@@ -1,0 +1,189 @@
+<!-- TEMPLATE CONTRACT (read by the P2 generate engine, not by the reader of the rendered file)
+     - Rendered ONCE by /pnp:setup and then owned by the operator; updates never overwrite it.
+     - {{resolvedRoot}} is a RENDER-TIME placeholder, not a config path: the generate engine
+       substitutes the project root it resolves while rendering (`git rev-parse --show-toplevel`,
+       or the explicit absolute path when config.project.root is not "auto"). Never render
+       config.project.root raw - its schema default is the literal string "auto". -->
+
+# PROJECT OVERRIDES - {{config.project.name}}
+
+> This document is **yours**. `/pnp:setup` writes it once from this template; updates never
+> overwrite it - at most they append a "review these sections" note. Everything here is
+> project-specific.
+>
+> The generic doctrine is **PLUGIN PAYLOAD - not files in this repository**: the PromptAndPray
+> payload's `docs/WORKFLOW.md`, `docs/LOOP.md` and `docs/REVIEW_CHECKLIST.md`, which live under the
+> installed plugin root (the `/pnp:*` skills resolve that path through `${CLAUDE_PLUGIN_ROOT}`) and
+> are updated with the plugin, never copied in here.
+>
+> Every role reads this file before starting work. Keep it short and true; a stale identity section
+> is worse than none.
+
+## Identity
+
+We are building **{{config.project.name}}** - {{config.project.description}}.
+
+{{config.project.name}} is **not**:
+
+- <the adjacent product it is most often confused with>
+- <a category it deliberately is not>
+- <a scope it explicitly refuses>
+
+*(This negative list is load-bearing: it is what a reviewer checks a diff against. Delete the
+placeholders and write real ones, or delete the section.)*
+
+## Hard rules
+
+- Never run destructive Git or filesystem cleanup commands (revert, restore, reset, clean, remove,
+  hard delete) unless the operator explicitly asks for that exact operation, immediately before it
+  runs.
+- Never touch, move, or delete untracked operator work or legacy files unless explicitly requested.
+- Destructive / system-changing operations require explicit confirmation immediately before
+  execution, even when a backlog, runbook, or brief marks them `MUST`. `MUST` means "mandatory
+  before completing", not "execute now". In this project that class is:
+  - <e.g. database reset / seed commands>
+  - <e.g. schema migration tool invocations>
+  - <e.g. container or linked-environment commands>
+- Do not change files outside the requested scope.
+- Planning lock: when the operator invokes `/plan` or explicitly asks for planning before
+  implementation, stay planning-only (full rules: the payload doc `docs/WORKFLOW.md` § Planning lock).
+- **Commit authority:** local commit only, and only after the review route passes and a human
+  explicitly approves. No automatic commits.
+- **Push authority:** push / merge / rebase only with the operator's **explicit word**, executed via
+  the native `ask` dialog. Fetch, cherry-pick, and sync likewise need explicit approval.
+- Do not start long-running services. The operator runs them:
+  - <e.g. the dev server, and on which port agents/tests attach to it>
+  - <e.g. background workers or queues>
+- If you do not know this project's migration / database workflow, stop and ask; do not improvise
+  schema-changing commands.
+
+## Execution discipline
+
+- **Checklist first.** Prepare a short checklist for the current scope only, execute only that
+  checklist, and self-check against it before the final response.
+- **Restate scope.** Restate the task scope in 1-3 bullets and confirm it before changing anything.
+
+## Sibling products and negative scope
+
+*(Fill in only if this repository sits next to a related product, a shared reference codebase, or an
+upstream it was forked from. If not, delete the section.)*
+
+- Reference-only paths (read-only unless the operator says otherwise): <paths>
+- Never create a Git coupling to them (remote, submodule, subtree, shared package). Improvements
+  useful to both are ported deliberately, in separate commits per repo.
+- Reusable from them as **platform/workflow reference only**: <list>
+- **Not** reusable as this project's product truth: <list>
+
+## Product direction
+
+<The first value loop, stated so that a proposed scope can be checked against it. If a proposed
+change can work without this loop, it is not this project's next step.>
+
+## Architecture direction
+
+Stack: {{config.project.stack}}
+
+<Boundaries that a reviewer must be able to check: what may not become the source of truth, which
+layer owns what, which dependencies are forbidden.>
+
+## Data, tenancy and access control
+
+- Where migrations live, how they are named, and which tool is (and is not) the migration workflow:
+  <fill in>
+- **The tenant key of this project is `<column or claim>`.** Every tenant-owned table and query is
+  scoped by it; new tables and endpoints get their access policy. This is what the Reviewer's
+  tenancy checks resolve against.
+
+## Test policy
+
+Tests are part of implementation, not polish. The single home of the test policy in this project is
+<path to your testing standard>. Routing:
+
+- pure logic / helper / transform -> targeted unit tests;
+- route / auth / navigation / middleware / runtime behavior -> runtime / E2E proof;
+- mixed change -> both where applicable;
+- a missing obvious proof test is a scope miss.
+
+Proof for algorithmic/runtime logic must exercise the production code path or an extracted
+production helper, not mirrored logic inside the test file.
+
+The literal VERIFY commands live in `aiwf.config.json`:
+{{#each config.verify.commands}}
+- `{{this.name}}`: `{{this.run}}` (cwd: `{{this.cwd}}`)
+{{/each}}
+
+## Status and release artifacts
+
+The documents the "status / release docs policy" in the payload doc `docs/WORKFLOW.md` applies to, in this project:
+
+- status page: <path or "none">
+- changelog: <path or "none">
+- roadmap: <path or "none">
+
+## Communication
+
+- Respond to the operator in **{{config.operator.language}}** unless explicitly asked otherwise.
+  Agent-to-agent traffic (briefs, verdicts, micro-rounds) is always English.
+- Conversational role names in the operator channel: Writer = "{{config.operator.roleNicknames.writer}}",
+  Reviewer = "{{config.operator.roleNicknames.reviewer}}", QA = "{{config.operator.roleNicknames.qa}}".
+  These are conversational only - the technical identifiers (`writer`, `reviewer`, `qa`, file paths,
+  frontmatter) never change.
+- Keep docs and plans in English unless the operator asks otherwise.
+- Be concise; no step-by-step reasoning narration in the output. Explain concretely when
+  architecture or product boundaries are involved.
+- Stop for an operator choice only when unresolved alternatives materially change product intent, an
+  architecture boundary, external risk/cost, or an irreversible outcome. The COO owns routine
+  engineering decisions; do not turn the operator into a tie-breaker for them.
+
+## Environment
+
+Platform: `{{config.os}}`. Prefer that platform's native commands for local instructions unless the
+repo already uses a specific cross-platform tool, and pass paths in its native form.
+
+## Workspace paths
+
+```text
+{{resolvedRoot}}    Repo root (resolved at render time, never the literal "auto")
+<path>              <what lives there>
+```
+
+Default integration/base branch: `{{config.project.defaultBranch}}`. It is not the only allowed
+working branch: a task may use a short-lived `feature/`, `fix/`, `experiment/`, `spike/`, or `r3/`
+branch when the brief or the operator says so. The agent works on the branch currently checked out.
+Always check the branch and dirty state before changes. If pre-existing changes fall outside the
+planned task, do not create or switch branches and do not carry those changes into a new branch.
+Finish or checkpoint the current scope first, or use a separate clean worktree explicitly provided
+by the operator. Never stash, clean, reset, or otherwise hide the dirty/untracked state.
+
+## Loop shape (this project's overrides of the generic defaults)
+
+These are the shape parameters the plugin lets a project set. The gates around them are payload
+mechanics and are **not** editable here (see the payload doc `docs/WORKFLOW.md` § Loop shape and its overrides).
+
+- **One reviewer, not two** - no "two independent reviewers" requirement.
+- **Correction rounds are capped at {{config.loop.correctionRoundsCap}}** for the implementation
+  loop, instead of the generic low-4 / medium-8 / high-12 caps. After the cap without a passable
+  result, stop and summarize to the operator. Only the operator lifts the cap, by an explicit word
+  before the re-dispatch, one extension at a time, recorded in the ticket's PLAN entry.
+- **R1 uses no orchestration loop** - it is done directly in the main session.
+- **QA is conditional** - only when a brief declares observable runtime/UI behavior; never in R1 or
+  non-runtime R2.
+- Plan readiness keeps its own two-pass contract regardless of the cap above.
+
+## Product boundary checks (rendered into the Reviewer)
+
+The lines below are rendered into the reviewer agent and are what "product-boundary alignment" means
+for this project. Empty is a valid answer.
+
+{{#each config.review.productBoundaryChecks}}
+- {{this}}
+{{/each}}
+
+## Workflow
+
+Routing (R1/R2/R3), the four roles, the ticket-brief contract, and commit/push mechanics are defined
+in the plugin payload - `docs/WORKFLOW.md`, with the one-page native mapping in `docs/LOOP.md`
+and the verdict rules in `docs/REVIEW_CHECKLIST.md`, all of them under the installed plugin root,
+not in this repository. Durable knowledge lives in Git under
+`{{config.paths.plansDir}}/active/` (finished plans move to `{{config.paths.plansDir}}/archive/`);
+live process state lives in the in-session orchestration.
