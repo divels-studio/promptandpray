@@ -1,0 +1,25 @@
+{
+  "description": "PromptAndPray enforcement gates: Gate 1 (non-writer subagents cannot write) and Gate 2 (every Writer dispatch is an operator click).",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/engine/pretooluse-mutation-guard.js\""
+          }
+        ]
+      },
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/engine/pretooluse-dispatch-gate.js\""
+          }
+        ]
+      }
+    ]
+  }
+}
