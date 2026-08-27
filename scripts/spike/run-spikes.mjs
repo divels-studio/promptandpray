@@ -14,7 +14,10 @@
  *                     it is absent, the parity column reports SKIP and only (1) is enforced.
  *
  * Gate 2 has no reference implementation to compare against (the reference project's Agent-tool hook
- * answers a different question), so it is asserted against the expectation table only.
+ * answers a different question), so it is asserted against the expectation table only. The Gate 3
+ * TOGGLE table is in the same position for the opposite reason: the reference predates
+ * `enforcement.routeWriteGuard`, so a parity comparison there would flag the intended change as a
+ * divergence. Everything the reference DOES implement stays under parity, in gate1Cases.
  *
  * Payload shapes are NOT invented: the two `capture:` fixtures below are raw PreToolUse inputs
  * recorded from a live harness run and published in the porting project's plan record; the rest are
@@ -161,6 +164,34 @@ const gate1Cases = [
   { name: 'route guard: Writer -> src/** while an R2 ticket is open', projectDir: projectOpenTicket, payload: writeEnvelope({ agent_id: 'a7', agent_type: 'writer' }, srcFileOpen), expect: 'allow(passthrough)' },
 ];
 
+// Gate 3's per-project toggle. These cases are deliberately NOT part of gate1Cases: the reference
+// implementation predates `enforcement.routeWriteGuard`, so a parity comparison would report a
+// DIVERGENCE that is the point of the change rather than a defect. They run against the plugin only,
+// and the table below says so in its own header.
+const projectToggle = (name, configRaw) => {
+  const root = path.join(tmpRoot, 'toggle-' + name);
+  fs.mkdirSync(path.join(root, '.aiwf'), { recursive: true });
+  fs.mkdirSync(path.join(root, '.claude', 'aiwf-native'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.aiwf', 'route-state.json'), JSON.stringify({ route: 'R2', ticket: 'DEMO-1' }));
+  if (configRaw !== null) fs.writeFileSync(path.join(root, '.claude', 'aiwf-native', 'aiwf.config.json'), configRaw);
+  return root;
+};
+const toggleConfig = (enforcement) => JSON.stringify({ project: { name: 'Spike' }, enforcement });
+const toggleOff = projectToggle('off', toggleConfig({ routeWriteGuard: false }));
+const toggleOn = projectToggle('on', toggleConfig({ routeWriteGuard: true }));
+const toggleCorrupt = projectToggle('corrupt', '{ not json ');
+const toggleNoKey = projectToggle('nokey', JSON.stringify({ project: { name: 'Spike' } }));
+const toggleString = projectToggle('strfalse', toggleConfig({ routeWriteGuard: 'false' }));
+
+const gate3ToggleCases = [
+  { name: 'toggle false: main session -> src/** while an R2 ticket is open', projectDir: toggleOff, payload: writeEnvelope({}, path.join(toggleOff, 'src', 'probe.txt')), expect: 'allow(passthrough)' },
+  { name: 'toggle false: reviewer subagent -> src/** (identity path is untouched)', projectDir: toggleOff, payload: writeEnvelope({ agent_id: 'a1', agent_type: 'reviewer' }, path.join(toggleOff, 'src', 'probe.txt')), expect: 'deny' },
+  { name: 'toggle true: main session -> src/** while an R2 ticket is open', projectDir: toggleOn, payload: writeEnvelope({}, path.join(toggleOn, 'src', 'probe.txt')), expect: 'deny' },
+  { name: 'corrupt config: main session -> src/** (armed - a broken config never disarms)', projectDir: toggleCorrupt, payload: writeEnvelope({}, path.join(toggleCorrupt, 'src', 'probe.txt')), expect: 'deny' },
+  { name: 'no enforcement key: main session -> src/** (armed)', projectDir: toggleNoKey, payload: writeEnvelope({}, path.join(toggleNoKey, 'src', 'probe.txt')), expect: 'deny' },
+  { name: 'routeWriteGuard "false" as a STRING: main session -> src/** (armed, no coercion)', projectDir: toggleString, payload: writeEnvelope({}, path.join(toggleString, 'src', 'probe.txt')), expect: 'deny' },
+];
+
 // Gate 2: the Agent-dispatch envelope, from the live shape (subagent_type next to
 // description/prompt/model/run_in_background).
 const agentEnvelope = (toolInput, extra = {}) => ({
@@ -241,6 +272,20 @@ for (const c of gate1Cases) {
     console.log(`    plugin reason   : ${got.reason || '(none)'}`);
     if (ref) console.log(`    reference reason: ${ref.reason || '(none)'}`);
   }
+}
+
+console.log('');
+console.log('== Gate 3 toggle - enforcement.routeWriteGuard (plugin only: the reference predates the toggle) ==');
+console.log('per case: [1] plugin decision matches the expectation  [2] plugin exited 0');
+console.log(`${pad('case', 62)} ${pad('expected', 18)} ${pad('plugin', 18)} ${pad('exit', 5)} verdict`);
+for (const c of gate3ToggleCases) {
+  const got = runHook(path.join(PLUGIN_HOOKS, GATE1), c.payload, c.projectDir);
+  let ok = record(got.decision === c.expect);
+  ok = record(got.exit === 0) && ok;
+  const verdict = ok ? 'PASS' : 'FAIL';
+  const gotExit = got.exit === null ? 'null' : String(got.exit);
+  console.log(`${pad(c.name, 62)} ${pad(c.expect, 18)} ${pad(got.decision, 18)} ${pad(gotExit, 5)} ${verdict}`);
+  if (verdict === 'FAIL') console.log(`    plugin reason: ${got.reason || '(none)'}`);
 }
 
 console.log('');

@@ -41,10 +41,12 @@ How you execute is **route-conditional**:
   in the agent's frontmatter, and the override silently replaces that pin with a tier alias
   (payload `docs/LOOP.md`).
 - **Doctrine preflight:** before the FIRST Writer dispatch of a session - and before authoring any
-  R2/R3 ticket brief - read payload `docs/WORKFLOW.md` and payload `docs/LOOP.md` IN FULL. This
-  file is a thin entry point; knowing a rule's headline is not knowing its text. Session entry
-  points for the operator: `/pnp:mission` (resume a mission without a brief), `/pnp:work` (ad-hoc
-  work under full doctrine), or no command for a free conversation (payload
+  R2/R3 ticket brief - read payload `docs/WORKFLOW.md`, payload `docs/LOOP.md` AND
+  `{{config.paths.overridesDoc}}` IN FULL. This file is a thin entry point; knowing a rule's
+  headline is not knowing its text, and the overrides document is where this project's identity,
+  hard rules and product truth live - a session without it works without the product's boundaries.
+  Session entry points for the operator: `/pnp:mission` (resume a mission without a brief),
+  `/pnp:work` (ad-hoc work under full doctrine), or no command for a free conversation (payload
   `docs/OPERATOR_PROTOCOL.md`).
 
 Approvals are native permission dialogs: every Writer dispatch (Gate 2), commit, and
@@ -81,7 +83,10 @@ for the full model.
 - **Discovery precedes dispatch, and the COO owns broad scans.** When the delegation triggers are
   met (3+ independent files, 2+ verify tracks, a docs/code/test cross-check), run the cheap-agent
   discovery BEFORE authoring the brief; the brief then carries a worklist with `file:line` pointers,
-  not reading assignments. Full text: payload `docs/WORKFLOW.md` § "COO owns broad scans".
+  not reading assignments. Two countable tripwires, because categories do not stop mid-work
+  inertia: (1) anything OUTSIDE this repository (upstream source, tarballs, external docs) is agent
+  work per se - zero own steps; (2) an open question that has already cost you two lookups without
+  an answer - stop and dispatch. Full text: payload `docs/WORKFLOW.md` § "COO owns broad scans".
 - **Model policy for ad-hoc subagents.** Always pass an explicit `model` to the Agent tool - never
   silently inherit the session model. `haiku` for purely mechanical scans; `sonnet` for evidence
   gathering with judgment (the default scan tier). The top tier is never delegated for scans. The

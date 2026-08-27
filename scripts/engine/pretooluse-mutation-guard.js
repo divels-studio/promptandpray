@@ -37,6 +37,18 @@
  * this guard protects the REPO. Branch (b) is untouched: the WRITER is never affected by this guard —
  * it is the role that is supposed to write.
  *
+ * THE `enforcement.routeWriteGuard` TOGGLE (project config, read from
+ * `<projectDir>/.claude/aiwf-native/aiwf.config.json`). Responsibility (2) - and ONLY (2) - can be
+ * switched off per project:
+ *   - no config file / unreadable / not JSON / no such key -> the guard behaves EXACTLY as it does
+ *     without this paragraph. That is the safe direction: a project that never installed the config
+ *     layer, and a project whose config is corrupt, both keep the armed guard. A toggle that failed
+ *     OPEN would mean "break the config, lose the gate", which is precisely backwards.
+ *   - the key is exactly the boolean `false` -> the route-state check is skipped. No coercion: the
+ *     STRING "false" is not the boolean false and leaves the guard armed.
+ * Responsibility (1), the identity check, is NEVER affected by this key - a config file cannot buy a
+ * non-writer subagent the right to write.
+ *
  * HONEST LIMIT: this covers the Edit/Write TOOL CLASS only. A main-session mutation performed through
  * a Bash command (`echo … > file`, `Set-Content`, a script) is NOT caught here and remains doctrine.
  *
@@ -95,6 +107,27 @@ function targetPathOf(toolInput) {
   return null;
 }
 
+// The per-project toggle. Returns TRUE (armed) for every state except an explicit boolean `false`,
+// so every failure mode of reading the config - absent, unreadable, malformed, key missing, key of
+// the wrong type - leaves the guard exactly as armed as it is on a project with no config at all.
+const CONFIG_REL = path.join('.claude', 'aiwf-native', 'aiwf.config.json');
+function routeWriteGuardEnabled(projectDir) {
+  let raw;
+  try {
+    raw = fs.readFileSync(path.join(projectDir, CONFIG_REL), 'utf8');
+  } catch (e) {
+    return true; // no config layer (or unreadable) -> today's behaviour
+  }
+  let config;
+  try {
+    config = JSON.parse(raw);
+  } catch (e) {
+    return true; // a corrupt config must not disarm a gate
+  }
+  if (!isPlainObject(config) || !isPlainObject(config.enforcement)) return true;
+  return config.enforcement.routeWriteGuard !== false;
+}
+
 // Reads the route state and reports WHETHER the guard is armed, never touching the tool payload.
 //   { off: true }                        -> no ticket dispatched (or the state was cleared)
 //   { why: 'ticket', ticket, route }     -> an R2/R3 ticket is open
@@ -138,6 +171,7 @@ function readGuardState(projectDir) {
 function mainSessionDecision(input) {
   const tool = input.tool_name || 'mutation';
   const projectDir = projectDirOf();
+  if (!routeWriteGuardEnabled(projectDir)) return lib.allowPassthrough(); // enforcement.routeWriteGuard === false
   const st = readGuardState(projectDir);
   if (st.off) return lib.allowPassthrough(); // no ticket dispatched -> nothing about today's behaviour changes
 

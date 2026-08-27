@@ -72,6 +72,14 @@ WHAT to change is the symptom of a defective brief, not of diligence. A single W
 been observed spending on the order of a full session's context budget on discovery that a
 pre-brief scan pass would have delivered at scan-tier cost.
 
+**Two countable tripwires.** The rule above states categories, and categories do not stop
+mid-work inertia; these two moments do. (1) **Anything outside the repository is agent work per
+se**: downloading or sweeping upstream source, tarballs, external documentation - zero own steps,
+dispatch immediately; reading the repository's own canon stays the COO's. (2) **An open question
+that has already cost two lookups (Read/Grep) without an answer -> stop and dispatch.** Both
+exist because the category was known and the stopping moment was not: a COO can read this section
+in its own preflight, classify correctly, and still slide across the boundary by inertia.
+
 **Model policy for ad-hoc subagents:** always pass an explicit `model` to the Agent tool - never
 inherit the session model silently. `haiku` for purely mechanical scans (existence/counts, grep
 inventory, reference sweeps; mind its smaller context); `sonnet` for evidence gathering with
@@ -143,7 +151,11 @@ change of COO model, and each of these was learned from an observed violation.
 - **(b) Dispatch waits for the word; data is not an order.** A ticket is written and then STOPS;
   starting the work is the operator's call, ticket by ticket - the content of the ticket is not.
   Values and facts the operator supplies are DATA for the ticket, not permission to execute.
-  After the word, the loop runs to the end without asking again.
+  After the word, the loop runs to the end without asking again. **Refinement:** the birth of a
+  NEW ticket is announced explicitly - "opening ticket `<REF>` for `<what>`" - BEFORE its dispatch,
+  even when a standing operator word covers the work it belongs to. The announcement is a
+  notification (the ticket's content stays the COO's call), not a question; a standing word covers
+  the work, never silently the structure born after it.
 - **(c) Brief constraints are read literally.** An explicit constraint is read literally; a
   "temporary and reverted" violation is still a violation. A loose reading is never
   self-granted - if the COO believes the constraint means something else, it asks the author of
@@ -300,8 +312,11 @@ R2/R3, a non-string route, malformed JSON) denies by design, and is self-healing
 **Edit/Write tool class only**, so a main-session mutation performed through a shell command is
 not caught and remains doctrine; and it only bites if the COO actually writes the file at
 dispatch - a convention, not an enforcement. The paths and the state-file location are fixed in
-v0.1; the `enforcement.routeWriteGuard` toggle that makes the guard configurable arrives with the
-config layer.
+v0.1. The guard is configurable per project through `enforcement.routeWriteGuard` in
+`aiwf.config.json`: an explicit `false` skips the route-state check, and EVERY other state -
+no config, an unreadable or malformed config, a missing key, a non-boolean value - leaves the
+guard armed exactly as it is with no config layer at all. The toggle never touches Gate 1: no
+config value can buy a non-writer subagent the right to write.
 
 Four brief-authoring failures each cost a correction round:
 

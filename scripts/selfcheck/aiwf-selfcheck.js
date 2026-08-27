@@ -46,6 +46,7 @@
  */
 
 const { spawnSync } = require('child_process');
+const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -96,6 +97,30 @@ function note(name, why) {
 
 const readText = (p) => { try { return fs.readFileSync(p, 'utf8'); } catch (e) { return null; } };
 const readJson = (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch (e) { return null; } };
+const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+
+// ---------------------------------------------------------------------------
+// Managed-artifact hashing (an INDEPENDENT implementation of the generator's projection)
+// ---------------------------------------------------------------------------
+// sha256 over the LF-normalised text - of the whole file for a `<file>` key, of the marked region
+// INCLUDING its markers for a `<file>#<region>` key. Written out here on purpose rather than
+// imported from the setup engine: a checker that reuses the code under test cannot catch that code
+// hashing the wrong thing. The negative controls prove this one can fail.
+const sha256 = (text) => crypto.createHash('sha256').update(text.replace(/\r\n/g, '\n'), 'utf8').digest('hex');
+function managedHash(projectRoot, key) {
+  const cut = key.indexOf('#');
+  const file = cut === -1 ? key : key.slice(0, cut);
+  const region = cut === -1 ? null : key.slice(cut + 1);
+  const text = readText(path.join(projectRoot, ...file.split('/')));
+  if (text === null) return null;
+  if (!region) return sha256(text);
+  const begin = `<!-- BEGIN ${region} -->`;
+  const end = `<!-- END ${region} -->`;
+  const from = text.indexOf(begin);
+  const to = text.indexOf(end);
+  if (from === -1 || to === -1 || to < from) return null;
+  return sha256(text.slice(from, to + end.length));
+}
 
 // ---------------------------------------------------------------------------
 // Hook execution (exactly as the harness launches a PreToolUse hook)
@@ -171,7 +196,7 @@ function writeFixture(root, pluginVersion) {
       installedPluginVersion: pluginVersion,
       lastMigrationApplied: '0001_initial',
       migrationJournal: null,
-      managedRegions: {},
+      managedRegions: {}, // filled in below from the files this function really writes
       ownedAskRules: FIXTURE_OWNED.slice(),
       suppressedAskRules: FIXTURE_SUPPRESSED.slice(),
     },
@@ -195,8 +220,6 @@ function writeFixture(root, pluginVersion) {
     paths: { scratchDir: '.aiwf', plansDir: 'docs/backlogs', overridesDoc: 'docs/ai/PROJECT_OVERRIDES.md' },
     review: { productBoundaryChecks: [] },
   };
-  put('.claude/aiwf-native/aiwf.config.json', JSON.stringify(config, null, 2) + '\n');
-
   // roles.json is a RENDERED artifact of config.roles - written here with the same values so the
   // consistency check has something true to verify (and something the negative controls can break).
   put('.claude/aiwf-native/roles.json', JSON.stringify({
@@ -225,6 +248,30 @@ function writeFixture(root, pluginVersion) {
 
   put('docs/ai/PROJECT_OVERRIDES.md', '# Fixture overrides\n');
   put('.aiwf/.keep', '');
+
+  // A CLAUDE.md with the managed region, so the `<file>#<region>` half of the bookkeeping has a real
+  // subject. Text outside the markers is here for the same reason: it must NOT enter the hash.
+  put('CLAUDE.md', [
+    '# Fixture project',
+    '',
+    '<!-- BEGIN aiwf-core -->',
+    'Managed region body (fixture).',
+    '<!-- END aiwf-core -->',
+    '',
+    'Text below the markers belongs to the operator and is never hashed.',
+    '',
+  ].join('\n'));
+
+  // The bookkeeping is computed from the files just written, never hand-typed: a fixture carrying
+  // invented hashes would make the managed-region checks pass on nothing. Every artifact the config
+  // implies gets an entry - roles.json, the writer, the claude-hosted reviewer, and the region.
+  const managedRegions = {};
+  for (const key of ['CLAUDE.md#aiwf-core', '.claude/aiwf-native/roles.json', '.claude/agents/writer.md', '.claude/agents/reviewer.md']) {
+    const hash = managedHash(root, key);
+    managedRegions[key] = { upstream: hash, local: hash, override: false };
+  }
+  config._aiwf.managedRegions = managedRegions;
+  put('.claude/aiwf-native/aiwf.config.json', JSON.stringify(config, null, 2) + '\n');
 }
 
 function isEmptyDir(p) {
@@ -236,6 +283,17 @@ function isEmptyDir(p) {
 // ---------------------------------------------------------------------------
 const GATE1 = path.join(PLUGIN_ROOT, 'scripts', 'engine', 'pretooluse-mutation-guard.js');
 const GATE2 = path.join(PLUGIN_ROOT, 'scripts', 'engine', 'pretooluse-dispatch-gate.js');
+const SCHEMA_FILE = path.join(PLUGIN_ROOT, 'schema', 'aiwf.config.schema.json');
+const VALIDATOR = path.join(PLUGIN_ROOT, 'scripts', 'setup', 'validate-config.mjs');
+
+// The validator is an ESM module and this engine is CommonJS, so it is exercised at its REAL CLI
+// entrypoint - which is also the entrypoint setup, generate and this file all use. Exit codes:
+// 0 valid, 1 invalid, 2 the run could not start (unreadable file, or a schema the interpreter
+// cannot execute).
+function runValidator(configPath, schemaPath) {
+  const r = spawnSync(process.execPath, [VALIDATOR, configPath, '--schema', schemaPath || SCHEMA_FILE], { encoding: 'utf8' });
+  return { status: r.status, stdout: (r.stdout || '').trim(), stderr: (r.stderr || '').trim() };
+}
 
 const writeEnvelope = (identity, filePath, extra) => Object.assign({
   session_id: '02a3eeba-ff69-4daa-94be-329a7a5036c1',
@@ -443,6 +501,146 @@ function sectionGate3(tmpRoot) {
       agent_type: 'reviewer', tool_input: { file_path: 'src/app/x.ts' } }, R2);
     check('reviewer subagent + R2 open -> DENY via the IDENTITY path, not the route path',
       deny(r) && r.reason.includes(G1_MARK) && !r.reason.includes(G3_MARK), r.reason.slice(0, 70));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// SECTION 3b - Gate 3's per-project toggle (enforcement.routeWriteGuard)
+// ---------------------------------------------------------------------------
+// The toggle is read from the PROJECT's aiwf.config.json, so every case here builds a project dir
+// with an armed route state and varies only the config. The direction under test is the safe one:
+// anything that is not an explicit boolean `false` leaves the guard armed - a corrupt config must
+// never be a way to switch a gate off.
+function sectionGate3Toggle(tmpRoot) {
+  section('GATE 3 TOGGLE - enforcement.routeWriteGuard, and every failure mode leaves the guard ARMED');
+  const mkProject = (name, configRaw) => {
+    const root = path.join(tmpRoot, 'g3t-' + name);
+    fs.mkdirSync(path.join(root, '.aiwf'), { recursive: true });
+    fs.mkdirSync(path.join(root, '.claude', 'aiwf-native'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.aiwf', 'route-state.json'), JSON.stringify({ ticket: 'TOGGLE-FIXTURE', route: 'R2' }));
+    if (configRaw !== null) fs.writeFileSync(path.join(root, '.claude', 'aiwf-native', 'aiwf.config.json'), configRaw);
+    return root;
+  };
+  const cfg = (enforcement) => JSON.stringify({ project: { name: 'Toggle' }, enforcement });
+  const G = (root, filePath, identity) => runHook(GATE1, Object.assign({
+    hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: filePath },
+  }, identity || {}), root);
+  const allow = (r) => r.decision === 'allow(passthrough)' && r.exit === 0;
+  const deny = (r) => r.decision === 'deny' && r.exit === 0;
+
+  check('routeWriteGuard false + R2 open + src/app/x.ts -> allow (the project switched Gate 3 off)',
+    allow(G(mkProject('off', cfg({ routeWriteGuard: false })), 'src/app/x.ts')));
+  check('routeWriteGuard true + R2 open + src/app/x.ts -> DENY (explicitly on)',
+    deny(G(mkProject('on', cfg({ routeWriteGuard: true })), 'src/app/x.ts')));
+  check('NO config file + R2 open -> DENY (armed, exactly as before the config layer existed)',
+    deny(G(mkProject('noconfig', null), 'src/app/x.ts')));
+  check('CORRUPT config + R2 open -> DENY (a broken config is not a way to disarm a gate)',
+    deny(G(mkProject('corrupt', '{ not json '), 'src/app/x.ts')));
+  check('config without an enforcement block + R2 open -> DENY (missing key = armed)',
+    deny(G(mkProject('nokey', JSON.stringify({ project: { name: 'Toggle' } })), 'src/app/x.ts')));
+  check('routeWriteGuard "false" (a STRING) + R2 open -> DENY (no coercion)',
+    deny(G(mkProject('strfalse', cfg({ routeWriteGuard: 'false' })), 'src/app/x.ts')));
+  check('routeWriteGuard null + R2 open -> DENY (only an explicit boolean false disarms)',
+    deny(G(mkProject('null', cfg({ routeWriteGuard: null })), 'src/app/x.ts')));
+  check('config is a JSON array + R2 open -> DENY (not a plain object = armed)',
+    deny(G(mkProject('array', '[]'), 'src/app/x.ts')));
+  {
+    // The whole point of the toggle's scope: it may switch off responsibility (2) and NOTHING else.
+    const root = mkProject('identity', cfg({ routeWriteGuard: false }));
+    const r = G(root, 'src/app/x.ts', { agent_id: 'a1', agent_type: 'reviewer' });
+    check('routeWriteGuard false + REVIEWER subagent -> still DENY via the identity path (Gate 1 is untouchable)',
+      deny(r) && r.reason.includes('gate 1'), r.reason.slice(0, 70));
+  }
+  check('routeWriteGuard false + WRITER + src/app/x.ts -> allow (unchanged)',
+    allow(G(mkProject('writer', cfg({ routeWriteGuard: false })), 'src/app/x.ts', { agent_id: 'w1', agent_type: 'writer' })));
+}
+
+// ---------------------------------------------------------------------------
+// SECTION 3c - the config schema and its interpreter
+// ---------------------------------------------------------------------------
+// Both directions are asserted: the shipped schema ACCEPTS a healthy config, and it REJECTS the
+// specific mistakes the interview can produce. The last three cases are the negative controls for
+// this section - they break the schema and the validator themselves, because a validator that
+// cannot fail (or a schema that is unreadable and treated as satisfied) would make every other
+// assertion here decorative.
+function sectionConfigSchema(tmpRoot) {
+  section('CONFIG SCHEMA - the schema is the authority and the interpreter really enforces it');
+  const dir = path.join(tmpRoot, 'schema');
+  fs.mkdirSync(dir, { recursive: true });
+
+  const schema = readJson(SCHEMA_FILE);
+  if (!check('schema/aiwf.config.schema.json exists and parses', schema != null, SCHEMA_FILE)) return;
+  check('the schema declares draft 2020-12', schema.$schema === 'https://json-schema.org/draft/2020-12/schema', String(schema.$schema));
+  check('the schema forbids unknown top-level keys', schema.additionalProperties === false);
+  check('scripts/setup/validate-config.mjs exists', fs.existsSync(VALIDATOR));
+
+  // A fixture project, written by the same function the project-layer checks use, so "the shipped
+  // schema accepts the shape this engine treats as healthy" is a real cross-check between the two.
+  const fx = path.join(dir, 'fixture');
+  fs.mkdirSync(fx, { recursive: true });
+  writeFixture(fx, (readJson(path.join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json')) || {}).version || '0.0.0');
+  const goodConfig = path.join(fx, '.claude', 'aiwf-native', 'aiwf.config.json');
+  {
+    const r = runValidator(goodConfig);
+    check('the self-check fixture config VALIDATES against the shipped schema (they cannot drift apart)',
+      r.status === 0, r.status === 0 ? '' : `${r.stderr.slice(0, 220)}`);
+  }
+
+  const variant = (name, mutate) => {
+    const p = path.join(dir, `${name}.json`);
+    const cfg = readJson(goodConfig);
+    mutate(cfg);
+    fs.writeFileSync(p, JSON.stringify(cfg, null, 2));
+    return p;
+  };
+  const rejects = (name, file, expectFragment) => {
+    const r = runValidator(file);
+    check(name, r.status === 1 && (!expectFragment || r.stderr.includes(expectFragment)),
+      `exit ${r.status}${r.stderr ? ' - ' + r.stderr.split('\n').slice(0, 2).join(' ').slice(0, 120) : ''}`);
+  };
+
+  rejects('rejects an unknown OS channel', variant('bad-os', (c) => { c.os = 'solaris'; }), '/os');
+  rejects('rejects an empty project.name', variant('no-name', (c) => { c.project.name = ''; }), '/project/name');
+  rejects('rejects a missing required block', variant('no-paths', (c) => { delete c.paths; }), 'paths');
+  rejects('rejects an unknown top-level key (typo protection)', variant('typo', (c) => { c.enforcment = {}; }));
+  rejects('rejects a claude-hosted role pinned to a full model id (the conditional really fires)',
+    variant('full-id', (c) => { c.roles.reviewer.model = 'claude-opus-5[1m]'; }), '/roles/reviewer/model');
+  rejects('rejects a codex-hosted qal switched to another engine', variant('qal-engine', (c) => { c.roles.qal.engine = 'claude'; }));
+  rejects('rejects a correctionRoundsCap below 1', variant('cap0', (c) => { c.loop.correctionRoundsCap = 0; }));
+  rejects('rejects a scratchDir moved away from .aiwf', variant('scratch', (c) => { c.paths.scratchDir = '.scratch'; }));
+  rejects('rejects a verify command with no run line', variant('cmd', (c) => { c.verify.commands = [{ name: 'unit' }]; }));
+  rejects('rejects a non-sha256 managed-region hash', variant('hash', (c) => {
+    c._aiwf.managedRegions['roles.json'] = { upstream: 'nope', local: 'nope', override: false };
+  }));
+
+  // --- negative controls for THIS section ---------------------------------------------------
+  {
+    const broken = path.join(dir, 'corrupt.schema.json');
+    fs.writeFileSync(broken, '{ not json ');
+    const r = runValidator(goodConfig, broken);
+    check('CONTROL: an unreadable schema exits 2, it is never treated as satisfied', r.status === 2, `exit ${r.status}`);
+  }
+  {
+    // A keyword the interpreter does not implement must STOP the run. Silently ignoring it would
+    // turn a real constraint into decoration - the exact failure this design refuses.
+    const unsupported = path.join(dir, 'unsupported.schema.json');
+    const copy = readJson(SCHEMA_FILE);
+    copy.properties.os.multipleOf = 2;
+    fs.writeFileSync(unsupported, JSON.stringify(copy, null, 2));
+    const r = runValidator(goodConfig, unsupported);
+    check('CONTROL: a schema keyword the interpreter cannot execute exits 2 (never silently ignored)',
+      r.status === 2 && r.stderr.includes('unsupported schema keyword'), `exit ${r.status} - ${r.stderr.slice(0, 90)}`);
+  }
+  {
+    // Strip the assertions out of a COPY of the validator and require the rejection to disappear.
+    // If this control ever passes trivially, the rejections above were constants, not checks.
+    const sabotaged = path.join(dir, 'sabotaged-validator.mjs');
+    const src = readText(VALIDATOR);
+    fs.writeFileSync(sabotaged, src.split('return errors;').join('return [];'));
+    const badConfig = variant('control-bad', (c) => { c.os = 'solaris'; });
+    const r = spawnSync(process.execPath, [sabotaged, badConfig, '--schema', SCHEMA_FILE], { encoding: 'utf8' });
+    check('CONTROL: a validator stripped of its assertions stops rejecting the bad config (so the rejections above are real)',
+      r.status === 0, `exit ${r.status}`);
   }
 }
 
@@ -719,8 +917,12 @@ function projectLayerFindings(projectRoot, pluginRoot, opts) {
   const ask = (settings && settings.permissions && Array.isArray(settings.permissions.ask)) ? settings.permissions.ask : null;
   const allow = (settings && settings.permissions && Array.isArray(settings.permissions.allow)) ? settings.permissions.allow : null;
   const deny = (settings && settings.permissions && Array.isArray(settings.permissions.deny)) ? settings.permissions.deny : null;
-  add('settings-parses', '.claude/settings.json exists, parses, and declares a permissions block',
-    ask != null && allow != null && deny != null);
+  // What an installation actually REQUIRES here is `permissions.ask` as a list - that is the set the
+  // ownership bookkeeping talks about. `allow`/`deny` are NOT required: setup applies the factory
+  // posture only to a project that had no permissions block at all, so a project carrying just an
+  // `ask` list is a legitimate install, and failing it would fail the very posture setup preserved.
+  add('settings-parses', '.claude/settings.json exists, parses, and declares permissions.ask as a list',
+    ask != null, ask != null ? `${ask.length} ask rules; allow=${allow ? allow.length + ' rules' : 'not declared'} deny=${deny ? deny.length + ' rules' : 'not declared'}` : 'no permissions.ask array');
 
   const owned = Array.isArray(bk.ownedAskRules) ? bk.ownedAskRules : [];
   const suppressed = Array.isArray(bk.suppressedAskRules) ? bk.suppressedAskRules : [];
@@ -791,6 +993,11 @@ function projectLayerFindings(projectRoot, pluginRoot, opts) {
         addNote('factory-posture', 'allow/deny match the payload factory posture',
           `the project runs its own posture (allow=${JSON.stringify(allow)} deny=${JSON.stringify(deny)}); setup only applies the factory posture to a project that had no permissions block, and the bookkeeping does not record which case this was`);
       }
+    } else {
+      // Neither list is declared. Same contract as a divergent posture: setup left an existing
+      // permissions block exactly as it found it, so there is nothing to compare and nothing wrong.
+      addNote('factory-posture', 'allow/deny match the payload factory posture',
+        `the project declares no allow/deny of its own (allow=${allow ? 'list' : 'absent'}, deny=${deny ? 'list' : 'absent'}); setup adds the factory posture only to a project with no permissions block at all, so an ask-only block is a posture it deliberately preserved`);
     }
   }
 
@@ -866,6 +1073,52 @@ function projectLayerFindings(projectRoot, pluginRoot, opts) {
   add('writer-effort', 'writer.md frontmatter effort equals config.roles.writer.effort',
     w.effort != null && w.effort === frontmatter('writer.md', 'effort'), `frontmatter=${frontmatter('writer.md', 'effort')}`);
 
+  // --- managed artifacts: the bookkeeping against what is really on disk -------------------------
+  // The hashes are the whole basis of "no silent overwrite": the next /pnp:update decides what to
+  // re-render, what to leave alone and what to call a conflict by comparing them. A stamp that does
+  // not describe the file it names turns that decision into a coin toss - silently, and in the
+  // direction of overwriting the operator's own work.
+  const regions = isPlainObject(bk.managedRegions) ? bk.managedRegions : null;
+  add('managed-regions-shape', '_aiwf.managedRegions is an object of managed-artifact records',
+    regions != null, regions ? `${Object.keys(regions).length} entries` : `found ${Array.isArray(bk.managedRegions) ? 'an array' : typeof bk.managedRegions}`);
+  if (regions) {
+    const problems = [];
+    for (const key of Object.keys(regions)) {
+      const entry = regions[key];
+      if (!isPlainObject(entry) || typeof entry.local !== 'string') { problems.push(`${key}: no local hash recorded`); continue; }
+      const hash = managedHash(projectRoot, key);
+      if (hash === null) {
+        problems.push(key.includes('#')
+          ? `${key}: the file is missing, or it no longer carries those markers`
+          : `${key}: the recorded artifact is missing from the project`);
+        continue;
+      }
+      // `local` is what was last ACCEPTED, so it must match the file even when the operator holds
+      // the artifact through an override - that is precisely what override records. Only `upstream`
+      // is expected to diverge there, and it is deliberately not compared.
+      if (hash !== entry.local) {
+        problems.push(`${key}: local ${entry.local.slice(0, 12)}... but the content hashes ${hash.slice(0, 12)}...` +
+          (entry.override === true ? ' (override is set, which still requires local to describe the accepted content)' : ''));
+      }
+    }
+    add('managed-regions-match', 'every managed artifact still hashes to its recorded local hash',
+      problems.length === 0, problems.length ? problems.slice(0, 4).join('; ') : `${Object.keys(regions).length} artifacts verified`);
+
+    // The set itself must be right: an artifact with no entry is unmanaged (an update would refuse
+    // to touch it), and an entry with no artifact is a stamp for something that is not there.
+    const expected = new Set(['CLAUDE.md#aiwf-core', '.claude/aiwf-native/roles.json', '.claude/agents/writer.md']);
+    for (const role of ['reviewer', 'qa']) {
+      if (cfg.roles && cfg.roles[role] && cfg.roles[role].engine === 'claude') expected.add(`.claude/agents/${role}.md`);
+    }
+    const actualKeys = new Set(Object.keys(regions));
+    const missing = [...expected].filter((k) => !actualKeys.has(k));
+    const extra = [...actualKeys].filter((k) => !expected.has(k));
+    add('managed-regions-cover', 'managedRegions covers exactly the artifacts this config implies',
+      missing.length === 0 && extra.length === 0,
+      (missing.length ? `missing ${JSON.stringify(missing)} ` : '') + (extra.length ? `unexpected ${JSON.stringify(extra)}` : '')
+        || `${expected.size} artifacts`);
+  }
+
   // --- version bookkeeping ----------------------------------------------------------------------
   const pluginJson = readJson(path.join(pluginRoot, '.claude-plugin', 'plugin.json'));
   const pluginVersion = pluginJson && pluginJson.version;
@@ -900,6 +1153,18 @@ function projectLayerFindings(projectRoot, pluginRoot, opts) {
   // scratch directory elsewhere would arm a guard nobody writes to.
   add('scratch-is-aiwf', 'paths.scratchDir is ".aiwf" (the route-state guard resolves that path literally in v0.1)',
     paths.scratchDir === '.aiwf', String(paths.scratchDir));
+
+  // --- the config satisfies the shipped schema --------------------------------------------------
+  // Run at the validator's real CLI entrypoint (the same one setup uses), against the payload schema
+  // - so an installation cannot carry a config shape the generator would refuse to produce.
+  {
+    const r = spawnSync(process.execPath, [
+      path.join(pluginRoot, 'scripts', 'setup', 'validate-config.mjs'), cfgPath,
+      '--schema', path.join(pluginRoot, 'schema', 'aiwf.config.schema.json'),
+    ], { encoding: 'utf8' });
+    add('config-schema-valid', 'aiwf.config.json satisfies schema/aiwf.config.schema.json',
+      r.status === 0, r.status === 0 ? '' : `validator exit ${r.status}: ${(r.stderr || '').trim().split('\n').slice(0, 3).join(' | ').slice(0, 200)}`);
+  }
 
   return out;
 }
@@ -954,7 +1219,7 @@ function sectionPayloadIntegrity() {
     .concat(listFiles(skillsDir, (p) => p.endsWith('.md')))
     .concat(listFiles(path.join(PLUGIN_ROOT, 'docs'), (p) => p.endsWith('.md')))
     .concat(listFiles(path.join(PLUGIN_ROOT, 'templates'), () => true));
-  const REF = /(?:docs\/[A-Za-z0-9_.-]+\.md|scripts\/native\/ps\/[A-Za-z0-9_.-]+\.ps1|scripts\/(?:engine|selfcheck|spike)\/[A-Za-z0-9_.-]+\.(?:js|mjs)|templates\/[A-Za-z0-9_./-]+\.(?:tmpl|json))/g;
+  const REF = /(?:docs\/[A-Za-z0-9_.-]+\.md|schema\/[A-Za-z0-9_.-]+\.json|scripts\/native\/ps\/[A-Za-z0-9_.-]+\.ps1|scripts\/(?:engine|selfcheck|spike|setup)\/[A-Za-z0-9_.-]+\.(?:js|mjs)|templates\/[A-Za-z0-9_./-]+\.(?:tmpl|json))/g;
   const dangling = [];
   let refCount = 0;
   for (const f of payloadFiles) {
@@ -1055,6 +1320,26 @@ const NEGATIVE_CONTROLS = [
     apply: (r) => fs.rmSync(path.join(r, 'docs', 'backlogs', 'active'), { recursive: true, force: true }) },
   { id: 'scratch-is-aiwf', label: 'scratchDir moved away from .aiwf (the route guard would be unarmed)',
     apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => { c.paths.scratchDir = '.scratch'; }) },
+  { id: 'managed-regions-shape', label: 'managedRegions replaced by something that is not an object',
+    apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => { c._aiwf.managedRegions = 'nope'; }) },
+  { id: 'managed-regions-match', label: 'a managed file drifted from its recorded hash (roles.json edited)',
+    apply: (r) => patchText(r, ['.claude', 'aiwf-native', 'roles.json'], /"effort": "high"/, '"effort": "low"') },
+  { id: 'managed-regions-match', label: 'a managed REGION drifted (CLAUDE.md edited between the markers)',
+    apply: (r) => patchText(r, ['CLAUDE.md'], /Managed region body \(fixture\)\./, 'I edited the managed region.') },
+  { id: 'managed-regions-match', label: 'a recorded local hash that describes nothing on disk',
+    apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
+      c._aiwf.managedRegions['.claude/aiwf-native/roles.json'].local = '0'.repeat(64);
+    }) },
+  { id: 'managed-regions-cover', label: 'a surplus managedRegions entry for a file that does not exist',
+    apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
+      c._aiwf.managedRegions['.claude/agents/ghost.md'] = { upstream: '0'.repeat(64), local: '0'.repeat(64), override: false };
+    }) },
+  { id: 'managed-regions-cover', label: 'a managed artifact with no bookkeeping entry at all',
+    apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
+      delete c._aiwf.managedRegions['.claude/agents/writer.md'];
+    }) },
+  { id: 'config-schema-valid', label: 'a config that violates the schema (an OS channel that does not exist)',
+    apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => { c.os = 'solaris'; }) },
 ];
 
 // Checks with no control, and the honest reason. Printed in the summary so the gap is visible
@@ -1157,6 +1442,8 @@ function main() {
     sectionGate1Identity(tmpRoot);
     sectionGate2(tmpRoot);
     sectionGate3(tmpRoot);
+    sectionGate3Toggle(tmpRoot);
+    sectionConfigSchema(tmpRoot);
     sectionHookWiring();
     sectionWrappers();
     sectionResolver(tmpRoot);
@@ -1172,8 +1459,12 @@ function main() {
   console.log('\n---- COVERAGE (honest) ----');
   console.log('EXECUTED: both enforcement hooks, run as the harness runs them (identity matrix, the two');
   console.log('captured live payloads, the dispatch gate\'s ask/passthrough matrix, and the route-state');
-  console.log('guard across R2/R3/unusable/cleared/absent state) - and the role resolver at its real');
-  console.log('entrypoint, including the claude factory fallback and the qal enabled gate.');
+  console.log('guard across R2/R3/unusable/cleared/absent state, and its enforcement.routeWriteGuard toggle,');
+  console.log('whose every failure mode leaves the guard ARMED) - the role resolver at its real entrypoint,');
+  console.log('including the claude factory fallback and the qal enabled gate - and the config validator at');
+  console.log('its own CLI entrypoint, in both directions (a healthy config is accepted, the mistakes the');
+  console.log('interview can produce are rejected), with its own controls for a broken schema and a');
+  console.log('validator stripped of its assertions.');
   console.log('STATIC: the wrapper flag locks, asserted as exact ARGV PAIRS rather than bare words (so a');
   console.log('flag switched in the argv while the old word survives in a comment still fails), the hook');
   console.log('wiring, the ASCII-only wrapper sources, and the payload cross-references.');

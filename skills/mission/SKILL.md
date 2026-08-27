@@ -26,8 +26,10 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
 ## Steps
 
 1. **Doctrine preflight (mandatory).** Read the plugin's `docs/WORKFLOW.md` and `docs/LOOP.md` IN
-   FULL before anything else. The project's `CLAUDE.md` is a thin entry point and does not carry the
-   gate texts.
+   FULL, and this project's `{{config.paths.overridesDoc}}` IN FULL, before anything else. The
+   project's `CLAUDE.md` is a thin entry point and does not carry the gate texts; the overrides
+   document is where the project's identity, hard rules and product truth live, so a session without
+   it works without the product's boundaries.
 2. **Identify the active mission.** List `{{config.paths.plansDir}}/active/PLAN_*.md` - plansDir is
    the PARENT of `active/` and `archive/`, and only `active/` holds candidates (an archived plan is
    finished by definition). Pick the plan

@@ -1,0 +1,361 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://promptandpray.dev/schema/aiwf.config.schema.json",
+  "title": "PromptAndPray project config (aiwf.config.json) - v1",
+  "$comment": "THE SINGLE AUTHORITY for the shape of a generated project config. scripts/setup/validate-config.mjs INTERPRETS this file; it never restates a constraint in code. The keyword subset used here is exactly the subset that interpreter supports ($schema, $id, $comment, title, description, default, type, enum, const, required, properties, additionalProperties, patternProperties, items, minItems, minLength, minimum, pattern, allOf, if, then, else) - the interpreter THROWS on any keyword it does not implement, so adding a keyword here without teaching it there fails loudly instead of being silently ignored.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "_aiwf",
+    "project",
+    "os",
+    "operator",
+    "roles",
+    "loop",
+    "enforcement",
+    "verify",
+    "paths",
+    "review"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Informational pointer at this file inside the installed plugin payload, written by /pnp:setup as an absolute path so an editor can resolve it. Nothing in the loop READS it: the authority for which payload version produced this config is _aiwf.installedPluginVersion. The path is machine-local and goes stale if the plugin root moves; that is harmless."
+    },
+
+    "_aiwf": {
+      "type": "object",
+      "description": "Bookkeeping. Written by /pnp:setup and /pnp:update ONLY - a manual edit here is a self-check failure, not a legitimate override.",
+      "additionalProperties": false,
+      "required": [
+        "installedPluginVersion",
+        "lastMigrationApplied",
+        "migrationJournal",
+        "managedRegions",
+        "ownedAskRules",
+        "suppressedAskRules"
+      ],
+      "properties": {
+        "installedPluginVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)*$",
+          "description": "Semver of the plugin payload that last wrote this file. The version interlock compares the payload version against this value."
+        },
+        "lastMigrationApplied": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Id of the last migration whose operations are reflected in this project. A fresh install applies nothing and stamps the last entry of the payload migration manifest."
+        },
+        "migrationJournal": {
+          "type": ["null", "object"],
+          "description": "null when no migration is in flight. Otherwise the write-ahead record of the operation being applied ({migration, opIndex, state, target, preHash, postHash, resolution}). Its exact shape is owned by the migration runner (P3) and is deliberately NOT constrained here in v1 - a schema that guesses at it would reject the runner's own journal."
+        },
+        "managedRegions": {
+          "type": "object",
+          "description": "One entry per managed artifact. The key is <file>#<region> for a marker region and <file> for a whole-file artifact (paths are project-relative, with forward slashes). upstream = sha256 of the content last RENDERED from the payload; local = sha256 of the content last ACCEPTED. Clean state: actual == local == upstream and override false.",
+          "additionalProperties": false,
+          "patternProperties": {
+            "^[^\\s].*$": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["upstream", "local", "override"],
+              "properties": {
+                "upstream": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                "local": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                "override": {
+                  "type": "boolean",
+                  "description": "true once the operator kept their own version through a conflict dialog; updates then only record the new upstream, they never apply it."
+                }
+              }
+            }
+          }
+        },
+        "ownedAskRules": {
+          "type": "array",
+          "description": "ONLY the ask rules setup actually INSERTED into .claude/settings.json. A desired rule that was already present is never owned and is never removed.",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "suppressedAskRules": {
+          "type": "array",
+          "description": "Tombstones: owned rules the operator removed by hand. They are never forced back; only an explicit operator action clears a tombstone.",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "description", "stack", "root", "defaultBranch"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The product name, rendered into every agent file and into the managed CLAUDE.md region. No default: a project without a name is not describable to a reviewer."
+        },
+        "description": {
+          "type": "string",
+          "default": "",
+          "description": "One line of product description for the agent templates. Empty is legal."
+        },
+        "stack": {
+          "type": "string",
+          "default": "",
+          "description": "One line of stack description, e.g. \"Next.js + Postgres\". Empty is legal."
+        },
+        "root": {
+          "type": "string",
+          "minLength": 1,
+          "default": "auto",
+          "description": "\"auto\" (resolve via `git rev-parse --show-toplevel` at Step 0) or an absolute path for a non-git edge case. NEVER render this value into a template: the render-time placeholder {{resolvedRoot}} carries the resolved path, because the literal \"auto\" is not one."
+        },
+        "defaultBranch": {
+          "type": "string",
+          "minLength": 1,
+          "default": "main"
+        }
+      }
+    },
+
+    "os": {
+      "type": "string",
+      "enum": ["windows", "linux", "macos"],
+      "default": "windows",
+      "description": "Selects the wrapper variant (ps/sh) and the OS syntax of the permission rules. The schema admits all three channels because the config format is not what is missing; the INTERVIEW refuses linux/macos fail-closed while only the PowerShell wrappers ship, so v0.1 cannot generate an installation it cannot run."
+    },
+
+    "operator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["language", "roleNicknames"],
+      "properties": {
+        "language": {
+          "type": "string",
+          "minLength": 1,
+          "default": "en",
+          "description": "The COO <-> operator channel ONLY. Agent-to-agent traffic (briefs, verdicts) is English by doctrine and is not configurable."
+        },
+        "roleNicknames": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["writer", "reviewer", "qa"],
+          "description": "Conversational names used in the operator channel. Nothing in the filesystem, frontmatter or code is renamed with them.",
+          "properties": {
+            "writer": { "type": "string", "minLength": 1, "default": "Writer" },
+            "reviewer": { "type": "string", "minLength": 1, "default": "Reviewer" },
+            "qa": { "type": "string", "minLength": 1, "default": "QA" }
+          }
+        }
+      }
+    },
+
+    "roles": {
+      "type": "object",
+      "description": "THE canonical source for roles. roles.json and the agent frontmatter are RENDERED from this block and hashed as managed artifacts; a manual edit there is a conflict, not a second source.",
+      "additionalProperties": false,
+      "required": ["writer", "reviewer", "qa", "qal"],
+      "properties": {
+        "writer": {
+          "type": "object",
+          "description": "The Writer is a Claude subagent by definition - it has no engine key and no external host.",
+          "additionalProperties": false,
+          "required": ["model", "effort"],
+          "properties": {
+            "model": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Rendered into .claude/agents/writer.md frontmatter, which is the ONE place a full model id is valid (a dispatch must never pass `model`, because the Agent tool override accepts tier aliases only)."
+            },
+            "effort": { "$comment": "see the effort note on roles.reviewer.effort", "type": "string", "minLength": 1 }
+          }
+        },
+        "reviewer": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["engine", "model", "effort"],
+          "properties": {
+            "engine": {
+              "type": "string",
+              "enum": ["claude", "codex"],
+              "default": "claude",
+              "description": "The factory default is claude - a missing config must never fall back to a paid external engine; codex is a deliberate opt-in."
+            },
+            "model": {
+              "type": "string",
+              "minLength": 1,
+              "description": "engine=claude: a TIER ALIAS only (the conditional below), because a claude-hosted role is dispatched through the Agent tool's `model` override whose enum is the aliases. engine=codex: any non-empty engine atom - the codex model vocabulary is the external engine's, and pinning it here would reject valid ids."
+            },
+            "effort": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Reasoning effort. Deliberately NOT an enum: the two consumers accept a free string and neither publishes a closed set to derive one from - a claude-hosted role renders it into agent frontmatter (`effort: <value>`), a codex-hosted role passes it as `-c model_reasoning_effort=<value>` to an external engine that owns its own vocabulary. The role resolver states the same contract (scripts/native/ps/aiwf-roles.ps1: engine has an enum, effort has none - a bad value is the engine's business) and rejects only a non-string or empty value, which is exactly what minLength 1 enforces here. Values seen in practice: \"high\", \"medium\"."
+            }
+          },
+          "allOf": [
+            {
+              "$comment": "The tier-alias conditional. Asserted independently by the self-check (tier-alias-<role>).",
+              "if": {
+                "required": ["engine"],
+                "properties": { "engine": { "const": "claude" } }
+              },
+              "then": {
+                "properties": {
+                  "model": { "enum": ["fable", "opus", "sonnet", "haiku"] }
+                }
+              }
+            }
+          ]
+        },
+        "qa": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["engine", "model", "effort"],
+          "properties": {
+            "engine": { "type": "string", "enum": ["claude", "codex"], "default": "claude" },
+            "model": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Same rule as roles.reviewer.model: tier alias when claude-hosted, free engine atom when codex-hosted."
+            },
+            "effort": { "$comment": "see the effort note on roles.reviewer.effort", "type": "string", "minLength": 1 }
+          },
+          "allOf": [
+            {
+              "if": {
+                "required": ["engine"],
+                "properties": { "engine": { "const": "claude" } }
+              },
+              "then": {
+                "properties": {
+                  "model": { "enum": ["fable", "opus", "sonnet", "haiku"] }
+                }
+              }
+            }
+          ]
+        },
+        "qal": {
+          "type": "object",
+          "description": "The live-browser exception. codex-only by design: the capability could not be proven on a Claude host, so no Claude QAL host exists.",
+          "additionalProperties": false,
+          "required": ["enabled", "engine", "model", "effort"],
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": false,
+              "description": "Factory default false. /pnp:qal is fail-closed: it needs enabled=true AND engine codex AND an explicit operator request in the current conversation."
+            },
+            "engine": { "const": "codex", "default": "codex" },
+            "model": { "type": "string", "minLength": 1 },
+            "effort": { "$comment": "see the effort note on roles.reviewer.effort", "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+
+    "loop": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["correctionRoundsCap"],
+      "properties": {
+        "correctionRoundsCap": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 2,
+          "description": "The project's VALUE for the correction-round cap. The lift gate around it (only the operator lifts it, by an explicit word, one extension at a time, recorded in the ticket's PLAN entry) is payload mechanics and is not configurable."
+        }
+      }
+    },
+
+    "enforcement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["routeWriteGuard"],
+      "properties": {
+        "routeWriteGuard": {
+          "type": "boolean",
+          "default": true,
+          "description": "Gate 3. true (or the key/config absent) = while .aiwf/route-state.json names an R2/R3 route, the main session may write only docs/**, .aiwf/** and root-level *.md. Only an explicit boolean false switches the route-state check off; Gate 1 (non-writer subagents cannot write) is never affected by this key."
+        }
+      }
+    },
+
+    "verify": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commands"],
+      "properties": {
+        "commands": {
+          "type": "array",
+          "default": [],
+          "description": "The project's VERIFY commands, quoted literally into every ticket brief. An empty list is legal but means briefs carry no verification track.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "run"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "run": { "type": "string", "minLength": 1 },
+              "cwd": {
+                "type": "string",
+                "description": "Optional, project-relative. Omitted means the project root."
+              }
+            }
+          }
+        },
+        "e2e": {
+          "type": "object",
+          "description": "The QA proof surface. Optional in the schema; /pnp:setup always writes the block (with enabled=false when the project has no E2E surface) so the qa agent template never renders an unresolvable path.",
+          "additionalProperties": false,
+          "required": ["enabled", "cwd", "runner", "specDir", "outputDir"],
+          "properties": {
+            "enabled": { "type": "boolean", "default": false },
+            "cwd": { "type": "string", "default": "." },
+            "runner": { "type": "string", "minLength": 1, "default": "npx playwright test" },
+            "specDir": { "type": "string", "minLength": 1, "default": "e2e" },
+            "outputDir": { "type": "string", "minLength": 1, "default": "test-results/aiwf-qa" }
+          }
+        }
+      }
+    },
+
+    "paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scratchDir", "plansDir", "overridesDoc"],
+      "properties": {
+        "scratchDir": {
+          "const": ".aiwf",
+          "default": ".aiwf",
+          "description": "FIXED in v0.1: the route-state guard resolves .aiwf/route-state.json literally, so a project that moved its scratch elsewhere would arm a guard nobody writes to. The self-check asserts the same value (scratch-is-aiwf)."
+        },
+        "plansDir": {
+          "type": "string",
+          "minLength": 1,
+          "default": "docs/backlogs",
+          "description": "The PARENT of active/ and archive/. A plan ENTERS the repo into <plansDir>/active/ at approval and LEAVES into <plansDir>/archive/ when every ticket is closed; setup creates both subdirectories."
+        },
+        "overridesDoc": {
+          "type": "string",
+          "minLength": 1,
+          "default": "docs/ai/PROJECT_OVERRIDES.md",
+          "description": "Project-relative path of the overrides document: this project's identity and hard rules. Every role reads it before starting work."
+        }
+      }
+    },
+
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["productBoundaryChecks"],
+      "properties": {
+        "productBoundaryChecks": {
+          "type": "array",
+          "default": [],
+          "description": "Free-text lines rendered into the reviewer agent (and the Writer's operating rules). This is where a project's product-boundary and tenancy clauses live - never in the payload. Empty is a valid answer.",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

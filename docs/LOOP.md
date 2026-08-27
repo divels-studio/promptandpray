@@ -104,7 +104,10 @@ count stays two) keeps the main session out of code-class files while an R2/R3 t
 dispatched: with `<projectDir>/.aiwf/route-state.json` naming an R2/R3 route, a main-session
 Edit/Write is allowed only under `docs/**`, `.aiwf/**` and root-level `*.md`. No state file, or the
 cleared `{}`, means the guard is invisible and R1 work is untouched; the Writer is never gated by
-it. It covers the Edit/Write tool class only - shell mutations remain doctrine.
+it. It covers the Edit/Write tool class only - shell mutations remain doctrine. A project can switch
+it off with `enforcement.routeWriteGuard: false` in `aiwf.config.json`; every other state of that
+key - absent, non-boolean, or a config that cannot be read at all - leaves the guard ARMED, and the
+toggle never reaches Gate 1.
 
 ## Commit gate (click-based, no tokens)
 
