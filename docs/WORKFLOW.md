@@ -334,6 +334,16 @@ Four brief-authoring failures each cost a correction round:
   from the source comes back as a review blocker; a brief that instructs the Writer to read the
   source before writing any factual claim produces zero factual errors.
 
+**The brief carries its full precision in the first draft.** A readiness or implementation
+review VERIFIES decisions the COO has already made; it is never the mechanism that extracts
+them. Every looseness the COO can see while authoring is resolved and written down before the
+first review pass is dispatched: a CLI surface names its modes and exit codes; a record names
+its exact field shape (discriminated where it varies); a "reuse where it fits" names the files
+and functions; a test is an enumerated matrix, not a category; a verify command is literal and
+can fail with a named output. Leaving such items to the Reviewer buys the same precision at
+review-quota price, with the auditor effectively writing the design. This changes nothing about
+routes or pass counts - it is about the state of the document when the first pass starts.
+
 Briefs, micro-rounds, and verdict contracts between the COO and the subagents are written in
 **plain engineering English** - the operator does not read agent-to-agent traffic, and another
 language between agents risks ambiguity and lost-in-translation on technical wording. The

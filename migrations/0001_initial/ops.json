@@ -1,0 +1,5 @@
+{
+  "migration": "0001_initial",
+  "targetPluginVersion": "0.1.0",
+  "operations": []
+}

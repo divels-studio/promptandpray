@@ -645,6 +645,149 @@ function sectionConfigSchema(tmpRoot) {
 }
 
 // ---------------------------------------------------------------------------
+// SECTION 3d - the migration payload and its validator
+// ---------------------------------------------------------------------------
+// The manifest is not decoration: setup STAMPS its last entry as `lastMigrationApplied` on a fresh
+// install, and every /pnp:update walks it. A payload with a gap, a duplicate id, a non-monotonic
+// version or an unknown op type would be discovered by the runner halfway through a sequence - so
+// it is validated here, at the validator's REAL entrypoint, in both directions: the shipped payload
+// is accepted, and each way of breaking it is rejected.
+const PAYLOAD_VALIDATOR = path.join(PLUGIN_ROOT, 'scripts', 'update', 'validate-payload.mjs');
+
+function runPayloadValidator(root) {
+  const r = spawnSync(process.execPath, [PAYLOAD_VALIDATOR, '--plugin-root', root], { encoding: 'utf8' });
+  return { status: r.status, stdout: (r.stdout || '').trim(), stderr: (r.stderr || '').trim() };
+}
+
+function sectionMigrationPayload(tmpRoot) {
+  section('MIGRATION PAYLOAD - the manifest, the ops, and a validator that really rejects');
+  const manifestFile = path.join(PLUGIN_ROOT, 'migrations', 'index.json');
+  const manifest = readJson(manifestFile);
+  if (!check('migrations/index.json exists and parses', Array.isArray(manifest), manifestFile)) return;
+  check('the manifest is a non-empty ordered array', manifest.length > 0, `${manifest.length} entries`);
+  // The FIRST entry is the id every v0.1 installation carries as lastMigrationApplied. Renaming it
+  // would break the "lastMigrationApplied exists in the manifest" invariant for every one of them.
+  check('the first entry is 0001_initial (the id every v0.1 install already carries)',
+    manifest[0] && manifest[0].id === '0001_initial', manifest[0] ? String(manifest[0].id) : 'no first entry');
+  const pluginVersion = (readJson(path.join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json')) || {}).version;
+  check('the LAST entry targets the payload version (no unapplied-migration/version disagreement)',
+    manifest[manifest.length - 1] && manifest[manifest.length - 1].targetPluginVersion === pluginVersion,
+    `${manifest[manifest.length - 1] && manifest[manifest.length - 1].targetPluginVersion} vs ${pluginVersion}`);
+  check('scripts/update/validate-payload.mjs exists', fs.existsSync(PAYLOAD_VALIDATOR));
+  {
+    const r = runPayloadValidator(PLUGIN_ROOT);
+    check('the shipped payload passes the validator at its real entrypoint (exit 0)', r.status === 0,
+      r.status === 0 ? r.stdout : `exit ${r.status} - ${r.stderr.split('\n').slice(0, 3).join(' | ').slice(0, 200)}`);
+  }
+  // Every managed artifact `--resolve <key>` can reopen must still have a payload template. The
+  // template paths themselves are proven to exist by the payload cross-reference check below.
+  const migrateSrc = readText(path.join(PLUGIN_ROOT, 'scripts', 'update', 'migrate.mjs')) || '';
+  check('migrate.mjs maps every resolvable managed artifact to a payload template',
+    ['CLAUDE.md#aiwf-core', 'roles.json.tmpl', 'writer.md.tmpl', 'reviewer.md.tmpl', 'qa.md.tmpl']
+      .every((needle) => migrateSrc.includes(needle)));
+
+  // --- the controls: each way of breaking a payload must be REJECTED ------------------------
+  const dir = path.join(tmpRoot, 'payload');
+  fs.mkdirSync(dir, { recursive: true });
+  const variant = (name, mutate) => {
+    const root = path.join(dir, name);
+    fs.mkdirSync(path.join(root, '.claude-plugin'), { recursive: true });
+    fs.copyFileSync(path.join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json'), path.join(root, '.claude-plugin', 'plugin.json'));
+    copyTree(path.join(PLUGIN_ROOT, 'migrations'), path.join(root, 'migrations'));
+    copyTree(path.join(PLUGIN_ROOT, 'templates'), path.join(root, 'templates'));
+    mutate(root);
+    return root;
+  };
+  const addMigration = (root, id, version, operations) => {
+    const m = readJson(path.join(root, 'migrations', 'index.json'));
+    m.push({ id, targetPluginVersion: version });
+    fs.writeFileSync(path.join(root, 'migrations', 'index.json'), JSON.stringify(m, null, 2) + '\n');
+    fs.mkdirSync(path.join(root, 'migrations', id), { recursive: true });
+    fs.writeFileSync(path.join(root, 'migrations', id, 'ops.json'),
+      JSON.stringify({ migration: id, targetPluginVersion: version, operations }, null, 2) + '\n');
+    fs.writeFileSync(path.join(root, 'migrations', id, 'NOTES.md'), `# ${id}\n\ncontrol fixture\n`);
+  };
+  const setVersion = (root, version) => {
+    const j = readJson(path.join(root, '.claude-plugin', 'plugin.json'));
+    j.version = version;
+    fs.writeFileSync(path.join(root, '.claude-plugin', 'plugin.json'), JSON.stringify(j, null, 2) + '\n');
+  };
+  const rejects = (name, root, fragment) => {
+    const r = runPayloadValidator(root);
+    check(`CONTROL: ${name} is REJECTED`, r.status === 1 && (!fragment || r.stderr.includes(fragment)),
+      `exit ${r.status} - ${r.stderr.split('\n').slice(0, 3).join(' | ').slice(0, 180)}`);
+  };
+
+  // Every mutation below is expressed RELATIVE to the manifest it found, never against literal ids
+  // or versions: this section also runs against a payload copy carrying extra migrations (the update
+  // suite points it at one), and a control that only breaks a one-entry manifest would pass there by
+  // accident - which is the definition of a vacuous control.
+  const pad = (n) => String(n).padStart(4, '0');
+  const bumpMinor = (v) => { const [a, b] = String(v).split('.').map(Number); return `${a}.${b + 1}.0`; };
+  const count = manifest.length;
+  const firstId = manifest[0].id;
+  const writeOps = (root, id, operations) => {
+    const entry = readJson(path.join(root, 'migrations', 'index.json')).find((e) => e.id === id);
+    fs.writeFileSync(path.join(root, 'migrations', id, 'ops.json'),
+      JSON.stringify({ migration: id, targetPluginVersion: entry.targetPluginVersion, operations }, null, 2) + '\n');
+  };
+
+  rejects('a gap in the numeric sequence', variant('gap', (root) => {
+    addMigration(root, `${pad(count + 2)}_gap`, bumpMinor(pluginVersion), []);
+    setVersion(root, bumpMinor(pluginVersion));
+  }), 'position');
+  rejects('a duplicate migration id', variant('dup', (root) => {
+    const m = readJson(path.join(root, 'migrations', 'index.json'));
+    m.push({ id: firstId, targetPluginVersion: bumpMinor(pluginVersion) });
+    fs.writeFileSync(path.join(root, 'migrations', 'index.json'), JSON.stringify(m, null, 2) + '\n');
+    setVersion(root, bumpMinor(pluginVersion));
+  }), 'DUPLICATE');
+  rejects('a non-monotonic version', variant('nonmono', (root) => {
+    addMigration(root, `${pad(count + 1)}_back`, '0.0.0', []);
+    setVersion(root, '0.0.0');
+  }), 'strictly monotonic');
+  rejects('a last entry that is not the payload version', variant('lastver', (root) => {
+    addMigration(root, `${pad(count + 1)}_ahead`, bumpMinor(pluginVersion), []);
+  }), 'LAST manifest entry');
+  rejects('an orphan migration directory with no manifest entry', variant('orphan', (root) => {
+    const id = `${pad(count + 5)}_orphan`;
+    fs.mkdirSync(path.join(root, 'migrations', id), { recursive: true });
+    fs.writeFileSync(path.join(root, 'migrations', id, 'ops.json'),
+      JSON.stringify({ migration: id, targetPluginVersion: '9.9.9', operations: [] }, null, 2) + '\n');
+    fs.writeFileSync(path.join(root, 'migrations', id, 'NOTES.md'), '# orphan\n');
+  }), 'SILENTLY never run');
+  rejects('an unknown op type', variant('unknownop', (root) => {
+    writeOps(root, firstId, [{ op: 'delete-everything', file: 'x' }]);
+  }), 'unknown op type');
+  rejects('an unknown field on a known op', variant('unknownfield', (root) => {
+    writeOps(root, firstId, [{ op: 'note', id: 'x', text: 'y', docRefs: [], sneaky: true }]);
+  }), 'unknown field');
+  rejects('a file path that escapes the project', variant('traversal', (root) => {
+    writeOps(root, firstId, [{ op: 'rerender-managed-region', file: '../outside.md', region: null, template: 'templates/roles.json.tmpl' }]);
+  }), 'traverse upwards');
+  // The template FILE is there and the REGION is not: existence alone would let this through, and it
+  // would then resolve to nothing halfway through a migration.
+  rejects('a template reference naming a region the template does not carry', variant('badregion', (root) => {
+    writeOps(root, firstId, [{ op: 'rerender-managed-region', file: 'CLAUDE.md', region: 'aiwf-core', template: 'templates/CLAUDE.md.tmpl#definitely-not-a-region' }]);
+  }), 'names a region the template does not carry');
+  rejects('a manifest version with a leading zero', variant('leadingzero', (root) => {
+    const m = readJson(path.join(root, 'migrations', 'index.json'));
+    m[m.length - 1].targetPluginVersion = `0${m[m.length - 1].targetPluginVersion}`;
+    fs.writeFileSync(path.join(root, 'migrations', 'index.json'), JSON.stringify(m, null, 2) + '\n');
+  }), 'plain MAJOR.MINOR.PATCH');
+  // A payload version that cannot be ordered is a payload DEFECT (exit 1), not a run that could not
+  // start (exit 2): the difference is what the operator is told to go and fix.
+  rejects('a payload version that is not a plain triple', variant('badpayloadversion', (root) => {
+    const j = readJson(path.join(root, '.claude-plugin', 'plugin.json'));
+    j.version = `${j.version}-rc.1`;
+    fs.writeFileSync(path.join(root, '.claude-plugin', 'plugin.json'), JSON.stringify(j, null, 2) + '\n');
+  }), 'plugin.json declares version');
+  rejects('a missing ops.json', variant('noops', (root) => {
+    fs.rmSync(path.join(root, 'migrations', firstId, 'ops.json'));
+  }), 'ops.json is missing');
+}
+
+// ---------------------------------------------------------------------------
 // SECTION 4 - hook wiring (the plugin's own hooks.json)
 // ---------------------------------------------------------------------------
 function sectionHookWiring() {
@@ -1214,12 +1357,36 @@ function sectionPayloadIntegrity() {
       /Step 0/.test(src) && /git rev-parse --show-toplevel/.test(src) && /aiwf\.config\.json/.test(src) && /\/pnp:setup/.test(src));
   }
 
-  // Cross-reference integrity: every payload doc / wrapper / template a payload file names must exist.
+  // The version interlock is ENFORCED, not described. Two documented exceptions run regardless -
+  // the command that applies the migrations and the diagnostic you need most when something is out
+  // of date cannot be the two commands that refuse to run.
+  const INTERLOCK_EXCEPTIONS = ['update', 'selfcheck'];
+  const notEnforcing = [];
+  const stillFuture = [];
+  for (const name of skillDirs) {
+    const src = readText(path.join(skillsDir, name, 'SKILL.md')) || '';
+    if (/enforced\s+from v0\.2|do not simulate/i.test(src)) stillFuture.push(name);
+    if (INTERLOCK_EXCEPTIONS.includes(name)) continue;
+    if (!/scripts\/update\/aiwf-update\.mjs/.test(src) || !/--check/.test(src)) notEnforcing.push(name);
+  }
+  check('no skill still carries the future-tense interlock wording ("enforced from v0.2" / "do not simulate")',
+    stillFuture.length === 0, stillFuture.join(', '));
+  check('every non-exception skill runs the real --check entrypoint in Step 0',
+    notEnforcing.length === 0, notEnforcing.length ? notEnforcing.join(', ') : `${skillDirs.length - INTERLOCK_EXCEPTIONS.length} skills`);
+  check('both documented interlock exceptions ship', INTERLOCK_EXCEPTIONS.every((n) => skillDirs.includes(n)), skillDirs.join(', '));
+
+  // Cross-reference integrity: every payload doc / wrapper / template / script a payload file names
+  // must exist. The update engine and the migration payload are scanned too - a migration's
+  // `template`/`ruleset` reference and the resolvable-artifact map in migrate.mjs are exactly the
+  // kind of path that rots silently. test-*.mjs is excluded on purpose: the acceptance suites build
+  // deliberately broken payload copies, and their fixture paths are not references to resolve.
   const payloadFiles = []
     .concat(listFiles(skillsDir, (p) => p.endsWith('.md')))
     .concat(listFiles(path.join(PLUGIN_ROOT, 'docs'), (p) => p.endsWith('.md')))
-    .concat(listFiles(path.join(PLUGIN_ROOT, 'templates'), () => true));
-  const REF = /(?:docs\/[A-Za-z0-9_.-]+\.md|schema\/[A-Za-z0-9_.-]+\.json|scripts\/native\/ps\/[A-Za-z0-9_.-]+\.ps1|scripts\/(?:engine|selfcheck|spike|setup)\/[A-Za-z0-9_.-]+\.(?:js|mjs)|templates\/[A-Za-z0-9_./-]+\.(?:tmpl|json))/g;
+    .concat(listFiles(path.join(PLUGIN_ROOT, 'templates'), () => true))
+    .concat(listFiles(path.join(PLUGIN_ROOT, 'migrations'), () => true))
+    .concat(listFiles(path.join(PLUGIN_ROOT, 'scripts', 'update'), (p) => p.endsWith('.mjs') && !path.basename(p).startsWith('test-')));
+  const REF = /(?:docs\/[A-Za-z0-9_.-]+\.md|schema\/[A-Za-z0-9_.-]+\.json|migrations\/[A-Za-z0-9_./-]+\.(?:json|md)|scripts\/native\/ps\/[A-Za-z0-9_.-]+\.ps1|scripts\/(?:engine|selfcheck|spike|setup|update)\/[A-Za-z0-9_.-]+\.(?:js|mjs)|templates\/[A-Za-z0-9_./-]+\.(?:tmpl|json))/g;
   const dangling = [];
   let refCount = 0;
   for (const f of payloadFiles) {
@@ -1444,6 +1611,7 @@ function main() {
     sectionGate3(tmpRoot);
     sectionGate3Toggle(tmpRoot);
     sectionConfigSchema(tmpRoot);
+    sectionMigrationPayload(tmpRoot);
     sectionHookWiring();
     sectionWrappers();
     sectionResolver(tmpRoot);
@@ -1465,6 +1633,10 @@ function main() {
   console.log('its own CLI entrypoint, in both directions (a healthy config is accepted, the mistakes the');
   console.log('interview can produce are rejected), with its own controls for a broken schema and a');
   console.log('validator stripped of its assertions.');
+  console.log('The MIGRATION PAYLOAD is validated at the runner\'s own validator entrypoint, in both directions:');
+  console.log('the shipped manifest and every ops.json are accepted, and a gap, a duplicate id, a non-monotonic');
+  console.log('version, a last entry that is not the payload version, an orphan directory, an unknown op type or');
+  console.log('field, and a traversal path are each REJECTED.');
   console.log('STATIC: the wrapper flag locks, asserted as exact ARGV PAIRS rather than bare words (so a');
   console.log('flag switched in the argv while the old word survives in a comment still fails), the hook');
   console.log('wiring, the ASCII-only wrapper sources, and the payload cross-references.');

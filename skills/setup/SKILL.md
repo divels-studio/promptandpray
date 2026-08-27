@@ -20,10 +20,12 @@ seeded once and then owned by the operator forever.
    fresh-install path - it is what this skill creates. If the file EXISTS, this is a re-interview:
    say so in one line, offer `/pnp:update` for a version change, and continue only if the operator
    wants to change answers.
-3. **Version interlock.** With an existing config, compare the payload version with
-   `_aiwf.installedPluginVersion` and point at `/pnp:update` if there are unapplied migrations. This
-   step is DOCUMENTED here but **enforced from v0.2**, when the migration runner ships - do not
-   simulate the check before then.
+3. **Version interlock.** With an existing config, run
+   `node "${CLAUDE_PLUGIN_ROOT}/scripts/update/aiwf-update.mjs" --check --project-root "<root>"`.
+   Any non-zero exit means migrations are pending (or an interrupted update is in flight): **stop**
+   and point the operator at `/pnp:update` - a re-interview over an out-of-date project would
+   re-render artifacts the pending migrations are about to touch. On a fresh install there is no
+   config and nothing to check.
 
 Notation: `{{config.some.key}}` in this document means *substitute the value you read in step 2*.
 

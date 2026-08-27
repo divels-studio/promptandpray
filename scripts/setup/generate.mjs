@@ -53,6 +53,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { collectDefaults, formatErrors, loadSchema, validate } from './validate-config.mjs';
+import { validatePayload } from '../update/validate-payload.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const DEFAULT_PLUGIN_ROOT = path.resolve(HERE, '..', '..');
@@ -65,14 +66,12 @@ const AGENTS_DIR = path.join('.claude', 'agents');
 const REGION_ID = 'aiwf-core';
 const REGION_BEGIN = `<!-- BEGIN ${REGION_ID} -->`;
 const REGION_END = `<!-- END ${REGION_ID} -->`;
-// Fresh install: nothing is executed, the last manifest entry is STAMPED. No migrations ship yet,
-// so this is the id the first manifest entry will carry (migrations/0001_initial - the runner is P3).
-const FRESH_INSTALL_MIGRATION = '0001_initial';
 // Stand-in bookkeeping, used ONLY to shape-check the answers before the real block exists. Never
-// written anywhere: the real _aiwf is built at the end of the plan, from the run's own hashes.
+// written anywhere, and deliberately NOT the fresh-install stamp: the real _aiwf is built at the end
+// of the plan, and its lastMigrationApplied is READ FROM THE PAYLOAD MANIFEST (see planInstall).
 const PROBE_AIWF = {
   installedPluginVersion: '0.0.0',
-  lastMigrationApplied: FRESH_INSTALL_MIGRATION,
+  lastMigrationApplied: '0000_probe',
   migrationJournal: null,
   managedRegions: {},
   ownedAskRules: [],
@@ -81,10 +80,13 @@ const PROBE_AIWF = {
 
 const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const toPosix = (p) => p.split(path.sep).join('/');
-const lf = (text) => text.replace(/\r\n/g, '\n');
+// lf / jsonText / orderConfig are exported for the UPDATE engine (scripts/update/migrate.mjs): a
+// rendered artifact, its hash and the config's byte layout must mean exactly the same thing in both
+// engines, and a second copy of these three lines is precisely how they would drift apart.
+export const lf = (text) => text.replace(/\r\n/g, '\n');
 export const sha256 = (text) => crypto.createHash('sha256').update(lf(text), 'utf8').digest('hex');
 const readText = (p) => { try { return fs.readFileSync(p, 'utf8'); } catch { return null; } };
-const jsonText = (value) => JSON.stringify(value, null, 2) + '\n';
+export const jsonText = (value) => JSON.stringify(value, null, 2) + '\n';
 
 // ---------------------------------------------------------------------------
 // Template rendering
@@ -236,7 +238,7 @@ const CONFIG_KEY_ORDER = ['$schema', '_aiwf', 'project', 'os', 'operator', 'role
 
 // Deterministic key order, so a re-run produces a byte-identical file. Keys the order does not know
 // are appended rather than dropped: an unknown key must fail schema validation loudly, not vanish.
-function orderConfig(config) {
+export function orderConfig(config) {
   const out = {};
   for (const key of CONFIG_KEY_ORDER) if (key in config) out[key] = config[key];
   for (const key of Object.keys(config)) if (!(key in out)) out[key] = config[key];
@@ -297,6 +299,20 @@ export function planInstall({ pluginRoot, projectRoot, answers, confirmRemoveSta
 
   const pluginJson = JSON.parse(fs.readFileSync(path.join(pluginRoot, '.claude-plugin', 'plugin.json'), 'utf8'));
   const activeSchema = schema || loadSchema(path.join(pluginRoot, 'schema', 'aiwf.config.schema.json'));
+
+  // ---- 0. the migration payload, BEFORE anything else ----------------------
+  // A fresh install executes no migration - it generates the current state and STAMPS the last
+  // manifest entry. That stamp is read from the manifest rather than hardcoded, because a constant
+  // here would silently disagree with the payload the moment a migration ships, and every later
+  // /pnp:update would then fail the "lastMigrationApplied exists in the manifest" invariant on a
+  // project this engine installed itself. The whole payload is validated (not just the manifest):
+  // an install whose migrations are incoherent is an install no update can ever move forward.
+  const payload = validatePayload(pluginRoot);
+  if (payload.errors.length) {
+    blockers.push(`the plugin's migration payload is not coherent, so nothing was installed:\n  - ${payload.errors.join('\n  - ')}`);
+    return { config: null, actions: [], blockers, notes, artifacts: [], askPlan: null };
+  }
+  const freshInstallMigration = payload.manifest[payload.manifest.length - 1].id;
 
   // ---- 1. the config object ------------------------------------------------
   const existingRaw = readText(abs(CONFIG_REL));
@@ -564,7 +580,7 @@ export function planInstall({ pluginRoot, projectRoot, answers, confirmRemoveSta
       installedPluginVersion: pluginJson.version,
       lastMigrationApplied: (previousAiwf && typeof previousAiwf.lastMigrationApplied === 'string' && previousAiwf.lastMigrationApplied)
         ? previousAiwf.lastMigrationApplied
-        : FRESH_INSTALL_MIGRATION,
+        : freshInstallMigration,
       migrationJournal: previousAiwf ? (previousAiwf.migrationJournal ?? null) : null,
       managedRegions,
       ownedAskRules: askPlan.owned,
