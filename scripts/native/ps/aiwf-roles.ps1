@@ -28,12 +28,24 @@
         `claude` and the QAL wrapper refuses - fail-closed by construction;
     (b) the file EXISTS but the role does not resolve to a valid (engine, model, effort) triple -
         engine one of (claude|codex), model and effort non-empty strings - -> ONE line to STDERR
-        and `exit 2`. This single branch folds malformed JSON / missing role / unknown engine /
-        empty model / empty effort: there is no per-class taxonomy, and `effort` has NO enum (a bad
-        value like "wat" passes through and the engine rejects it VISIBLY at call time - documented
-        natural fail-closed).
+        and `exit 2`. This single branch folds malformed JSON / a non-object root / missing role /
+        unknown engine / empty model / empty effort: there is no per-class taxonomy, and `effort`
+        has NO enum (a bad value like "wat" passes through and the engine rejects it VISIBLY at
+        call time - documented natural fail-closed).
         Rationale: silently dispatching the WRONG engine burns the operator's paid budget invisibly,
         so the resolver guards intent + money, not `validateState` theater.
+
+  STRICT SHAPE (the same contract in both channels, deliberately NOT PowerShell's defaults):
+    - the top level must be a JSON OBJECT. An array root is rejected, even a single-element one:
+      `$raw | ConvertFrom-Json` ENUMERATES an array, so `[{...}]` would arrive unwrapped and
+      resolve a file the bash channel rejects.
+    - the role key is matched CASE-SENSITIVELY (`-ceq`), and so is `enabled`. PowerShell property
+      lookup is case-insensitive by default, which would resolve a `"Reviewer"` key here and fail
+      on bash.
+    Both are host-language accidents, not contract: roles.json is a MACHINE-RENDERED artifact with
+    exact-case keys, so a file that only resolves by accident of the host language is a defect the
+    resolver must report rather than paper over. Both collapse into the single exit-2 path above.
+
   The config file is read EXACTLY ONCE.
 
 .PARAMETER Role
@@ -96,16 +108,40 @@ if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
   $enabled = $null
   try {
     $cfg   = $raw | ConvertFrom-Json -ErrorAction Stop
-    $entry = $cfg.$Role
-    if ($null -ne $entry) {
-      $engine = $entry.engine
-      $model  = $entry.model
-      $effort = $entry.effort
-      if ($Role -eq 'qal') {
-        # `enabled` is read LEAN and FAIL-CLOSED: it never opens a third failure path. Only a real
-        # boolean true enables QAL; absent, null, "true" as a string, 1, or anything else -> false.
-        $enabled = ($entry.PSObject.Properties.Name -contains 'enabled') -and ($entry.enabled -is [bool]) -and $entry.enabled
+    # STRICT SHAPE (see the header): an object root only - an array root would be member-enumerated
+    # by PowerShell and resolve a file the bash channel rejects - and a CASE-SENSITIVE key lookup,
+    # because `$cfg.$Role` matches "Reviewer" for "reviewer" and bash never would.
+    # The object-root rule is checked on the RAW TEXT, and it has to be: `$raw | ConvertFrom-Json`
+    # ENUMERATES an array root, so a single-element `[{...}]` arrives here already unwrapped into
+    # the object it contains and no test on $cfg can see that it was an array (measured, not
+    # assumed). PowerShell 5.1 has no -NoEnumerate to turn that off. The first non-whitespace
+    # character of a JSON object root is `{`; a leading BOM is stripped with the whitespace.
+    $rootIsObject = ($raw -replace '^[\uFEFF\s]+', '').StartsWith('{')
+    $entry = $null
+    if ($rootIsObject -and ($null -ne $cfg) -and -not ($cfg -is [array]) -and ($cfg -is [System.Management.Automation.PSCustomObject])) {
+      # Every read below is a DIRECT ASSIGNMENT from the property, deliberately not a helper that
+      # returns: a PowerShell `return` unrolls an array through the pipeline, so `"model": ["a"]`
+      # would arrive as the string "a" and pass the validation this resolver exists to fail
+      # (measured). Direct assignment preserves the value's real type.
+      foreach ($p in $cfg.PSObject.Properties) {
+        if ($p.Name -ceq $Role) { $entry = $p.Value; break }
       }
+    }
+    if ($null -ne $entry) {
+      # `switch -CaseSensitive` IS the case-sensitive key lookup: PowerShell's `$entry.engine` is
+      # case-insensitive and would resolve an "Engine" key the bash channel never sees.
+      # `enabled` is read LEAN and FAIL-CLOSED: it never opens a third failure path. Only a real
+      # boolean true enables QAL; absent, null, "true" as a string, 1, "Enabled" -> false.
+      $enabledValue = $null
+      foreach ($p in $entry.PSObject.Properties) {
+        switch -CaseSensitive ($p.Name) {
+          'engine'  { $engine = $p.Value }
+          'model'   { $model  = $p.Value }
+          'effort'  { $effort = $p.Value }
+          'enabled' { $enabledValue = $p.Value }
+        }
+      }
+      if ($Role -eq 'qal') { $enabled = ($enabledValue -is [bool]) -and $enabledValue }
     }
   } catch {
     $engine  = $null

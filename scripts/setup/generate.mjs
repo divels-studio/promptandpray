@@ -67,7 +67,7 @@ import { finishWithSelfCheck } from '../selfcheck/run-selfcheck.mjs';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const DEFAULT_PLUGIN_ROOT = path.resolve(HERE, '..', '..');
 
-export const SUPPORTED_OS = 'windows';
+export const SUPPORTED_OS = ['windows', 'linux', 'macos'];
 export const CONFIG_REL = path.join('.claude', 'aiwf-native', 'aiwf.config.json');
 export const ROLES_REL = path.join('.claude', 'aiwf-native', 'roles.json');
 export const SETTINGS_REL = path.join('.claude', 'settings.json');
@@ -101,7 +101,7 @@ export const jsonText = (value) => JSON.stringify(value, null, 2) + '\n';
 // Template rendering
 // ---------------------------------------------------------------------------
 // The syntax is exactly what the shipped templates use, and nothing more:
-//   {{config.<dotpath>}}   {{resolvedRoot}}   {{this}} / {{this.<key>}} inside a block
+//   {{config.<dotpath>}}   {{resolvedRoot}}   {{wrappers.<key>}}   {{this}} / {{this.<key>}} inside a block
 //   {{#each <path>}} ... {{/each}}            {{^<path>}} ... {{/<path>}}   (inverse)
 // An unresolvable path THROWS. A typo in a template must break the install loudly rather than
 // render an empty string into a doctrine file nobody re-reads.
@@ -204,7 +204,7 @@ function renderNodes(nodes, scope) {
   return out;
 }
 
-/** Renders one template. `context` is `{ config, resolvedRoot }`. Never mutates the context. */
+/** Renders one template. `context` is `{ config, resolvedRoot, wrappers }`. Never mutates it. */
 export function renderTemplate(text, context) {
   const tree = parseBlocks(tokenize(stripStandaloneTags(text)));
   return renderNodes(tree.children, context);
@@ -222,13 +222,44 @@ export function resolveProjectRoot(explicit, cwd = process.cwd()) {
   return null;
 }
 
-/** The fail-closed OS gate. The schema admits three channels; v0.1 can only GENERATE one. */
+/**
+ * The fail-closed OS gate. All three channels now ship wrappers (`scripts/native/ps` for windows,
+ * `scripts/native/sh` for linux/macos), so this admits the schema's enum and still refuses anything
+ * outside it - an unknown channel would render an installation pointing at wrappers that do not
+ * exist.
+ */
 export function assertSupportedOs(os) {
-  if (os === SUPPORTED_OS) return;
+  if (SUPPORTED_OS.includes(os)) return;
   throw new SetupError(
-    `os "${os}" is not supported before 1.0 - only "${SUPPORTED_OS}" ships wrappers today, and setup ` +
-    'refuses rather than generate an installation this version cannot run.',
+    `os "${os}" is not a supported channel - setup generates one of ${SUPPORTED_OS.map((o) => `"${o}"`).join(', ')} ` +
+    'and refuses rather than generate an installation this version cannot run.',
   );
+}
+
+// ---------------------------------------------------------------------------
+// The wrapper channel (which OS-specific scripts the rendered project layer points at)
+// ---------------------------------------------------------------------------
+// The template engine has variables, {{#each}} and inverse blocks - and deliberately no
+// conditionals - so the OS branch is taken HERE and the templates read a value. windows keeps the
+// PowerShell channel; linux and macos share the bash channel. Paths are PAYLOAD-relative and
+// POSIX-separated, exactly as the templates spelled them before this became a variable, so an
+// os=windows render is byte-identical to the pre-channel one.
+export function wrapperContext(os) {
+  // No silent default: an unknown channel here would quietly hand every template the bash paths.
+  // Both callers gate on assertSupportedOs first, so this only fires if a third caller forgets to.
+  assertSupportedOs(os);
+  const dir = os === 'windows' ? 'scripts/native/ps' : 'scripts/native/sh';
+  const ext = os === 'windows' ? '.ps1' : '.sh';
+  const at = (name) => `${dir}/${name}${ext}`;
+  return {
+    dir,
+    ext,
+    shell: os === 'windows' ? 'pwsh' : 'bash',
+    roles: at('aiwf-roles'),
+    review: at('codex-review'),
+    qa: at('codex-qa'),
+    qal: at('codex-qal'),
+  };
 }
 
 export class SetupError extends Error {}
@@ -363,7 +394,9 @@ export function planInstall({ pluginRoot, projectRoot, answers, confirmRemoveSta
 
   // ---- 2. render every managed artifact ------------------------------------
   const resolvedRoot = projectRoot;
-  const context = { config: merged, resolvedRoot };
+  // `wrappers` is COMPUTED from merged.os (see wrapperContext): the templates name a wrapper by
+  // role, never by OS, so one template renders both channels.
+  const context = { config: merged, resolvedRoot, wrappers: wrapperContext(merged.os) };
   const artifacts = [];
   const addArtifact = (key, rel, content) => { artifacts.push({ key, rel, file: abs(rel), content }); };
 

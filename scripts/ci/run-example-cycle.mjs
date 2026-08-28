@@ -17,7 +17,12 @@
  *   later run into a green report about a tree nobody wrote deliberately.
  *
  * CLI
- *   node scripts/ci/run-example-cycle.mjs [--work-dir <dir>] [--keep] [--quiet]
+ *   node scripts/ci/run-example-cycle.mjs [--work-dir <dir>] [--answers <file>] [--keep] [--quiet]
+ *     --answers <file>  the answers file the install step uses. Default:
+ *                       examples/example-project/answers.json (the windows channel). CI also runs
+ *                       the cycle with answers-linux.json on its POSIX legs: the OS channel changes
+ *                       which wrapper paths get RENDERED, and rendering is pure file writing, so the
+ *                       cycle is host-independent and either answers file runs anywhere.
  *     --work-dir <dir>  where to run. Default: a fresh mkdtemp under the system temp directory.
  *                       This directory is REMOVED when the run finishes, so it is judged first and
  *                       refused (exit 2, nothing created) when it is the repository itself, inside
@@ -49,7 +54,7 @@ const EXAMPLE_DIR = path.join(REPO_ROOT, 'examples', 'example-project');
 // split on spaces - so a work directory whose path contains a space still produces the right argv.
 // The README lists these lines verbatim; the self-check compares the two sets in both directions.
 export const DOCUMENTED_COMMANDS = [
-  'node <payload>/scripts/setup/interview.mjs --answers-file <repo>/examples/example-project/answers.json --plugin-root <payload> --project-root <project> --no-seeds',
+  'node <payload>/scripts/setup/interview.mjs --answers-file <answers> --plugin-root <payload> --project-root <project> --no-seeds',
   'node <payload2>/scripts/update/validate-payload.mjs --plugin-root <payload2>',
   'node <payload2>/scripts/update/aiwf-update.mjs --check --plugin-root <payload2> --project-root <project>',
   'node <payload2>/scripts/update/aiwf-update.mjs --dry-run --plugin-root <payload2> --project-root <project>',
@@ -310,10 +315,47 @@ const SEED_PROSE = 'This file existed before PromptAndPray was installed';
 // be refused for the reason it is dangerous, not shadowed by whatever else happens to be wrong.
 const workDirPlan = planWorkDir(flag('--work-dir'));
 
-for (const rel of ['answers.json', 'README.md', 'seed/CLAUDE.md', 'seed/.claude/settings.json', 'seed/src/hello.mjs', 'bump/bump.json', 'bump/schema-key.json']) {
+for (const rel of ['answers.json', 'answers-linux.json', 'README.md', 'seed/CLAUDE.md', 'seed/.claude/settings.json', 'seed/src/hello.mjs', 'bump/bump.json', 'bump/schema-key.json']) {
   if (!fs.existsSync(path.join(EXAMPLE_DIR, ...rel.split('/')))) {
     bail(`examples/example-project/${rel} is missing - the cycle runs on committed fixture data, and this run cannot start without it.`);
   }
+}
+
+// The answers file is DATA the caller may choose, so every way of getting it wrong is refused
+// BEFORE anything is created, rather than surfacing nine steps later as an install failure with a
+// misleading reason: no value, an EMPTY value, a path that cannot be read, and a path that is not a
+// regular file.
+//
+// The first two are the dangerous ones, and they are the reason the flag is read ONCE here with
+// ABSENT separated from EMPTY. Both `--answers` (terminal) and `--answers ""` are falsy, so the
+// obvious `flag(...) || <default>` reading turns either of them into "use the windows answers
+// file" - and a CI leg written to exercise the POSIX channel would then run the windows one and
+// report green. `null` below means the flag was never passed; anything else is a value the caller
+// typed and this run is accountable to.
+const ANSWERS_ARG = (() => {
+  const at = args.indexOf('--answers');
+  return at === -1 ? null : args[at + 1];
+})();
+if (ANSWERS_ARG !== null) {
+  if (ANSWERS_ARG === undefined) {
+    bail('--answers was passed without a value. It is not optional-with-a-default once written: a '
+      + 'silent fall back to the default answers file would run a cycle nobody asked for.');
+  }
+  if (ANSWERS_ARG.trim() === '') {
+    bail('--answers was passed an EMPTY value. An empty string is not "no flag": falling back to '
+      + 'the default answers file here would run a cycle nobody asked for - on the channel the '
+      + 'caller was trying NOT to run.');
+  }
+}
+const ANSWERS_FILE = path.resolve(ANSWERS_ARG === null ? path.join(EXAMPLE_DIR, 'answers.json') : ANSWERS_ARG);
+let answersStat = null;
+try {
+  answersStat = fs.statSync(ANSWERS_FILE);
+} catch (e) {
+  bail(`--answers "${ANSWERS_FILE}" cannot be read (${e.code || e.message}) - the install step needs a real answers file.`);
+}
+if (!answersStat.isFile()) {
+  bail(`--answers "${ANSWERS_FILE}" is not a regular file - the install step reads it as JSON.`);
 }
 
 const bump = readJson(path.join(EXAMPLE_DIR, 'bump', 'bump.json'));
@@ -381,6 +423,7 @@ const RESOLUTIONS = path.join(workDir, 'resolutions.json');
 const RESOLVE_TAKE_NEW = path.join(workDir, 'resolve-take-new.json');
 const run = makeRunner({
   '<repo>': REPO_ROOT,
+  '<answers>': ANSWERS_FILE,
   '<work>': workDir,
   '<payload2>': PAYLOAD_2, // before <payload>, so the longer placeholder is matched first
   '<payload>': PAYLOAD_1,
@@ -390,6 +433,7 @@ const run = makeRunner({
 if (!QUIET) {
   console.log('PromptAndPray example cycle');
   console.log(`repository : ${REPO_ROOT}`);
+  console.log(`answers    : ${ANSWERS_FILE}`);
   console.log(`work dir   : ${workDir}${OWNS_WORK_DIR ? ' (created by this run - removed whole at the end)' : ' (supplied and empty - only what this run creates is removed)'}`);
 }
 

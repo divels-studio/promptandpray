@@ -37,13 +37,17 @@ counters** - the loop is convention + the native click-based permission gates on
   truth. The Reviewer/QA roles are the opposite case - `/pnp:review` and `/pnp:qa` always pass
   `model: $role.model`, so their `roles.json` values must stay tier aliases.
 - **Reviewer** - read-only, **engine-neutral** (Codex or Claude per
-  `.claude/aiwf-native/roles.json`, resolved by `scripts/native/ps/aiwf-roles.ps1`). `/pnp:review`
-  resolves the host once and dispatches either the Codex wrapper
-  `scripts/native/ps/codex-review.ps1` **or** the `reviewer` Claude subagent (`Read/Grep/Glob`
-  only). Adversarial code/design review; reports `pass` / `pass-with-notes` / `fail` (per
+  `.claude/aiwf-native/roles.json`, resolved by the role resolver of this project's OS channel -
+  `scripts/native/ps/aiwf-roles.ps1` on `windows`, `scripts/native/sh/aiwf-roles.sh` on
+  `linux`/`macos`; `config.os` selects it, and the two channels mirror each other flag for flag).
+  `/pnp:review` resolves the host once and dispatches either the Codex wrapper
+  (`scripts/native/ps/codex-review.ps1` / `scripts/native/sh/codex-review.sh`) **or** the `reviewer`
+  Claude subagent (`Read/Grep/Glob` only). Adversarial code/design review; reports
+  `pass` / `pass-with-notes` / `fail` (per
   `docs/REVIEW_CHECKLIST.md`; `PASS`/`NEEDS-FIX` is reserved for plan-readiness); never edits.
 - **QA** - read-only, **engine-neutral** (Codex or Claude per `roles.json`). `/pnp:qa` resolves the
-  host once and dispatches either `scripts/native/ps/codex-qa.ps1` **or** the `qa` Claude subagent,
+  host once and dispatches either the Codex wrapper (`scripts/native/ps/codex-qa.ps1` /
+  `scripts/native/sh/codex-qa.sh`) **or** the `qa` Claude subagent,
   **only** when the ticket has observable runtime/UI behavior. QA is an **artifact judge**, not a
   live browser: a Codex-launched browser cannot run under the read-only sandbox
   (`docs/QA_BROWSER_INVESTIGATION.md`), so the browser lives in the **test runner**, outside the
@@ -54,9 +58,10 @@ counters** - the loop is convention + the native click-based permission gates on
   are missing/unreadable). On the **codex** host that read is under a hard OS `--sandbox read-only`
   cell; on the **claude** host QA is a `Read/Grep/Glob`-only subagent held read-only by its tool
   allowlist + Gate 1, with no OS cell. QA never starts a dev server and never drives a browser.
-- **QAL** - live agentic-browser Codex via `scripts/native/ps/codex-qal.ps1` (wrapped by
-  `/pnp:qal`). The **operator-gated exception**: runs **only after an explicit operator request in
-  the current conversation** and only when `roles.qal.enabled` is true - the orchestrator never
+- **QAL** - live agentic-browser Codex via `scripts/native/ps/codex-qal.ps1` /
+  `scripts/native/sh/codex-qal.sh` (wrapped by `/pnp:qal`). The **operator-gated exception**: runs
+  **only after an explicit operator request in the current conversation** and only when
+  `roles.qal.enabled` is true - the orchestrator never
   launches it on its own. It runs **without an OS sandbox** (`--sandbox danger-full-access`, the
   minimal non-bypass flag that runs a Codex-launched browser - the broader
   `--dangerously-bypass-approvals-and-sandbox` also works but additionally strips the approval

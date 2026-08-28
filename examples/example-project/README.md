@@ -11,6 +11,7 @@ the repository; the cycle asserts that the repository is byte-identical afterwar
 | path | what it is |
 |------|------------|
 | `answers.json` | a complete, non-interactive answers file for `/pnp:setup` (Windows channel, both review roles claude-hosted on tier aliases, QAL off). It is also a valid config body: the self-check validates it against `schema/aiwf.config.schema.json`. |
+| `answers-linux.json` | the same answers on the `linux` OS channel, and nothing else changed. It is what the ubuntu and macos CI legs run the cycle with: the channel decides which wrapper paths get RENDERED into the project, and rendering is pure file writing, so this file runs on any host - including Windows. |
 | `seed/` | the host project BEFORE the install: its own `CLAUDE.md` prose, its own `.claude/settings.json` with one foreign permission rule, and `src/hello.mjs` - the target of the configured VERIFY command. The install must append beside all three, never over them. |
 | `bump/` | the simulated `0.1.0 -> 0.2.0` release: the manifest entry (`bump.json`), the migration itself (`0002_example-bump/`, one operation of each of the four types), and the schema property that migration introduces (`schema-key.json`). |
 
@@ -24,6 +25,8 @@ runs on every push. Substitute the four paths and you can run it by hand:
 - `<payload>` - `<work>/payload-0.1.0`, a copy of `<repo>`
 - `<payload2>` - `<work>/payload-0.2.0`, that copy with `bump/` overlaid onto it
 - `<project>` - `<work>/project`, a copy of `seed/`
+- `<answers>` - `<repo>/examples/example-project/answers.json`, or the file passed to `--answers`
+  (CI's POSIX legs pass `answers-linux.json`)
 
 (Quote any path that contains a space.)
 
@@ -32,7 +35,7 @@ runs on every push. Substitute the four paths and you can run it by hand:
 permission rule stays in `settings.json`.
 
 ```
-node <payload>/scripts/setup/interview.mjs --answers-file <repo>/examples/example-project/answers.json --plugin-root <payload> --project-root <project> --no-seeds
+node <payload>/scripts/setup/interview.mjs --answers-file <answers> --plugin-root <payload> --project-root <project> --no-seeds
 ```
 
 exit 0
@@ -106,6 +109,7 @@ exit 0
 node scripts/ci/run-example-cycle.mjs
 ```
 
-`--work-dir <dir>` picks the directory, `--keep` leaves it behind to inspect, `--quiet` prints only
-failures and the summary. Exit 0 = every check passed, 1 = at least one failed, 2 = it could not
-start.
+`--work-dir <dir>` picks the directory, `--answers <file>` picks the answers file (default
+`answers.json`; CI's ubuntu and macos legs pass `examples/example-project/answers-linux.json`),
+`--keep` leaves it behind to inspect, `--quiet` prints only failures and the summary. Exit 0 = every
+check passed, 1 = at least one failed, 2 = it could not start.

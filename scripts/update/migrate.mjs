@@ -81,7 +81,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   CONFIG_REL, ROLES_REL, SETTINGS_REL,
-  jsonText, lf, orderConfig, planAskRules, renderTemplate, sha256,
+  jsonText, lf, orderConfig, planAskRules, renderTemplate, sha256, wrapperContext,
 } from '../setup/generate.mjs';
 import { formatErrors, loadSchema, validate } from '../setup/validate-config.mjs';
 import { compareVersions, parseVersion, validatePayload } from './validate-payload.mjs';
@@ -320,12 +320,14 @@ function setConfigPath(config, dotted, value) {
 
 function renderContext(projectRoot, config) {
   // The same context shape setup renders with, so an identical template yields identical bytes:
-  // the payload half of the config, plus the resolved root. `$schema` and `_aiwf` are stripped
-  // because setup renders from the answers, which never carry them.
+  // the payload half of the config, the resolved root, and the OS-derived wrapper channel.
+  // `$schema` and `_aiwf` are stripped because setup renders from the answers, which never carry
+  // them. `wrappers` is COMPUTED from config.os by the same function setup uses - a second copy of
+  // that mapping here is exactly how the two engines would drift into different bytes.
   const payloadHalf = { ...config };
   delete payloadHalf.$schema;
   delete payloadHalf._aiwf;
-  return { config: payloadHalf, resolvedRoot: projectRoot };
+  return { config: payloadHalf, resolvedRoot: projectRoot, wrappers: wrapperContext(payloadHalf.os) };
 }
 
 function renderRef(pluginRoot, ref, context) {

@@ -31,7 +31,9 @@ What is here:
   cannot use the Edit/Write family, plus Gate 3, the route-state write guard that keeps the main
   session out of code while an R2/R3 ticket is open - and the dispatch gate, Gate 2, which turns
   every Writer dispatch into an operator click.
-- **The role resolver and the Codex wrappers** (`scripts/native/ps/`): one review role resolved to
+- **The role resolver and the Codex wrappers** (`scripts/native/ps/` on Windows,
+  `scripts/native/sh/` on Linux/macOS - two channels that mirror each other): one review role
+  resolved to
   `{engine, model, effort}`, and three Codex hosts whose flags are literals in the script rather
   than defaults inherited from a config - two of them sandboxed read-only (Reviewer, QA) and QAL,
   which trades the sandbox away to get a live browser and is therefore operator-gated and off by
@@ -46,16 +48,19 @@ What is here:
   than reading their source, and then insists its own checks can fail: the project-layer, example
   fixture and provenance sections each sabotage a copy one way per assertion and require the target
   check to flip. A check with no control is printed by name with the reason, never quietly as a pass.
-- **CI** (`.github/workflows/ci.yml`): on every push and pull request, one step per gate, none of
-  them advisory. Two things are deliberately left out and say so in the file: the manifest
-  validation, which needs a CLI a runner does not have, and hook parity against the reference
-  implementation, which lives on an operator machine and is a local check by nature.
+- **CI** (`.github/workflows/ci.yml`): on every push and pull request, three OS legs (windows,
+  ubuntu, macos), one step per gate, none of them advisory. Three things are deliberately left out
+  and say so in the file: the manifest validation, which needs a CLI a runner does not have; hook
+  parity against the reference implementation, which lives on an operator machine and is a local
+  check by nature; and `shellcheck` on the macos leg, where it is not preinstalled (the ubuntu leg
+  runs it).
 
 What is **not** here yet:
 
-- **Linux and macOS.** Only the PowerShell wrappers ship; `/pnp:setup` refuses any OS channel other
-  than `windows`, fail-closed, before it plans a single file - v0.1 will not generate an
-  installation it cannot run. The bash mirrors and the OS matrix land before 1.0.
+- **A Linux or macOS install anybody has actually run.** Both channels ship - the bash wrappers
+  mirror the PowerShell ones flag for flag, `/pnp:setup` accepts all three OS channels, and the CI
+  matrix runs the gates on ubuntu and macos runners. What is missing is field use: the POSIX legs
+  first execute on the operator's first push, and no POSIX machine has hosted a real loop yet.
 - **The dogfood installation.** No real project has adopted this plugin yet. The install and update
   paths are proven by the acceptance suites and by an end-to-end cycle over committed data, not yet
   by a project that lives on it.

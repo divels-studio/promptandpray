@@ -8,11 +8,14 @@ allowed-tools: Read, Grep, Glob, Bash, Agent
 
 Adversarial, **read-only** code/design review of the Writer's diff. The Reviewer role is
 **engine-neutral**: its host is data in the project's `.claude/aiwf-native/roles.json`, resolved by
-the plugin's `scripts/native/ps/aiwf-roles.ps1`. This skill resolves the host once and dispatches
-one of two branches:
+the plugin's role resolver - `scripts/native/ps/aiwf-roles.ps1` on os `windows`,
+`scripts/native/sh/aiwf-roles.sh` on os `linux`/`macos` (`{{config.os}}`, read in Step 0, decides
+which; the two channels have the same CLI contract and the same exit codes). This skill resolves the
+host once and dispatches one of two branches:
 
-- **engine `codex`** -> the canonical wrapper
-  `${CLAUDE_PLUGIN_ROOT}/scripts/native/ps/codex-review.ps1` (`docs/CODEX_REVIEW_QA_RECIPE.md`) -
+- **engine `codex`** -> the canonical wrapper for this OS channel,
+  `${CLAUDE_PLUGIN_ROOT}/scripts/native/ps/codex-review.ps1` or
+  `${CLAUDE_PLUGIN_ROOT}/scripts/native/sh/codex-review.sh` (`docs/CODEX_REVIEW_QA_RECIPE.md`) -
   read-only by a **hard OS `--sandbox read-only` cell**; the wrapper locks the flags and takes the
   brief on stdin.
 - **engine `claude`** -> the `reviewer` subagent via the **Agent tool** (the project's rendered
@@ -41,14 +44,26 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
 
 ## Step 0b - Resolve the reviewer host (run the resolver once)
 
+Run the channel `{{config.os}}` selects. Both print the same snapshot object.
+
+**os `windows`:**
+
 ```powershell
 $role = pwsh -NoProfile -File "${CLAUDE_PLUGIN_ROOT}/scripts/native/ps/aiwf-roles.ps1" `
   -Role reviewer -RolesPath "<root>/.claude/aiwf-native/roles.json" -AsJson | ConvertFrom-Json
 # $role.engine -> 'codex' or 'claude';  $role.model -> the model to use on that engine
 ```
 
-`-RolesPath` is mandatory: the plugin payload has no project of its own, so the path is built from
-the root resolved in Step 0. If the resolver exits non-zero (exit 2), it printed the reason to
+**os `linux` / `macos`:**
+
+```bash
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/native/sh/aiwf-roles.sh" \
+  --role reviewer --roles-path "<root>/.claude/aiwf-native/roles.json" --as-json
+# prints one JSON object: {"role":..,"engine":..,"model":..,"effort":..} - read the fields from it
+```
+
+`-RolesPath` / `--roles-path` is mandatory: the plugin payload has no project of its own, so the
+path is built from the root resolved in Step 0. If the resolver exits non-zero (exit 2), it printed the reason to
 stderr - stop and report the misconfiguration to the COO; do not guess a host. `$role.engine`
 selects the branch below; `$role.model` is the model that branch runs.
 
@@ -134,11 +149,21 @@ Deliver the brief to the wrapper on **stdin** - never as a positional/argv argum
 reads the model from the resolver itself, so no model is passed here.
 
 **Write the brief to the fixed path `<root>/{{config.paths.scratchDir}}/review-brief.txt`** (Write
-tool), then invoke the wrapper with exactly this command, character for character:
+tool), then invoke the wrapper of this project's OS channel (`{{config.os}}`) with exactly that
+command, character for character:
+
+**os `windows`:**
 
 ```powershell
 Get-Content '<root>/{{config.paths.scratchDir}}/review-brief.txt' -Raw | `
   & "${CLAUDE_PLUGIN_ROOT}/scripts/native/ps/codex-review.ps1" -ProjectRoot '<root>'
+```
+
+**os `linux` / `macos`:**
+
+```bash
+cat '<root>/{{config.paths.scratchDir}}/review-brief.txt' \
+  | bash "${CLAUDE_PLUGIN_ROOT}/scripts/native/sh/codex-review.sh" --project-root '<root>'
 ```
 
 The path is fixed **on purpose**. A permission rule can only match a constant command string, so an
@@ -169,9 +194,11 @@ gate**, so a timeout kill spends the operator's budget and returns no verdict. B
 no such cap and the harness notifies you on completion. Never re-run a timed-out pass in the
 foreground hoping it will fit this time.
 
-The PowerShell block above is the **only canonical wrapper-invocation path**. From a non-PowerShell
-shell, start an interactive `pwsh` session (or put the block in a PowerShell script file) and run
-the block there - do not inline it through another shell's quoting.
+The block of this project's OS channel is the **only canonical wrapper-invocation path**: on os
+`windows` the PowerShell one, on os `linux`/`macos` the bash one. Run it in that shell - from a
+foreign shell, start an interactive `pwsh` (or `bash`) session, or put the block in a script file,
+and run it there; do not inline it through another shell's quoting. The two channels are mirrors,
+not alternatives: never invoke the `.sh` wrapper on a windows install or the `.ps1` on a POSIX one.
 
 ### Step 3 - claude branch (`$role.engine -eq 'claude'`) - dispatch the reviewer subagent
 

@@ -31,20 +31,24 @@ overrides") - not every ticket is a ceremony.
   into a native Yes/No dialog.)
 - **Reviewer / Code Reviewer** - read-only adversarial code/design review; not browser QA.
   **Engine-neutral**: the host is data in the project's `.claude/aiwf-native/roles.json`
-  (resolved by the plugin's `scripts/native/ps/aiwf-roles.ps1`), so `/pnp:review` dispatches
-  either the read-only Codex wrapper `scripts/native/ps/codex-review.ps1` (`--sandbox
-  read-only`, prompt via stdin) **or** the `reviewer` Claude subagent (`Read/Grep/Glob` only).
+  (resolved by the plugin's role resolver - `scripts/native/ps/aiwf-roles.ps1` on os `windows`,
+  `scripts/native/sh/aiwf-roles.sh` on os `linux`/`macos`), so `/pnp:review` dispatches
+  either the read-only Codex wrapper of that channel (`scripts/native/ps/codex-review.ps1` /
+  `scripts/native/sh/codex-review.sh`; `--sandbox read-only`, prompt via stdin) **or** the
+  `reviewer` Claude subagent (`Read/Grep/Glob` only).
   On the codex host the read-only boundary is a hard OS cell; on the claude host Gate 1 catches
   the Edit/Write family (tool-availability + convention + git reversibility, no OS cell).
 - **QA** - read-only; verifies real runtime/UI behavior against acceptance criteria; engages
   only for observable runtime/UI behavior. An **artifact judge**, not a live browser: the Writer
   authors an E2E `.spec`, the orchestrator runs the configured test runner, and QA reads the
   artifacts (report/screenshots/traces). **Engine-neutral**: `/pnp:qa` dispatches either
-  `scripts/native/ps/codex-qa.ps1` (`--sandbox read-only`) **or** the `qa` Claude subagent
+  `scripts/native/ps/codex-qa.ps1` / `scripts/native/sh/codex-qa.sh` (`--sandbox read-only`)
+  **or** the `qa` Claude subagent
   (`Read/Grep/Glob` only); never starts a dev server, never drives a browser. (A Codex-launched
   browser cannot run under the read-only sandbox - see `docs/QA_BROWSER_INVESTIGATION.md`.)
 - **QAL** - live agentic-browser Codex via `/pnp:qal` (wraps
-  `scripts/native/ps/codex-qal.ps1`). The **operator-gated exception**, invoked only after an
+  `scripts/native/ps/codex-qal.ps1` / `scripts/native/sh/codex-qal.sh`). The **operator-gated
+  exception**, invoked only after an
   explicit operator request, and only when `roles.qal.enabled` is true; runs **without an OS
   sandbox** (containment is cwd/profile hygiene, not a guarantee). Not part of the default
   route - read-only QA is the default.
@@ -551,15 +555,20 @@ The loop is reproducible from Git plus the plugin payload - no external runtime 
   `templates/agents/writer.md.tmpl`; invoked via the Agent tool with `subagent_type: "writer"`.
 - **Reviewer / QA:** **engine-neutral** - the host per role is data in the project's
   `.claude/aiwf-native/roles.json` (itself rendered from `aiwf.config.json.roles.*`), resolved by
-  `scripts/native/ps/aiwf-roles.ps1` (entrypoint `-Role <r> -RolesPath <p> -AsJson`; a missing
-  config file falls back to the factory `claude`/`opus`/`high` record). `/pnp:review` and
-  `/pnp:qa` dispatch either the read-only Codex wrappers `scripts/native/ps/codex-review.ps1` /
-  `scripts/native/ps/codex-qa.ps1` (recipe: `docs/CODEX_REVIEW_QA_RECIPE.md`; needs the Codex
-  CLI) **or** the `reviewer` / `qa` Claude subagents (`Read/Grep/Glob` only; read-only by Gate 1
+  the role resolver of this project's OS channel - `scripts/native/ps/aiwf-roles.ps1` (entrypoint
+  `-Role <r> -RolesPath <p> -AsJson`) on `windows`, `scripts/native/sh/aiwf-roles.sh` (entrypoint
+  `--role <r> --roles-path <p> --as-json`) on `linux`/`macos`; on either, a missing config file
+  falls back to the factory `claude`/`opus`/`high` record. `/pnp:review` and
+  `/pnp:qa` dispatch either the read-only Codex wrappers of that channel
+  (`scripts/native/ps/codex-review.ps1` / `scripts/native/ps/codex-qa.ps1`, or
+  `scripts/native/sh/codex-review.sh` / `scripts/native/sh/codex-qa.sh`; recipe:
+  `docs/CODEX_REVIEW_QA_RECIPE.md`; needs the Codex CLI) **or** the `reviewer` / `qa` Claude
+  subagents (`Read/Grep/Glob` only; read-only by Gate 1
   + tool allowlist). QA is an artifact judge on either host: the orchestrator runs the configured
   E2E runner (which produces the JSON report/traces/screenshots) and QA reads those artifacts
   read-only - QA does not drive a browser. The live-browser tools are used by the operator-gated
-  **QAL** (`scripts/native/ps/codex-qal.ps1`, `/pnp:qal`, codex-only), not by QA.
+  **QAL** (`scripts/native/ps/codex-qal.ps1` / `scripts/native/sh/codex-qal.sh`, `/pnp:qal`,
+  codex-only), not by QA.
 - **Enforcement:** Gate 1 (the PreToolUse mutation guard, which also carries Gate 3, the
   route-state write guard) and Gate 2 (the PreToolUse dispatch gate), both wired through the
   plugin's `hooks/hooks.json` - two hook files, three responsibilities - plus the declarative `ask`

@@ -7,10 +7,12 @@
  *
  *     A. PAYLOAD INVARIANTS - properties of the plugin itself. The two enforcement hooks are
  *        EXECUTED as the harness launches them (`node <hook>` with a JSON PreToolUse payload on
- *        stdin, decision read from stdout), the role resolver is EXECUTED at its real entrypoint
- *        (`pwsh -NoProfile -File aiwf-roles.ps1 -Role <r> -RolesPath <p> -AsJson`), and the Codex
- *        wrappers are checked STATICALLY for their locked flags. These assertions hold for every
- *        installation, because their subject is the payload.
+ *        stdin, decision read from stdout), BOTH role resolvers are EXECUTED at their real
+ *        entrypoints (`pwsh -NoProfile -File aiwf-roles.ps1 -Role <r> -RolesPath <p> -AsJson` and
+ *        `bash aiwf-roles.sh --role <r> --roles-path <p> --as-json`) over the same fixture matrix,
+ *        with the bash channel held to the PowerShell one fixture by fixture, and the Codex
+ *        wrappers of both channels are checked STATICALLY for their locked flags. These assertions
+ *        hold for every installation, because their subject is the payload.
  *
  *        The EXAMPLE FIXTURE section belongs to this class: examples/example-project/ is committed
  *        DATA the example cycle runs on, and data rots as silently as code - so the answers file is
@@ -175,6 +177,38 @@ function resolveRole(role, rolesPath) {
   const args = ['-NoProfile', '-File', RESOLVER, '-Role', role, '-AsJson'];
   if (rolesPath !== undefined && rolesPath !== null) args.push('-RolesPath', rolesPath);
   const r = spawnSync(PWSH, args, { encoding: 'utf8' });
+  let json = null;
+  try { json = r.stdout && r.stdout.trim() ? JSON.parse(r.stdout) : null; } catch (e) { json = null; }
+  return { status: r.status, stdout: r.stdout, stderr: r.stderr, json };
+}
+
+// ---------------------------------------------------------------------------
+// bash host discovery (the other resolver channel is a .sh and must run for real too)
+// ---------------------------------------------------------------------------
+// Deliberately the SAME posture as the PowerShell host above, because the two channels carry the
+// same contract: a host that cannot be found is not an exemption - the section below FAILS and says
+// the contract is unproven in this run. On Windows the two Git-for-Windows locations are tried
+// after PATH, which is where a bash lives on a machine that has git but no `bash` on PATH.
+function findBash() {
+  const candidates = ['bash'];
+  const pf = [process.env['ProgramFiles'], process.env['ProgramW6432'], process.env['ProgramFiles(x86)']].filter(Boolean);
+  for (const base of pf) {
+    candidates.push(path.join(base, 'Git', 'bin', 'bash.exe'));
+    candidates.push(path.join(base, 'Git', 'usr', 'bin', 'bash.exe'));
+  }
+  for (const exe of candidates) {
+    const r = spawnSync(exe, ['-c', 'exit 0'], { encoding: 'utf8' });
+    if (!r.error && r.status === 0) return exe;
+  }
+  return null;
+}
+const BASH = findBash();
+
+const SH_RESOLVER = path.join(PLUGIN_ROOT, 'scripts', 'native', 'sh', 'aiwf-roles.sh');
+function resolveRoleSh(role, rolesPath) {
+  const args = [SH_RESOLVER, '--role', role, '--as-json'];
+  if (rolesPath !== undefined && rolesPath !== null) args.push('--roles-path', rolesPath);
+  const r = spawnSync(BASH, args, { encoding: 'utf8' });
   let json = null;
   try { json = r.stdout && r.stdout.trim() ? JSON.parse(r.stdout) : null; } catch (e) { json = null; }
   return { status: r.status, stdout: r.stdout, stderr: r.stderr, json };
@@ -947,6 +981,440 @@ function sectionWrappers() {
     check('resolver is entrypoint-only (no dot-source dual-mode guard)',
       !/InvocationName\s*-ne\s*'\.'/.test(resolverSrc));
   }
+
+}
+
+// ---------------------------------------------------------------------------
+// SECTION 5b - the bash wrapper channel (static source checks + their controls)
+// ---------------------------------------------------------------------------
+// The same contract as the PowerShell channel, asserted separately rather than through a shared
+// abstraction: the two channels are different LANGUAGES, and a checker that folded them into one
+// pattern would end up asserting the intersection of what both happen to look like. What is shared
+// is the CONTRACT, and every clause of it appears here in bash form.
+//
+// The byte-level facts (LF-only, ASCII-only) are counted at byte level for the reason the workflow
+// doctrine states out loud: a text-level `grep -c` for a carriage return once reported 0 on a file
+// holding 283 of them.
+//
+// Unlike the PowerShell section above, every finding here carries a stable `id` and a negative
+// control that must flip it. A static source check is exactly the kind that rots into a regex
+// matching nothing, so the controls sabotage a throwaway copy of the channel one way per assertion
+// and require the named check to FAIL.
+function shWrapperFindings(root, { execProbes = true, tmpDir = null } = {}) {
+  const out = [];
+  const add = (id, name, ok, detail) => { out.push({ id, name, ok: !!ok, detail: detail || '' }); return !!ok; };
+  const SH = path.join(root, 'scripts', 'native', 'sh');
+  if (!add('sh-channel-present', 'scripts/native/sh/ exists (the bash channel ships)', fs.existsSync(SH))) return out;
+  const src = (f) => readText(path.join(SH, f));
+  const reviewSrc = src('codex-review.sh');
+  const qaSrc = src('codex-qa.sh');
+  const qalSrc = src('codex-qal.sh');
+  const resolverSrc = src('aiwf-roles.sh');
+
+  // Flags are checked against the `CODEX_ARGS=( ... )` array ONLY - the security comments in the
+  // headers cite the forbidden flags by name, so checking the whole file would false-match those.
+  // Close on the array's REAL terminator (a `)` at the start of a line).
+  const argBlock = (s) => { const m = s ? /CODEX_ARGS=\(([\s\S]*?)[\r\n]+\)/.exec(s) : null; return m ? m[1] : ''; };
+  // Every flag assertion is an EXACT ARGV PAIR, never a bare word: a bare-word check passes on the
+  // word wherever it appears - including a stale comment inside the block - so a wrapper could be
+  // switched to workspace-write while a leftover `# ... read-only ...` line kept the check green.
+  const SANDBOX_PAIR = (value) => new RegExp(`--sandbox\\s+${value}(?![-\\w])`);
+  const EFFORT_PAIR = /-c\s+"model_reasoning_effort=\$ROLE_EFFORT"/;
+  const MODEL_PAIR = /-m\s+"\$ROLE_MODEL"/;
+  // The FIRST real atom of the block, comments and blank lines skipped - `exec` opening the argv is
+  // a position, not a presence, and a presence test would pass on `exec` sitting anywhere.
+  const firstAtom = (block) => (block.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))[0] || '(empty)');
+  const APPROVAL_PIN = /-c\s+approval_policy=never/;
+  // Generalized negatives: the model must come from the resolver, and no wrapper may bake an
+  // absolute filesystem path into the args it hands the engine. HARDCODED_MODEL is phrased as "any
+  // -m whose value is not the resolved variable", so it catches a literal this file never saw.
+  const HARDCODED_MODEL = /-m\s+(?!"\$ROLE_MODEL")\S/;
+  const ABSOLUTE_PATH_LITERAL = /[A-Za-z]:[\\/]|\/(?:home|Users|mnt|opt|var)\//;
+  const STDIN_PIPE = /printf\s+'%s\\n'\s+"\$PROMPT"\s*\|\s*codex\s+"\$\{CODEX_ARGS\[@\]\}"/;
+  // The prompt reaches codex ONLY through that pipe. Any other argv shape - a further atom after
+  // the arg array (the `||` status capture excepted), or a --prompt/-p flag parsed out of argv -
+  // reopens the option-injection hole.
+  const PROMPT_ON_ARGV = /codex\s+"\$\{CODEX_ARGS\[@\]\}"[ \t]+(?!\|\|)\S|--prompt\)|-p\)|PROMPT="\$2"/;
+  const PROJECT_ROOT_REQUIRED = /\[\s*-n\s+"\$PROJECT_ROOT"\s*\]\s*\|\|\s*fail/;
+  const PASSES_ROLES_PATH = /--roles-path\s+"\$ROLES_PATH"/;
+  // The resolver snapshot -> shell variables transport. The delimiter must be NUL and the fields
+  // must arrive through a redirect: the config schema admits ANY non-empty string for model/effort,
+  // so a newline-delimited transport lets a value with a newline shift the fields and change the
+  // argv. A shell variable cannot carry a NUL, which is why `<<< "$fields"` is forbidden here.
+  const NUL_JOIN = /\.join\("\\u0000"\)\s*\+\s*"\\u0000"/;
+  const NUL_READ = /IFS=\s+read\s+-r\s+-d\s+""\s+ROLE_/;
+  const PROC_SUB = /<\s*<\(PNP_SNAPSHOT="\$snapshot"\s+node\s+-e\s+"\$FIELDS_JS"\)/;
+  const VARIABLE_TRANSPORT = /<<<\s*"\$fields"/;
+
+  // LF-only and ASCII-only, at BYTE level. `.gitattributes` marks *.sh eol=lf, but a checkout
+  // setting or an editor can still write CRLF into the working tree, and a bash script with CRLF
+  // line endings dies at the shebang with an unreadable error on a POSIX host.
+  const files = fs.readdirSync(SH).filter((n) => n.endsWith('.sh')).sort();
+  add('sh-channel-files', 'the bash channel ships exactly the four mirrored wrappers',
+    files.join(',') === 'aiwf-roles.sh,codex-qa.sh,codex-qal.sh,codex-review.sh', files.join(', '));
+  for (const f of files) {
+    const buf = fs.readFileSync(path.join(SH, f));
+    let cr = -1;
+    let nonAscii = -1;
+    for (let i = 0; i < buf.length; i++) {
+      if (cr === -1 && buf[i] === 0x0d) cr = i;
+      if (nonAscii === -1 && buf[i] > 0x7f) nonAscii = i;
+    }
+    add(`sh-lf-${f}`, `${f} is LF-only (no 0x0D byte anywhere)`, cr === -1,
+      cr === -1 ? `${buf.length} bytes` : `carriage return at offset ${cr}`);
+    add(`sh-ascii-${f}`, `${f} is ASCII-only`, nonAscii === -1,
+      nonAscii === -1 ? `${buf.length} bytes` : `first non-ASCII byte 0x${buf[nonAscii].toString(16)} at offset ${nonAscii}`);
+    const text = readText(path.join(SH, f)) || '';
+    add(`sh-shebang-${f}`, `${f} declares the portable bash shebang on line 1`,
+      text.split('\n')[0] === '#!/usr/bin/env bash', text.split('\n')[0]);
+    add(`sh-strict-${f}`, `${f} sets the strict mode (set -euo pipefail)`, /^set -euo pipefail$/m.test(text));
+  }
+
+  for (const [name, short, s, role] of [['codex-review.sh', 'review', reviewSrc, 'reviewer'], ['codex-qa.sh', 'qa', qaSrc, 'qa']]) {
+    if (!add(`sh-${short}-exists`, `${name} exists`, s != null)) continue;
+    const args = argBlock(s);
+    const id = (clause) => `sh-${short}-${clause}`;
+    add(id('exec'), `${name} opens the argv with the 'exec' atom`, firstAtom(args) === 'exec', firstAtom(args));
+    add(id('sandbox'), `${name} pins the --sandbox read-only argv PAIR (not the bare word)`, SANDBOX_PAIR('read-only').test(args));
+    add(id('approval'), `${name} pins the -c approval_policy=never pair`, APPROVAL_PIN.test(args));
+    add(id('no-danger'), `${name} argv contains NO danger-full-access atom`, !SANDBOX_PAIR('danger-full-access').test(args));
+    add(id('no-bypass'), `${name} argv contains NO --dangerously-bypass atom`, !/--dangerously-bypass[a-z-]*/.test(args));
+    add(id('no-ignore'), `${name} argv contains NO --ignore-user-config atom`, !/--ignore-user-config/.test(args));
+    add(id('stdin'), `${name} delivers the prompt via stdin`, STDIN_PIPE.test(s));
+    add(id('no-argv-prompt'), `${name} has NO prompt on argv and no prompt flag at all`, !PROMPT_ON_ARGV.test(s));
+    add(id('empty-prompt'), `${name} exits 2 on an empty (or whitespace-only) prompt`,
+      /tr -d '\[:space:\]'/.test(s) && /No prompt provided/.test(s));
+    add(id('cwd'), `${name} takes -C from the caller's $PROJECT_ROOT, never a baked-in path`,
+      /-C\s+"\$PROJECT_ROOT"/.test(args) && !ABSOLUTE_PATH_LITERAL.test(args));
+    add(id('project-root'), `${name} requires --project-root`, PROJECT_ROOT_REQUIRED.test(s));
+    add(id('resolver'), `${name} resolves the ${role} role through the resolver entrypoint with --roles-path`,
+      /aiwf-roles\.sh/.test(s) && new RegExp(`--role\\s+${role}\\b`).test(s) && PASSES_ROLES_PATH.test(s));
+    add(id('model'), `${name} passes the resolved model as the -m "$ROLE_MODEL" pair`, MODEL_PAIR.test(args));
+    add(id('no-model-literal'), `${name} does NOT hardcode a model literal in -m`, !HARDCODED_MODEL.test(args));
+    add(id('engine-mismatch'), `${name} exits 2 when the resolved engine is not codex`,
+      /\[\s*"\$ROLE_ENGINE"\s*!=\s*'codex'\s*\]/.test(s));
+    add(id('effort'), `${name} pins the -c "model_reasoning_effort=$ROLE_EFFORT" pair`, EFFORT_PAIR.test(args));
+    add(id('exit-code'), `${name} propagates codex's exit code`, /\|\|\s*status=\$\?/.test(s) && /^exit "\$status"$/m.test(s));
+    add(id('transport'), `${name} carries the resolved fields NUL-delimited through a redirect (never a line-delimited variable)`,
+      NUL_JOIN.test(s) && NUL_READ.test(s) && PROC_SUB.test(s) && !VARIABLE_TRANSPORT.test(s));
+  }
+
+  if (add('sh-qal-exists', 'codex-qal.sh exists', qalSrc != null)) {
+    const args = argBlock(qalSrc);
+    add('sh-qal-exec', 'qal (sh) opens the argv with the \'exec\' atom', firstAtom(args) === 'exec', firstAtom(args));
+    add('sh-qal-sandbox', 'qal (sh) pins the --sandbox danger-full-access argv PAIR', SANDBOX_PAIR('danger-full-access').test(args));
+    add('sh-qal-approval', 'qal (sh) pins the -c approval_policy=never pair', APPROVAL_PIN.test(args));
+    add('sh-qal-no-bypass', 'qal (sh) argv contains NO --dangerously-bypass atom', !/--dangerously-bypass[a-z-]*/.test(args));
+    add('sh-qal-no-ignore', 'qal (sh) argv contains NO --ignore-user-config atom', !/--ignore-user-config/.test(args));
+    add('sh-qal-no-restrictive', 'qal (sh) does NOT reintroduce a restrictive --sandbox pair',
+      !SANDBOX_PAIR('read-only').test(args) && !SANDBOX_PAIR('workspace-write').test(args));
+    add('sh-qal-cwd', 'qal (sh) -C targets the per-run scratch, never a baked-in path',
+      /-C\s+"\$SCRATCH"/.test(args) && !ABSOLUTE_PATH_LITERAL.test(args));
+    add('sh-qal-never-project-root', 'qal (sh) never passes $PROJECT_ROOT to codex (the repo is never the cwd)',
+      !/-C\s+"\$PROJECT_ROOT"/.test(args));
+    add('sh-qal-stdin', 'qal (sh) delivers the prompt via stdin', STDIN_PIPE.test(qalSrc));
+    add('sh-qal-no-argv-prompt', 'qal (sh) has NO prompt on argv and no prompt flag at all', !PROMPT_ON_ARGV.test(qalSrc));
+    add('sh-qal-empty-prompt', 'qal (sh) exits 2 on an empty (or whitespace-only) prompt',
+      /tr -d '\[:space:\]'/.test(qalSrc) && /No prompt provided/.test(qalSrc));
+    // mktemp -d is what makes "fresh every run" TRUE rather than merely likely: the name is unique
+    // and the create is atomic, so an existing path can never be silently reused.
+    add('sh-qal-mktemp', 'qal (sh) creates the scratch with mktemp -d under the per-user temp dir',
+      /mktemp -d "\$\{TMPDIR:-\/tmp\}\/aiwf-qal\.XXXXXX"/.test(qalSrc));
+    add('sh-qal-trap', 'qal (sh) removes the scratch from a trap on EXIT (so every exit path cleans up)',
+      /trap cleanup_scratch EXIT/.test(qalSrc) && /cleanup_scratch\(\)/.test(qalSrc));
+    add('sh-qal-cleanup-warn', 'qal (sh) cleanup warns with the path on failure', /cleanup failed[^\n]*%s/.test(qalSrc));
+    add('sh-qal-resolver', 'qal (sh) resolves the qal role through the resolver entrypoint with --roles-path',
+      /aiwf-roles\.sh/.test(qalSrc) && /--role\s+qal\b/.test(qalSrc) && PASSES_ROLES_PATH.test(qalSrc));
+    add('sh-qal-model', 'qal (sh) passes the resolved model as the -m "$ROLE_MODEL" pair', MODEL_PAIR.test(args));
+    add('sh-qal-no-model-literal', 'qal (sh) does NOT hardcode a model literal in -m', !HARDCODED_MODEL.test(args));
+    add('sh-qal-engine-mismatch', 'qal (sh) exits 2 when the resolved engine is not codex (codex-only by design)',
+      /\[\s*"\$ROLE_ENGINE"\s*!=\s*'codex'\s*\]/.test(qalSrc));
+    // The operator gate, fail-closed: the resolver emits `enabled` as a strict boolean, and only
+    // the literal true opens the gate here.
+    add('sh-qal-enabled-gate', 'qal (sh) refuses to run unless roles.qal.enabled is true (operator gate, fail-closed)',
+      /\[\s*"\$ROLE_ENABLED"\s*!=\s*'true'\s*\]/.test(qalSrc) && /QAL is disabled/.test(qalSrc));
+    add('sh-qal-effort', 'qal (sh) pins the -c "model_reasoning_effort=$ROLE_EFFORT" pair', EFFORT_PAIR.test(args));
+    add('sh-qal-exit-code', 'qal (sh) propagates codex\'s exit code',
+      /\|\|\s*status=\$\?/.test(qalSrc) && /^exit "\$status"$/m.test(qalSrc));
+    add('sh-qal-transport', 'qal (sh) carries the resolved fields NUL-delimited through a redirect (never a line-delimited variable)',
+      NUL_JOIN.test(qalSrc) && NUL_READ.test(qalSrc) && PROC_SUB.test(qalSrc) && !VARIABLE_TRANSPORT.test(qalSrc));
+  }
+
+  if (add('sh-resolver-exists', 'aiwf-roles.sh exists', resolverSrc != null)) {
+    add('sh-resolver-roles-path', 'resolver (sh) requires --roles-path, with NO script-relative fallback',
+      /\[\s*-n\s+"\$ROLES_PATH"\s*\]\s*\|\|\s*fail/.test(resolverSrc)
+      && !/BASH_SOURCE[^\n]*roles\.json/.test(resolverSrc) && !/\$HERE[^\n]*roles\.json/.test(resolverSrc));
+    add('sh-resolver-fallback', 'resolver (sh) carries the factory fallback literals claude/opus/high',
+      /FALLBACK_ENGINE='claude'/.test(resolverSrc) && /FALLBACK_MODEL='opus'/.test(resolverSrc)
+      && /FALLBACK_EFFORT='high'/.test(resolverSrc));
+    add('sh-resolver-never-codex', 'resolver (sh) never falls back to a paid external engine',
+      !/FALLBACK_ENGINE='codex'/.test(resolverSrc));
+    add('sh-resolver-fail-paths', 'resolver (sh) has BOTH exit-2 fail paths (unknown role, invalid triple) through one helper',
+      /is not a valid role/.test(resolverSrc) && /does not resolve to a valid \(engine, model, effort\) triple/.test(resolverSrc)
+      && /^\s*exit 2$/m.test(resolverSrc));
+    add('sh-resolver-single-read', 'resolver (sh) reads the config EXACTLY once (a single node invocation)',
+      (resolverSrc.match(/node -e/g) || []).length === 1);
+    add('sh-resolver-no-capmap', 'resolver (sh) has NO built-in capability-map construct',
+      !/CapabilityMap|capability_map|CAPMAP/i.test(resolverSrc));
+  }
+
+  // -------------------------------------------------------------------------
+  // The transport, EXECUTED (not read)
+  // -------------------------------------------------------------------------
+  // Every check above this line reads source text, and source text cannot prove what argv a shell
+  // really builds. So the wrappers are RUN, against a resolver fixture whose model and effort each
+  // contain a space AND a newline - the values the config schema admits and a line-delimited
+  // transport silently mangles - with a recording `codex` stub first on PATH. What is asserted is
+  // the argv the engine would really have received, atom for atom, plus the stdin it would have
+  // read and the exit code it would have returned.
+  if (execProbes && tmpDir) {
+    // Missing-host posture, identical to the role-resolver section's: a host that cannot be found
+    // is a FAILURE saying the contract is unproven, never a silent skip. Nothing is printed when
+    // the host IS there - the six executed findings below are that statement.
+    if (!BASH) {
+      add('sh-exec-host', 'a bash host is available to run the wrappers', false,
+        'neither `bash` on PATH nor a Git-for-Windows bash could be executed - the wrapper transport is UNPROVEN in this run');
+    } else {
+      for (const [wrapper, short] of [['codex-review.sh', 'review'], ['codex-qa.sh', 'qa']]) {
+        const probe = runWrapperWithStub(root, wrapper, tmpDir);
+        const expected = [
+          'exec', '-C', probe.projectRoot, '-m', HOSTILE_MODEL,
+          '--sandbox', 'read-only', '-c', 'approval_policy=never', '-c', `model_reasoning_effort=${HOSTILE_EFFORT}`,
+        ];
+        add(`sh-exec-${short}-argv`,
+          `${wrapper} EXECUTED: the argv codex really receives is the locked flag set, with the resolved model and effort intact as ONE atom each (space and newline included)`,
+          JSON.stringify(probe.atoms) === JSON.stringify(expected),
+          probe.atoms === null ? `the wrapper did not reach codex (exit ${probe.status}): ${firstLine(probe.stderr)}`
+            : `${probe.atoms.length} atoms; -m atom ${JSON.stringify(String(probe.atoms[4]).slice(0, 40))}`);
+        add(`sh-exec-${short}-stdin`, `${wrapper} EXECUTED: the brief reached codex on stdin, byte for byte, and never on argv`,
+          probe.stdin === STUB_BRIEF && !(probe.atoms || []).some((a) => a.includes(STUB_BRIEF.trim())),
+          probe.stdin === null ? 'nothing was recorded' : JSON.stringify(String(probe.stdin).slice(0, 40)));
+        add(`sh-exec-${short}-exit`, `${wrapper} EXECUTED: codex's exit code is propagated unchanged`,
+          probe.status === STUB_EXIT, `exit ${probe.status} (the stub exits ${STUB_EXIT})`);
+      }
+    }
+  }
+  return out;
+}
+
+// The hostile-but-legal resolver values: the schema requires a non-empty string and nothing more, so
+// both of these are valid config a project may really carry. The `--sandbox danger-full-access` text
+// inside the model is there on purpose - if the transport ever split on whitespace it would become
+// its own argv atom, i.e. a flag.
+const HOSTILE_MODEL = 'atom 9\nrogue --sandbox danger-full-access';
+const HOSTILE_EFFORT = 'high\nlow';
+const STUB_BRIEF = 'the brief for the transport probe\n';
+const STUB_EXIT = 7;
+const NUL_BYTE = String.fromCharCode(0);
+
+/**
+ * Runs one bash wrapper for real with a recording `codex` stub first on PATH, and returns what that
+ * stub saw: the argv atoms (NUL-separated in the recording, because an argv atom may contain a
+ * newline), the stdin bytes, and the wrapper's own exit code. The stub exits with a distinctive
+ * code so exit-propagation is proven by the same run.
+ */
+function runWrapperWithStub(root, wrapper, tmpDir) {
+  const home = fs.mkdtempSync(path.join(tmpDir, 'sh-exec-'));
+  const bin = path.join(home, 'bin');
+  const projectRoot = path.join(home, 'project');
+  fs.mkdirSync(bin, { recursive: true });
+  fs.mkdirSync(path.join(projectRoot, '.claude', 'aiwf-native'), { recursive: true });
+  const record = { engine: 'codex', model: HOSTILE_MODEL, effort: HOSTILE_EFFORT };
+  fs.writeFileSync(path.join(projectRoot, '.claude', 'aiwf-native', 'roles.json'),
+    JSON.stringify({ reviewer: record, qa: record, qal: Object.assign({ enabled: true }, record) }));
+
+  const argvOut = path.join(home, 'argv.bin');
+  const stdinOut = path.join(home, 'stdin.bin');
+  const stub = path.join(bin, 'codex');
+  fs.writeFileSync(stub,
+    '#!/usr/bin/env bash\n'
+    + ': > "$PNP_ARGV_OUT"\n'
+    + 'for a in "$@"; do printf \'%s\\0\' "$a" >> "$PNP_ARGV_OUT"; done\n'
+    + 'cat > "$PNP_STDIN_OUT"\n'
+    + `exit ${STUB_EXIT}\n`);
+  fs.chmodSync(stub, 0o755);
+
+  const sep = process.platform === 'win32' ? ';' : ':';
+  const env = Object.assign({}, process.env, {
+    PATH: bin + sep + process.env.PATH,
+    PNP_ARGV_OUT: argvOut,
+    PNP_STDIN_OUT: stdinOut,
+  });
+  const r = spawnSync(BASH, [path.join(root, 'scripts', 'native', 'sh', wrapper), '--project-root', projectRoot],
+    { input: STUB_BRIEF, encoding: 'utf8', env });
+  const recorded = readText(argvOut);
+  return {
+    projectRoot,
+    status: r.status,
+    stderr: r.stderr || '',
+    // The recording ends with a trailing NUL, so the last split element is always the empty string.
+    atoms: recorded === null ? null : recorded.split(NUL_BYTE).slice(0, -1),
+    stdin: readText(stdinOut),
+  };
+}
+
+// A control copies ONLY the four wrapper files (the findings above read nothing else), so a
+// sabotage costs four file copies rather than a payload tree.
+function copyShChannel(from, to) {
+  const src = path.join(from, 'scripts', 'native', 'sh');
+  const dst = path.join(to, 'scripts', 'native', 'sh');
+  fs.mkdirSync(dst, { recursive: true });
+  for (const name of fs.readdirSync(src)) fs.copyFileSync(path.join(src, name), path.join(dst, name));
+}
+const shRel = (file) => ['scripts', 'native', 'sh', file];
+/** Drops one line out of a wrapper's CODEX_ARGS block (the array lines are indented by two). */
+const dropArgLine = (file, literal) => (r) => patchText(r, shRel(file), new RegExp(`\\n {2}${literal}\\n`), '\n');
+const replaceArgLine = (file, literal, replacement) => (r) => patchText(r, shRel(file), new RegExp(`\\n {2}${literal}\\n`), `\n  ${replacement}\n`);
+
+/** The per-file controls for the two read-only wrappers, which are structurally identical. */
+function readOnlyWrapperControls(file, short) {
+  const at = shRel(file);
+  return [
+    { id: `sh-${short}-exec`, label: `${file}: the exec atom dropped from the argv`, apply: dropArgLine(file, 'exec') },
+    { id: `sh-${short}-sandbox`, label: `${file}: the --sandbox read-only pair dropped`, apply: dropArgLine(file, '--sandbox read-only') },
+    { id: `sh-${short}-approval`, label: `${file}: the approval_policy pin dropped`, apply: dropArgLine(file, '-c approval_policy=never') },
+    { id: `sh-${short}-no-danger`, label: `${file}: the sandbox switched to danger-full-access`, apply: replaceArgLine(file, '--sandbox read-only', '--sandbox danger-full-access') },
+    { id: `sh-${short}-no-bypass`, label: `${file}: a --dangerously-bypass flag smuggled into the argv`, apply: replaceArgLine(file, '-c approval_policy=never', '--dangerously-bypass-approvals-and-sandbox') },
+    { id: `sh-${short}-no-ignore`, label: `${file}: --ignore-user-config smuggled into the argv`, apply: replaceArgLine(file, 'exec', 'exec\n  --ignore-user-config') },
+    { id: `sh-${short}-stdin`, label: `${file}: the stdin pipe replaced by a plain call`, apply: (r) => patchText(r, at, /printf '%s\\n' "\$PROMPT" \| codex/, 'codex') },
+    { id: `sh-${short}-no-argv-prompt`, label: `${file}: the prompt appended to the argv`, apply: (r) => patchText(r, at, /codex "\$\{CODEX_ARGS\[@\]\}"/, 'codex "${CODEX_ARGS[@]}" "$PROMPT"') },
+    { id: `sh-${short}-empty-prompt`, label: `${file}: the empty-prompt guard defanged`, apply: (r) => patchText(r, at, /tr -d '\[:space:\]'/, 'cat') },
+    { id: `sh-${short}-cwd`, label: `${file}: an absolute path baked into -C`, apply: replaceArgLine(file, '-C "\\$PROJECT_ROOT"', '-C /home/someone/repo') },
+    { id: `sh-${short}-project-root`, label: `${file}: --project-root no longer required`, apply: (r) => patchText(r, at, /\[ -n "\$PROJECT_ROOT" \] \|\| fail/, 'true || fail') },
+    { id: `sh-${short}-resolver`, label: `${file}: the resolver called with a hardcoded roles path`, apply: (r) => patchText(r, at, /--roles-path "\$ROLES_PATH"/, '--roles-path roles.json') },
+    { id: `sh-${short}-model`, label: `${file}: a model literal in place of the resolved one`, apply: replaceArgLine(file, '-m "\\$ROLE_MODEL"', '-m gpt-5') },
+    { id: `sh-${short}-no-model-literal`, label: `${file}: a model literal in -m (the generalized negative)`, apply: replaceArgLine(file, '-m "\\$ROLE_MODEL"', '-m gpt-5') },
+    { id: `sh-${short}-engine-mismatch`, label: `${file}: the engine-mismatch guard removed`, apply: (r) => patchText(r, at, /\[ "\$ROLE_ENGINE" != 'codex' \]/, '[ -z "$ROLE_ENGINE" ]') },
+    { id: `sh-${short}-effort`, label: `${file}: the model_reasoning_effort pin dropped`, apply: dropArgLine(file, '-c "model_reasoning_effort=\\$ROLE_EFFORT"') },
+    { id: `sh-${short}-exit-code`, label: `${file}: codex's exit code swallowed`, apply: (r) => patchText(r, at, /exit "\$status"/, 'exit 0') },
+    { id: `sh-${short}-transport`, label: `${file}: the NUL-delimited transport regressed to line-delimited`, apply: lineDelimitedTransport(file) },
+    // The three EXECUTED controls. Each breaks a different half of the same run, and each is
+    // detectable only because the wrapper is really executed: the argv one is exactly the defect a
+    // source-reading check cannot see, since the line-delimited source looks perfectly reasonable.
+    { id: `sh-exec-${short}-argv`, label: `${file}: line-delimited transport, so a newline in the model shifts the argv`, apply: lineDelimitedTransport(file) },
+    { id: `sh-exec-${short}-stdin`, label: `${file}: the brief no longer piped to codex`,
+      apply: (r) => patchText(r, at, /printf '%s\\n' "\$PROMPT" \| codex/, 'codex') },
+    { id: `sh-exec-${short}-exit`, label: `${file}: codex's exit code swallowed (executed)`,
+      apply: (r) => patchText(r, at, /exit "\$status"/, 'exit 0') },
+  ];
+}
+
+/**
+ * The sabotage the executed probe exists for: the transport goes back to newline-delimited fields
+ * read from a shell variable - which is what this wrapper shipped before the review found it, and
+ * which reads as entirely ordinary shell.
+ */
+function lineDelimitedTransport(file) {
+  const at = shRel(file);
+  return (r) => {
+    const p = path.join(r, ...at);
+    const src = readText(p);
+    const fields = file === 'codex-qal.sh' ? 'ROLE_ENGINE ROLE_MODEL ROLE_EFFORT ROLE_ENABLED' : 'ROLE_ENGINE ROLE_MODEL ROLE_EFFORT';
+    const reads = fields.split(' ').map((v) => `  IFS= read -r ${v}`).join('\n');
+    const broken = src
+      .replace(/\.join\("\\u0000"\) \+ "\\u0000"/, '.join("\\n") + "\\n"')
+      .replace(/if ! \{[\s\S]*?\} < <\(PNP_SNAPSHOT="\$snapshot" node -e "\$FIELDS_JS"\); then[\s\S]*?\nfi\n/,
+        `fields="$(PNP_SNAPSHOT="$snapshot" node -e "$FIELDS_JS")"\n{\n${reads}\n} <<< "$fields"\n`);
+    fs.writeFileSync(p, broken);
+  };
+}
+
+const QAL = 'codex-qal.sh';
+const QAL_AT = shRel(QAL);
+const ROLES_SH = 'aiwf-roles.sh';
+const ROLES_AT = shRel(ROLES_SH);
+const SH_CONTROLS = [
+  { id: 'sh-channel-files', label: 'one wrapper missing from the channel', apply: (r) => fs.rmSync(path.join(r, ...shRel('codex-qa.sh'))) },
+]
+  // The byte-level facts, one control per file: a CR byte, a non-ASCII byte, a foreign shebang and
+  // a relaxed strict mode. All four are invisible to a check phrased over text rather than bytes.
+  .concat(['aiwf-roles.sh', 'codex-qa.sh', QAL, 'codex-review.sh'].flatMap((f) => [
+    { id: `sh-lf-${f}`, label: `${f}: a CR byte smuggled into the file`, apply: (r) => {
+      const p = path.join(r, ...shRel(f));
+      fs.writeFileSync(p, fs.readFileSync(p, 'utf8').replace('\n', '\r\n'));
+    } },
+    // The non-ASCII byte is written as an ESCAPE, never as a literal: this file is itself inside the
+    // payload the provenance scan reads, and a stray literal here would be a finding of its own.
+    { id: `sh-ascii-${f}`, label: `${f}: a non-ASCII byte appended`, apply: (r) => fs.appendFileSync(path.join(r, ...shRel(f)), '# ' + String.fromCharCode(0xe9) + '\n') },
+    { id: `sh-shebang-${f}`, label: `${f}: the shebang changed to /bin/sh`, apply: (r) => patchText(r, shRel(f), /^#!\/usr\/bin\/env bash/, '#!/bin/sh') },
+    { id: `sh-strict-${f}`, label: `${f}: the strict mode relaxed`, apply: (r) => patchText(r, shRel(f), /^set -euo pipefail$/m, 'set -e') },
+  ]))
+  .concat(readOnlyWrapperControls('codex-review.sh', 'review'))
+  .concat(readOnlyWrapperControls('codex-qa.sh', 'qa'))
+  .concat([
+    { id: 'sh-qal-exec', label: 'qal: the exec atom dropped from the argv', apply: dropArgLine(QAL, 'exec') },
+    { id: 'sh-qal-sandbox', label: 'qal: the danger-full-access pair dropped', apply: dropArgLine(QAL, '--sandbox danger-full-access') },
+    { id: 'sh-qal-approval', label: 'qal: the approval_policy pin dropped', apply: dropArgLine(QAL, '-c approval_policy=never') },
+    { id: 'sh-qal-no-bypass', label: 'qal: the bypass flag substituted for the narrower one', apply: replaceArgLine(QAL, '--sandbox danger-full-access', '--dangerously-bypass-approvals-and-sandbox') },
+    { id: 'sh-qal-no-ignore', label: 'qal: --ignore-user-config smuggled into the argv', apply: replaceArgLine(QAL, 'exec', 'exec\n  --ignore-user-config') },
+    { id: 'sh-qal-no-restrictive', label: 'qal: a restrictive sandbox reintroduced (which blocks the browser)', apply: replaceArgLine(QAL, '--sandbox danger-full-access', '--sandbox read-only') },
+    { id: 'sh-qal-cwd', label: 'qal: an absolute path baked into -C', apply: replaceArgLine(QAL, '-C "\\$SCRATCH"', '-C /var/tmp/qal') },
+    { id: 'sh-qal-never-project-root', label: 'qal: -C pointed at the repository instead of the scratch', apply: replaceArgLine(QAL, '-C "\\$SCRATCH"', '-C "$PROJECT_ROOT"') },
+    { id: 'sh-qal-stdin', label: 'qal: the stdin pipe replaced by a plain call', apply: (r) => patchText(r, QAL_AT, /printf '%s\\n' "\$PROMPT" \| codex/, 'codex') },
+    { id: 'sh-qal-no-argv-prompt', label: 'qal: the prompt appended to the argv', apply: (r) => patchText(r, QAL_AT, /codex "\$\{CODEX_ARGS\[@\]\}"/, 'codex "${CODEX_ARGS[@]}" "$PROMPT"') },
+    { id: 'sh-qal-empty-prompt', label: 'qal: the empty-prompt guard defanged', apply: (r) => patchText(r, QAL_AT, /tr -d '\[:space:\]'/, 'cat') },
+    { id: 'sh-qal-mktemp', label: 'qal: the scratch template dropped from mktemp', apply: (r) => patchText(r, QAL_AT, /mktemp -d "\$\{TMPDIR:-\/tmp\}\/aiwf-qal\.XXXXXX"/, 'mktemp -d') },
+    { id: 'sh-qal-trap', label: 'qal: the EXIT trap removed, so the early exit path leaks the scratch dir', apply: (r) => patchText(r, QAL_AT, /trap cleanup_scratch EXIT\n/, '') },
+    { id: 'sh-qal-cleanup-warn', label: 'qal: the cleanup failure no longer names the path', apply: (r) => patchText(r, QAL_AT, /cleanup failed \(remove it manually\): %s/, 'cleanup failed') },
+    { id: 'sh-qal-resolver', label: 'qal: the resolver called with a hardcoded roles path', apply: (r) => patchText(r, QAL_AT, /--roles-path "\$ROLES_PATH"/, '--roles-path roles.json') },
+    { id: 'sh-qal-model', label: 'qal: a model literal in place of the resolved one', apply: replaceArgLine(QAL, '-m "\\$ROLE_MODEL"', '-m gpt-5') },
+    { id: 'sh-qal-no-model-literal', label: 'qal: a model literal in -m (the generalized negative)', apply: replaceArgLine(QAL, '-m "\\$ROLE_MODEL"', '-m gpt-5') },
+    { id: 'sh-qal-engine-mismatch', label: 'qal: the codex-only guard removed', apply: (r) => patchText(r, QAL_AT, /\[ "\$ROLE_ENGINE" != 'codex' \]/, '[ -z "$ROLE_ENGINE" ]') },
+    { id: 'sh-qal-enabled-gate', label: 'qal: the roles.qal.enabled operator gate removed', apply: (r) => patchText(r, QAL_AT, /\[ "\$ROLE_ENABLED" != 'true' \]/, '[ -z "$ROLE_ENABLED" ]') },
+    { id: 'sh-qal-effort', label: 'qal: the model_reasoning_effort pin dropped', apply: dropArgLine(QAL, '-c "model_reasoning_effort=\\$ROLE_EFFORT"') },
+    { id: 'sh-qal-exit-code', label: 'qal: codex\'s exit code swallowed', apply: (r) => patchText(r, QAL_AT, /exit "\$status"/, 'exit 0') },
+    { id: 'sh-qal-transport', label: 'qal: the NUL-delimited transport regressed to line-delimited', apply: lineDelimitedTransport(QAL) },
+    { id: 'sh-qal-exists', label: 'the qal wrapper deleted', apply: (r) => fs.rmSync(path.join(r, ...QAL_AT)) },
+    { id: 'sh-review-exists', label: 'the review wrapper deleted', apply: (r) => fs.rmSync(path.join(r, ...shRel('codex-review.sh'))) },
+    { id: 'sh-qa-exists', label: 'the qa wrapper deleted', apply: (r) => fs.rmSync(path.join(r, ...shRel('codex-qa.sh'))) },
+    { id: 'sh-resolver-exists', label: 'the resolver deleted', apply: (r) => fs.rmSync(path.join(r, ...ROLES_AT)) },
+    { id: 'sh-channel-present', label: 'the whole bash channel removed', apply: (r) => fs.rmSync(path.join(r, 'scripts', 'native', 'sh'), { recursive: true, force: true }) },
+    { id: 'sh-resolver-roles-path', label: 'the resolver given a script-relative default roles path', apply: (r) => patchText(r, ROLES_AT, /\[ -n "\$ROLES_PATH" \] \|\| fail/, 'ROLES_PATH="${ROLES_PATH:-$HERE/roles.json}"; true || fail') },
+    { id: 'sh-resolver-fallback', label: 'the factory fallback model changed', apply: (r) => patchText(r, ROLES_AT, /FALLBACK_MODEL='opus'/, "FALLBACK_MODEL='sonnet'") },
+    { id: 'sh-resolver-never-codex', label: 'the factory fallback engine flipped to the paid external one', apply: (r) => patchText(r, ROLES_AT, /FALLBACK_ENGINE='claude'/, "FALLBACK_ENGINE='codex'") },
+    { id: 'sh-resolver-fail-paths', label: 'the unknown-role failure path removed', apply: (r) => patchText(r, ROLES_AT, /is not a valid role/, 'is unusual') },
+    { id: 'sh-resolver-single-read', label: 'the config read a second time', apply: (r) => fs.appendFileSync(path.join(r, ...ROLES_AT), 'node -e "$RESOLVE_JS"\n') },
+    { id: 'sh-resolver-no-capmap', label: 'a capability map introduced into the resolver', apply: (r) => fs.appendFileSync(path.join(r, ...ROLES_AT), 'CAPMAP=1\n') },
+  ]);
+
+// The executed probes cost four child processes per wrapper, so they run for the real payload, for
+// the pristine control copy, and then ONLY for the controls that target one of them - the same
+// economy (and the same reason) as the example section's guard probes.
+const SH_EXEC_IDS = new Set(['sh-exec-host',
+  'sh-exec-review-argv', 'sh-exec-review-stdin', 'sh-exec-review-exit',
+  'sh-exec-qa-argv', 'sh-exec-qa-stdin', 'sh-exec-qa-exit']);
+
+function sectionShWrappers(tmpRoot) {
+  section('WRAPPERS (bash channel) - locked flags, stdin-only delivery, LF + ASCII bytes, executed transport');
+  const findings = shWrapperFindings(PLUGIN_ROOT, { tmpDir: tmpRoot });
+  for (const f of findings) check(f.name, f.ok, f.detail);
+
+  section('WRAPPERS (bash channel) CONTROLS - each of those assertions is proven able to FAIL');
+  const base = path.join(tmpRoot, 'sh-base');
+  copyShChannel(PLUGIN_ROOT, base);
+  const pristine = shWrapperFindings(base, { tmpDir: tmpRoot }).filter((f) => !f.ok);
+  check('the control copy is clean before any sabotage', pristine.length === 0,
+    pristine.length ? pristine.map((f) => f.id).join(', ') : `${findings.length} checks green`);
+
+  let i = 0;
+  const covered = new Set();
+  for (const m of SH_CONTROLS) {
+    const broken = path.join(tmpRoot, `sh-neg-${i += 1}`);
+    copyShChannel(base, broken);
+    try { m.apply(broken); } catch (e) { check(`control could be applied: ${m.label}`, false, String(e.message)); continue; }
+    const target = shWrapperFindings(broken, { execProbes: SH_EXEC_IDS.has(m.id), tmpDir: tmpRoot }).find((f) => f.id === m.id);
+    if (!target) {
+      check(`control "${m.label}" targets a live check (id "${m.id}")`, false, 'no check with that id was produced');
+      continue;
+    }
+    covered.add(m.id);
+    check(`sabotage detected [${m.id}]: ${m.label}`, target.ok === false,
+      target.ok ? 'still PASS - the check is vacuous' : 'FAIL as required');
+    try { fs.rmSync(broken, { recursive: true, force: true }); } catch (e) { /* best-effort */ }
+  }
+  for (const id of findings.filter((f) => !covered.has(f.id)).map((f) => f.id)) {
+    note(`no negative control for bash-channel check "${id}"`, 'no control defined - add one or state why it cannot fail');
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -983,6 +1451,15 @@ function sectionResolver(tmpRoot) {
   const NUMEFFORT = fx('numeffort.json', '{ "reviewer": { "engine": "claude", "model": "opus", "effort": 5 } }');
   const NOEFFORT = fx('noeffort.json', '{ "reviewer": { "engine": "claude", "model": "opus" } }');
   const EMPTYEFFORT = fx('emptyeffort.json', '{ "reviewer": { "engine": "claude", "model": "opus", "effort": "" } }');
+  // The STRICT-SHAPE fixtures. Each is a file that ONE host language would resolve by accident:
+  // PowerShell's property lookup is case-insensitive, and `$raw | ConvertFrom-Json` enumerates an
+  // array root so `[{...}]` arrives already unwrapped. Both are rejected in BOTH channels now -
+  // roles.json is a machine-rendered artifact with exact-case keys, and a file that only resolves
+  // through a host accident is a defect the resolver reports rather than papers over.
+  const CASEROLE = fx('caserole.json', '{ "Reviewer": { "engine": "codex", "model": "atom-9", "effort": "low" } }');
+  const ARRAYROOT = fx('arrayroot.json', '[{ "reviewer": { "engine": "codex", "model": "atom-9", "effort": "low" } }]');
+  const CASEFIELD = fx('casefield.json', '{ "reviewer": { "Engine": "codex", "model": "atom-9", "effort": "low" } }');
+  const QAL_CASE_ENABLED = fx('qal-case-enabled.json', '{ "qal": { "Enabled": true, "engine": "codex", "model": "atom-9", "effort": "high" } }');
   const NOFILE = path.join(dir, 'does-not-exist.json');
 
   const okSnap = (r, engine, model, effort) => r.status === 0 && r.json
@@ -1036,12 +1513,100 @@ function sectionResolver(tmpRoot) {
   check('non-string effort -> exit 2', isExit2(resolveRole('reviewer', NUMEFFORT)));
   check('missing effort -> exit 2', isExit2(resolveRole('reviewer', NOEFFORT)));
   check('empty effort -> exit 2', isExit2(resolveRole('reviewer', EMPTYEFFORT)));
+  // STRICT SHAPE, on the channel whose host language would otherwise accept each of these.
+  check('a role key differing only in CASE -> exit 2 (the lookup is case-sensitive in both channels)',
+    isExit2(resolveRole('reviewer', CASEROLE)));
+  check('a field key differing only in CASE -> exit 2 ("Engine" is not "engine")',
+    isExit2(resolveRole('reviewer', CASEFIELD)));
+  check('a single-element ARRAY root -> exit 2 (never unwrapped into the object it contains)',
+    isExit2(resolveRole('reviewer', ARRAYROOT)));
+  check('qal with "Enabled" (capital E) -> enabled=false (the operator gate is case-sensitive too)', (() => {
+    const r = resolveRole('qal', QAL_CASE_ENABLED); return r.status === 0 && r.json && r.json.enabled === false;
+  })());
   // -RolesPath is Mandatory, so omitting it must NOT silently resolve against some payload default.
   // A mandatory parameter with no value on a non-interactive host fails rather than prompting.
   {
     const r = resolveRole('reviewer', null);
     check('omitting -RolesPath does NOT silently resolve (the parameter is mandatory)',
       r.status !== 0 || r.json === null, `exit ${r.status}`);
+  }
+
+  // -------------------------------------------------------------------------
+  // The BASH channel, on the SAME fixtures, and held to the PowerShell one
+  // -------------------------------------------------------------------------
+  // Two channels of one contract are only worth having if they answer identically, so the sh
+  // resolver is not given a checklist of its own: every fixture above is replayed through it and
+  // its exit code AND its JSON snapshot are compared with what the PowerShell resolver returned.
+  // Parity alone could be two identical mistakes, which is why the absolute assertions above stay
+  // and the two most load-bearing ones (the claude factory fallback, the fail-closed qal gate) are
+  // re-stated absolutely here as well.
+  section('ROLE RESOLVER (bash channel) - the same matrix, and parity with the PowerShell channel');
+  if (!BASH) {
+    check('a bash host is available to run the sh resolver', false,
+      'neither `bash` on PATH nor a Git-for-Windows bash could be executed - the sh resolver contract is UNPROVEN in this run');
+    return;
+  }
+  check('a bash host is available to run the sh resolver', true, BASH);
+
+  const MATRIX = [
+    ['valid reviewer record', 'reviewer', VALID],
+    ['valid claude-hosted qa record', 'qa', VALID],
+    ['valid qal record (enabled true)', 'qal', VALID],
+    ['qal with enabled:false', 'qal', QAL_FALSE],
+    ['qal with no enabled key', 'qal', QAL_NO_ENABLED],
+    ['qal with enabled:"true" (a string)', 'qal', QAL_STR_ENABLED],
+    ['missing config file', 'reviewer', NOFILE],
+    ['missing config file + qal', 'qal', NOFILE],
+    ['malformed JSON', 'reviewer', MALFORMED],
+    ['unknown engine', 'reviewer', BADENGINE],
+    ['empty model', 'reviewer', EMPTYMODEL],
+    ['role missing from the file', 'reviewer', MISSINGROLE],
+    ['unknown role argument', 'bogus', VALID],
+    ['number model', 'reviewer', NUMMODEL],
+    ['bool model', 'reviewer', BOOLMODEL],
+    ['object model', 'reviewer', OBJMODEL],
+    ['array model', 'reviewer', ARRMODEL],
+    ['non-string engine', 'reviewer', NUMENGINE],
+    ['non-string effort', 'reviewer', NUMEFFORT],
+    ['missing effort', 'reviewer', NOEFFORT],
+    ['empty effort', 'reviewer', EMPTYEFFORT],
+    ['a role key differing only in case', 'reviewer', CASEROLE],
+    ['a field key differing only in case', 'reviewer', CASEFIELD],
+    ['a single-element array root', 'reviewer', ARRAYROOT],
+    ['qal with "Enabled" (capital E)', 'qal', QAL_CASE_ENABLED],
+  ];
+  const shape = (json) => (json === null ? 'null' : JSON.stringify(json));
+  for (const [label, role, file] of MATRIX) {
+    const ps = resolveRole(role, file);
+    const sh = resolveRoleSh(role, file);
+    check(`sh resolver matches the ps resolver on: ${label}`,
+      ps.status === sh.status && shape(ps.json) === shape(sh.json),
+      `ps exit ${ps.status} ${shape(ps.json)} vs sh exit ${sh.status} ${shape(sh.json)}`);
+  }
+  {
+    // THE FLIP, restated on this channel: a missing config must fall back to claude, never to a
+    // paid external engine.
+    const r = resolveRoleSh('reviewer', NOFILE);
+    check('sh: missing config file -> factory fallback claude/opus/high, exit 0 (never codex)',
+      okSnap(r, 'claude', 'opus', 'high'), r.json ? `${r.json.engine}/${r.json.model}/${r.json.effort}` : `exit ${r.status}`);
+  }
+  {
+    const r = resolveRoleSh('qal', QAL_STR_ENABLED);
+    check('sh: qal enabled:"true" (a string) -> enabled=false (no coercion, fail-closed)',
+      r.status === 0 && r.json && r.json.enabled === false, shape(r.json));
+  }
+  {
+    // The plain-text form is the other half of the printed contract, and it is what a human reads.
+    const r = spawnSync(BASH, [SH_RESOLVER, '--role', 'reviewer', '--roles-path', VALID], { encoding: 'utf8' });
+    check('sh: the plain (non-JSON) form prints "<engine> <model> <effort>"',
+      r.status === 0 && (r.stdout || '').trim() === 'codex atom-9 low', JSON.stringify((r.stdout || '').trim()));
+  }
+  {
+    // --roles-path is required, with no payload-relative default - the sh mirror of the mandatory
+    // -RolesPath above.
+    const r = resolveRoleSh('reviewer', null);
+    check('sh: omitting --roles-path does NOT silently resolve (it is required)',
+      r.status === 2 && r.json === null, `exit ${r.status}`);
   }
 }
 
@@ -1395,19 +1960,39 @@ function sectionPayloadIntegrity() {
     .concat(listFiles(path.join(PLUGIN_ROOT, 'templates'), () => true))
     .concat(listFiles(path.join(PLUGIN_ROOT, 'migrations'), () => true))
     .concat(listFiles(path.join(PLUGIN_ROOT, 'scripts', 'update'), (p) => p.endsWith('.mjs') && !path.basename(p).startsWith('test-')));
-  const REF = /(?:docs\/[A-Za-z0-9_.-]+\.md|schema\/[A-Za-z0-9_.-]+\.json|migrations\/[A-Za-z0-9_./-]+\.(?:json|md)|scripts\/native\/ps\/[A-Za-z0-9_.-]+\.ps1|scripts\/(?:ci|engine|selfcheck|spike|setup|update)\/[A-Za-z0-9_.-]+\.(?:js|mjs)|templates\/[A-Za-z0-9_./-]+\.(?:tmpl|json))/g;
+  const REF = /(?:docs\/[A-Za-z0-9_.-]+\.md|schema\/[A-Za-z0-9_.-]+\.json|migrations\/[A-Za-z0-9_./-]+\.(?:json|md)|scripts\/native\/ps\/[A-Za-z0-9_.-]+\.ps1|scripts\/native\/sh\/[A-Za-z0-9_.-]+\.sh|scripts\/(?:ci|engine|selfcheck|spike|setup|update)\/[A-Za-z0-9_.-]+\.(?:js|mjs)|templates\/[A-Za-z0-9_./-]+\.(?:tmpl|json))/g;
   const dangling = [];
   let refCount = 0;
+  let shRefCount = 0;
   for (const f of payloadFiles) {
     const src = readText(f) || '';
     const seen = new Set(src.match(REF) || []);
     for (const ref of seen) {
       refCount += 1;
+      if (ref.startsWith('scripts/native/sh/')) shRefCount += 1;
       if (!fs.existsSync(path.join(PLUGIN_ROOT, ref))) dangling.push(`${path.relative(PLUGIN_ROOT, f)} -> ${ref}`);
     }
   }
   check('every payload path referenced from a skill/doc/template exists',
     dangling.length === 0, dangling.length ? dangling.slice(0, 6).join('; ') : `${refCount} references resolved across ${payloadFiles.length} files`);
+  // "Nothing dangling" is also what a scan that matched NOTHING reports, so each channel's arm of
+  // the pattern has to be shown to be live. The payload names the bash wrappers in the skills, the
+  // doctrine and the wrapper README, so a zero here means the sh alternative stopped matching -
+  // and every sh reference would then be unchecked while this section still printed green.
+  check('the sh arm of the reference scan is live (the payload really names the bash channel)',
+    shRefCount > 0, `${shRefCount} scripts/native/sh/ references resolved`);
+  // The needle itself, on constructed input - the same technique the provenance section uses, and
+  // for the same reason: a pattern that matches nothing and a payload with nothing to match look
+  // identical from the outside. This proves the arm both MATCHES and would report a dangling one.
+  {
+    const probe = 'see scripts/native/sh/aiwf-roles.sh and scripts/native/sh/nonexistent.sh';
+    const hits = probe.match(REF) || [];
+    check('the sh arm matches a real AND a dangling bash-wrapper reference (so a broken one cannot pass)',
+      hits.includes('scripts/native/sh/aiwf-roles.sh') && hits.includes('scripts/native/sh/nonexistent.sh')
+      && fs.existsSync(path.join(PLUGIN_ROOT, 'scripts/native/sh/aiwf-roles.sh'))
+      && !fs.existsSync(path.join(PLUGIN_ROOT, 'scripts/native/sh/nonexistent.sh')),
+      `${hits.length} matched on constructed input`);
+  }
 
   // Command prefix: the payload speaks /pnp:, never the originating project's prefix.
   const KNOWN_FUTURE = ['setup', 'update', 'selfcheck'];
@@ -1464,16 +2049,17 @@ const PROV_ORIGIN_DIGESTS = [
 // hashed, which is the difference between hashing every word of the payload and hashing a few.
 const PROV_ORIGIN_LENGTHS = [10, 7, 7];
 
-// Text file types of the payload. `.sh` is deliberately absent: the bash wrappers do not ship yet,
-// and the day they do, this list is the place that says so out loud.
-const PROV_TEXT_EXT = new Set(['.md', '.mjs', '.js', '.json', '.tmpl', '.ps1', '.yml']);
+// Text file types of the payload. `.sh` joined the list with the bash wrapper channel: the scan is
+// the payload's, not one OS channel's, and an unclassified file type FAILS rather than being skipped.
+const PROV_TEXT_EXT = new Set(['.md', '.mjs', '.js', '.json', '.tmpl', '.ps1', '.sh', '.yml']);
 const PROV_TEXT_NAMES = new Set(['LICENSE', '.gitattributes']);
 const PROV_SKIP_DIRS = new Set(['.git', 'node_modules']);
 // Every top-level area of the payload must contribute at least one scanned file, root files
 // included. This is the half of the coverage assertion that a raw count cannot express: a scan
 // that stopped descending after two directories still returns a large, plausible number.
 const PROV_AREAS = ['.claude-plugin', '.github', 'docs', 'examples', 'hooks', 'migrations', 'schema', 'scripts', 'skills', 'templates'];
-// The payload ships 91 text files today. The floor is deliberately well below that - ordinary
+// The payload ships 96 text files today (this run prints the number it really scanned; that is
+// where this one comes from). The floor is deliberately well below that - ordinary
 // growth and pruning must not trip it, while an empty or gutted list is not read as agreement.
 const PROV_MIN_FILES = 60;
 
@@ -1654,7 +2240,7 @@ const reEscape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
  * `fs.rmSync(recursive, force)` then throws EPERM too and LEAVES THE DIRECTORY BEHIND, so the
  * control would trade a proven branch for permanent debris under the system temp dir, in a file
  * whose own rule is that unfinished cleanup is a failure. It is also `icacls`, i.e. Windows-only
- * code in a payload that gets a Linux/macOS channel before 1.0. Injection is deterministic,
+ * code in a payload that now ships a Linux/macOS channel too. Injection is deterministic,
  * portable, and drives exactly the same branch; the EPERM code below is the one Windows really
  * produced in that experiment.
  */
@@ -1831,6 +2417,28 @@ const stripPlaceholders = (token) => token
   .split('<payload2>').join('.').split('<payload>').join('.')
   .split('<repo>').join('.').split('<project>').join('.').split('<work>').join('.');
 
+/**
+ * The workflow's jobs, as raw text per job name. Deliberately a two-space-indent scan rather than a
+ * YAML parser: the payload ships zero dependencies, and what the checks below need is "which lines
+ * belong to which leg", which the indentation already says. A job name is the only key at that
+ * depth under `jobs:`; everything inside a job is indented further.
+ */
+function workflowJobs(workflow) {
+  const out = new Map();
+  const text = String(workflow || '');
+  const at = text.indexOf('\njobs:');
+  if (at === -1) return out;
+  let current = null;
+  const lines = [];
+  for (const line of text.slice(at + 1).split('\n').slice(1)) {
+    const m = /^ {2}([A-Za-z0-9_-]+):\s*$/.exec(line);
+    if (m) { current = m[1]; lines.push([current, []]); continue; }
+    if (current) lines[lines.length - 1][1].push(line);
+  }
+  for (const [name, body] of lines) out.set(name, body.join('\n'));
+  return out;
+}
+
 const firstLine = (text) => String(text || '').trim().split('\n')[0].slice(0, 180);
 const safeReaddir = (p) => { try { return fs.readdirSync(p).sort(); } catch (e) { return null; } };
 
@@ -1838,11 +2446,14 @@ const safeReaddir = (p) => { try { return fs.readdirSync(p).sort(); } catch (e) 
  * The junction probe, as a function so its "a junction could not be created" branch is reachable in
  * a test. `symlink` is injected for exactly that reason; production passes fs.symlinkSync.
  *
- * A junction that cannot be created is a FAILED check, not a NOTE. This payload is Windows-only by
- * contract before 1.0 (the interview is fail-closed for os != windows) and a junction needs no
- * elevation there, so "we could not make one" describes a broken environment, not a condition this
- * check is exempt from. A NOTE here would be a mandatory probe quietly becoming a non-failure -
- * which is the entire class of defect this section exists to catch.
+ * A link that cannot be created is a FAILED check, not a NOTE, on EVERY OS this payload supports.
+ * On Windows the link is a junction, which needs no elevation; on Linux and macOS Node ignores the
+ * 'junction' type argument and creates a plain symlink, which needs no privilege either - and the
+ * danger being probed is identical in both cases: a --work-dir reached into the repository through
+ * a link, whose child does not exist yet, that a non-recursive mkdir would still follow. So "we
+ * could not make one" describes a broken environment, not a condition this check is exempt from. A
+ * NOTE here would be a mandatory probe quietly becoming a non-failure - the entire class of defect
+ * this section exists to catch.
  */
 function junctionProbeFinding(root, tmpDir, probe, symlink) {
   const NAME = 'the cycle driver REFUSES a --work-dir reached through a junction into the repository: '
@@ -1855,8 +2466,8 @@ function junctionProbeFinding(root, tmpDir, probe, symlink) {
     make(root, link, 'junction');
   } catch (e) {
     return { id: 'example-workdir-junction', ok: false, name: NAME,
-      detail: `a junction could not be created (${`${e.code || ''} ${e.message}`.trim()}) - on the only OS this payload `
-        + 'supports that is a broken environment, not an exemption, so this probe FAILS rather than excusing itself' };
+      detail: `a junction (or, on a POSIX host, a symlink) could not be created (${`${e.code || ''} ${e.message}`.trim()}) - on every OS `
+        + 'this payload supports that is a broken environment, not an exemption, so this probe FAILS rather than excusing itself' };
   }
   const child = path.join(link, 'pnp-junction-probe');
   const throughTheLink = path.join(root, 'pnp-junction-probe'); // where it would really land
@@ -2030,6 +2641,43 @@ function exampleFixtureFindings(root, tmpDir, { guardProbes = true } = {}) {
     add('example-answers-valid', `${EXAMPLE_REL}/answers.json satisfies schema/aiwf.config.schema.json`, ok, detail);
   }
 
+  // --- the POSIX answers file: the same data, one key apart ------------------------------------
+  // The CI matrix runs the cycle twice, and the second run is only worth anything if its answers
+  // differ in the OS CHANNEL and in nothing else - otherwise a difference nobody intended (a role
+  // moved to another engine, a path renamed) would quietly make the two legs test two products.
+  {
+    const linux = readJson(exAt(root, 'answers-linux.json'));
+    add('example-answers-linux', `${EXAMPLE_REL}/answers-linux.json exists, is valid JSON, and declares os=linux`,
+      isPlainObject(linux) && linux.os === 'linux', isPlainObject(linux) ? `os=${linux.os}` : 'missing or unparseable');
+    const differences = (a, b, prefix = '') => {
+      const keys = new Set([...Object.keys(a || {}), ...Object.keys(b || {})]);
+      const out = [];
+      for (const key of keys) {
+        const left = (a || {})[key];
+        const right = (b || {})[key];
+        if (isPlainObject(left) && isPlainObject(right)) { out.push(...differences(left, right, `${prefix}${key}.`)); continue; }
+        if (JSON.stringify(left) !== JSON.stringify(right)) out.push(`${prefix}${key}`);
+      }
+      return out;
+    };
+    const diff = (isPlainObject(answers) && isPlainObject(linux)) ? differences(answers, linux) : ['(one of the files is unreadable)'];
+    add('example-answers-linux-parity', 'answers-linux.json differs from answers.json in the OS channel and NOTHING else',
+      diff.length === 1 && diff[0] === 'os', diff.length ? `differs in: ${diff.join(', ')}` : 'the two files are identical - the linux leg would test the windows channel');
+    const probe = path.join(tmpDir, `example-answers-linux-${exampleProbe += 1}.json`);
+    let ok = false;
+    let detail = 'answers-linux.json is not an object';
+    if (isPlainObject(linux)) {
+      fs.writeFileSync(probe, JSON.stringify(Object.assign({}, linux, { _aiwf: PROBE_AIWF }), null, 2));
+      const r = spawnSync(process.execPath, [
+        path.join(root, 'scripts', 'setup', 'validate-config.mjs'), probe,
+        '--schema', path.join(root, 'schema', 'aiwf.config.schema.json'),
+      ], { encoding: 'utf8' });
+      ok = r.status === 0;
+      detail = ok ? '' : `validator exit ${r.status}: ${(r.stderr || '').trim().split('\n').slice(0, 3).join(' | ').slice(0, 220)}`;
+    }
+    add('example-answers-linux-valid', `${EXAMPLE_REL}/answers-linux.json satisfies schema/aiwf.config.schema.json`, ok, detail);
+  }
+
   // --- docs cannot drift from code -------------------------------------------------------------
   const driverRel = 'scripts/ci/run-example-cycle.mjs';
   const driver = readText(path.join(root, ...driverRel.split('/')));
@@ -2076,22 +2724,51 @@ function exampleFixtureFindings(root, tmpDir, { guardProbes = true } = {}) {
       dangling.length ? dangling.join(', ') : (runScripts.length === 0 ? 'the workflow runs NO node steps at all' : `${runScripts.length} steps resolved`));
   }
   {
-    // EVERY gate, the spikes included. A list that omits one turns "the workflow explains why it
-    // runs the spikes" into the only thing standing between the repository and a silently deleted
-    // step: the `run:` line goes, the comment stays, and both this check and example-ci-omissions
-    // report green about a gate that no longer exists. That is the exact failure mode this section
-    // is for, so the list is the complete set and the control below deletes only the run: line.
+    // EVERY gate, the spikes included, IN EVERY OS LEG. A list that omits one turns "the workflow
+    // explains why it runs the spikes" into the only thing standing between the repository and a
+    // silently deleted step: the `run:` line goes, the comment stays, and both this check and
+    // example-ci-omissions report green about a gate that no longer exists.
+    //
+    // Per JOB, not per file, and that is the whole point since the matrix arrived: a gate that
+    // survives in one leg while being dropped from another would satisfy a whole-file check while
+    // the channel that leg exists to cover goes untested.
     const REQUIRED_GATES = [
       'scripts/update/validate-payload.mjs', 'scripts/setup/test-setup.mjs', 'scripts/update/test-update.mjs',
       'scripts/spike/run-spikes.mjs', 'scripts/ci/run-example-cycle.mjs', 'scripts/selfcheck/aiwf-selfcheck.js',
     ];
-    const absent = REQUIRED_GATES.filter((g) => !runScripts.includes(g));
-    add('example-ci-gates', 'CI runs every gate this repository has (payload validator, both suites, the hook spikes, the example cycle, the self-check)',
-      workflow !== null && absent.length === 0, absent.length ? `not run in CI: ${absent.join(', ')}` : `${REQUIRED_GATES.length} gates`);
+    const REQUIRED_JOBS = ['windows', 'ubuntu', 'macos'];
+    const jobs = workflowJobs(workflow);
+    add('example-ci-os-matrix', 'CI runs one leg per shipped OS channel (windows, ubuntu, macos), each on its own runner',
+      REQUIRED_JOBS.every((j) => jobs.has(j) && new RegExp(`runs-on:\\s*${j}-latest`).test(jobs.get(j))),
+      `jobs: ${[...jobs.keys()].join(', ') || '(none parsed)'}`);
+    const absent = [];
+    for (const job of REQUIRED_JOBS) {
+      const body = jobs.get(job);
+      if (body === undefined) { absent.push(`${job}: the whole job`); continue; }
+      const ran = [...body.matchAll(/^\s*run:\s*node\s+(\S+)/gm)].map((m) => m[1]);
+      for (const gate of REQUIRED_GATES) if (!ran.includes(gate)) absent.push(`${job}: ${gate}`);
+    }
+    add('example-ci-gates', 'EVERY OS leg runs every gate this repository has (payload validator, both suites, the hook spikes, the example cycle, the self-check)',
+      workflow !== null && absent.length === 0,
+      absent.length ? `not run: ${absent.join(', ')}` : `${REQUIRED_GATES.length} gates x ${REQUIRED_JOBS.length} legs`);
   }
-  add('example-ci-omissions', 'the workflow WRITES DOWN both decisions it would otherwise make silently (claude plugin validate, the spikes\' reference)',
-    workflow !== null && /claude plugin validate/.test(workflow) && /run-spikes\.mjs/.test(workflow) && /--reference|PNP_SPIKE_REFERENCE_HOOKS/.test(workflow),
+  add('example-ci-omissions', 'the workflow WRITES DOWN every decision it would otherwise make silently (claude plugin validate, the spikes\' reference, shellcheck on macos)',
+    workflow !== null && /claude plugin validate/.test(workflow) && /run-spikes\.mjs/.test(workflow)
+      && /--reference|PNP_SPIKE_REFERENCE_HOOKS/.test(workflow)
+      // The third omission is asserted IN THE LEG IT BELONGS TO: a sentence about shellcheck
+      // anywhere in the file would also be satisfied by the ubuntu step that really runs it.
+      && /shellcheck/.test(workflowJobs(workflow).get('macos') || '')
+      && /NOT preinstalled/.test(workflowJobs(workflow).get('macos') || ''),
     workflow === null ? 'missing' : '');
+  {
+    // shellcheck runs in CI and NOT in the self-check, deliberately: it is not on an operator
+    // machine, so a self-check section that needed it would be red on every local run. The
+    // workflow is where that decision has to be visible.
+    const ubuntu = workflowJobs(workflow).get('ubuntu') || '';
+    add('example-ci-shellcheck', 'the ubuntu leg lints the bash wrappers with shellcheck (the one gate that exists only there)',
+      /run:\s*shellcheck\s+scripts\/native\/sh\/\*\.sh/.test(ubuntu),
+      ubuntu ? '' : 'no ubuntu job parsed');
+  }
 
   // --- the cycle driver's work-directory guard, EXECUTED ---------------------------------------
   // The driver REMOVES its work directory when it finishes, so a --work-dir it should have refused
@@ -2167,6 +2844,35 @@ function exampleFixtureFindings(root, tmpDir, { guardProbes = true } = {}) {
         r.status === 2 && /parent directory does not exist/.test(r.out) && !fs.existsSync(parent) && !fs.existsSync(target),
         `exit ${r.status}${fs.existsSync(parent) ? ' AND IT CREATED THE MISSING PARENT' : ''}: ${firstLine(r.out)}`);
     }
+    {
+      // The --answers guard, EXECUTED, and in the same class as the --work-dir guards above: a
+      // flag that silently fell back to the DEFAULT answers file would make the POSIX CI legs run
+      // the windows channel and report green about a channel they never touched. Both probes are
+      // refused before the run creates anything, so neither starts a real cycle.
+      const answersProbe = (argv) => {
+        const r = spawnSync(process.execPath, [driver, ...argv], { encoding: 'utf8' });
+        return { status: r.status, out: (r.stdout || '') + (r.stderr || '') };
+      };
+      const terminal = answersProbe(['--answers']);
+      add('example-answers-flag-guard',
+        'the cycle driver REFUSES a --answers with no value: exit 2 and the reason named, never a silent fall back to the default answers file',
+        terminal.status === 2 && /--answers was passed without a value/.test(terminal.out),
+        `exit ${terminal.status}: ${firstLine(terminal.out)}`);
+      // The EMPTY value is its own probe, and it has to be: `--answers ""` is falsy exactly like an
+      // absent flag, so one `flag(...) || <default>` reading covers both - and the empty one then
+      // runs a full cycle on the DEFAULT answers file while the caller believes they selected
+      // another channel. Absent and empty are different inputs and are asserted separately.
+      const empty = answersProbe(['--answers', '']);
+      add('example-answers-empty-guard',
+        'the cycle driver REFUSES an EMPTY --answers value: exit 2 and the reason named, never read as "no flag"',
+        empty.status === 2 && /--answers was passed an EMPTY value/.test(empty.out),
+        `exit ${empty.status}: ${firstLine(empty.out)}`);
+      const notAFile = answersProbe(['--answers', path.join(root, 'examples', 'example-project')]);
+      add('example-answers-file-guard',
+        'the cycle driver REFUSES a --answers that exists but is not a regular file: exit 2, the reason named',
+        notAFile.status === 2 && /is not a regular file/.test(notAFile.out),
+        `exit ${notAFile.status}: ${firstLine(notAFile.out)}`);
+    }
     // The two file-ownership rules, executed against a short-circuited copy so the cleanup is
     // reached in about a second rather than seventy.
     for (const f of fileOwnershipFindings(root, tmpDir)) out.push(f);
@@ -2215,6 +2921,14 @@ const EXAMPLE_CONTROLS = [
       (o) => { o.operations.find((x) => x.op === 'add-config-key').path = 'enforcement.somethingElse'; }) },
   { id: 'example-answers-valid', label: 'the answers file pinned to an OS channel that does not exist',
     apply: (r) => mutateJson(r, ['examples', 'example-project', 'answers.json'], (a) => { a.os = 'solaris'; }) },
+  { id: 'example-answers-linux', label: 'the POSIX answers file deleted',
+    apply: (r) => fs.rmSync(exAt(r, 'answers-linux.json')) },
+  { id: 'example-answers-linux', label: 'the POSIX answers file quietly moved back to the windows channel',
+    apply: (r) => mutateJson(r, ['examples', 'example-project', 'answers-linux.json'], (a) => { a.os = 'windows'; }) },
+  { id: 'example-answers-linux-parity', label: 'a second, unintended difference smuggled into the POSIX answers file',
+    apply: (r) => mutateJson(r, ['examples', 'example-project', 'answers-linux.json'], (a) => { a.roles.qa.engine = 'codex'; }) },
+  { id: 'example-answers-linux-valid', label: 'the POSIX answers file violating the schema',
+    apply: (r) => mutateJson(r, ['examples', 'example-project', 'answers-linux.json'], (a) => { a.roles.reviewer.model = 'claude-opus-5[1m]'; }) },
   { id: 'example-answers-valid', label: 'a claude-hosted role in the answers pinned to a full model id',
     apply: (r) => mutateJson(r, ['examples', 'example-project', 'answers.json'], (a) => { a.roles.reviewer.model = 'claude-opus-5[1m]'; }) },
   { id: 'example-driver-commands', label: 'the driver\'s DOCUMENTED_COMMANDS block renamed',
@@ -2230,6 +2944,17 @@ const EXAMPLE_CONTROLS = [
     apply: (r) => patchText(r, ['.github', 'workflows', 'ci.yml'], /run: node scripts\/setup\/test-setup\.mjs/, 'run: node scripts/setup/test-setup-v2.mjs') },
   { id: 'example-ci-gates', label: 'a gate quietly dropped from CI',
     apply: (r) => patchText(r, ['.github', 'workflows', 'ci.yml'], /run: node scripts\/ci\/run-example-cycle\.mjs/, 'run: node --version') },
+  // The same sabotage one leg further down: a gate that survives on windows while quietly leaving
+  // the ubuntu leg is invisible to any check phrased over the whole file.
+  { id: 'example-ci-gates', label: 'a gate dropped from the ubuntu leg only, while windows keeps it',
+    apply: (r) => patchText(r, ['.github', 'workflows', 'ci.yml'],
+      /(runs-on: ubuntu-latest[\s\S]*?)run: node scripts\/update\/test-update\.mjs/, '$1run: node --version') },
+  { id: 'example-ci-os-matrix', label: 'the macos leg deleted, so one shipped channel is no longer exercised',
+    apply: (r) => patchText(r, ['.github', 'workflows', 'ci.yml'], /\n {2}macos:[\s\S]*$/, '\n') },
+  { id: 'example-ci-shellcheck', label: 'the shellcheck step dropped from the ubuntu leg',
+    apply: (r) => patchText(r, ['.github', 'workflows', 'ci.yml'], /run: shellcheck scripts\/native\/sh\/\*\.sh/, 'run: true') },
+  { id: 'example-ci-omissions', label: 'the written-down shellcheck omission stripped out of the macos leg',
+    apply: (r) => patchText(r, ['.github', 'workflows', 'ci.yml'], /NOT preinstalled/, 'unavailable') },
   // The spikes' own control, and the reason the list above must be complete: ONLY the `run:` line
   // is deleted, so the step's explanatory comment survives untouched and example-ci-omissions stays
   // green. If example-ci-gates did not name the spikes, this sabotage would be invisible.
@@ -2275,6 +3000,23 @@ const EXAMPLE_CONTROLS = [
     apply: (r) => patchText(r, ['scripts', 'ci', 'run-example-cycle.mjs'], /if \(now !== entry\.hash\) \{/, 'if (false) {') },
   { id: 'example-workdir-missing-parent', label: 'the missing-parent branch removed, so the refusal no longer names the reason',
     apply: (r) => patchText(r, ['scripts', 'ci', 'run-example-cycle.mjs'], /if \(e\.code === 'ENOENT'\) \{/, 'if (false) {') },
+  // The --answers guards, at CONTRACT level (the refusal must name its reason) rather than by
+  // deleting the predicate: a driver that stopped refusing would fall through to a real 70-second
+  // cycle inside a negative control, which is a price this section deliberately never pays.
+  { id: 'example-answers-flag-guard', label: 'the value-less --answers refusal stops naming its reason',
+    apply: (r) => patchText(r, ['scripts', 'ci', 'run-example-cycle.mjs'], /--answers was passed without a value/, 'that argument is odd') },
+  { id: 'example-answers-file-guard', label: 'the not-a-regular-file refusal stops naming its reason',
+    apply: (r) => patchText(r, ['scripts', 'ci', 'run-example-cycle.mjs'], /is not a regular file/, 'is unusable') },
+  // The empty-value control is PREDICATE level, not message level, and it can afford to be
+  // (measured, not assumed): with the branch gone, `path.resolve('')` becomes the caller's CWD, so
+  // the very next guard refuses it as "not a regular file" - exit 2, immediately, no cycle. The
+  // check flips because the reason is now WRONG, which is exactly the defect: a guard that refuses
+  // for the wrong reason tells the caller nothing about what they typed. (Note what this control
+  // does NOT prove: that the empty value would have run a cycle. It would have, when the value was
+  // read as `flag(...) || <default>` - that reading is gone, and this is the assertion keeping it
+  // gone.)
+  { id: 'example-answers-empty-guard', label: 'the empty-value branch deleted, so an empty --answers reads as "no flag" again',
+    apply: (r) => patchText(r, ['scripts', 'ci', 'run-example-cycle.mjs'], /if \(ANSWERS_ARG\.trim\(\) === ''\) \{/, 'if (false) {') },
 ];
 
 function sectionExampleFixture(tmpRoot) {
@@ -2304,7 +3046,8 @@ function sectionExampleFixture(tmpRoot) {
       () => { const e = new Error('simulated: junctions unavailable'); e.code = 'EPERM'; throw e; },
     );
     check('the junction probe FAILS when a junction cannot be created (it never degrades to a NOTE or a pass)',
-      simulated.ok === false && simulated.note !== true && /junction could not be created/.test(simulated.detail),
+      simulated.ok === false && simulated.note !== true && /could not be created/.test(simulated.detail)
+        && /every OS\s+this payload supports/.test(simulated.detail),
       simulated.note ? 'it produced a NOTE' : `ok=${simulated.ok}`);
   }
 
@@ -2315,7 +3058,7 @@ function sectionExampleFixture(tmpRoot) {
     copyPayloadTree(base, broken);
     try { m.apply(broken); } catch (e) { check(`control could be applied: ${m.label}`, false, String(e.message)); continue; }
     const target = exampleFixtureFindings(broken, tmpRoot,
-      { guardProbes: m.id.startsWith('example-workdir') || m.id.startsWith('example-cycle-file') })
+      { guardProbes: m.id.startsWith('example-workdir') || m.id.startsWith('example-cycle-file') || m.id.endsWith('-guard') })
       .find((f) => f.id === m.id);
     if (!target) {
       check(`control "${m.label}" targets a live check (id "${m.id}")`, false, 'no check with that id was produced');
@@ -2528,6 +3271,7 @@ function main() {
     sectionMigrationPayload(tmpRoot);
     sectionHookWiring();
     sectionWrappers();
+    sectionShWrappers(tmpRoot);
     sectionResolver(tmpRoot);
     sectionPayloadIntegrity();
     sectionProvenance(tmpRoot);
@@ -2576,7 +3320,8 @@ function main() {
   console.log('carry the proof, so the controls prove the mechanism and the digests are stated data.');
   console.log('STATIC: the wrapper flag locks, asserted as exact ARGV PAIRS rather than bare words (so a');
   console.log('flag switched in the argv while the old word survives in a comment still fails), the hook');
-  console.log('wiring, the ASCII-only wrapper sources, and the payload cross-references.');
+  console.log('wiring, the wrapper sources of BOTH channels (ASCII-only everywhere, LF-only for the bash');
+  console.log('one, counted at byte level), and the payload cross-references.');
   console.log('PROJECT LAYER: owned/suppressed ask-rule bookkeeping, rendered artifacts agreeing with the');
   console.log('config, the conditional-render contract (a Claude agent file exists iff its role is');
   console.log('claude-hosted), and version bookkeeping - proven able to fail by the negative controls,');

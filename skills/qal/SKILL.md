@@ -15,8 +15,10 @@ blocks a Codex-launched browser, so it must be relaxed. `--sandbox danger-full-a
 mechanism. **Neither is "safe"** - both give the browser full disk access
 (`docs/QA_BROWSER_INVESTIGATION.md`).
 
-Thin wrapper around `${CLAUDE_PLUGIN_ROOT}/scripts/native/ps/codex-qal.ps1`. This skill only builds
-the brief and invokes the wrapper.
+Thin wrapper around the QAL host of this project's OS channel (`{{config.os}}`, read in Step 0):
+`${CLAUDE_PLUGIN_ROOT}/scripts/native/ps/codex-qal.ps1` on `windows`,
+`${CLAUDE_PLUGIN_ROOT}/scripts/native/sh/codex-qal.sh` on `linux`/`macos`. Same locked flags, same
+stdin contract, same preflight. This skill only builds the brief and invokes the wrapper.
 
 ## Invocation gate - operator request required
 
@@ -69,17 +71,29 @@ QAL runs only when ALL THREE hold. Any other state = refuse with one line of exp
 3. **The operator asked for QAL explicitly in the CURRENT conversation** (the gate above). No
    script can check this one - it is on you.
 
+Run the channel `{{config.os}}` selects. Both print the same snapshot object.
+
+**os `windows`:**
+
 ```powershell
 $role = pwsh -NoProfile -File "${CLAUDE_PLUGIN_ROOT}/scripts/native/ps/aiwf-roles.ps1" `
   -Role qal -RolesPath "<root>/.claude/aiwf-native/roles.json" -AsJson | ConvertFrom-Json
 # $role.enabled -> the operator gate;  $role.engine -> must be 'codex'
 ```
 
+**os `linux` / `macos`:**
+
+```bash
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/native/sh/aiwf-roles.sh" \
+  --role qal --roles-path "<root>/.claude/aiwf-native/roles.json" --as-json
+# prints {"role":"qal",..,"enabled":<bool>} - `enabled` is the operator gate, `engine` must be codex
+```
+
 If `$role.enabled` is not true, **stop**: *QAL is disabled (`roles.qal.enabled` is false) - it is an
 operator-gated exception; enable it deliberately before asking for a live pass.* If `$role.engine`
 is not `codex`, **stop** and report the natural fail-closed: *QAL is codex-only - there is no Claude
-QAL host; fix `<root>/.claude/aiwf-native/roles.json`.* Only the `codex` branch exists. (The
-`codex-qal.ps1` wrapper independently guards both conditions and exits 2, so this fail-closed is
+QAL host; fix `<root>/.claude/aiwf-native/roles.json`.* Only the `codex` branch exists. (The QAL
+wrapper of either channel independently guards both conditions and exits 2, so this fail-closed is
 doubly enforced.)
 
 ## Step 1 - Build the QAL brief
@@ -115,11 +129,21 @@ app is not running), then findings with concrete evidence for each.
 Deliver the brief on **stdin** in the **same** executable block (an empty brief makes the wrapper
 exit 2):
 
+**os `windows`:**
+
 ```powershell
 $brief = @'
 <paste the completed Step-1 brief here>
 '@
 $brief | & "${CLAUDE_PLUGIN_ROOT}/scripts/native/ps/codex-qal.ps1" -ProjectRoot '<root>'
+```
+
+**os `linux` / `macos`:**
+
+```bash
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/native/sh/codex-qal.sh" --project-root '<root>' <<'BRIEF'
+<paste the completed Step-1 brief here>
+BRIEF
 ```
 
 `-ProjectRoot` is used for ONE thing: locating the project's `roles.json` for the preflight. It is
@@ -132,8 +156,9 @@ operator-gated exception, so a wasted pass is the most expensive kind. Same rule
 Step 3 - with one extra consequence here: a killed QAL run can leave its scratch directory behind,
 so check that the wrapper's cleanup ran and remove the directory if it did not.
 
-This PowerShell block is the only canonical invocation path (same foreign-shell caveat as
-`/pnp:qa`). Do not pass the brief positionally - the wrapper pins its flags and routes stdin so no
+The block of this project's OS channel is the only canonical invocation path - PowerShell on os
+`windows`, bash on os `linux`/`macos` (same foreign-shell caveat as `/pnp:qa`). Do not pass the
+brief positionally - the wrapper pins its flags and routes stdin so no
 prompt text can be parsed as a CLI option.
 
 ## Step 3 - Relay findings to the operator

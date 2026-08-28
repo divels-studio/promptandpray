@@ -1,7 +1,9 @@
 # Codex Reviewer / QA invocation recipe
 
 Reviewer and QA are **engine-neutral** read-only review roles: the host per role is data in the
-project's `.claude/aiwf-native/roles.json` (resolved by `scripts/native/ps/aiwf-roles.ps1`). **This
+project's `.claude/aiwf-native/roles.json` (resolved by the role resolver of the project's OS
+channel: `scripts/native/ps/aiwf-roles.ps1` on `windows`, `scripts/native/sh/aiwf-roles.sh` on
+`linux`/`macos`). **This
 recipe covers the `codex` host** - run as `codex exec` under the OS read-only sandbox, the boundary
 a Claude subagent cannot provide. When a role resolves to `claude` instead, `/pnp:review` /
 `/pnp:qa` dispatch the `reviewer` / `qa` Claude subagents (`Read/Grep/Glob` only; read-only by
@@ -27,9 +29,10 @@ Gate 1 + the tool allowlist, not an OS cell) - see those agent files, not this r
 ## Canonical invocation surface - the wrapper scripts
 
 Always invoke Reviewer/QA through the wrapper scripts. They are the canonical, safe surface:
-`scripts/native/ps/codex-review.ps1` and `scripts/native/ps/codex-qa.ps1` (usage in the role
-sections below). They pin the locked flags **and** deliver the prompt via stdin so no prompt text
-can be parsed as a CLI option.
+`scripts/native/ps/codex-review.ps1` and `scripts/native/ps/codex-qa.ps1` on the `windows` channel,
+`scripts/native/sh/codex-review.sh` and `scripts/native/sh/codex-qa.sh` on `linux`/`macos` (usage in
+the role sections below; `config.os` selects the channel). They pin the same locked flags **and**
+deliver the prompt via stdin so no prompt text can be parsed as a CLI option.
 
 **Do NOT put the prompt as a positional argument.** A positional `"<prompt>"` on argv reopens the
 option-injection hole the wrappers close (a prompt beginning with `--` would be parsed as a flag).
@@ -45,7 +48,7 @@ Hard requirements (do not change without re-proving the read-only posture):
   (QA is an artifact judge that reads test-runner output; it does NOT drive a browser - a
   Codex-launched browser cannot run under this sandbox. See `docs/QA_BROWSER_INVESTIGATION.md`.)
 - `-C <projectRoot>` - the project root; an absolute path, supplied by the wrapper's mandatory
-  `-ProjectRoot` parameter.
+  `-ProjectRoot` (ps) / `--project-root` (sh) parameter.
 - `-m <model>` - the Reviewer/QA model, resolved from `roles.json`.
 - `-c approval_policy=never` - pins the approval mechanism **explicitly** so it is NOT inherited from
   the user's `~/.codex/config.toml`. `codex exec` has no `--ask-for-approval` flag; approval is a
@@ -66,8 +69,11 @@ Hard requirements (do not change without re-proving the read-only posture):
   embedded in a splatted array) before it reaches codex, so an on-argv prompt cannot be protected.
   Stdin sidesteps option parsing entirely. The locked flags above are only trustworthy because no
   caller text reaches the option parser.
-- Prompt is passed with `-Prompt` or piped in (use `-Raw` for long briefs); either way the wrapper
-  routes it through stdin.
+- Prompt delivery per channel, same guarantee: on `windows` it is passed with `-Prompt` or piped in
+  (use `-Raw` for long briefs) and the wrapper routes it through stdin; on `linux`/`macos` the bash
+  wrappers have **no prompt flag at all** - the brief arrives on stdin and only on stdin, and any
+  unrecognised argument is refused with exit 2. An empty or whitespace-only brief is refused (exit 2)
+  on both, before a paid pass is spent.
 - **Every wrapper runs in the BACKGROUND by default** (`run_in_background: true`). A foreground shell
   call is capped at 10 minutes, while an external engine at `effort: high` on a real diff routinely
   runs longer and is killed mid-reasoning (exit 143). The pass is then lost *and already paid for* -
@@ -84,6 +90,12 @@ The dangerous payloads `-Prompt '--ignore-user-config'` and
 `-Prompt '--dangerously-bypass-approvals-and-sandbox'` must likewise be echoed back as the `user`
 prompt with header `sandbox: read-only`, `approval: never`.
 
+On the bash channel the same probe is `printf '%s' '--help' | bash scripts/native/sh/codex-qa.sh
+--project-root <root>` (and the two dangerous payloads the same way): the text must come back as the
+`user` prompt under `sandbox: read-only`, `approval: never`. The bash wrappers carry no prompt flag,
+so the argv-injection surface is smaller by construction - `bash scripts/native/sh/codex-qa.sh
+--project-root <root> --help` is refused with exit 2 rather than forwarded.
+
 ## Reviewer (code/design, read-only, no browser)
 
 Adversarial code/design review of the Writer's diff. Read-only; reports, never fixes. Give it the
@@ -97,6 +109,11 @@ scripts\native\ps\codex-review.ps1 -ProjectRoot <root> -Prompt "Review the diff 
 Get-Content .\review-brief.txt -Raw | scripts\native\ps\codex-review.ps1 -ProjectRoot <root>
 ```
 
+```bash
+# linux / macos - the brief arrives on stdin, there is no prompt flag
+cat ./review-brief.txt | bash scripts/native/sh/codex-review.sh --project-root <root>
+```
+
 ## Two QA surfaces (why the split)
 
 The QA browser investigation (`docs/QA_BROWSER_INVESTIGATION.md`) proved a **Codex-launched browser
@@ -106,8 +123,8 @@ read-only sandbox" is impossible. QA is therefore split into two surfaces, one c
 
 | Surface | Sandbox | Browser | Gate | Wrapper |
 |---|---|---|---|---|
-| **QA** - artifact judge | `--sandbox read-only` (hard OS guarantee) | none - reads test artifacts | default route (conditional on runtime/UI) | `scripts/native/ps/codex-qa.ps1` |
-| **QAL** - live agentic browser | `--sandbox danger-full-access` (**no cell**) | live Codex-driven browser | **operator request only**, and `roles.qal.enabled` | `scripts/native/ps/codex-qal.ps1` |
+| **QA** - artifact judge | `--sandbox read-only` (hard OS guarantee) | none - reads test artifacts | default route (conditional on runtime/UI) | `scripts/native/ps/codex-qa.ps1` / `scripts/native/sh/codex-qa.sh` |
+| **QAL** - live agentic browser | `--sandbox danger-full-access` (**no cell**) | live Codex-driven browser | **operator request only**, and `roles.qal.enabled` | `scripts/native/ps/codex-qal.ps1` / `scripts/native/sh/codex-qal.sh` |
 
 ### QA (artifact judge, read-only, no browser)
 
@@ -120,6 +137,11 @@ The full step-flow is `/pnp:qa`.
 
 ```powershell
 scripts\native\ps\codex-qa.ps1 -ProjectRoot <root> -Prompt "QA (artifact judge) ticket <ref> against acceptance criteria: <criteria>. Read the E2E artifacts (JSON report: <path>; traces/screenshots: <path>) under read-only - do NOT run a browser or start a server. Login context (as exercised by the spec): this project's E2E fixture account per its own test setup, referenced by env var NAME only, unless the brief overrides it. Risk threshold: <sev>. Stop condition: <cond>. Return pass/pass-with-notes/fail with evidence (test name, artifact path)."
+```
+
+```bash
+# linux / macos - same brief, delivered on stdin
+cat ./qa-brief.txt | bash scripts/native/sh/codex-qa.sh --project-root <root>
 ```
 
 If no usable artifacts exist (the run never produced them / they are unreadable), QA reports
@@ -143,6 +165,11 @@ disposable browser profile. **There is no cell** - that isolation is hygiene, no
 scripts\native\ps\codex-qal.ps1 -ProjectRoot <root> -Prompt "QAL - live exploratory browsing. App at <url> (do NOT start a server; BLOCKED if nothing is listening). Exploration goal: <what to investigate>. Scope: <in/out of bounds>. Stop condition: <cond>. You drive a live browser and report with evidence; you NEVER write the repo (convention). Return pass/pass-with-notes/fail (or BLOCKED) with evidence."
 ```
 
+```bash
+# linux / macos - same brief, delivered on stdin
+cat ./qal-brief.txt | bash scripts/native/sh/codex-qal.sh --project-root <root>
+```
+
 Chosen-flag rationale (`--sandbox danger-full-access` vs the broader
 `--dangerously-bypass-approvals-and-sandbox`): the investigation proved `danger-full-access` is the
 minimal flag that works; the bypass flag additionally strips the approval mechanism, an unnecessary
@@ -150,7 +177,9 @@ widening.
 
 ## Notes
 
-- All three wrapper scripts are thin: they only prepend the proven, locked flags and forward the
-  prompt via stdin. Read them before trusting them.
+- All three wrapper scripts - in both channels - are thin: they only prepend the proven, locked flags
+  and forward the prompt via stdin. Read them before trusting them. The bash channel additionally
+  shells out to `node` once to read the resolver's JSON snapshot: node is a hard prerequisite of this
+  plugin, `jq` is not.
 - Reviewer and QA are read-only by OS sandbox. **QAL is not read-only** - its containment is
   cwd/profile hygiene plus the operator gate, and that is stated honestly everywhere.

@@ -15,7 +15,7 @@ effort: {{config.roles.qa.effort}}
 <!-- TEMPLATE CONTRACT (read by the P2 generate engine, not by QA)
      - CONDITIONAL RENDER: this file is rendered ONLY when config.roles.qa.engine == 'claude'.
        A codex-hosted QA has NO Claude agent file; its host is the wrapper
-       scripts/native/ps/codex-qa.ps1 and its effort travels as a wrapper flag. If the engine later
+       {{wrappers.qa}} and its effort travels as a wrapper flag. If the engine later
        changes to 'codex', the rendered file is REMOVED, not left behind: a stale
        .claude/agents/qa.md next to a codex-hosted role is a defect the self-check fails.
      - The `model` above goes through the Agent tool's `model` override, whose enum is the tier
@@ -27,7 +27,7 @@ You are **QA - the artifact judge** for {{config.project.name}}. You verify obse
 behavior against the acceptance criteria by reading the **evidence** an end-to-end run produced -
 you do **not** drive a browser. You are engine-neutral by role; this file is the **Claude** host
 of the QA role (per `.claude/aiwf-native/roles.json`). The Codex host is the plugin's
-`scripts/native/ps/codex-qa.ps1`. `/pnp:qa` picks the host from the role resolver and dispatches
+`{{wrappers.qa}}`. `/pnp:qa` picks the host from the role resolver and dispatches
 you when the qa role resolves to `claude`.
 
 ## Read-only boundary (honest model)

@@ -14,8 +14,9 @@
  *   4. an edit INSIDE a managed artifact stops the run and overwrites NOTHING;
  *   5. the conditional agent render is correct in BOTH directions, and removing a stale render is
  *      gated on an explicit confirmation;
- *   6. an unsupported OS channel and answers that violate the schema are both refused before a
- *      single file is written;
+ *   6. every shipped OS channel installs and renders ITS OWN wrapper paths (windows -> the
+ *      PowerShell ones, linux/macos -> the bash ones), while an OS outside the three and answers
+ *      that violate the schema are both refused before a single file is written;
  *   7. foreign permission rules are never touched, and a rule the operator removed is not forced
  *      back (the tombstone);
  *   8. the self-check is the install's OWN last step: a fresh install runs it and reports PASS,
@@ -303,13 +304,50 @@ section('6 - the conditional agent render, in both directions');
 }
 
 // ---------------------------------------------------------------------------
+// The OS channel decides WHICH wrapper paths the rendered project layer names. Both POSIX channels
+// are asserted end to end - installed, rendered, and re-run - because "linux is accepted now" is a
+// claim about generated FILES, not about an enum: a channel that installs while still naming the
+// PowerShell wrappers would pass an exit-code-only check and hand the operator an unrunnable loop.
+section('6b - the linux and macos channels install and render the bash wrappers');
+{
+  const PS_ROLES = 'scripts/native/ps/aiwf-roles.ps1';
+  const SH_ROLES = 'scripts/native/sh/aiwf-roles.sh';
+  const PS_REVIEW = 'scripts/native/ps/codex-review.ps1';
+  const SH_REVIEW = 'scripts/native/sh/codex-review.sh';
+
+  // The windows control first: the same templates must still render the PowerShell channel, or
+  // "linux renders sh" would be true of every channel and prove nothing.
+  const winWriter = read(at(p1, '.claude/agents/writer.md')) || '';
+  const winReviewer = read(at(p1, '.claude/agents/reviewer.md')) || '';
+  check('os=windows still renders the PowerShell wrapper paths',
+    winWriter.includes(PS_ROLES) && winReviewer.includes(PS_REVIEW) && !winWriter.includes(SH_ROLES) && !winReviewer.includes(SH_REVIEW));
+
+  for (const channel of ['linux', 'macos']) {
+    const dir = project(`os-${channel}`);
+    const r = install(dir, baseAnswers({ os: channel }), ['--no-seeds']);
+    check(`os=${channel} installs (exit 0)`, r.status === 0, why(r));
+    const writer = read(at(dir, '.claude/agents/writer.md')) || '';
+    const reviewer = read(at(dir, '.claude/agents/reviewer.md')) || '';
+    check(`os=${channel}: the writer agent names the bash resolver, never the PowerShell one`,
+      writer.includes(SH_ROLES) && !writer.includes(PS_ROLES));
+    check(`os=${channel}: the reviewer agent names the bash Codex wrapper, never the PowerShell one`,
+      reviewer.includes(SH_REVIEW) && !reviewer.includes(PS_REVIEW));
+    check(`os=${channel}: the config records the channel`, (readJson(at(dir, CONFIG_REL)) || {}).os === channel);
+    const before = snapshot(dir);
+    const again = install(dir, baseAnswers({ os: channel }), ['--no-seeds']);
+    check(`os=${channel}: a re-run is still a zero diff`,
+      again.status === 0 && diffSnapshots(before, snapshot(dir)).length === 0, diffSnapshots(before, snapshot(dir)).join(', '));
+  }
+}
+
+// ---------------------------------------------------------------------------
 section('7 - refusals happen BEFORE anything is written');
 {
-  const p7 = project('linux');
-  const answers = baseAnswers({ os: 'linux' });
+  const p7 = project('unknown-os');
+  const answers = baseAnswers({ os: 'solaris' });
   const r = install(p7, answers, ['--no-seeds']);
-  check('os=linux is refused (exit 1)', r.status === 1, `exit ${r.status}`);
-  check('the message says what it says: not supported before 1.0', r.out.includes('supported before 1.0'));
+  check('an os outside the three channels is refused (exit 1)', r.status === 1, `exit ${r.status}`);
+  check('the message names the channels setup can generate', r.out.includes('"windows", "linux", "macos"'), why(r, true));
   check('the project directory is still empty', snapshot(p7) && Object.keys(snapshot(p7)).length === 0);
 }
 {

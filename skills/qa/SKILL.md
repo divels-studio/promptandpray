@@ -7,8 +7,10 @@ allowed-tools: Read, Grep, Glob, Bash, Agent
 # /pnp:qa - QA (engine-neutral artifact judge)
 
 QA is the **judge over evidence**, not a live browser. The QA role is **engine-neutral**: its host
-is data in the project's `.claude/aiwf-native/roles.json`, resolved by the plugin's
-`scripts/native/ps/aiwf-roles.ps1`. A Codex-launched browser cannot run under the read-only sandbox
+is data in the project's `.claude/aiwf-native/roles.json`, resolved by the plugin's role resolver -
+`scripts/native/ps/aiwf-roles.ps1` on os `windows`, `scripts/native/sh/aiwf-roles.sh` on os
+`linux`/`macos` (`{{config.os}}`, read in Step 0, decides which; same CLI contract, same exit
+codes). A Codex-launched browser cannot run under the read-only sandbox
 (`docs/QA_BROWSER_INVESTIGATION.md`), so on **either** host the browser lives in the **test
 runner**, outside the review engine, and QA reads the artifacts read-only. The flow:
 
@@ -19,7 +21,9 @@ runner**, outside the review engine, and QA reads the artifacts read-only. The f
 
 QA's host is resolved once (Step 0b) and dispatched as one of two branches:
 
-- **engine `codex`** -> `${CLAUDE_PLUGIN_ROOT}/scripts/native/ps/codex-qa.ps1` - read-only by a hard
+- **engine `codex`** -> the wrapper of this OS channel,
+  `${CLAUDE_PLUGIN_ROOT}/scripts/native/ps/codex-qa.ps1` or
+  `${CLAUDE_PLUGIN_ROOT}/scripts/native/sh/codex-qa.sh` - read-only by a hard
   OS `--sandbox read-only` cell; wrapper locks flags, brief on stdin.
 - **engine `claude`** -> the `qa` subagent via the **Agent tool** (the project's rendered qa agent) -
   read-only by a `Read/Grep/Glob`-only tool allowlist. **Gate 1 catches the Edit/Write family; the
@@ -54,10 +58,22 @@ surface: say so and stop rather than improvising one.
 
 ## Step 0b - Resolve the QA host (run the resolver once)
 
+Run the channel `{{config.os}}` selects. Both print the same snapshot object.
+
+**os `windows`:**
+
 ```powershell
 $role = pwsh -NoProfile -File "${CLAUDE_PLUGIN_ROOT}/scripts/native/ps/aiwf-roles.ps1" `
   -Role qa -RolesPath "<root>/.claude/aiwf-native/roles.json" -AsJson | ConvertFrom-Json
 # $role.engine -> 'codex' or 'claude';  $role.model -> the model to use on that engine
+```
+
+**os `linux` / `macos`:**
+
+```bash
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/native/sh/aiwf-roles.sh" \
+  --role qa --roles-path "<root>/.claude/aiwf-native/roles.json" --as-json
+# prints one JSON object: {"role":..,"engine":..,"model":..,"effort":..} - read the fields from it
 ```
 
 If the resolver exits non-zero, it printed the reason to stderr - stop and report the
@@ -106,10 +122,20 @@ unzip**. So the orchestrator extracts each trace into a sibling `trace-extracted
 host *could* read the zip directly, but extracting keeps the brief **engine-neutral** - the same
 paths work on both hosts). Run from `{{config.verify.e2e.cwd}}`:
 
+**os `windows`:**
+
 ```powershell
 Get-ChildItem {{config.verify.e2e.outputDir}} -Recurse -Filter trace.zip | ForEach-Object {
   Expand-Archive -LiteralPath $_.FullName -DestinationPath (Join-Path $_.DirectoryName 'trace-extracted') -Force
 }
+```
+
+**os `linux` / `macos`** (same result; `unzip -o` overwrites, as `-Force` does above). Every path is
+quoted: the configured output dir may contain spaces, and so may a trace's own directory:
+
+```bash
+find "{{config.verify.e2e.outputDir}}" -name trace.zip -exec sh -c \
+  'unzip -o "$1" -d "$(dirname "$1")/trace-extracted"' _ {} \;
 ```
 
 Each trace's internals (`0-trace.trace`, `test.trace`, `0-trace.network`, `resources/...`) now live
@@ -175,12 +201,21 @@ Deliver the brief on **stdin** - never positionally. The wrapper reads its model
 so no model is passed here.
 
 **Write the brief to the fixed path `<root>/{{config.paths.scratchDir}}/qa-brief.txt`** (Write tool -
-an empty brief makes the wrapper exit 2, so write the file first), then invoke the wrapper with
-exactly this command, character for character:
+an empty brief makes the wrapper exit 2, so write the file first), then invoke the wrapper of this
+project's OS channel (`{{config.os}}`) with exactly that command, character for character:
+
+**os `windows`:**
 
 ```powershell
 Get-Content '<root>/{{config.paths.scratchDir}}/qa-brief.txt' -Raw | `
   & "${CLAUDE_PLUGIN_ROOT}/scripts/native/ps/codex-qa.ps1" -ProjectRoot '<root>'
+```
+
+**os `linux` / `macos`:**
+
+```bash
+cat '<root>/{{config.paths.scratchDir}}/qa-brief.txt' \
+  | bash "${CLAUDE_PLUGIN_ROOT}/scripts/native/sh/codex-qa.sh" --project-root '<root>'
 ```
 
 The path is fixed **on purpose** - same reasoning as `/pnp:review` Step 3: a permission rule can
@@ -193,9 +228,11 @@ call is capped at 10 minutes; an external engine at `effort: high` routinely exc
 killed mid-run (exit 143), which spends the operator's paid quota and returns no verdict. Same
 rule, same reasoning, as `/pnp:review` Step 3.
 
-The PowerShell block is the **only canonical wrapper path** (same foreign-shell caveat as
-`/pnp:review`). `{{config.paths.scratchDir}}` is gitignored, so the brief never enters a commit.
-Never delete it afterwards - `rm` is an `ask` rule and cleanup would pop the very dialog this
+The block of this project's OS channel is the **only canonical wrapper path** - PowerShell on os
+`windows`, bash on os `linux`/`macos` (same foreign-shell caveat as `/pnp:review`, and the same
+rule: the channels are mirrors, never alternatives). `{{config.paths.scratchDir}}` is gitignored, so
+the brief never enters a commit. Never delete it afterwards - `rm` is an `ask` rule and cleanup
+would pop the very dialog this
 arrangement removes; the next dispatch overwrites the file.
 
 ### claude branch (`$role.engine -eq 'claude'`) - dispatch the qa subagent

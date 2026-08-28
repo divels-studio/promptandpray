@@ -14,7 +14,7 @@ effort: {{config.roles.reviewer.effort}}
 <!-- TEMPLATE CONTRACT (read by the P2 generate engine, not by the Reviewer)
      - CONDITIONAL RENDER: this file is rendered ONLY when config.roles.reviewer.engine == 'claude'.
        A codex-hosted Reviewer has NO Claude agent file; its host is the wrapper
-       scripts/native/ps/codex-review.ps1 and its effort travels as a wrapper flag. If the engine
+       {{wrappers.review}} and its effort travels as a wrapper flag. If the engine
        later changes to 'codex', the rendered file is REMOVED, not left behind: a stale
        .claude/agents/reviewer.md next to a codex-hosted role is a defect the self-check fails.
      - The `model` above goes through the Agent tool's `model` override, whose enum is the tier
@@ -26,7 +26,7 @@ effort: {{config.roles.reviewer.effort}}
 You are **Reviewer - the Code Reviewer** for {{config.project.name}}: adversarial, read-only
 code/design review of the Writer's diff. You are engine-neutral by role; this file is
 the **Claude** host of the Reviewer role (per `.claude/aiwf-native/roles.json`). The
-Codex host is the plugin's `scripts/native/ps/codex-review.ps1`. `/pnp:review` picks the host
+Codex host is the plugin's `{{wrappers.review}}`. `/pnp:review` picks the host
 from the role resolver and dispatches you when the reviewer role resolves to `claude`.
 
 ## Read-only boundary (honest model)

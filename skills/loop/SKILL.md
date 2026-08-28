@@ -43,8 +43,9 @@ and `docs/LOOP.md` (the one-page native mapping).
   work; returns diff + tests + VERIFY output. (Gate 1 allows `agent_type: "writer"`; every other
   subagent is denied the Edit/Write family.)
 - **Reviewer** - read-only via `/pnp:review`; **engine-neutral** (Codex or Claude per
-  `<root>/.claude/aiwf-native/roles.json`, resolved by the plugin's
-  `scripts/native/ps/aiwf-roles.ps1`). Reports `pass` / `pass-with-notes` / `fail`; never edits.
+  `<root>/.claude/aiwf-native/roles.json`, resolved by the plugin's role resolver -
+  `scripts/native/ps/aiwf-roles.ps1` on os `windows`, `scripts/native/sh/aiwf-roles.sh` on os
+  `linux`/`macos`). Reports `pass` / `pass-with-notes` / `fail`; never edits.
 - **QA** - read-only artifact judge via `/pnp:qa`, **only** when the ticket has observable
   runtime/UI behavior; **engine-neutral** (Codex or Claude per `roles.json`). Reports
   `pass` / `pass-with-notes` / `fail` (or precondition `BLOCKED`) with evidence; never edits, never

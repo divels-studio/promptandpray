@@ -33,9 +33,10 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
 
 - An existing installation: report it in one line (project name, installed version, roles) and ask
   whether the operator wants a re-interview or an update. Do not start asking questions unprompted.
-- The OS channel: only `windows` can be generated before 1.0. The interview refuses `linux` and
-  `macos` fail-closed - the shell wrappers for them do not ship yet, and an installation this
-  version cannot run is worse than a refusal.
+- The OS channel: all three ship - `windows` renders the PowerShell wrappers
+  (`scripts/native/ps/`), `linux` and `macos` the bash ones (`scripts/native/sh/`). The interview
+  refuses anything outside those three fail-closed: an unknown channel would name wrappers that do
+  not exist, and an installation this version cannot run is worse than a refusal.
 
 ## Step 2 - Interview
 

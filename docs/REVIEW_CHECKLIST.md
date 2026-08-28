@@ -2,8 +2,11 @@
 
 Verdict authority for the **Reviewer** (code/design) and **QA** (runtime/UI). Both roles are
 **engine-neutral**: the host is data in the project's `.claude/aiwf-native/roles.json` (resolved by
-`scripts/native/ps/aiwf-roles.ps1`). `/pnp:review` and `/pnp:qa` dispatch either the read-only Codex
-wrappers `scripts/native/ps/codex-review.ps1` / `scripts/native/ps/codex-qa.ps1` (brief on **stdin**
+the role resolver of this project's OS channel - `scripts/native/ps/aiwf-roles.ps1` on `windows`,
+`scripts/native/sh/aiwf-roles.sh` on `linux`/`macos`). `/pnp:review` and `/pnp:qa` dispatch either
+the read-only Codex wrappers of that channel - `scripts/native/ps/codex-review.ps1` /
+`scripts/native/ps/codex-qa.ps1`, or `scripts/native/sh/codex-review.sh` /
+`scripts/native/sh/codex-qa.sh` (brief on **stdin**
 under an OS `--sandbox read-only` boundary they cannot escape; recipe:
 `docs/CODEX_REVIEW_QA_RECIPE.md`) **or** the `reviewer` / `qa` Claude subagents (`Read/Grep/Glob`
 only - read-only by Gate 1 + the tool allowlist, with no OS cell; the hard OS boundary applies only

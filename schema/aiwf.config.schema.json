@@ -122,7 +122,7 @@
       "type": "string",
       "enum": ["windows", "linux", "macos"],
       "default": "windows",
-      "description": "Selects the wrapper variant (ps/sh) and the OS syntax of the permission rules. The schema admits all three channels because the config format is not what is missing; the INTERVIEW refuses linux/macos fail-closed while only the PowerShell wrappers ship, so v0.1 cannot generate an installation it cannot run."
+      "description": "Selects the wrapper variant rendered into the project layer: windows -> scripts/native/ps/*.ps1, linux and macos -> scripts/native/sh/*.sh. All three channels ship wrappers; setup refuses anything outside this enum fail-closed, because an unknown channel would name wrappers that do not exist. The permission ask-ruleset is one OS-neutral superset (see templates/settings.ask-ruleset.json), not a per-OS render."
     },
 
     "operator": {

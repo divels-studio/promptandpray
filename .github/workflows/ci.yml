@@ -1,17 +1,20 @@
 name: ci
 
-# Every gate this repository has, on every push and every pull request. One job, one command per
-# step, each step a real gate: a red step is a red build, and nothing here is advisory.
+# Every gate this repository has, on every push and every pull request. One job per shipped OS
+# channel, one command per step, each step a real gate: a red step is a red build, and nothing here
+# is advisory.
+#
+# The two POSIX legs have never executed: this repository is unpushed, so ubuntu and macos first run
+# on the operator's first push. They are written as full gates rather than smoke tests precisely
+# because that first run is the moment the bash channel stops being only locally proven.
 on:
   push:
   pull_request:
 
 jobs:
   windows:
-    # windows-latest only, and deliberately not a matrix. The setup engine is fail-closed for
-    # os != windows before 1.0 (scripts/setup/generate.mjs, assertSupportedOs), and only the
-    # PowerShell wrappers ship - so an ubuntu job could not install a project this version can run.
-    # The OS matrix arrives with the sh wrappers, not before.
+    # The channel the loop runs on today, and the only one with a live operator behind it: the
+    # PowerShell wrappers, the pwsh-hosted resolver, and the example cycle on the windows answers.
     runs-on: windows-latest
 
     steps:
@@ -51,3 +54,75 @@ jobs:
       # GitHub runner, so a step invoking it would either fail for a reason that has nothing to do
       # with this repository or be wrapped in a "continue-on-error" that reads as coverage while
       # asserting nothing. Plugin-manifest validation stays a local, operator-run check.
+
+  ubuntu:
+    # The bash channel, statically and end to end. Same gates as windows, on the linux answers file,
+    # plus the one gate that exists only here: shellcheck.
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # shellcheck is PREINSTALLED on the ubuntu runner image, so this costs no install step. It is
+      # deliberately NOT part of the self-check: shellcheck is not on an operator machine, and a
+      # self-check section that needed it would go red on every local run. The local static proof is
+      # the self-check's own bash-channel assertions plus `bash -n`.
+      - name: shellcheck the bash wrappers
+        run: shellcheck scripts/native/sh/*.sh
+
+      - name: migration payload is coherent
+        run: node scripts/update/validate-payload.mjs
+
+      - name: setup acceptance suite
+        run: node scripts/setup/test-setup.mjs
+
+      - name: update acceptance suite
+        run: node scripts/update/test-update.mjs
+
+      - name: hook spikes (expectation table; Gate 1 parity reports SKIP without a reference)
+        run: node scripts/spike/run-spikes.mjs
+
+      - name: example cycle on the linux answers (setup -> version bump -> update -> self-check)
+        run: node scripts/ci/run-example-cycle.mjs --answers examples/example-project/answers-linux.json
+
+      - name: self-check
+        run: node scripts/selfcheck/aiwf-selfcheck.js --plugin-root .
+
+  macos:
+    # The second POSIX channel. macos runs the same gates as ubuntu with ONE deliberate omission,
+    # written down here rather than left to be noticed: `shellcheck` is NOT preinstalled on the
+    # macos runner image, and installing it through a package manager on every run would trade a
+    # minute of build time for a lint this workflow already performs on ubuntu over the same files.
+    # The bash channel is one set of files, so linting it twice proves nothing the ubuntu leg does
+    # not already prove; what macos is here for is EXECUTION - a different bash (3.2 by default on
+    # this image), a different mktemp, a different tmpdir layout.
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: migration payload is coherent
+        run: node scripts/update/validate-payload.mjs
+
+      - name: setup acceptance suite
+        run: node scripts/setup/test-setup.mjs
+
+      - name: update acceptance suite
+        run: node scripts/update/test-update.mjs
+
+      - name: hook spikes (expectation table; Gate 1 parity reports SKIP without a reference)
+        run: node scripts/spike/run-spikes.mjs
+
+      - name: example cycle on the linux answers (setup -> version bump -> update -> self-check)
+        run: node scripts/ci/run-example-cycle.mjs --answers examples/example-project/answers-linux.json
+
+      - name: self-check
+        run: node scripts/selfcheck/aiwf-selfcheck.js --plugin-root .

@@ -28,7 +28,7 @@ well-specified ticket. Your role does not depend on any model.
 You are the **ONLY** role that writes to the repository. Reviewer and QA are
 read-only review roles - hosted on Codex **or** Claude per
 `.claude/aiwf-native/roles.json` (resolved by the plugin's
-`scripts/native/ps/aiwf-roles.ps1`); a Claude-hosted review role is held read-only by Gate 1 +
+`{{wrappers.roles}}`); a Claude-hosted review role is held read-only by Gate 1 +
 a `Read, Grep, Glob`-only tool allowlist, a Codex-hosted one by the OS `--sandbox read-only`
 cell. The COO plans and reviews but does not write implementation code. If you are running, you
 are the write path.

@@ -11,9 +11,10 @@
  *   being quietly reset to the factory value.
  *
  * WHAT IT REFUSES
- *   os != windows, fail-closed: only the PowerShell wrappers ship before 1.0, and generating an
- *   installation this version cannot run would be worse than refusing. The schema still admits the
- *   three channels - the format is not what is missing.
+ *   An os outside the schema's three channels (windows | linux | macos), fail-closed: windows
+ *   renders the PowerShell wrappers, linux and macos the bash ones, and an unknown channel would
+ *   name wrappers that do not exist. Generating an installation this version cannot run would be
+ *   worse than refusing.
  *
  * NON-INTERACTIVE
  *   --answers-file <json> skips every question and uses the file as the answers object (the CI and
