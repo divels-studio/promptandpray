@@ -12,6 +12,12 @@
  *        wrappers are checked STATICALLY for their locked flags. These assertions hold for every
  *        installation, because their subject is the payload.
  *
+ *        The EXAMPLE FIXTURE section belongs to this class: examples/example-project/ is committed
+ *        DATA the example cycle runs on, and data rots as silently as code - so the answers file is
+ *        validated at the config validator's own entrypoint, the simulated version bump is held to
+ *        the payload validator's own id/version rules, and the quickstart README, the cycle driver
+ *        and the CI workflow are compared against each other in both directions.
+ *
  *     B. PROJECT-LAYER INVARIANTS - properties of ONE installed project: the owned-ask-rule
  *        bookkeeping, the rendered artifacts (roles.json / agent frontmatter) agreeing with
  *        aiwf.config.json, and the version bookkeeping. Their subject is the project directory
@@ -107,6 +113,9 @@ const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArr
 // imported from the setup engine: a checker that reuses the code under test cannot catch that code
 // hashing the wrong thing. The negative controls prove this one can fail.
 const sha256 = (text) => crypto.createHash('sha256').update(text.replace(/\r\n/g, '\n'), 'utf8').digest('hex');
+// The RAW-BYTE companion, for facts that are about bytes rather than about text: a file whose
+// content was rewritten in place is invisible to a hash that normalises line endings first.
+const sha256Bytes = (buffer) => crypto.createHash('sha256').update(buffer).digest('hex');
 function managedHash(projectRoot, key) {
   const cut = key.indexOf('#');
   const file = cut === -1 ? key : key.slice(0, cut);
@@ -1386,7 +1395,7 @@ function sectionPayloadIntegrity() {
     .concat(listFiles(path.join(PLUGIN_ROOT, 'templates'), () => true))
     .concat(listFiles(path.join(PLUGIN_ROOT, 'migrations'), () => true))
     .concat(listFiles(path.join(PLUGIN_ROOT, 'scripts', 'update'), (p) => p.endsWith('.mjs') && !path.basename(p).startsWith('test-')));
-  const REF = /(?:docs\/[A-Za-z0-9_.-]+\.md|schema\/[A-Za-z0-9_.-]+\.json|migrations\/[A-Za-z0-9_./-]+\.(?:json|md)|scripts\/native\/ps\/[A-Za-z0-9_.-]+\.ps1|scripts\/(?:engine|selfcheck|spike|setup|update)\/[A-Za-z0-9_.-]+\.(?:js|mjs)|templates\/[A-Za-z0-9_./-]+\.(?:tmpl|json))/g;
+  const REF = /(?:docs\/[A-Za-z0-9_.-]+\.md|schema\/[A-Za-z0-9_.-]+\.json|migrations\/[A-Za-z0-9_./-]+\.(?:json|md)|scripts\/native\/ps\/[A-Za-z0-9_.-]+\.ps1|scripts\/(?:ci|engine|selfcheck|spike|setup|update)\/[A-Za-z0-9_.-]+\.(?:js|mjs)|templates\/[A-Za-z0-9_./-]+\.(?:tmpl|json))/g;
   const dangling = [];
   let refCount = 0;
   for (const f of payloadFiles) {
@@ -1415,6 +1424,567 @@ function sectionPayloadIntegrity() {
   check('no payload file uses a foreign command prefix', badPrefix.length === 0, badPrefix.join('; '));
   check('every /pnp:<cmd> reference names a shipped or planned skill',
     unknownCommands.length === 0, unknownCommands.slice(0, 6).join('; '));
+}
+
+// ---------------------------------------------------------------------------
+// SECTION - the example fixture (examples/example-project + its driver + CI)
+// ---------------------------------------------------------------------------
+// The example cycle is the only gate that runs the whole product the way an operator would, and it
+// runs on DATA: a committed answers file, a committed seed project, a committed simulated version
+// bump. That data can rot exactly like code, and silently - a stale answers file, a bump the
+// payload validator would now reject, a README whose commands are no longer what CI runs. So it is
+// asserted here, with a negative control per assertion.
+//
+// EVERY CHECK BELOW MUST SURVIVE BEING RUN AGAINST A PAYLOAD COPY. The acceptance suites and the
+// cycle itself run this self-check with --plugin-root pointing at a copy that already carries a
+// fixture migration, so a check phrased as "the bump is newer than the last manifest entry" would
+// fail on exactly the payloads that exercise the engine hardest. The predecessor rule below is
+// phrased against the entry the bump declares itself to FOLLOW, which is stable in both.
+const EXAMPLE_REL = 'examples/example-project';
+const exAt = (root, ...rel) => path.join(root, 'examples', 'example-project', ...rel);
+const OP_TYPES = ['add-config-key', 'rerender-managed-region', 'reconcile-ask-ruleset', 'note'];
+const MIGRATION_ID_RE = /^([0-9]{4})_([a-z0-9]+(?:-[a-z0-9]+)*)$/;
+const VERSION_RE = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/;
+
+// An independent implementation, like sha256 above and for the same reason: this file must be able
+// to catch the payload validator agreeing with itself. Same rule, written out separately.
+function versionTriple(value) {
+  const m = typeof value === 'string' ? VERSION_RE.exec(value) : null;
+  return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
+}
+function versionGreater(a, b) {
+  const pa = versionTriple(a);
+  const pb = versionTriple(b);
+  if (!pa || !pb) return false;
+  for (let i = 0; i < 3; i += 1) if (pa[i] !== pb[i]) return pa[i] > pb[i];
+  return false;
+}
+
+// The stand-in bookkeeping block, mirroring scripts/setup/generate.mjs (PROBE_AIWF). An answers file
+// legitimately carries no _aiwf - setup writes that block itself - so validating the answers against
+// the schema needs one supplied, exactly as the generator does before it renders anything.
+const PROBE_AIWF = {
+  installedPluginVersion: '0.0.0',
+  lastMigrationApplied: '0000_probe',
+  migrationJournal: null,
+  managedRegions: {},
+  ownedAskRules: [],
+  suppressedAskRules: [],
+};
+
+/** The command lines the cycle driver declares as documented. Null when the block is not there. */
+function documentedCommands(source) {
+  const block = /export const DOCUMENTED_COMMANDS = \[([\s\S]*?)\n\];/.exec(source || '');
+  if (!block) return null;
+  return (block[1].match(/'[^']*'/g) || []).map((s) => s.slice(1, -1));
+}
+/** Every command line the example README shows, split into the ones with cycle placeholders and the rest. */
+function readmeCommands(readme) {
+  const lines = String(readme || '').split('\n').map((l) => l.trim()).filter((l) => l.startsWith('node '));
+  return { placeholder: lines.filter((l) => l.includes('<')), plain: lines.filter((l) => !l.includes('<')) };
+}
+const stripPlaceholders = (token) => token
+  .split('<payload2>').join('.').split('<payload>').join('.')
+  .split('<repo>').join('.').split('<project>').join('.').split('<work>').join('.');
+
+const firstLine = (text) => String(text || '').trim().split('\n')[0].slice(0, 180);
+const safeReaddir = (p) => { try { return fs.readdirSync(p).sort(); } catch (e) { return null; } };
+
+/**
+ * The junction probe, as a function so its "a junction could not be created" branch is reachable in
+ * a test. `symlink` is injected for exactly that reason; production passes fs.symlinkSync.
+ *
+ * A junction that cannot be created is a FAILED check, not a NOTE. This payload is Windows-only by
+ * contract before 1.0 (the interview is fail-closed for os != windows) and a junction needs no
+ * elevation there, so "we could not make one" describes a broken environment, not a condition this
+ * check is exempt from. A NOTE here would be a mandatory probe quietly becoming a non-failure -
+ * which is the entire class of defect this section exists to catch.
+ */
+function junctionProbeFinding(root, tmpDir, probe, symlink) {
+  const NAME = 'the cycle driver REFUSES a --work-dir reached through a junction into the repository: '
+    + 'exit 2, a containment reason, nothing created inside it';
+  const make = symlink || fs.symlinkSync;
+  const holder = path.join(tmpDir, `workdir-junction-${exampleProbe += 1}`);
+  fs.mkdirSync(holder, { recursive: true });
+  const link = path.join(holder, 'link');
+  try {
+    make(root, link, 'junction');
+  } catch (e) {
+    return { id: 'example-workdir-junction', ok: false, name: NAME,
+      detail: `a junction could not be created (${`${e.code || ''} ${e.message}`.trim()}) - on the only OS this payload `
+        + 'supports that is a broken environment, not an exemption, so this probe FAILS rather than excusing itself' };
+  }
+  const child = path.join(link, 'pnp-junction-probe');
+  const throughTheLink = path.join(root, 'pnp-junction-probe'); // where it would really land
+  const r = probe(child);
+  const landed = fs.existsSync(throughTheLink);
+  const finding = { id: 'example-workdir-junction', name: NAME,
+    ok: r.status === 2 && /is refused: it is (inside|an ancestor of) the repository/.test(r.out) && !landed,
+    detail: `exit ${r.status}${landed ? ' AND IT CREATED THE DIRECTORY INSIDE THE REPOSITORY' : ''}: ${firstLine(r.out)}` };
+  // The LINK is removed with rmdirSync, which never touches what it points at. (Measured: recursive
+  // rmSync does not follow a junction either, so the temp-tree cleanup is not a second chance to
+  // get this wrong - but this run does not lean on that.)
+  try { fs.rmdirSync(link); } catch (e) { try { fs.unlinkSync(link); } catch (e2) { /* the tmp tree removal is the backstop */ } }
+  return finding;
+}
+
+/**
+ * The two file-ownership rules of the cycle driver, EXECUTED.
+ *
+ * Both are about what happens between "this run wrote a file" and "the cleanup removes it", which
+ * in a real run are seventy seconds apart. So the probe takes a throwaway copy of the payload and
+ * SHORT-CIRCUITS the cycle body at its first step: the injected lines create the situation and then
+ * throw, which still reaches the cleanup - the part under test - about a second later. The injection
+ * lives in a temp copy, never in the payload: production carries no test hook.
+ */
+function shortCircuitedCopy(root, tmpDir, injected) {
+  const copy = path.join(tmpDir, `cycle-copy-${exampleProbe += 1}`);
+  copyPayloadTree(root, copy);
+  const driver = path.join(copy, 'scripts', 'ci', 'run-example-cycle.mjs');
+  const src = readText(driver);
+  const ANCHOR = "  step('1 - a payload copy and the seed project, both inside the work directory');";
+  if (src === null || !src.includes(ANCHOR)) return null;
+  fs.writeFileSync(driver, src.replace(ANCHOR, injected.join('\n')));
+  return { driver, work: fs.mkdtempSync(path.join(tmpDir, 'cycle-work-')) };
+}
+
+function fileOwnershipFindings(root, tmpDir) {
+  const out = [];
+  const runCopy = (injected) => {
+    const built = shortCircuitedCopy(root, tmpDir, injected);
+    if (!built) return null;
+    const r = spawnSync(process.execPath, [built.driver, '--work-dir', built.work], { encoding: 'utf8' });
+    return { status: r.status, out: (r.stdout || '') + (r.stderr || ''), work: built.work };
+  };
+
+  // 1. A file that appeared under one of this run's names AFTER the (empty) work directory was
+  //    acquired must not be overwritten: the exclusive create refuses and the run bails 2.
+  {
+    const PLANTED = 'planted by something that is not this run';
+    const r = runCopy([
+      `  fs.writeFileSync(RESOLUTIONS, '${PLANTED}');`,
+      '  writeJsonExclusive(RESOLUTIONS, { probe: true });',
+      `  throw new Error('unreachable: the exclusive create must have refused');`,
+    ]);
+    const survived = r && readText(path.join(r.work, 'resolutions.json'));
+    out.push({ id: 'example-cycle-file-exclusive',
+      name: "a file that appeared under one of the cycle's own names is REFUSED, never overwritten (exit 2, the bytes intact)",
+      ok: !!r && r.status === 2 && /already exists/.test(r.out) && survived === PLANTED,
+      detail: r ? `exit ${r.status}, the file now reads ${JSON.stringify(String(survived).slice(0, 40))}: ${firstLine(r.out)}`
+        : 'the cycle body could not be short-circuited (its first step line moved)' });
+  }
+
+  // 2. A file this run wrote and something else then REPLACED is not the file this run owns: the
+  //    cleanup leaves it and reports it, rather than deleting it because the name still matches.
+  {
+    const REPLACED = 'replaced after this run wrote it';
+    const r = runCopy([
+      '  const probeHash = writeJsonExclusive(RESOLUTIONS, { probe: true });',
+      `  recordCreatedFile('resolutions.json', probeHash);`,
+      `  fs.writeFileSync(RESOLUTIONS, '${REPLACED}');`,
+      `  throw new Error('ownership probe: stopping once the record exists');`,
+    ]);
+    const survived = r && readText(path.join(r.work, 'resolutions.json'));
+    out.push({ id: 'example-cycle-file-ownership',
+      name: 'a recorded file whose bytes changed since this run wrote it is LEFT on disk and reported, not deleted by name',
+      ok: !!r && survived === REPLACED && /its bytes changed since this run wrote it/.test(r.out),
+      detail: r ? `the file ${survived === REPLACED ? 'survived' : 'was DELETED or changed'}, and the run ${/its bytes changed since this run wrote it/.test(r.out) ? 'reported it' : 'DID NOT REPORT IT'}`
+        : 'the cycle body could not be short-circuited (its first step line moved)' });
+  }
+  return out;
+}
+
+let exampleProbe = 0;
+/**
+ * `guardProbes` runs the EXECUTED half of this section - the cycle driver spawned with a dangerous
+ * --work-dir. It is on for the real run and for the pristine control copy, and in the control loop
+ * only for the controls that target one of those checks: three extra child processes per findings
+ * computation is worth paying twice, not twenty times, and a control that targets a different id
+ * never reads them.
+ */
+function exampleFixtureFindings(root, tmpDir, { guardProbes = true } = {}) {
+  const out = [];
+  const add = (id, name, ok, detail) => { out.push({ id, name, ok: !!ok, detail: detail || '' }); return !!ok; };
+
+  // --- the four things that must be there ---------------------------------------------------
+  const readme = readText(exAt(root, 'README.md'));
+  add('example-readme', `${EXAMPLE_REL}/README.md exists`, readme !== null);
+  const answers = readJson(exAt(root, 'answers.json'));
+  add('example-answers', `${EXAMPLE_REL}/answers.json exists and is valid JSON`, isPlainObject(answers));
+  const seedMissing = ['CLAUDE.md', '.claude/settings.json', 'src/hello.mjs']
+    .filter((rel) => !fs.existsSync(exAt(root, 'seed', ...rel.split('/'))));
+  add('example-seed', `${EXAMPLE_REL}/seed/ carries the pre-existing prose, the foreign permission rule and the VERIFY target`,
+    seedMissing.length === 0, seedMissing.length ? `missing ${seedMissing.join(', ')}` : '3 files');
+
+  const bump = readJson(exAt(root, 'bump', 'bump.json'));
+  const bumpShapeOk = isPlainObject(bump)
+    && Object.keys(bump).sort().join(',') === 'migration,targetPluginVersion'
+    && typeof bump.migration === 'string' && typeof bump.targetPluginVersion === 'string';
+  add('example-bump-json', `${EXAMPLE_REL}/bump/bump.json carries exactly {migration, targetPluginVersion}`,
+    bumpShapeOk, isPlainObject(bump) ? Object.keys(bump).join(', ') : 'not an object');
+
+  const migrationId = bumpShapeOk ? bump.migration : '';
+  const ops = readJson(exAt(root, 'bump', migrationId, 'ops.json'));
+  const notes = readText(exAt(root, 'bump', migrationId, 'NOTES.md'));
+  add('example-bump-migration', `${EXAMPLE_REL}/bump/<migration>/ has ops.json + NOTES.md, both agreeing with bump.json`,
+    isPlainObject(ops) && notes !== null && ops.migration === migrationId && ops.targetPluginVersion === (bump || {}).targetPluginVersion,
+    isPlainObject(ops) ? `ops declares ${ops.migration} -> ${ops.targetPluginVersion}` : 'ops.json missing or unparseable');
+
+  const opList = (isPlainObject(ops) && Array.isArray(ops.operations)) ? ops.operations : [];
+  const usedTypes = new Set(opList.filter(isPlainObject).map((o) => o.op));
+  const missingTypes = OP_TYPES.filter((t) => !usedTypes.has(t));
+  add('example-bump-ops-types', 'the example migration exercises ALL FOUR operation types, so a reader sees the whole vocabulary',
+    missingTypes.length === 0, missingTypes.length ? `missing ${missingTypes.join(', ')}` : `${opList.length} operations`);
+
+  // --- the bump is a plausible NEXT release ---------------------------------------------------
+  // The predecessor rule, phrased exactly as validate-payload phrases an appended entry: the id is
+  // NNNN_<slug>, the entry numbered NNNN-1 really exists in the manifest, and the target version is
+  // strictly greater than that entry's.
+  const manifest = readJson(path.join(root, 'migrations', 'index.json'));
+  const idMatch = MIGRATION_ID_RE.exec(migrationId);
+  const number = idMatch ? Number(idMatch[1]) : 0;
+  const predecessor = (Array.isArray(manifest) && number >= 2) ? manifest[number - 2] : null;
+  add('example-bump-id', 'the bump id is NNNN_<slug> and the manifest entry it declares itself to FOLLOW really exists',
+    !!idMatch && isPlainObject(predecessor) && typeof predecessor.id === 'string',
+    idMatch ? `${migrationId} follows ${predecessor ? predecessor.id : 'nothing at position ' + (number - 1)}` : `"${migrationId}" is not NNNN_<slug>`);
+  add('example-bump-version', 'the bump target version is a plain MAJOR.MINOR.PATCH triple, strictly greater than that entry\'s',
+    versionTriple((bump || {}).targetPluginVersion) !== null && isPlainObject(predecessor)
+      && versionGreater(bump.targetPluginVersion, predecessor.targetPluginVersion),
+    `${(bump || {}).targetPluginVersion} vs ${predecessor ? predecessor.targetPluginVersion : '(no predecessor)'}`);
+
+  // --- the schema half of the same release ----------------------------------------------------
+  const schemaKey = readJson(exAt(root, 'bump', 'schema-key.json'));
+  const schemaFile = readJson(path.join(root, 'schema', 'aiwf.config.schema.json'));
+  const host = (isPlainObject(schemaKey) && isPlainObject(schemaFile) && isPlainObject(schemaFile.properties))
+    ? schemaFile.properties[schemaKey.at] : null;
+  add('example-bump-schema-key',
+    'bump/schema-key.json names a real object block of the payload schema and declares NO default (the migration owns the default)',
+    isPlainObject(schemaKey) && typeof schemaKey.property === 'string' && /^[A-Za-z][A-Za-z0-9]*$/.test(schemaKey.property)
+      && isPlainObject(host) && isPlainObject(host.properties)
+      && isPlainObject(schemaKey.schema) && typeof schemaKey.schema.type === 'string'
+      && schemaKey.schema.default === undefined,
+    isPlainObject(schemaKey) ? `${schemaKey.at}.${schemaKey.property}` : 'schema-key.json missing or unparseable');
+  const addKeyOp = opList.find((o) => isPlainObject(o) && o.op === 'add-config-key');
+  add('example-bump-key-agrees', 'the add-config-key operation adds exactly the key schema-key.json admits',
+    !!addKeyOp && isPlainObject(schemaKey) && addKeyOp.path === `${schemaKey.at}.${schemaKey.property}`,
+    addKeyOp ? String(addKeyOp.path) : 'no add-config-key operation');
+
+  // --- the answers file really satisfies the shipped schema ------------------------------------
+  {
+    const probe = path.join(tmpDir, `example-answers-${exampleProbe += 1}.json`);
+    let ok = false;
+    let detail = 'answers.json is not an object';
+    if (isPlainObject(answers)) {
+      fs.writeFileSync(probe, JSON.stringify(Object.assign({}, answers, { _aiwf: PROBE_AIWF }), null, 2));
+      const r = spawnSync(process.execPath, [
+        path.join(root, 'scripts', 'setup', 'validate-config.mjs'), probe,
+        '--schema', path.join(root, 'schema', 'aiwf.config.schema.json'),
+      ], { encoding: 'utf8' });
+      ok = r.status === 0;
+      detail = ok ? '' : `validator exit ${r.status}: ${(r.stderr || '').trim().split('\n').slice(0, 3).join(' | ').slice(0, 220)}`;
+    }
+    add('example-answers-valid', `${EXAMPLE_REL}/answers.json satisfies schema/aiwf.config.schema.json`, ok, detail);
+  }
+
+  // --- docs cannot drift from code -------------------------------------------------------------
+  const driverRel = 'scripts/ci/run-example-cycle.mjs';
+  const driver = readText(path.join(root, ...driverRel.split('/')));
+  const declared = documentedCommands(driver);
+  const shown = readmeCommands(readme);
+  add('example-driver-commands', `${driverRel} declares its DOCUMENTED_COMMANDS block`,
+    Array.isArray(declared) && declared.length > 0, declared ? `${declared.length} commands` : 'no DOCUMENTED_COMMANDS array found');
+  {
+    const set = new Set(declared || []);
+    const undocumented = shown.placeholder.filter((line) => !set.has(line));
+    // An EMPTY set of shown commands is not agreement - it is a README that documents nothing, and
+    // 'none of zero commands disagreed' must never read as a pass.
+    add('example-readme-in-driver', 'every command the example README shows is one the cycle driver really runs',
+      Array.isArray(declared) && shown.placeholder.length > 0 && undocumented.length === 0,
+      undocumented.length ? undocumented[0].slice(0, 150)
+        : (shown.placeholder.length === 0 ? 'the README shows NO commands at all' : `${shown.placeholder.length} commands`));
+    const shownSet = new Set(shown.placeholder);
+    const unshown = (declared || []).filter((line) => !shownSet.has(line));
+    add('example-driver-in-readme', 'every command the cycle driver runs is shown in the example README',
+      Array.isArray(declared) && declared.length > 0 && unshown.length === 0,
+      unshown.length ? unshown[0].slice(0, 150)
+        : (!declared || declared.length === 0 ? 'the driver declares NO commands at all' : `${declared.length} commands`));
+  }
+  {
+    const scripts = shown.placeholder.concat(shown.plain)
+      .map((line) => stripPlaceholders(line.split(' ')[1] || ''))
+      .filter((s) => s !== '');
+    const dangling = scripts.filter((s) => !fs.existsSync(path.join(root, ...s.split('/'))));
+    add('example-readme-scripts-exist', 'every script the example README invokes exists in the payload',
+      scripts.length > 0 && dangling.length === 0,
+      dangling.length ? dangling.join(', ') : (scripts.length === 0 ? 'the README invokes NO scripts at all' : `${scripts.length} scripts`));
+  }
+
+  // --- the CI workflow ---------------------------------------------------------------------------
+  const workflowRel = '.github/workflows/ci.yml';
+  const workflow = readText(path.join(root, ...workflowRel.split('/')));
+  const runScripts = [...String(workflow || '').matchAll(/^\s*run:\s*node\s+(\S+)/gm)].map((m) => m[1]);
+  add('example-ci-workflow', `${workflowRel} exists and runs at least one node step`,
+    workflow !== null && runScripts.length > 0, workflow === null ? 'missing' : `${runScripts.length} node steps`);
+  {
+    const dangling = runScripts.filter((s) => !fs.existsSync(path.join(root, ...s.split('/'))));
+    add('example-ci-steps', 'every CI step command names a script that really exists',
+      workflow !== null && runScripts.length > 0 && dangling.length === 0,
+      dangling.length ? dangling.join(', ') : (runScripts.length === 0 ? 'the workflow runs NO node steps at all' : `${runScripts.length} steps resolved`));
+  }
+  {
+    // EVERY gate, the spikes included. A list that omits one turns "the workflow explains why it
+    // runs the spikes" into the only thing standing between the repository and a silently deleted
+    // step: the `run:` line goes, the comment stays, and both this check and example-ci-omissions
+    // report green about a gate that no longer exists. That is the exact failure mode this section
+    // is for, so the list is the complete set and the control below deletes only the run: line.
+    const REQUIRED_GATES = [
+      'scripts/update/validate-payload.mjs', 'scripts/setup/test-setup.mjs', 'scripts/update/test-update.mjs',
+      'scripts/spike/run-spikes.mjs', 'scripts/ci/run-example-cycle.mjs', 'scripts/selfcheck/aiwf-selfcheck.js',
+    ];
+    const absent = REQUIRED_GATES.filter((g) => !runScripts.includes(g));
+    add('example-ci-gates', 'CI runs every gate this repository has (payload validator, both suites, the hook spikes, the example cycle, the self-check)',
+      workflow !== null && absent.length === 0, absent.length ? `not run in CI: ${absent.join(', ')}` : `${REQUIRED_GATES.length} gates`);
+  }
+  add('example-ci-omissions', 'the workflow WRITES DOWN both decisions it would otherwise make silently (claude plugin validate, the spikes\' reference)',
+    workflow !== null && /claude plugin validate/.test(workflow) && /run-spikes\.mjs/.test(workflow) && /--reference|PNP_SPIKE_REFERENCE_HOOKS/.test(workflow),
+    workflow === null ? 'missing' : '');
+
+  // --- the cycle driver's work-directory guard, EXECUTED ---------------------------------------
+  // The driver REMOVES its work directory when it finishes, so a --work-dir it should have refused
+  // is a delete-the-repository bug, not a tidiness one. That makes the guard payload behaviour in
+  // the same class as the hooks and the role resolver, and it is proven the same way: the real
+  // entrypoint is spawned, and the refusal is read off the exit code, the reason it printed, and
+  // the filesystem afterwards. A guard asserted by reading its source would only prove the source
+  // says so.
+  if (guardProbes) {
+    const driver = path.join(root, 'scripts', 'ci', 'run-example-cycle.mjs');
+    const probe = (badDir) => {
+      const r = spawnSync(process.execPath, [driver, '--work-dir', badDir], { encoding: 'utf8' });
+      return { status: r.status, out: (r.stdout || '') + (r.stderr || '') };
+    };
+
+    {
+      const target = path.join(root, 'examples', 'example-project', 'pnp-workdir-probe');
+      const r = probe(target);
+      const created = fs.existsSync(target);
+      add('example-workdir-inside',
+        'the cycle driver REFUSES a --work-dir inside the repository: exit 2, the reason named, nothing created',
+        r.status === 2 && /is inside the repository/.test(r.out) && !created,
+        `exit ${r.status}${created ? ' AND IT CREATED THE DIRECTORY' : ''}: ${firstLine(r.out)}`);
+    }
+    {
+      const target = path.dirname(root);
+      const before = safeReaddir(target);
+      const r = probe(target);
+      const now = safeReaddir(target);
+      // A listing this run could not read is NOT evidence that nothing appeared. Without both
+      // listings the 'nothing created' half is unproven, so the check fails rather than passing on
+      // an empty array that only means 'we could not look'.
+      const listed = before !== null && now !== null;
+      const appeared = listed ? now.filter((n) => !before.includes(n)) : null;
+      add('example-workdir-ancestor',
+        'the cycle driver REFUSES a --work-dir that is an ANCESTOR of the repository: exit 2, the reason named, nothing created',
+        r.status === 2 && /is an ancestor of the repository/.test(r.out) && listed && appeared.length === 0,
+        `exit ${r.status}${!listed ? ' BUT THE DIRECTORY COULD NOT BE LISTED, so nothing-created is unproven' : (appeared.length ? ' AND IT CREATED ' + appeared.join(', ') : '')}: ${firstLine(r.out)}`);
+    }
+    {
+      const target = path.join(tmpDir, `workdir-probe-${exampleProbe += 1}`);
+      const foreign = path.join(target, 'not-mine.txt');
+      fs.mkdirSync(target, { recursive: true });
+      fs.writeFileSync(foreign, 'a file that was in this directory first\n');
+      // The foreign file's RAW BYTES, not just its name: a driver that truncated or rewrote it in
+      // place would leave the listing identical, and "the directory untouched" would be a sentence
+      // about names rather than about contents.
+      const bytesBefore = sha256Bytes(fs.readFileSync(foreign));
+      const r = probe(target);
+      const after = safeReaddir(target); // null = could not be listed, which is not 'unchanged'
+      const bytesAfter = fs.existsSync(foreign) ? sha256Bytes(fs.readFileSync(foreign)) : null;
+      add('example-workdir-nonempty',
+        'the cycle driver REFUSES an existing NON-EMPTY --work-dir: exit 2, the reason named, the foreign file byte-for-byte untouched',
+        r.status === 2 && /is not empty/.test(r.out) && after !== null && after.join(',') === 'not-mine.txt' && bytesAfter === bytesBefore,
+        `exit ${r.status}, the directory now holds [${after === null ? '(could not be listed)' : after.join(', ')}]${bytesAfter === bytesBefore ? '' : ', AND ITS CONTENT CHANGED'}: ${firstLine(r.out)}`);
+    }
+    {
+      // A JUNCTION outside the repository that points INTO it, with a child that does not exist yet.
+      // As a string the child is harmless; a non-recursive mkdir still follows the junction and
+      // lands inside the repository, which is why the guard canonicalizes through the nearest
+      // EXISTING ancestor instead of comparing text.
+      out.push(junctionProbeFinding(root, tmpDir, probe));
+    }
+    {
+      // A --work-dir whose PARENT does not exist. Nothing above the work directory may ever be
+      // created, because the cleanup removes only the work directory itself and anything conjured
+      // above it would silently outlive the run.
+      const parent = path.join(tmpDir, `workdir-missing-parent-${exampleProbe += 1}`);
+      const target = path.join(parent, 'work');
+      const r = probe(target);
+      add('example-workdir-missing-parent',
+        'the cycle driver REFUSES a --work-dir whose parent does not exist: exit 2, the reason named, and the parent is not conjured up either',
+        r.status === 2 && /parent directory does not exist/.test(r.out) && !fs.existsSync(parent) && !fs.existsSync(target),
+        `exit ${r.status}${fs.existsSync(parent) ? ' AND IT CREATED THE MISSING PARENT' : ''}: ${firstLine(r.out)}`);
+    }
+    // The two file-ownership rules, executed against a short-circuited copy so the cleanup is
+    // reached in about a second rather than seventy.
+    for (const f of fileOwnershipFindings(root, tmpDir)) out.push(f);
+  }
+
+  return out;
+}
+
+function copyPayloadTree(from, to) {
+  fs.mkdirSync(to, { recursive: true });
+  for (const e of fs.readdirSync(from, { withFileTypes: true })) {
+    if (e.name === '.git' || e.name === 'node_modules') continue;
+    const s = path.join(from, e.name);
+    const d = path.join(to, e.name);
+    if (e.isDirectory()) copyPayloadTree(s, d); else fs.copyFileSync(s, d);
+  }
+}
+
+// One control per assertion above. Each names the check `id` it must break, exactly like the
+// project-layer controls: a control that stops targeting a live check fails loudly rather than
+// quietly proving nothing.
+const EXAMPLE_CONTROLS = [
+  { id: 'example-readme', label: 'the example README deleted',
+    apply: (r) => fs.rmSync(exAt(r, 'README.md')) },
+  { id: 'example-answers', label: 'answers.json corrupted',
+    apply: (r) => fs.writeFileSync(exAt(r, 'answers.json'), '{ not json ') },
+  { id: 'example-seed', label: 'the VERIFY command target removed from the seed project',
+    apply: (r) => fs.rmSync(exAt(r, 'seed', 'src', 'hello.mjs')) },
+  { id: 'example-bump-json', label: 'an extra field smuggled into bump.json',
+    apply: (r) => mutateJson(r, ['examples', 'example-project', 'bump', 'bump.json'], (b) => { b.extra = 'nope'; }) },
+  { id: 'example-bump-migration', label: 'the migration ops.json claims another migration id',
+    apply: (r) => mutateJson(r, ['examples', 'example-project', 'bump', '0002_example-bump', 'ops.json'], (o) => { o.migration = '0009_other'; }) },
+  { id: 'example-bump-ops-types', label: 'the note operation dropped, so one op type is undemonstrated',
+    apply: (r) => mutateJson(r, ['examples', 'example-project', 'bump', '0002_example-bump', 'ops.json'],
+      (o) => { o.operations = o.operations.filter((x) => x.op !== 'note'); }) },
+  { id: 'example-bump-id', label: 'the bump renumbered so it follows a manifest entry that does not exist',
+    apply: (r) => mutateJson(r, ['examples', 'example-project', 'bump', 'bump.json'], (b) => { b.migration = '0009_example-bump'; }) },
+  { id: 'example-bump-version', label: 'the bump target version no longer rises above its predecessor',
+    apply: (r) => mutateJson(r, ['examples', 'example-project', 'bump', 'bump.json'], (b) => { b.targetPluginVersion = '0.0.1'; }) },
+  { id: 'example-bump-schema-key', label: 'schema-key.json points at a schema block that does not exist',
+    apply: (r) => mutateJson(r, ['examples', 'example-project', 'bump', 'schema-key.json'], (s) => { s.at = 'notABlock'; }) },
+  { id: 'example-bump-schema-key', label: 'schema-key.json declares a default, which would make the migration a no-op on a fresh install',
+    apply: (r) => mutateJson(r, ['examples', 'example-project', 'bump', 'schema-key.json'], (s) => { s.schema.default = true; }) },
+  { id: 'example-bump-key-agrees', label: 'the migration adds a different key from the one the schema admits',
+    apply: (r) => mutateJson(r, ['examples', 'example-project', 'bump', '0002_example-bump', 'ops.json'],
+      (o) => { o.operations.find((x) => x.op === 'add-config-key').path = 'enforcement.somethingElse'; }) },
+  { id: 'example-answers-valid', label: 'the answers file pinned to an OS channel that does not exist',
+    apply: (r) => mutateJson(r, ['examples', 'example-project', 'answers.json'], (a) => { a.os = 'solaris'; }) },
+  { id: 'example-answers-valid', label: 'a claude-hosted role in the answers pinned to a full model id',
+    apply: (r) => mutateJson(r, ['examples', 'example-project', 'answers.json'], (a) => { a.roles.reviewer.model = 'claude-opus-5[1m]'; }) },
+  { id: 'example-driver-commands', label: 'the driver\'s DOCUMENTED_COMMANDS block renamed',
+    apply: (r) => patchText(r, ['scripts', 'ci', 'run-example-cycle.mjs'], /export const DOCUMENTED_COMMANDS = \[/, 'export const SOMETHING_ELSE = [') },
+  { id: 'example-readme-in-driver', label: 'the README shows a command the driver never runs',
+    apply: (r) => fs.appendFileSync(exAt(r, 'README.md'), '\n```\nnode <payload2>/scripts/update/aiwf-update.mjs --apply --plugin-root <payload2> --force\n```\n') },
+  { id: 'example-driver-in-readme', label: 'a command the driver runs is dropped from the README',
+    apply: (r) => patchText(r, ['examples', 'example-project', 'README.md'],
+      /^node <payload2>\/scripts\/update\/validate-payload\.mjs --plugin-root <payload2>$/m, '(this step is no longer documented)') },
+  { id: 'example-readme-scripts-exist', label: 'the README invokes a script that is not in the payload',
+    apply: (r) => fs.appendFileSync(exAt(r, 'README.md'), '\n```\nnode scripts/ci/run-something-else.mjs\n```\n') },
+  { id: 'example-ci-steps', label: 'a CI step renamed to a script that does not exist',
+    apply: (r) => patchText(r, ['.github', 'workflows', 'ci.yml'], /run: node scripts\/setup\/test-setup\.mjs/, 'run: node scripts/setup/test-setup-v2.mjs') },
+  { id: 'example-ci-gates', label: 'a gate quietly dropped from CI',
+    apply: (r) => patchText(r, ['.github', 'workflows', 'ci.yml'], /run: node scripts\/ci\/run-example-cycle\.mjs/, 'run: node --version') },
+  // The spikes' own control, and the reason the list above must be complete: ONLY the `run:` line
+  // is deleted, so the step's explanatory comment survives untouched and example-ci-omissions stays
+  // green. If example-ci-gates did not name the spikes, this sabotage would be invisible.
+  { id: 'example-ci-gates', label: 'the spike step\'s run: line deleted while its explanatory comment stays',
+    apply: (r) => patchText(r, ['.github', 'workflows', 'ci.yml'], /\n[ \t]*run: node scripts\/spike\/run-spikes\.mjs\n/, '\n') },
+  { id: 'example-ci-omissions', label: 'the written-down omissions stripped out of the workflow',
+    apply: (r) => patchText(r, ['.github', 'workflows', 'ci.yml'], /claude plugin validate/g, 'that other command') },
+  { id: 'example-ci-workflow', label: 'the workflow file deleted',
+    apply: (r) => fs.rmSync(path.join(r, '.github', 'workflows', 'ci.yml')) },
+  // The guard's controls. Both sabotage the payload copy's driver and both keep the sabotaged run
+  // CHEAP - it still refuses immediately, so no control here ever starts a 70-second cycle.
+  //
+  // PREDICATE level: with the ancestor rule gone, the repository's parent is caught by the
+  // "not empty" rule instead. Still exit 2, still nothing created - but the reason is now wrong,
+  // and a guard that refuses for the wrong reason tells the operator nothing about the danger.
+  { id: 'example-workdir-ancestor', label: 'the ancestor-of-the-repository predicate deleted from the driver\'s guard',
+    apply: (r) => patchText(r, ['scripts', 'ci', 'run-example-cycle.mjs'],
+      /^ {2}if \(isInside\(real, repo\)\) return `it is an ancestor of the repository, \$\{removed\}`;$/m,
+      '  // (predicate deleted by a self-check negative control)') },
+  // CONTRACT level: the guard still refuses, but with the wrong exit code. Callers - CI included -
+  // branch on 2 meaning "could not start"; a refusal that exits 1 is indistinguishable from a cycle
+  // that ran and failed.
+  { id: 'example-workdir-inside', label: 'the guard refuses but exits 1 instead of 2 (the could-not-start contract broken)',
+    apply: (r) => patchText(r, ['scripts', 'ci', 'run-example-cycle.mjs'], /process\.exit\(2\);/, 'process.exit(1);') },
+  { id: 'example-workdir-nonempty', label: 'the guard refuses but exits 1 instead of 2 (the could-not-start contract broken)',
+    apply: (r) => patchText(r, ['scripts', 'ci', 'run-example-cycle.mjs'], /process\.exit\(2\);/, 'process.exit(1);') },
+  // CONTENT level: the driver rewrites the foreign file in place and then refuses exactly as before
+  // - same names in the directory, same exit code. Only a check that compares BYTES can see it.
+  { id: 'example-workdir-nonempty', label: 'the driver rewrites the foreign file in place, keeping its name and the exit code',
+    apply: (r) => patchText(r, ['scripts', 'ci', 'run-example-cycle.mjs'], /^ {4}if \(entries\.length\) \{$/m,
+      "    if (entries.length) { fs.writeFileSync(path.join(dir, entries[0]), 'clobbered by a self-check negative control');") },
+  // The junction probe's control is PREDICATE level and stays cheap: with the walk-up deleted,
+  // canonicalize degrades to the textual path for anything that does not exist yet, the junction's
+  // child passes the first layer, and only the post-creation layer catches it - so the run still
+  // refuses immediately, but no longer with the up-front reason the probe requires.
+  { id: 'example-workdir-junction', label: 'the canonicalize walk-up deleted, so a not-yet-existing path is judged as text',
+    apply: (r) => patchText(r, ['scripts', 'ci', 'run-example-cycle.mjs'], /^ {2}let cursor = path\.resolve\(p\);$/m,
+      '  let cursor = path.resolve(p); if (!fs.existsSync(cursor)) return cursor; // (walk deleted by a negative control)') },
+  // FILE OWNERSHIP. Both stay cheap: the probes they target short-circuit the cycle body.
+  { id: 'example-cycle-file-exclusive', label: 'the exclusive create weakened to a plain overwrite (wx -> w)',
+    apply: (r) => patchText(r, ['scripts', 'ci', 'run-example-cycle.mjs'], /\{ flag: 'wx' \}/, "{ flag: 'w' }") },
+  { id: 'example-cycle-file-ownership', label: 'the cleanup goes back to removing recorded FILES by name, without checking their bytes',
+    apply: (r) => patchText(r, ['scripts', 'ci', 'run-example-cycle.mjs'], /if \(now !== entry\.hash\) \{/, 'if (false) {') },
+  { id: 'example-workdir-missing-parent', label: 'the missing-parent branch removed, so the refusal no longer names the reason',
+    apply: (r) => patchText(r, ['scripts', 'ci', 'run-example-cycle.mjs'], /if \(e\.code === 'ENOENT'\) \{/, 'if (false) {') },
+];
+
+function sectionExampleFixture(tmpRoot) {
+  section('EXAMPLE FIXTURE - the committed cycle data, its driver and CI cannot drift apart');
+  const findings = exampleFixtureFindings(PLUGIN_ROOT, tmpRoot);
+  for (const f of findings) {
+    if (f.note) { note(f.name, f.detail); continue; }
+    check(f.name, f.ok, f.detail);
+  }
+
+  section('EXAMPLE FIXTURE CONTROLS - each of those assertions is proven able to FAIL');
+  const base = path.join(tmpRoot, 'example-base');
+  copyPayloadTree(PLUGIN_ROOT, base);
+  const pristine = exampleFixtureFindings(base, tmpRoot);
+  const pristineFailures = pristine.filter((f) => !f.note && !f.ok);
+  check('the control copy is clean before any sabotage', pristineFailures.length === 0,
+    pristineFailures.length ? pristineFailures.map((f) => f.id).join(', ') : `${pristine.length} checks green`);
+
+  // The junction probe's OWN failure branch, exercised in process. A negative control on a payload
+  // copy cannot reach it: the copy supplies the driver and the data, while the probe's symlink call
+  // belongs to THIS process - so the branch is driven by injecting a symlink that refuses, and the
+  // requirement is that the finding comes back a FAILURE, never a NOTE and never a pass.
+  {
+    const simulated = junctionProbeFinding(
+      PLUGIN_ROOT, tmpRoot,
+      () => { throw new Error('the probe must not spawn anything on this path'); },
+      () => { const e = new Error('simulated: junctions unavailable'); e.code = 'EPERM'; throw e; },
+    );
+    check('the junction probe FAILS when a junction cannot be created (it never degrades to a NOTE or a pass)',
+      simulated.ok === false && simulated.note !== true && /junction could not be created/.test(simulated.detail),
+      simulated.note ? 'it produced a NOTE' : `ok=${simulated.ok}`);
+  }
+
+  let i = 0;
+  const covered = new Set();
+  for (const m of EXAMPLE_CONTROLS) {
+    const broken = path.join(tmpRoot, `example-neg-${i += 1}`);
+    copyPayloadTree(base, broken);
+    try { m.apply(broken); } catch (e) { check(`control could be applied: ${m.label}`, false, String(e.message)); continue; }
+    const target = exampleFixtureFindings(broken, tmpRoot,
+      { guardProbes: m.id.startsWith('example-workdir') || m.id.startsWith('example-cycle-file') })
+      .find((f) => f.id === m.id);
+    if (!target) {
+      check(`control "${m.label}" targets a live check (id "${m.id}")`, false, 'no check with that id was produced');
+      continue;
+    }
+    covered.add(m.id);
+    check(`sabotage detected [${m.id}]: ${m.label}`, target.ok === false && target.note !== true,
+      target.note ? 'the check degraded to a NOTE instead of failing' : (target.ok ? 'still PASS - the check is vacuous' : 'FAIL as required'));
+    try { fs.rmSync(broken, { recursive: true, force: true }); } catch (e) { /* best-effort */ }
+  }
+  for (const id of pristine.filter((f) => !f.note && !covered.has(f.id)).map((f) => f.id)) {
+    note(`no negative control for example-fixture check "${id}"`, 'no control defined - add one or state why it cannot fail');
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1616,6 +2186,7 @@ function main() {
     sectionWrappers();
     sectionResolver(tmpRoot);
     sectionPayloadIntegrity();
+    sectionExampleFixture(tmpRoot);
     sectionProjectLayer(PROJECT, selfAuthored);
     sectionNegativeControls(tmpRoot, pluginVersion);
   } finally {
@@ -1637,6 +2208,16 @@ function main() {
   console.log('the shipped manifest and every ops.json are accepted, and a gap, a duplicate id, a non-monotonic');
   console.log('version, a last entry that is not the payload version, an orphan directory, an unknown op type or');
   console.log('field, and a traversal path are each REJECTED.');
+  console.log('The EXAMPLE FIXTURE - the committed answers file, seed project and simulated version bump under');
+  console.log('examples/example-project/ - is asserted as data that cannot rot: the answers really satisfy the');
+  console.log('shipped schema (at the validator\'s own entrypoint), the bump is a plausible next release by the');
+  console.log('payload validator\'s own id/version rules, the migration demonstrates all four op types, and the');
+  console.log('README, the cycle driver and the CI workflow are compared against each other in both directions.');
+  console.log('Every one of those assertions has its own negative control on a sabotaged payload copy.');
+  console.log('The cycle driver is also EXECUTED there: it is spawned with a --work-dir inside the repository,');
+  console.log('one above it, one reached through a junction into it, one that is not empty and one whose parent');
+  console.log('does not exist, and each must exit 2 having created nothing - that directory is deleted when the');
+  console.log('run ends, so a guard asserted by reading its source would only prove the source says so.');
   console.log('STATIC: the wrapper flag locks, asserted as exact ARGV PAIRS rather than bare words (so a');
   console.log('flag switched in the argv while the old word survives in a comment still fails), the hook');
   console.log('wiring, the ASCII-only wrapper sources, and the payload cross-references.');

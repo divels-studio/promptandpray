@@ -25,7 +25,17 @@
  *   7. a malformed payload blocks BOTH the runner and a fresh setup, with zero bytes written;
  *   8. a crash at every write boundary recovers deterministically in a fresh process, including a
  *      config-target operation and a manual merge (whose staged answer is replayed, not re-asked);
- *   9. a dry run writes nothing at all.
+ *   9. a dry run writes nothing at all;
+ *  10. the self-check is the update's OWN last step: a real apply runs it and reports PASS,
+ *      --no-selfcheck skips it out loud, a self-check that cannot be run at all makes the update
+ *      exit 1, and a self-check that runs and comes back RED also makes it exit 1 - while the
+ *      migrations it just applied stay applied, because a red verdict is a report about the result,
+ *      not a rollback.
+ *
+ * WHY MOST CASES PASS --no-selfcheck
+ *   Every install and every apply below would otherwise pay for a full self-check run (300+
+ *   assertions and a fresh PowerShell host per run). The cases that are ABOUT the integration run
+ *   it; the rest skip it through the same flag an operator has, never through a test-only bypass.
  *
  * Exit 0 = every assertion passed. Exit 1 = at least one failed. Exit 2 = the suite could not run.
  */
@@ -122,20 +132,24 @@ const baseAnswers = (overrides = {}) => ({
   ...overrides,
 });
 
-function install(projectDir, { payload = PLUGIN_ROOT, answers = baseAnswers(), extra = [] } = {}) {
+// `selfcheck: true` lets the run perform its integrated self-check; everything else passes
+// --no-selfcheck, which is the operator's own flag and not a test-only bypass.
+function install(projectDir, { payload = PLUGIN_ROOT, answers = baseAnswers(), extra = [], selfcheck = false } = {}) {
   const answersFile = path.join(tmpRoot, `answers-${path.basename(projectDir)}-${Math.random().toString(36).slice(2, 8)}.json`);
   writeJson(answersFile, answers);
   const r = spawnSync(process.execPath, [
     path.join(payload, 'scripts', 'setup', 'interview.mjs'),
-    '--answers-file', answersFile, '--plugin-root', payload, '--project-root', projectDir, '--no-seeds', ...extra,
+    '--answers-file', answersFile, '--plugin-root', payload, '--project-root', projectDir, '--no-seeds',
+    ...(selfcheck ? [] : ['--no-selfcheck']), ...extra,
   ], { encoding: 'utf8' });
   return { status: r.status, out: (r.stdout || '') + (r.stderr || '') };
 }
 
-function update(projectDir, args, { payload = PLUGIN_ROOT, env = null } = {}) {
+function update(projectDir, args, { payload = PLUGIN_ROOT, env = null, selfcheck = false } = {}) {
   const r = spawnSync(process.execPath, [
     path.join(payload, 'scripts', 'update', 'aiwf-update.mjs'),
     ...args, '--plugin-root', payload, '--project-root', projectDir,
+    ...(selfcheck ? [] : ['--no-selfcheck']),
   ], { encoding: 'utf8', env: env ? { ...process.env, ...env } : process.env });
   return { status: r.status, out: (r.stdout || '') + (r.stderr || '') };
 }
@@ -1050,6 +1064,74 @@ section('11 - the recovery state machine has no dead ends, and no decision is ap
   const again = update(p, ['--apply'], { payload: P020 });
   check('the next run says "already current"', again.status === 0 && again.out.includes('already current'), why(again));
   check('and the stage root is gone with it', !exists(at(p, STAGE_REL)));
+}
+
+// ---------------------------------------------------------------------------
+section('12 - the self-check is the update\'s own last step, and a red one is never exit 0');
+{
+  const p = project('sc-pass');
+  check('install exits 0', install(p).status === 0);
+  const r = update(p, ['--apply', '--resolution-file', resolutionFile('sc-pass', FULL_RESOLUTIONS)], { payload: P020, selfcheck: true });
+  check('--apply exits 0', r.status === 0, why(r));
+  check('the update RAN the self-check itself and reported PASS', r.out.includes('self-check: PASS'), why(r));
+  check('and the PASS line quotes the self-check\'s own summary line verbatim',
+    /self-check: PASS - .*assertions passed/.test(r.out),
+    (r.out.split('\n').find((l) => l.startsWith('self-check:')) || '(no self-check line)').slice(0, 120));
+}
+{
+  const p = project('sc-skipped');
+  check('install exits 0', install(p).status === 0);
+  // The flag is passed EXPLICITLY here rather than left to the helper's default: this case is about
+  // the flag, and a case that depends on a default is not testing what it says it tests.
+  const r = update(p, ['--apply', '--resolution-file', resolutionFile('sc-skip', FULL_RESOLUTIONS), '--no-selfcheck'],
+    { payload: P020, selfcheck: true });
+  check('--no-selfcheck still exits 0', r.status === 0, why(r));
+  check('and it says so on one line - a skipped gate that prints nothing reads exactly like a gate that passed',
+    r.out.includes('self-check: SKIPPED'), why(r));
+  check('no PASS line is printed for a run that never checked anything', !r.out.includes('self-check: PASS'));
+}
+{
+  // FAIL-CLOSED: the payload's self-check script is not there at all. The migrations still applied;
+  // what must not happen is exit 0, because nothing verified the result.
+  const payload = path.join(tmpRoot, 'payload-020-without-selfcheck');
+  copyTree(P020, payload);
+  fs.rmSync(at(payload, 'scripts/selfcheck/aiwf-selfcheck.js'));
+  const p = project('sc-unrunnable');
+  check('install exits 0', install(p).status === 0);
+  const r = update(p, ['--apply', '--resolution-file', resolutionFile('sc-unrunnable', FULL_RESOLUTIONS)], { payload, selfcheck: true });
+  check('an unrunnable self-check makes the update exit 1, not 0', r.status === 1, why(r));
+  check('the message names exactly what could not run', r.out.includes('scripts/selfcheck/aiwf-selfcheck.js'), why(r));
+  check('and says plainly that the files WERE written and nothing was rolled back',
+    r.out.includes('WERE written') && r.out.includes('nothing was rolled back'), why(r));
+  const bk = bookkeeping(p);
+  check('which is true: the migrations really applied and the journal is clear',
+    bk.installedPluginVersion === '0.2.0' && bk.lastMigrationApplied === '0002_fixture' && bk.migrationJournal === null,
+    `${bk.installedPluginVersion} / ${bk.lastMigrationApplied}`);
+}
+{
+  // The self-check RUNS and comes back RED, after an apply that succeeded. A managed artifact edited
+  // by hand is enough on its own: the self-check hashes every managed artifact against the `local`
+  // stamp its bookkeeping records, and this migration never touches roles.json - so the apply has no
+  // reason to stop, and the result is nevertheless an inconsistent project.
+  const notePayload = makePayload('note-only-020', {
+    version: '0.2.0',
+    migrations: [{ id: '0002_noteonly', version: '0.2.0', ops: [FIXTURE_NOTE] }],
+  });
+  const p = project('sc-red');
+  check('install exits 0', install(p).status === 0);
+  patch(at(p, ROLES_REL), '"effort": "high"', '"effort": "low"');
+  const r = update(p, ['--apply'], { payload: notePayload, selfcheck: true });
+  check('a RED self-check after a successful apply makes the update exit 1', r.status === 1, why(r));
+  check('the self-check\'s own output reached the operator verbatim',
+    r.out.includes('roles.json') && r.out.includes('FAILURES:'), why(r));
+  check('the verdict says the files WERE written and nothing was rolled back',
+    r.out.includes('WERE written') && r.out.includes('nothing was rolled back'), why(r));
+  const bk = bookkeeping(p);
+  check('which is true: the migration applied, the stamps moved and the journal is clear',
+    bk.installedPluginVersion === '0.2.0' && bk.lastMigrationApplied === '0002_noteonly' && bk.migrationJournal === null,
+    `${bk.installedPluginVersion} / ${bk.lastMigrationApplied}`);
+  check('and the CHANGES report is on disk too', exists(at(p, 'CHANGES_0.1.0-to-0.2.0.md')));
+  check('the operator\'s hand edit was never overwritten', (read(at(p, ROLES_REL)) || '').includes('"effort": "low"'));
 }
 
 // ---------------------------------------------------------------------------

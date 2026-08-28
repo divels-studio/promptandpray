@@ -1,0 +1,29 @@
+{
+  "migration": "0002_example-bump",
+  "targetPluginVersion": "0.2.0",
+  "operations": [
+    {
+      "op": "add-config-key",
+      "path": "enforcement.dispatchGate",
+      "default": true,
+      "askOperator": true,
+      "question": "Keep the native Yes/No dialog on every Writer dispatch?"
+    },
+    {
+      "op": "rerender-managed-region",
+      "file": "CLAUDE.md",
+      "region": "aiwf-core",
+      "template": "templates/CLAUDE.md.tmpl#aiwf-core"
+    },
+    {
+      "op": "reconcile-ask-ruleset",
+      "ruleset": "templates/settings.ask-ruleset.json"
+    },
+    {
+      "op": "note",
+      "id": "example-bump",
+      "text": "This migration exists so a reader can see all four operation types in one place, in a run they can execute themselves.",
+      "docRefs": ["docs/LOOP.md", "migrations/README.md"]
+    }
+  ]
+}

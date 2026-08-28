@@ -86,10 +86,21 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/update/aiwf-update.mjs" --resolve "<key>" --
 `<key>` is the managed key - `CLAUDE.md#aiwf-core`, `.claude/aiwf-native/roles.json`,
 `.claude/agents/writer.md`, and the reviewer/qa agent files. No version bump is required.
 
-## Step 5 - Self-check, then report
+## Step 5 - Self-check (the CLI already ran it), then report
 
-Run `/pnp:selfcheck` against the project. A green self-check is what turns "files were written" into
-"the installation is consistent".
+You do not have to remember this step: an `--apply` that really applied migrations, and every
+`--resolve`, **run the self-check themselves** as their last action, against the project they just
+wrote, and report `self-check: PASS` with the child's own summary line. `--check`, `--dry-run` and an
+"already current" run write nothing, so there is nothing for it to judge and it does not run.
+
+- a **red** self-check makes the update exit **1** and says plainly that the migrations WERE applied
+  and nothing was rolled back - the writes stand, the verdict is that the result is not consistent;
+- a self-check that could not be started at all is **also** exit 1: "could not check" is never
+  reported as "checked";
+- `--no-selfcheck` skips it, and says so on one line.
+
+`/pnp:selfcheck` is how you **re-run** it or inspect a failure in full - not a step the agent has to
+remember after a write.
 
 Report in `{{config.operator.language}}`, short: the version diff, what was applied, every conflict
 and how it was resolved, and the artifacts now held by the operator. Point at the generated

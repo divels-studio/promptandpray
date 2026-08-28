@@ -14,12 +14,24 @@
  *   --plugin-root <dir>        default: the payload this file lives in
  *   --resolution-file <json>   answers, keyed by address (see below)
  *   --quiet                    print only what blocked, if anything
+ *   --no-selfcheck             skip the integrated self-check step (it says so on one line)
+ *
+ * THE SELF-CHECK IS THE LAST STEP OF A WRITING RUN
+ *   `--apply` that really applied migrations, and `--resolve`, finish by RUNNING
+ *   scripts/selfcheck/aiwf-selfcheck.js against the project. `--check`, `--dry-run` and an
+ *   "already current" run write nothing, so there is nothing for it to judge and it does not run.
+ *   A red self-check makes this command exit 1 while saying plainly that the migrations WERE
+ *   applied and nothing was rolled back; a self-check that cannot be spawned is also exit 1,
+ *   because "could not check" is never reported as "checked". Contract:
+ *   scripts/selfcheck/run-selfcheck.mjs.
  *
  * EXIT CODES (the contract every caller may rely on)
  *   0  success: applied, already current, a clean dry-run, or `--check` on a current project
  *   1  blocked: an invariant violation, a payload/validation failure, or a stop at an unresolved
  *      conflict. `--check` also exits 1 when migrations are pending - that is what makes it an
- *      interlock a skill can branch on.
+ *      interlock a skill can branch on. A writing run whose integrated self-check came back red (or
+ *      could not run at all) also exits 1: the writes stand, the verdict is that they are not
+ *      consistent.
  *   2  the run could not start: no installation, an unreadable config, an unreadable payload, or a
  *      usage error.
  *
@@ -42,6 +54,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveProjectRoot } from '../setup/generate.mjs';
+import { finishWithSelfCheck } from '../selfcheck/run-selfcheck.mjs';
 import { PayloadError } from './validate-payload.mjs';
 import {
   DEFAULT_PLUGIN_ROOT, UpdateError, UpdateStartError,
@@ -149,7 +162,7 @@ function main() {
 
   const chosen = MODES.filter((m) => has(m));
   if (chosen.length !== 1) {
-    console.error(`usage: node aiwf-update.mjs (${MODES.join(' | ')} <key>) [--project-root <dir>] [--plugin-root <dir>] [--resolution-file <json>] [--quiet]`);
+    console.error(`usage: node aiwf-update.mjs (${MODES.join(' | ')} <key>) [--project-root <dir>] [--plugin-root <dir>] [--resolution-file <json>] [--quiet] [--no-selfcheck]`);
     console.error(chosen.length === 0 ? '  exactly one mode is required.' : `  these modes are mutually exclusive: ${chosen.join(', ')}`);
     return 2;
   }
@@ -160,6 +173,12 @@ function main() {
     console.error('pnp-update: cannot resolve the project root - pass --project-root <dir> (this directory is not a git worktree).');
     return 2;
   }
+
+  // The integrated self-check, for the two modes that write. `wouldRun: true` at every call site
+  // below is deliberate: each one is reached only after a run that really wrote something.
+  const finish = (code, subject) => finishWithSelfCheck({
+    pluginRoot, projectRoot, code, wouldRun: true, skipped: has('--no-selfcheck'), quiet, subject,
+  });
 
   try {
     if (mode === '--check') {
@@ -189,7 +208,9 @@ function main() {
       const resolve = makeResolver({ resolutionFile: flag('--resolution-file'), dryRun: false });
       const result = resolveArtifact({ pluginRoot, projectRoot, key, resolve, log: say });
       say(`resolved "${result.key}" as ${result.resolution}.`);
-      return 0;
+      // --resolve always writes: the artifact in take-new/merge, and the bookkeeping stamp in every
+      // branch including keep-mine. So it is a writing run and it is judged like one.
+      return finish(0, 'the resolved artifact');
     }
 
     const dryRun = mode === '--dry-run';
@@ -207,7 +228,7 @@ function main() {
     say(`updated: ${report.from} -> ${report.to}, ${report.applied.length} operation(s) applied.`);
     say(`report:  ${path.relative(projectRoot, report.changesFile).split(path.sep).join('/')}`);
     say('Nothing was committed - review the diff and commit it the usual way.');
-    return 0;
+    return finish(0, 'the updated project');
   } catch (e) {
     if (e instanceof UpdateError) { console.error(`pnp-update: ${e.message}`); return 1; }
     if (e instanceof UpdateStartError || e instanceof PayloadError) { console.error(`pnp-update: ${e.message}`); return 2; }

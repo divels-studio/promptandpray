@@ -1,0 +1,37 @@
+{
+  "project": {
+    "name": "ExampleProject",
+    "description": "a throwaway host project that exists only to demonstrate a full install/update cycle",
+    "stack": "Node.js, no dependencies",
+    "root": "auto",
+    "defaultBranch": "main"
+  },
+  "os": "windows",
+  "operator": {
+    "language": "en",
+    "roleNicknames": { "writer": "Writer", "reviewer": "Reviewer", "qa": "QA" }
+  },
+  "roles": {
+    "writer": { "model": "claude-opus-5[1m]", "effort": "high" },
+    "reviewer": { "engine": "claude", "model": "opus", "effort": "high" },
+    "qa": { "engine": "claude", "model": "sonnet", "effort": "medium" },
+    "qal": { "enabled": false, "engine": "codex", "model": "unset", "effort": "high" }
+  },
+  "loop": { "correctionRoundsCap": 2 },
+  "enforcement": { "routeWriteGuard": true },
+  "verify": {
+    "commands": [
+      { "name": "syntax", "run": "node --check src/hello.mjs", "cwd": "." }
+    ]
+  },
+  "paths": {
+    "scratchDir": ".aiwf",
+    "plansDir": "docs/backlogs",
+    "overridesDoc": "docs/ai/PROJECT_OVERRIDES.md"
+  },
+  "review": {
+    "productBoundaryChecks": [
+      "This example project has no product boundary of its own - a real project puts its tenancy, security and domain lines here."
+    ]
+  }
+}

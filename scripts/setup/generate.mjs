@@ -42,10 +42,18 @@
  * MEMORY SEEDS are PRINTED for the operator, never written into any memory store: the store's
  * format and location are machine-local and are not the plugin's to assume.
  *
+ * THE SELF-CHECK IS PART OF THE RUN
+ *   The direct CLI finishes exactly as interview.mjs does: a successful, non-dry-run apply that
+ *   really wrote something RUNS scripts/selfcheck/aiwf-selfcheck.js against the project, and a red
+ *   or unrunnable self-check makes the command exit 1 while saying that the files were written and
+ *   nothing was rolled back. --no-selfcheck skips it and says so. Contract:
+ *   scripts/selfcheck/run-selfcheck.mjs.
+ *
  * CLI
  *   node generate.mjs --answers-file <answers.json> [--project-root <dir>] [--plugin-root <dir>]
- *                     [--confirm-remove-stale] [--no-seeds] [--dry-run] [--quiet]
- *   exit 0 = applied (or dry-run clean); exit 1 = blocked, nothing written; exit 2 = cannot start.
+ *                     [--confirm-remove-stale] [--no-seeds] [--dry-run] [--quiet] [--no-selfcheck]
+ *   exit 0 = applied (or dry-run clean); exit 1 = blocked with nothing written, or a red/unrunnable
+ *   self-check after a successful write; exit 2 = cannot start.
  */
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -54,6 +62,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { collectDefaults, formatErrors, loadSchema, validate } from './validate-config.mjs';
 import { validatePayload } from '../update/validate-payload.mjs';
+import { finishWithSelfCheck } from '../selfcheck/run-selfcheck.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const DEFAULT_PLUGIN_ROOT = path.resolve(HERE, '..', '..');
@@ -687,7 +696,15 @@ if (isMain()) {
     const report = generateProject({ pluginRoot, projectRoot, answers, confirmRemoveStale: has('--confirm-remove-stale'), dryRun: has('--dry-run') });
     const seeds = (has('--no-seeds') || report.blocked || has('--dry-run')) ? [] : readMemorySeeds(pluginRoot);
     if (!has('--quiet') || report.blocked) console.log(formatReport(report, { projectRoot, seeds }));
-    process.exit(report.blocked ? 1 : 0);
+    process.exit(finishWithSelfCheck({
+      pluginRoot,
+      projectRoot,
+      code: report.blocked ? 1 : 0,
+      wouldRun: !report.blocked && !has('--dry-run') && report.applied.length > 0,
+      skipped: has('--no-selfcheck'),
+      quiet: has('--quiet'),
+      subject: 'the installed project layer',
+    }));
   } catch (e) {
     console.error(`setup: ${e.message}`);
     process.exit(e instanceof SetupError ? 1 : 2);

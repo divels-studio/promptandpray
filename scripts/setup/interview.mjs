@@ -20,10 +20,19 @@
  *   test path). The two paths converge on the same generator, so a scripted install and an
  *   interactive one cannot drift apart.
  *
+ * THE SELF-CHECK IS PART OF THE INSTALL, NOT A REMINDER
+ *   A successful, non-dry-run install that really wrote something finishes by RUNNING
+ *   scripts/selfcheck/aiwf-selfcheck.js against the project it just wrote. A red self-check makes
+ *   this command exit 1 while saying plainly that the files were written and nothing was rolled
+ *   back; a self-check that cannot be spawned at all is also exit 1, because "could not check" is
+ *   never reported as "checked". --no-selfcheck skips it and says so. Full contract:
+ *   scripts/selfcheck/run-selfcheck.mjs.
+ *
  * CLI
  *   node interview.mjs [--answers-file <json>] [--project-root <dir>] [--plugin-root <dir>]
- *                      [--confirm-remove-stale] [--dry-run] [--no-seeds]
- *   exit 0 = installed; exit 1 = refused or blocked (nothing written); exit 2 = cannot start.
+ *                      [--confirm-remove-stale] [--dry-run] [--no-seeds] [--no-selfcheck]
+ *   exit 0 = installed; exit 1 = refused, blocked (nothing written), or a red/unrunnable self-check
+ *   after a successful write; exit 2 = cannot start.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -35,6 +44,7 @@ import {
   DEFAULT_PLUGIN_ROOT, SetupError, assertSupportedOs, formatReport, generateProject,
   readMemorySeeds, resolveProjectRoot,
 } from './generate.mjs';
+import { finishWithSelfCheck } from '../selfcheck/run-selfcheck.mjs';
 
 const TIERS = ['fable', 'opus', 'sonnet', 'haiku'];
 // A disabled QAL still renders into roles.json, and inventing a plausible codex model id would be
@@ -229,9 +239,20 @@ if (isMain()) {
     const seeds = (has('--no-seeds') || report.blocked || has('--dry-run')) ? [] : readMemorySeeds(pluginRoot);
     console.log(formatReport(report, { projectRoot, seeds }));
     if (!report.blocked && !has('--dry-run')) {
-      console.log('\nNext: run the self-check (`/pnp:selfcheck`) and read the generated overrides document - its placeholders are yours to fill in.');
+      console.log('\nNext: read the generated overrides document - its placeholders are yours to fill in.');
     }
     code = report.blocked ? 1 : 0;
+    // The self-check is this command's last step, not a note to whoever reads the report. It runs
+    // only when a non-dry-run install really wrote something: a blocked run has nothing to check,
+    // and a zero-diff re-run changed nothing to be wrong about.
+    code = finishWithSelfCheck({
+      pluginRoot,
+      projectRoot,
+      code,
+      wouldRun: !report.blocked && !has('--dry-run') && report.applied.length > 0,
+      skipped: has('--no-selfcheck'),
+      subject: 'the installed project layer',
+    });
   } catch (e) {
     console.error(`setup: ${e.message}`);
     code = e instanceof SetupError ? 1 : 2;

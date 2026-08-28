@@ -17,7 +17,16 @@
  *   6. an unsupported OS channel and answers that violate the schema are both refused before a
  *      single file is written;
  *   7. foreign permission rules are never touched, and a rule the operator removed is not forced
- *      back (the tombstone).
+ *      back (the tombstone);
+ *   8. the self-check is the install's OWN last step: a fresh install runs it and reports PASS,
+ *      --no-selfcheck skips it out loud, and a self-check that cannot be run at all makes the
+ *      install exit 1 rather than report a green it never obtained.
+ *
+ * WHY MOST CASES PASS --no-selfcheck
+ *   Every install below would otherwise pay for a full self-check run (300+ assertions, a fresh
+ *   PowerShell host and two dozen child processes). The cases that are ABOUT the integration run it;
+ *   the ones that are about the generator skip it deliberately, through the same flag an operator
+ *   has - not through a test-only bypass.
  *
  * Exit 0 = every assertion passed. Exit 1 = at least one failed. Exit 2 = the suite could not run.
  */
@@ -31,8 +40,8 @@ import { runInterview } from './interview.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PLUGIN_ROOT = path.resolve(HERE, '..', '..');
-const INTERVIEW = path.join(HERE, 'interview.mjs');
 const SELFCHECK = path.join(PLUGIN_ROOT, 'scripts', 'selfcheck', 'aiwf-selfcheck.js');
+const SELFCHECK_REL = 'scripts/selfcheck/aiwf-selfcheck.js';
 
 const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'pnp-setup-test-'));
 let failures = 0;
@@ -60,13 +69,29 @@ function project(name) {
   return dir;
 }
 
+// `opts.selfcheck: true` lets the install run its integrated self-check; every other case passes
+// --no-selfcheck, because paying 300+ assertions per install to prove the generator wrote a file is
+// not coverage, it is a slow suite. `opts.payload` runs a DIFFERENT payload copy (the fail-closed
+// control installs from a payload whose self-check script has been removed).
 function install(projectDir, answers, extra = [], opts = {}) {
   const answersFile = path.join(tmpRoot, `answers-${path.basename(projectDir)}-${Math.random().toString(36).slice(2, 8)}.json`);
   fs.writeFileSync(answersFile, JSON.stringify(answers, null, 2));
-  const args = [INTERVIEW, '--answers-file', answersFile, '--plugin-root', PLUGIN_ROOT, ...extra];
+  const payload = opts.payload || PLUGIN_ROOT;
+  const args = [path.join(payload, 'scripts', 'setup', 'interview.mjs'), '--answers-file', answersFile, '--plugin-root', payload, ...extra];
+  if (!opts.selfcheck && !extra.includes('--no-selfcheck')) args.push('--no-selfcheck');
   if (!opts.autoRoot) args.push('--project-root', projectDir);
   const r = spawnSync(process.execPath, args, { encoding: 'utf8', cwd: opts.cwd || process.cwd() });
   return { status: r.status, out: (r.stdout || '') + (r.stderr || '') };
+}
+
+function copyTree(from, to, skip = new Set(['.git', 'node_modules'])) {
+  fs.mkdirSync(to, { recursive: true });
+  for (const e of fs.readdirSync(from, { withFileTypes: true })) {
+    if (skip.has(e.name)) continue;
+    const s = path.join(from, e.name);
+    const d = path.join(to, e.name);
+    if (e.isDirectory()) copyTree(s, d, skip); else fs.copyFileSync(s, d);
+  }
 }
 
 // Every file under a project, keyed by its project-relative path with forward slashes. `.git` is
@@ -113,8 +138,12 @@ const at = (dir, rel) => path.join(dir, ...rel.split('/'));
 // ---------------------------------------------------------------------------
 section('1 - fresh install, self-check green, memory seeds printed');
 const p1 = project('fresh');
-const r1 = install(p1, baseAnswers());
+const r1 = install(p1, baseAnswers(), [], { selfcheck: true });
 check('install exits 0', r1.status === 0, why(r1));
+// The install's OWN last step, not a reminder printed for someone else to act on.
+check('the install RAN the self-check itself and reported PASS', r1.out.includes('self-check: PASS'), why(r1, true));
+check('and the PASS line quotes the self-check\'s own summary line verbatim',
+  /self-check: PASS - .*assertions passed/.test(r1.out), (r1.out.split('\n').find((l) => l.startsWith('self-check:')) || '(no self-check line)').slice(0, 120));
 check('config written', exists(at(p1, CONFIG_REL)));
 check('roles.json written', exists(at(p1, ROLES_REL)));
 check('writer agent always rendered', exists(at(p1, '.claude/agents/writer.md')));
@@ -516,6 +545,35 @@ for (const [name, permissions, needle] of [
   check(`${name} -> the message says what it does not understand`, r.out.includes(needle), why(r, true).slice(0, 120));
   check(`${name} -> settings.json is byte-identical`, read(at(dir, '.claude/settings.json')) === original);
   check(`${name} -> the rest of the project was not written either`, !exists(at(dir, CONFIG_REL)));
+}
+
+// ---------------------------------------------------------------------------
+section('17 - the self-check is the install\'s own last step, and "could not check" is never "checked"');
+{
+  const p22 = project('selfcheck-skipped');
+  // The flag is passed EXPLICITLY here rather than left to the helper's default: this case is about
+  // the flag, and a case that depends on a default is not testing what it says it tests.
+  const r = install(p22, baseAnswers(), ['--no-seeds', '--no-selfcheck']);
+  check('--no-selfcheck still exits 0', r.status === 0, why(r));
+  check('and it says so on one line - a skipped gate that prints nothing reads exactly like a gate that passed',
+    r.out.includes('self-check: SKIPPED'), why(r, true).slice(0, 160));
+  check('no PASS line is printed for a run that never checked anything', !r.out.includes('self-check: PASS'));
+  check('the project was still installed', exists(at(p22, CONFIG_REL)));
+}
+{
+  // FAIL-CLOSED: a payload whose self-check script is not there at all. The install itself succeeds
+  // and its files stay on disk - what must not happen is exit 0, because nothing verified them.
+  const payload = path.join(tmpRoot, 'payload-without-selfcheck');
+  copyTree(PLUGIN_ROOT, payload);
+  fs.rmSync(path.join(payload, ...SELFCHECK_REL.split('/')));
+  const p23 = project('selfcheck-unrunnable');
+  const r = install(p23, baseAnswers(), ['--no-seeds'], { payload, selfcheck: true });
+  check('an unrunnable self-check makes the install exit 1, not 0', r.status === 1, why(r, true).slice(0, 200));
+  check('the message names exactly what could not run', r.out.includes(SELFCHECK_REL), why(r, true).slice(0, 200));
+  check('and says plainly that the files WERE written and nothing was rolled back',
+    r.out.includes('WERE written') && r.out.includes('nothing was rolled back'), why(r, true).slice(0, 200));
+  check('which is true: the project layer really is on disk',
+    exists(at(p23, CONFIG_REL)) && exists(at(p23, ROLES_REL)) && exists(at(p23, 'CLAUDE.md')));
 }
 
 // ---------------------------------------------------------------------------

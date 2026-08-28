@@ -77,10 +77,20 @@ The generator plans everything before it writes anything, so a blocked run leave
 Text OUTSIDE the `aiwf-core` markers in `CLAUDE.md`, an existing overrides document, and foreign
 permission rules are never touched in any branch.
 
-## Step 4 - Self-check
+## Step 4 - Self-check (the CLI already ran it)
 
-Run `/pnp:selfcheck` against the project. A green self-check is what turns "files were written" into
-"the installation is consistent".
+You do not have to remember this step: a successful install that really wrote something **runs the
+self-check itself** as its last action, against the project it just wrote, and reports
+`self-check: PASS` with the child's own summary line.
+
+- a **red** self-check makes the install exit **1** and says plainly that the files WERE written and
+  nothing was rolled back - the writes stand, the verdict is that the result is not consistent;
+- a self-check that could not be started at all is **also** exit 1: "could not check" is never
+  reported as "checked";
+- `--no-selfcheck` skips it, and says so on one line.
+
+`/pnp:selfcheck` is how you **re-run** it or inspect a failure in full - not a step the agent has to
+remember after a write.
 
 ## Step 5 - Report, and the memory seeds
 
