@@ -7,6 +7,14 @@
   their locked flags, their stdin-only prompt delivery and their ASCII-only source, and the
   EXAMPLE FIXTURE (`examples/example-project/`, its cycle driver and the CI workflow, compared
   against each other in both directions so committed data cannot rot unnoticed);
+- **provenance** - every text file of the payload scanned for the origin project's names (held as
+  digests, never as text, since the engine is itself inside the set it scans), for email addresses, for
+  Cyrillic code points and for drive-letter absolute paths outside a per-file allowlist. Which
+  files are scanned is stated by extension/known name, `.git` and `node_modules` excluded. An
+  unclassified file, a file that could not be read and a directory that could not be enumerated are
+  each a FAILURE rather than a silent skip - a dropped subtree leaves every other number in the
+  section perfectly plausible - and an empty or implausibly small file list is not read as
+  agreement;
 - **project-layer invariants** - the owned/suppressed ask-rule bookkeeping, the rendered
   artifacts (roles.json, agent frontmatter) agreeing with `aiwf.config.json`, and the version
   bookkeeping.

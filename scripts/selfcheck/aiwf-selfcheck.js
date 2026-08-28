@@ -1427,6 +1427,350 @@ function sectionPayloadIntegrity() {
 }
 
 // ---------------------------------------------------------------------------
+// SECTION - provenance (nothing of the project this payload was extracted from)
+// ---------------------------------------------------------------------------
+// This plugin was extracted from a real, private production project. That project's names, machine
+// paths, addresses and operator language must not travel with the payload - and "we grepped once
+// and it was zero" rots the moment somebody pastes a path into a comment. So the scrub is a
+// standing gate in the same shape as everything else here: findings with stable ids, and one
+// sabotage per finding proving it can fail.
+//
+// TWO DELIBERATE PECULIARITIES, both consequences of this file being INSIDE the set it scans:
+//
+//   1. The origin names are held as sha256 DIGESTS of their lowercased form, never as text.
+//      Spelling them out would put the very identifiers this section exists to keep out back into
+//      a payload that is currently clean - the check would become the leak. Recompute one with:
+//        node -e "console.log(require('crypto').createHash('sha256').update(process.argv[1].toLowerCase()).digest('hex'))" "<name>"
+//      What the controls prove is the MECHANISM - that a denylisted token planted in any payload
+//      file, in any case, is found - not that these digests have the preimages they claim. That
+//      last step is not provable from inside a payload that must not contain the preimages, and
+//      this paragraph is the honest statement of the gap rather than a silent one.
+//   2. Every drive-letter literal in this file is split immediately after the colon
+//      ('C:' + '\\repo'), for the same reason: the allowlist must NAME the paths it admits, and a
+//      whole literal here would be an unadmitted occurrence in this very file. A typo inside a
+//      split literal is self-detecting - the real occurrence it describes stops being admitted and
+//      the absolute-path check fails loudly.
+//
+// The scanned set is every text file of the payload, defined by extension/known name below, with
+// .git and node_modules excluded as not-payload. A file whose type is not in that set is a
+// FAILURE, not a silent skip: a new file class gets classified deliberately or the gate says so.
+
+const PROV_ORIGIN_DIGESTS = [
+  '010b3361af1b132b4c18771b3b1a0d972130c070050af026ab1cd91c8db3099f',
+  '7e7f34bca54cadc24ef362a6813b1e458334f2c3be2de39afe67fab3a765c63c',
+  '63119e36a7ac5020848d84e780e6c71a824fb962733928462d333fca80150175',
+];
+// Lengths of those three tokens. Purely an optimisation: only tokens of a denylisted length are
+// hashed, which is the difference between hashing every word of the payload and hashing a few.
+const PROV_ORIGIN_LENGTHS = [10, 7, 7];
+
+// Text file types of the payload. `.sh` is deliberately absent: the bash wrappers do not ship yet,
+// and the day they do, this list is the place that says so out loud.
+const PROV_TEXT_EXT = new Set(['.md', '.mjs', '.js', '.json', '.tmpl', '.ps1', '.yml']);
+const PROV_TEXT_NAMES = new Set(['LICENSE', '.gitattributes']);
+const PROV_SKIP_DIRS = new Set(['.git', 'node_modules']);
+// Every top-level area of the payload must contribute at least one scanned file, root files
+// included. This is the half of the coverage assertion that a raw count cannot express: a scan
+// that stopped descending after two directories still returns a large, plausible number.
+const PROV_AREAS = ['.claude-plugin', '.github', 'docs', 'examples', 'hooks', 'migrations', 'schema', 'scripts', 'skills', 'templates'];
+// The payload ships 91 text files today. The floor is deliberately well below that - ordinary
+// growth and pruning must not trip it, while an empty or gutted list is not read as agreement.
+const PROV_MIN_FILES = 60;
+
+// The absolute paths that legitimately survive, each pinned to the ONE file that justifies it: a
+// generic placeholder in a documentation example, a fixture value, and a negative control. The
+// pairing is the point - the same string in a new place is a new absolute path and fails.
+const PROV_ABS_ALLOW = [
+  { file: 'scripts/native/ps/aiwf-roles.ps1', literal: 'C:' + '\\repo\\.claude\\aiwf-native\\roles.json',
+    why: '.EXAMPLE block: a placeholder project path' },
+  { file: 'scripts/native/ps/codex-review.ps1', literal: 'C:' + '\\repo', why: '.EXAMPLE block' },
+  { file: 'scripts/native/ps/codex-qa.ps1', literal: 'C:' + '\\repo', why: '.EXAMPLE block' },
+  { file: 'scripts/native/ps/codex-qal.ps1', literal: 'C:' + '\\repo', why: '.EXAMPLE block' },
+  { file: 'scripts/spike/run-spikes.mjs', literal: 'C:' + '\\\\work\\\\demo',
+    why: 'the cwd of the captured hook payloads the spikes replay' },
+  { file: 'scripts/update/test-update.mjs', literal: 'C:' + '/Windows/system.ini',
+    why: 'the negative control that proves the payload validator rejects an absolute path' },
+];
+
+const PROV_TOKEN_RE = /[a-z0-9]+/g;
+const PROV_EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/;
+// By CODE POINT, never by byte class: a byte-level Cyrillic range also matches parts of an em-dash,
+// and this payload is full of em-dashes - the finding below prints how many it saw and did not
+// match, so the absence of that mistake is reported rather than assumed.
+const PROV_CYRILLIC_RE = /[\u0400-\u04FF]/;
+// The lookbehind is what keeps the letter-colon-slash inside an https URL from reading as a drive
+// letter. (Writing that three-character sequence out here, quoted, would itself be an unadmitted
+// occurrence - the check caught exactly that in its own first draft.)
+const PROV_ABS_RE = /(?<![A-Za-z0-9_])[A-Za-z]:[\\/][^\s"'`,;:()<>|\]]*/g;
+
+/** Hits of the denylist inside one piece of text, counted as whole alphanumeric tokens, case-free. */
+function provTokenHits(text, digests, lengths) {
+  let hits = 0;
+  for (const tok of text.toLowerCase().match(PROV_TOKEN_RE) || []) {
+    if (lengths.has(tok.length) && digests.has(sha256(tok))) hits += 1;
+  }
+  return hits;
+}
+function provAbsMatches(text) {
+  PROV_ABS_RE.lastIndex = 0;
+  return [...text.matchAll(PROV_ABS_RE)].map((m) => m[0]);
+}
+const provRel = (root, p) => path.relative(root, p).split(path.sep).join('/') || '.';
+const provWhy = (e) => e.code || e.message;
+
+/**
+ * `readdir` is injectable for exactly one reason: the negative controls have to drive the
+ * enumeration-failure branch below, and that branch belongs to THIS process rather than to the
+ * payload copy a control sabotages. Same pattern, and the same reason, as the junction probe.
+ */
+function provenanceWalk(root, { readdir = fs.readdirSync } = {}) {
+  const scanned = [];
+  const unclassified = [];
+  const unreadableDirs = [];
+  (function rec(dir) {
+    let entries;
+    // A directory that cannot be enumerated is a SUBTREE THIS SCAN NEVER LOOKED AT. Returning
+    // quietly would let the file count and the area coverage stay perfectly plausible while the
+    // claim "the payload carries nothing of its origin" was never tested there - the vacuous pass
+    // this whole section exists to prevent. So it is collected and it FAILS.
+    try { entries = readdir(dir, { withFileTypes: true }); }
+    catch (e) { unreadableDirs.push(`${provRel(root, dir)} (${provWhy(e)})`); return; }
+    for (const e of entries) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) { if (!PROV_SKIP_DIRS.has(e.name)) rec(p); continue; }
+      const rel = provRel(root, p);
+      if (PROV_TEXT_EXT.has(path.extname(e.name).toLowerCase()) || PROV_TEXT_NAMES.has(e.name)) scanned.push(rel);
+      else unclassified.push(rel);
+    }
+  })(root);
+  return { scanned: scanned.sort(), unclassified: unclassified.sort(), unreadableDirs: unreadableDirs.sort() };
+}
+
+/**
+ * `extraOriginDigests`/`extraOriginLengths` arm the denylist with one extra token. Only the
+ * negative controls use it, and they plant a canary whose digest nothing else knows - which is how
+ * a control can prove the origin scan catches a planted name without this file containing one.
+ */
+function provenanceFindings(root, {
+  extraOriginDigests = [], extraOriginLengths = [],
+  readdir = fs.readdirSync, readFile = (p) => fs.readFileSync(p, 'utf8'),
+} = {}) {
+  const out = [];
+  const add = (id, name, ok, detail) => { out.push({ id, name, ok: !!ok, detail: detail || '' }); return !!ok; };
+
+  const { scanned, unclassified, unreadableDirs } = provenanceWalk(root, { readdir });
+  const digests = new Set(PROV_ORIGIN_DIGESTS.concat(extraOriginDigests));
+  const lengths = new Set(PROV_ORIGIN_LENGTHS.concat(extraOriginLengths));
+
+  const unreadable = [];
+  const originHits = [];
+  const emailHits = [];
+  const cyrillicHits = [];
+  const pathHits = [];
+  const allowUsed = PROV_ABS_ALLOW.map(() => 0);
+  let emDashes = 0;
+
+  for (const rel of scanned) {
+    // Read here rather than through readText(): a file that is in the set but could not be read is
+    // a hole in the scan, not a clean file, and the reason is worth naming. Injectable for the same
+    // reason as readdir above - the controls have to be able to drive this branch.
+    let src;
+    try { src = readFile(path.join(root, ...rel.split('/'))); }
+    catch (e) { unreadable.push(`${rel} (${provWhy(e)})`); continue; }
+    emDashes += (src.match(/\u2014/g) || []).length;
+    const lines = src.split(/\r?\n/);
+    for (let i = 0; i < lines.length; i += 1) {
+      const line = lines[i];
+      const where = `${rel}:${i + 1}`;
+      if (provTokenHits(line, digests, lengths)) originHits.push(where);
+      if (PROV_EMAIL_RE.test(line)) emailHits.push(where);
+      if (PROV_CYRILLIC_RE.test(line)) cyrillicHits.push(where);
+      for (const atom of provAbsMatches(line)) {
+        const i2 = PROV_ABS_ALLOW.findIndex((a) => a.file === rel && a.literal === atom);
+        if (i2 === -1) pathHits.push(`${where} ${atom}`); else allowUsed[i2] += 1;
+      }
+    }
+  }
+
+  // Three ways this scan can be less complete than its count suggests, and all three FAIL here: a
+  // file class nobody classified, a file that could not be read, and a directory that could not be
+  // enumerated. The third is the dangerous one - it removes a whole subtree from the scan while
+  // every other number in this section stays entirely plausible.
+  add('provenance-scope',
+    'every directory of the payload tree was enumerated, and every file in it is classified as scannable text and was really read',
+    unclassified.length === 0 && unreadable.length === 0 && unreadableDirs.length === 0,
+    unclassified.length || unreadable.length || unreadableDirs.length
+      ? `NOT SCANNED - directories that could not be enumerated: ${unreadableDirs.slice(0, 5).join(', ') || 'none'}; `
+        + `files that could not be read: ${unreadable.slice(0, 5).join(', ') || 'none'}; `
+        + `files of an unclassified type: ${unclassified.slice(0, 5).join(', ') || 'none'}`
+      : `${scanned.length} text files scanned, every directory enumerated`);
+
+  const areas = new Set(scanned.map((rel) => (rel.includes('/') ? rel.split('/')[0] : '(root)')));
+  const missingAreas = PROV_AREAS.filter((a) => !areas.has(a));
+  add('provenance-scope-areas',
+    'the scanned set covers every payload area - examples/ included, since it ships with the plugin - and is not implausibly small',
+    missingAreas.length === 0 && areas.has('(root)') && scanned.length >= PROV_MIN_FILES,
+    missingAreas.length ? `nothing scanned under ${missingAreas.join(', ')}`
+      : `${scanned.length} files (floor ${PROV_MIN_FILES}) across ${areas.size} areas`);
+
+  // The hit lists print WHERE, never WHAT: echoing a found identifier would leak it into every log
+  // that captures this run.
+  add('provenance-origin', 'no payload file names the project this loop was extracted from',
+    originHits.length === 0,
+    originHits.length ? `${originHits.length} hit(s) at ${originHits.slice(0, 6).join(', ')} (the token itself is not printed)` : `${scanned.length} files clean`);
+  add('provenance-email', 'no payload file carries an email address',
+    emailHits.length === 0,
+    emailHits.length ? `${emailHits.length} hit(s) at ${emailHits.slice(0, 6).join(', ')} (the address itself is not printed)` : `${scanned.length} files clean`);
+  add('provenance-cyrillic', 'no payload file carries a Cyrillic code point (the origin project\'s operator channel was written in a Cyrillic script)',
+    cyrillicHits.length === 0,
+    cyrillicHits.length ? `${cyrillicHits.length} hit(s) at ${cyrillicHits.slice(0, 6).join(', ')}`
+      : `${scanned.length} files clean, with ${emDashes} em-dashes present and correctly not matched`);
+  add('provenance-abs-path', 'every drive-letter absolute path in the payload is one the allowlist admits IN THAT FILE',
+    pathHits.length === 0,
+    pathHits.length ? `${pathHits.length} unadmitted: ${pathHits.slice(0, 6).join(', ')}`
+      : `${allowUsed.reduce((a, b) => a + b, 0)} admitted occurrences across ${PROV_ABS_ALLOW.length} entries`);
+  const dead = PROV_ABS_ALLOW.filter((a, i) => allowUsed[i] === 0).map((a) => `${a.file} :: ${a.literal}`);
+  add('provenance-allowlist-live', 'every allowlist entry still describes a real occurrence (a dead entry is a standing exemption nobody needs)',
+    dead.length === 0, dead.length ? `dead: ${dead.join(', ')}` : `${PROV_ABS_ALLOW.length} entries live`);
+
+  return out;
+}
+
+// The canary: a token that exists nowhere in the payload, assembled from fragments so that this
+// file does not contain it either. The controls arm the denylist with its digest and plant the
+// token - which proves the scan finds a planted name, in a payload that must never contain one.
+const PROV_CANARY = 'pnpcanary' + 'provenancetoken';
+const PROV_ARMED = { extraOriginDigests: [sha256(PROV_CANARY)], extraOriginLengths: [PROV_CANARY.length] };
+
+function appendText(root, rel, text) {
+  fs.appendFileSync(path.join(root, ...rel.split('/')), text, 'utf8');
+}
+const reEscape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * The two "could not read it" controls inject the failure at the boundary the walk itself uses,
+ * rather than really revoking permissions on a copy. Measured, not assumed: `icacls <dir> /deny
+ * "<user>:(RX)"` DOES work on a directory this user owns and makes readdirSync throw EPERM - but
+ * `fs.rmSync(recursive, force)` then throws EPERM too and LEAVES THE DIRECTORY BEHIND, so the
+ * control would trade a proven branch for permanent debris under the system temp dir, in a file
+ * whose own rule is that unfinished cleanup is a failure. It is also `icacls`, i.e. Windows-only
+ * code in a payload that gets a Linux/macOS channel before 1.0. Injection is deterministic,
+ * portable, and drives exactly the same branch; the EPERM code below is the one Windows really
+ * produced in that experiment.
+ */
+function denyingReaddir(absDir) {
+  return (dir, opts) => {
+    if (path.resolve(dir) === path.resolve(absDir)) {
+      const e = new Error(`simulated: cannot enumerate ${absDir}`); e.code = 'EPERM'; throw e;
+    }
+    return fs.readdirSync(dir, opts);
+  };
+}
+function denyingReadFile(absFile) {
+  return (p) => {
+    if (path.resolve(p) === path.resolve(absFile)) {
+      const e = new Error(`simulated: cannot read ${absFile}`); e.code = 'EPERM'; throw e;
+    }
+    return fs.readFileSync(p, 'utf8');
+  };
+}
+
+const PROVENANCE_CONTROLS = [
+  { id: 'provenance-origin', label: 'a denylisted origin name planted in a payload doc', opts: PROV_ARMED,
+    apply: (r) => appendText(r, 'docs/LOOP.md', `\nA sentence that names ${PROV_CANARY}.\n`) },
+  { id: 'provenance-origin', label: 'the same name planted in a template IN UPPER CASE (the match is case-free)', opts: PROV_ARMED,
+    apply: (r) => appendText(r, 'templates/CLAUDE.md.tmpl', `\n${PROV_CANARY.toUpperCase()}\n`) },
+  { id: 'provenance-origin', label: 'the same name planted under examples/, which ships with the plugin', opts: PROV_ARMED,
+    apply: (r) => appendText(r, 'examples/example-project/README.md', `\n${PROV_CANARY}\n`) },
+  { id: 'provenance-email', label: 'an email address planted in a script comment',
+    apply: (r) => appendText(r, 'scripts/engine/aiwf-lib.js', `\n// contact: someone@${'example.com'}\n`) },
+  { id: 'provenance-cyrillic', label: 'one Cyrillic character planted in a template',
+    apply: (r) => appendText(r, 'templates/PROJECT_OVERRIDES.md.tmpl', '\nnote: \u0414\n') },
+  { id: 'provenance-abs-path', label: 'a new drive-letter absolute path planted in a script',
+    apply: (r) => appendText(r, 'scripts/setup/generate.mjs', `\n// see ${'C:' + '\\Users\\someone\\notes.txt'}\n`) },
+  { id: 'provenance-abs-path', label: 'an ALLOWLISTED literal planted in a file it does not belong to',
+    apply: (r) => appendText(r, 'docs/WORKFLOW.md', `\n    ${'C:' + '\\repo'}\n`) },
+  { id: 'provenance-allowlist-live', label: 'the occurrence an allowlist entry describes removed from its file',
+    apply: (r) => patchText(r, ['scripts', 'spike', 'run-spikes.mjs'], new RegExp(reEscape('C:' + '\\\\work\\\\demo'), 'g'), 'demo') },
+  { id: 'provenance-scope', label: 'a file of an unclassified type dropped into the payload',
+    apply: (r) => fs.writeFileSync(path.join(r, 'payload.bin'), 'binary-ish') },
+  // No edit to the copy: the sabotage IS the injected failure, at the walk's own boundary.
+  { id: 'provenance-scope', label: 'a directory that cannot be enumerated (docs/, EPERM at the readdir boundary the walk uses)',
+    opts: (r) => ({ readdir: denyingReaddir(path.join(r, 'docs')) }), apply: () => {} },
+  { id: 'provenance-scope', label: 'a file that cannot be read (README.md, EPERM at the readFile boundary the scan uses)',
+    opts: (r) => ({ readFile: denyingReadFile(path.join(r, 'README.md')) }), apply: () => {} },
+  { id: 'provenance-scope-areas', label: 'a whole payload area (examples/) removed from the copy',
+    apply: (r) => fs.rmSync(path.join(r, 'examples'), { recursive: true, force: true }) },
+];
+
+function sectionProvenance(tmpRoot) {
+  section('PROVENANCE - the payload carries nothing of the project it was extracted from');
+  for (const f of provenanceFindings(PLUGIN_ROOT)) check(f.name, f.ok, f.detail);
+
+  // The needles themselves, on constructed input. A denylist that matches nothing and a pattern
+  // that matches nothing both report "0 hits" against a clean payload, and look identical there.
+  const D = new Set([sha256(PROV_CANARY)]);
+  const L = new Set([PROV_CANARY.length]);
+  check('the name scan matches a denylisted token in any case and around any punctuation, and only as a WHOLE token',
+    provTokenHits(`prefix ${PROV_CANARY} suffix`, D, L) === 1
+    && provTokenHits(PROV_CANARY.toUpperCase(), D, L) === 1
+    && provTokenHits(`D:${'\\'}${PROV_CANARY}${'\\'}apps`, D, L) === 1
+    && provTokenHits(`${PROV_CANARY}x`, D, L) === 0
+    && provTokenHits('nothing of the sort here', D, L) === 0);
+  check('the email pattern matches a real address, and not a package spec, a bare handle or a dotless host',
+    ['someone@' + 'example.com', 'first.last+tag@' + 'sub.domain.co', 'a_b@' + 'x-y.io'].every((s) => PROV_EMAIL_RE.test(s))
+    && ['pkg@' + '1.2.3', 'codex@' + 'openai-codex', '@' + 'handle', 'a@' + 'b'].every((s) => !PROV_EMAIL_RE.test(s)));
+  check('the Cyrillic class matches by CODE POINT: a Cyrillic letter hits, an em-dash and a hyphen do not',
+    PROV_CYRILLIC_RE.test('\u0414') && PROV_CYRILLIC_RE.test('\u044F')
+    && !PROV_CYRILLIC_RE.test('\u2014') && !PROV_CYRILLIC_RE.test('\u2013') && !PROV_CYRILLIC_RE.test('-'));
+  check('the absolute-path pattern matches a drive path and not the letter-colon-slash inside an https URL',
+    provAbsMatches(`-ProjectRoot '${'C:' + '\\repo'}' -Prompt x`).join('|') === 'C:' + '\\repo'
+    && provAbsMatches('see https:' + '//example.com/x and http:' + '//localhost:3000/y').length === 0);
+
+  section('PROVENANCE CONTROLS - each of those assertions is proven able to FAIL');
+  const base = path.join(tmpRoot, 'prov-base');
+  copyPayloadTree(PLUGIN_ROOT, base);
+  const pristine = provenanceFindings(base);
+  const pristineFailures = pristine.filter((f) => !f.ok);
+  check('the control copy is clean before any sabotage', pristineFailures.length === 0,
+    pristineFailures.length ? pristineFailures.map((f) => f.id).join(', ') : `${pristine.length} checks green`);
+
+  // Two things at once, and both matter. Every forbidden pattern is planted inside .git/ - which is
+  // NOT payload - and the denylist is armed with the canary that is planted nowhere. The copy must
+  // still be green: it proves the walk really skips .git, and that each control below is proving
+  // its PLANT rather than the arming.
+  fs.mkdirSync(path.join(base, '.git'), { recursive: true });
+  fs.writeFileSync(path.join(base, '.git', 'config'),
+    `${PROV_CANARY}\ncontact someone@${'example.com'}\n\u0414\n${'C:' + '\\Users\\someone\\secret'}\n`, 'utf8');
+  const armedClean = provenanceFindings(base, PROV_ARMED).filter((f) => !f.ok);
+  check('.git is not payload, and arming alone finds nothing: every forbidden pattern planted in .git/ with the canary armed leaves the copy green',
+    armedClean.length === 0, armedClean.length ? armedClean.map((f) => f.id).join(', ') : 'still green');
+
+  let i = 0;
+  const covered = new Set();
+  for (const m of PROVENANCE_CONTROLS) {
+    const broken = path.join(tmpRoot, `prov-neg-${i += 1}`);
+    copyPayloadTree(base, broken);
+    try { m.apply(broken); } catch (e) { check(`control could be applied: ${m.label}`, false, String(e.message)); continue; }
+    // `opts` may be a function of the sabotaged root: the two injection controls need to name a
+    // path inside the copy that only exists once the copy exists.
+    const opts = typeof m.opts === 'function' ? m.opts(broken) : (m.opts || {});
+    const target = provenanceFindings(broken, opts).find((f) => f.id === m.id);
+    if (!target) {
+      check(`control "${m.label}" targets a live check (id "${m.id}")`, false, 'no check with that id was produced');
+      continue;
+    }
+    covered.add(m.id);
+    check(`sabotage detected [${m.id}]: ${m.label}`, target.ok === false,
+      target.ok ? 'still PASS - the check is vacuous' : 'FAIL as required');
+    try { fs.rmSync(broken, { recursive: true, force: true }); } catch (e) { /* best-effort */ }
+  }
+  for (const id of pristine.filter((f) => !covered.has(f.id)).map((f) => f.id)) {
+    note(`no negative control for provenance check "${id}"`, 'no control defined - add one or state why it cannot fail');
+  }
+}
+
+// ---------------------------------------------------------------------------
 // SECTION - the example fixture (examples/example-project + its driver + CI)
 // ---------------------------------------------------------------------------
 // The example cycle is the only gate that runs the whole product the way an operator would, and it
@@ -2186,6 +2530,7 @@ function main() {
     sectionWrappers();
     sectionResolver(tmpRoot);
     sectionPayloadIntegrity();
+    sectionProvenance(tmpRoot);
     sectionExampleFixture(tmpRoot);
     sectionProjectLayer(PROJECT, selfAuthored);
     sectionNegativeControls(tmpRoot, pluginVersion);
@@ -2218,6 +2563,17 @@ function main() {
   console.log('one above it, one reached through a junction into it, one that is not empty and one whose parent');
   console.log('does not exist, and each must exit 2 having created nothing - that directory is deleted when the');
   console.log('run ends, so a guard asserted by reading its source would only prove the source says so.');
+  console.log('PROVENANCE: every text file of the payload - defined by extension/known name, .git and');
+  console.log('node_modules excluded, with an unclassified file, an unreadable file and a directory that');
+  console.log('could not be enumerated each counted as a FAILURE rather than skipped (a dropped subtree');
+  console.log('leaves every other number in the section plausible) - is');
+  console.log('scanned for the origin project\'s names (held as digests, never as text), for email');
+  console.log('addresses, for Cyrillic code points and for drive-letter absolute paths outside a per-file');
+  console.log('allowlist. Each of those has its own negative control on a sabotaged payload copy; the');
+  console.log('needles themselves are exercised on constructed input, since a pattern that matches nothing');
+  console.log('reports the same "0 hits" as a clean payload. What is NOT proven: that the three name');
+  console.log('digests have the preimages they claim - a payload that must not contain those names cannot');
+  console.log('carry the proof, so the controls prove the mechanism and the digests are stated data.');
   console.log('STATIC: the wrapper flag locks, asserted as exact ARGV PAIRS rather than bare words (so a');
   console.log('flag switched in the argv while the old word survives in a comment still fails), the hook');
   console.log('wiring, the ASCII-only wrapper sources, and the payload cross-references.');
