@@ -145,7 +145,7 @@ const baseAnswers = (overrides = {}) => ({
     qal: { enabled: false, engine: 'codex', model: 'unset', effort: 'high' },
   },
   loop: { correctionRoundsCap: 2 },
-  enforcement: { routeWriteGuard: true },
+  enforcement: { routeWriteGuard: true, dispatchGate: 'always' },
   verify: { commands: [{ name: 'unit', run: 'npm test', cwd: '.' }] },
   paths: { scratchDir: '.aiwf', plansDir: 'docs/backlogs', overridesDoc: 'docs/ai/PROJECT_OVERRIDES.md' },
   review: { productBoundaryChecks: [] },
@@ -184,6 +184,11 @@ check('memory seeds are PRINTED for the operator', r1.out.includes('MEMORY SEEDS
   check('_aiwf stamps a fresh-install migration id', bk.lastMigrationApplied === '0001_initial', String(bk.lastMigrationApplied));
   check('_aiwf journal is clear', bk.migrationJournal === null);
   check('$schema points at the payload schema', typeof cfg.$schema === 'string' && cfg.$schema.endsWith('schema/aiwf.config.schema.json'), String(cfg.$schema));
+  // Both enforcement keys are REQUIRED by the schema, so a fresh install carries them whatever the
+  // answers say - a hook that had to guess a mode would be guessing on every project.
+  check('the enforcement block carries both gates, Gate 2 in its factory mode',
+    cfg.enforcement && cfg.enforcement.routeWriteGuard === true && cfg.enforcement.dispatchGate === 'always',
+    JSON.stringify(cfg.enforcement));
 
   // Bookkeeping correctness: every recorded hash must be the hash of what is really on disk, with
   // upstream == local == actual and override false on a clean install. A wrong hash here would make
@@ -363,6 +368,27 @@ section('6b - the linux and macos channels install and render the bash wrappers'
 // ---------------------------------------------------------------------------
 section('7 - refusals happen BEFORE anything is written');
 {
+  // The pair for the refusal below: the OTHER value the enum admits installs cleanly and reaches the
+  // config verbatim, so "sometimes" being refused is about the value, not about the key.
+  const pOffPlan = project('dispatch-off-plan');
+  const answers = baseAnswers();
+  answers.enforcement.dispatchGate = 'off-plan';
+  const r = install(pOffPlan, answers, ['--no-seeds']);
+  check('the off-plan dispatch mode installs (exit 0)', r.status === 0, why(r));
+  check('and the answer reached the config, not the factory default',
+    ((readJson(at(pOffPlan, CONFIG_REL)) || {}).enforcement || {}).dispatchGate === 'off-plan',
+    JSON.stringify((readJson(at(pOffPlan, CONFIG_REL)) || {}).enforcement));
+}
+{
+  const pBadMode = project('dispatch-bad-mode');
+  const answers = baseAnswers();
+  answers.enforcement.dispatchGate = 'sometimes';
+  const r = install(pBadMode, answers, ['--no-seeds']);
+  check('a dispatch mode outside the enum is refused (exit 1)', r.status === 1, `exit ${r.status}`);
+  check('the schema error names the offending path', r.out.includes('/enforcement/dispatchGate'), why(r, true));
+  check('nothing was written', Object.keys(snapshot(pBadMode)).length === 0);
+}
+{
   const p7 = project('unknown-os');
   const answers = baseAnswers({ os: 'solaris' });
   const r = install(p7, answers, ['--no-seeds']);
@@ -493,6 +519,9 @@ section('12 - the interactive question flow itself (scripted answers, no readlin
   });
   check('the required answer is captured', answers.project.name === 'Interviewed');
   check('an empty answer takes the schema default', answers.os === 'windows' && answers.paths.plansDir === 'docs/backlogs' && answers.loop.correctionRoundsCap === 2);
+  check('the enforcement questions are asked and default to the factory posture',
+    answers.enforcement.routeWriteGuard === true && answers.enforcement.dispatchGate === 'always',
+    JSON.stringify(answers.enforcement));
   check('the engine default is claude (never a paid engine by accident)', answers.roles.reviewer.engine === 'claude' && answers.roles.qa.engine === 'claude');
   check('a declined QAL is written as codex + disabled, with a visible placeholder model',
     answers.roles.qal.enabled === false && answers.roles.qal.engine === 'codex' && answers.roles.qal.model === 'unset');

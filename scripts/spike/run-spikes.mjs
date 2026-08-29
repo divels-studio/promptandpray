@@ -15,9 +15,10 @@
  *
  * Gate 2 has no reference implementation to compare against (the reference project's Agent-tool hook
  * answers a different question), so it is asserted against the expectation table only. The Gate 3
- * TOGGLE table is in the same position for the opposite reason: the reference predates
- * `enforcement.routeWriteGuard`, so a parity comparison there would flag the intended change as a
- * divergence. Everything the reference DOES implement stays under parity, in gate1Cases.
+ * TOGGLE and Gate 2 MODE tables are in the same position for the opposite reason: the reference
+ * predates `enforcement.routeWriteGuard` and `enforcement.dispatchGate`, so a parity comparison there
+ * would flag the intended change as a divergence. Everything the reference DOES implement stays under
+ * parity, in gate1Cases.
  *
  * Payload shapes are NOT invented: the two `capture:` fixtures below are raw PreToolUse inputs
  * recorded from a live harness run and published in the porting project's plan record; the rest are
@@ -225,6 +226,70 @@ const gate2Cases = [
   { name: 'empty stdin (fail-to-ask)', payload: '', expect: 'ask' },
 ];
 
+// Gate 2's per-project MODE (`enforcement.dispatchGate`). Same position as the Gate 3 toggle table
+// above and for the same reason: the reference implementation knows nothing of this config key, so a
+// parity comparison would report the intended change as a divergence. Plugin only.
+//
+// Each fixture is a project dir: a config (or none) plus, when it has one, a plans directory holding
+// PLAN_DEMO.md. The two on-plan fixtures carry DIFFERENT refs on purpose - `nearmiss` holds DEMO-10
+// and nothing else, which is the fixture that catches a substring match pretending to be a word
+// match.
+const projectMode = (name, configRaw, planText) => {
+  const root = path.join(tmpRoot, 'mode-' + name);
+  fs.mkdirSync(path.join(root, '.claude', 'aiwf-native'), { recursive: true });
+  if (configRaw !== null) fs.writeFileSync(path.join(root, '.claude', 'aiwf-native', 'aiwf.config.json'), configRaw);
+  if (planText !== null) {
+    const activeDir = path.join(root, 'docs', 'backlogs', 'active'); // the schema default plansDir
+    fs.mkdirSync(activeDir, { recursive: true });
+    fs.writeFileSync(path.join(activeDir, 'PLAN_DEMO.md'), planText);
+  }
+  return root;
+};
+const modeConfig = (mode) => JSON.stringify({ project: { name: 'Spike' }, enforcement: { routeWriteGuard: true, dispatchGate: mode } });
+const planWith = (ref) => `# PLAN DEMO\n\n## ${ref} - the only ref this fixture plan carries\n\nBody.\n`;
+const PLAN_ONE = planWith('DEMO-1');
+
+const modeOffPlan = projectMode('offplan', modeConfig('off-plan'), PLAN_ONE);
+// The four near-miss fixtures. Each holds ONE ref that a naive matcher would let clear another:
+// a longer numeric tail (DEMO-10), a longer DASHED tail (DEMO-1-EXTRA), a dashed PREFIX (X-DEMO-1),
+// and a ref that itself ends in a dash (ABC- vs ABC-X). The dashed ones are the reason the boundary
+// is stated over [A-Za-z0-9_-] instead of `\b`: `-` is not a regex word character, so `\b` sits in
+// the middle of "DEMO-1-EXTRA" and would clear DEMO-1 there.
+const modeNearMiss = projectMode('nearmiss', modeConfig('off-plan'), planWith('DEMO-10'));
+const modeSuffixDash = projectMode('suffixdash', modeConfig('off-plan'), planWith('DEMO-1-EXTRA'));
+const modePrefixDash = projectMode('prefixdash', modeConfig('off-plan'), planWith('X-DEMO-1'));
+const modeTrailingDash = projectMode('trailingdash', modeConfig('off-plan'), planWith('ABC-'));
+const modeTrailingDashX = projectMode('trailingdashx', modeConfig('off-plan'), planWith('ABC-X'));
+const modeNoPlansDir = projectMode('noplansdir', modeConfig('off-plan'), null);
+const modeAlways = projectMode('always', modeConfig('always'), PLAN_ONE);
+const modeNoConfig = projectMode('noconfig', null, PLAN_ONE);
+const modeCorrupt = projectMode('corrupt', '{ not json ', PLAN_ONE);
+const modeWrongCase = projectMode('wrongcase', modeConfig('OFF-PLAN'), PLAN_ONE);
+
+const writerBrief = (prompt) => agentEnvelope({
+  description: 'Implement a ticket', prompt, subagent_type: 'writer', model: 'opus', run_in_background: false,
+});
+
+const gate2ModeCases = [
+  { name: 'off-plan mode, ref IS in an active PLAN', projectDir: modeOffPlan, payload: writerBrief('Ticket: DEMO-1\n\nDo the thing.'), expect: 'allow(passthrough)' },
+  { name: 'off-plan mode, ref is in NO active PLAN', projectDir: modeOffPlan, payload: writerBrief('Ticket: DEMO-2\n\nDo the thing.'), expect: 'ask' },
+  { name: 'off-plan mode, brief carries no Ticket: line', projectDir: modeOffPlan, payload: writerBrief('Do the thing, no ticket line here.'), expect: 'ask' },
+  { name: 'off-plan mode, ref mentioned in PROSE only (not on its own line)', projectDir: modeOffPlan, payload: writerBrief('This relates to Ticket: DEMO-1 somewhere in a sentence.'), expect: 'ask' },
+  { name: 'off-plan mode, near-miss ref DEMO-1 vs a plan holding DEMO-10', projectDir: modeNearMiss, payload: writerBrief('Ticket: DEMO-1\n\nDo the thing.'), expect: 'ask' },
+  { name: 'off-plan mode, DEMO-1 vs a plan holding only DEMO-1-EXTRA (dashed SUFFIX)', projectDir: modeSuffixDash, payload: writerBrief('Ticket: DEMO-1\n\nDo the thing.'), expect: 'ask' },
+  { name: 'off-plan mode, that same plan and the ref DEMO-1-EXTRA (control)', projectDir: modeSuffixDash, payload: writerBrief('Ticket: DEMO-1-EXTRA\n\nDo the thing.'), expect: 'allow(passthrough)' },
+  { name: 'off-plan mode, DEMO-1 vs a plan holding only X-DEMO-1 (dashed PREFIX)', projectDir: modePrefixDash, payload: writerBrief('Ticket: DEMO-1\n\nDo the thing.'), expect: 'ask' },
+  { name: 'off-plan mode, that same plan and the ref X-DEMO-1 (control)', projectDir: modePrefixDash, payload: writerBrief('Ticket: X-DEMO-1\n\nDo the thing.'), expect: 'allow(passthrough)' },
+  { name: 'off-plan mode, a ref ending in a dash, ABC-, present EXACTLY', projectDir: modeTrailingDash, payload: writerBrief('Ticket: ABC-\n\nDo the thing.'), expect: 'allow(passthrough)' },
+  { name: 'off-plan mode, the ref ABC- vs a plan holding only ABC-X', projectDir: modeTrailingDashX, payload: writerBrief('Ticket: ABC-\n\nDo the thing.'), expect: 'ask' },
+  { name: 'off-plan mode, the plans directory does not exist', projectDir: modeNoPlansDir, payload: writerBrief('Ticket: DEMO-1\n\nDo the thing.'), expect: 'ask' },
+  { name: 'off-plan mode, non-writer subagent (untouched by the gate)', projectDir: modeOffPlan, payload: agentEnvelope({ description: 'review', prompt: 'Ticket: DEMO-2', subagent_type: 'reviewer' }), expect: 'allow(passthrough)' },
+  { name: 'always mode, ref IS in an active PLAN (still a click)', projectDir: modeAlways, payload: writerBrief('Ticket: DEMO-1\n\nDo the thing.'), expect: 'ask' },
+  { name: 'NO config file, ref IS in an active PLAN (factory = always)', projectDir: modeNoConfig, payload: writerBrief('Ticket: DEMO-1\n\nDo the thing.'), expect: 'ask' },
+  { name: 'CORRUPT config, ref IS in an active PLAN (a broken config never buys silence)', projectDir: modeCorrupt, payload: writerBrief('Ticket: DEMO-1\n\nDo the thing.'), expect: 'ask' },
+  { name: 'mode "OFF-PLAN" (wrong case) -> always, no coercion', projectDir: modeWrongCase, payload: writerBrief('Ticket: DEMO-1\n\nDo the thing.'), expect: 'ask' },
+];
+
 // ---- run -------------------------------------------------------------------
 const pad = (s, n) => (s.length >= n ? s : s + ' '.repeat(n - s.length));
 let failures = 0;
@@ -289,11 +354,25 @@ for (const c of gate3ToggleCases) {
 }
 
 console.log('');
-console.log('== Gate 2 - every Writer dispatch is an operator click ==');
+console.log('== Gate 2 - the dispatch gate in its factory mode (a project with no config = "always") ==');
 console.log('per case: [1] plugin decision matches the expectation  [2] plugin exited 0');
 console.log(`${pad('case', 62)} ${pad('expected', 18)} ${pad('plugin', 18)} ${pad('exit', 5)} verdict`);
 for (const c of gate2Cases) {
   const got = runHook(path.join(PLUGIN_HOOKS, GATE2), c.payload, projectNoTicket);
+  let ok = record(got.decision === c.expect);
+  ok = record(got.exit === 0) && ok;
+  const verdict = ok ? 'PASS' : 'FAIL';
+  const gotExit = got.exit === null ? 'null' : String(got.exit);
+  console.log(`${pad(c.name, 62)} ${pad(c.expect, 18)} ${pad(got.decision, 18)} ${pad(gotExit, 5)} ${verdict}`);
+  if (verdict === 'FAIL') console.log(`    plugin reason: ${got.reason || '(none)'}`);
+}
+
+console.log('');
+console.log('== Gate 2 mode - enforcement.dispatchGate (plugin only: the reference predates the mode key) ==');
+console.log('per case: [1] plugin decision matches the expectation  [2] plugin exited 0');
+console.log(`${pad('case', 62)} ${pad('expected', 18)} ${pad('plugin', 18)} ${pad('exit', 5)} verdict`);
+for (const c of gate2ModeCases) {
+  const got = runHook(path.join(PLUGIN_HOOKS, GATE2), c.payload, c.projectDir);
   let ok = record(got.decision === c.expect);
   ok = record(got.exit === 0) && ok;
   const verdict = ok ? 'PASS' : 'FAIL';

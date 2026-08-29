@@ -162,6 +162,9 @@ export async function runInterview({ schema, ask, installed = null }) {
   output.write('\n-- loop --\n');
   await integer('loop.correctionRoundsCap', 'Correction-round cap (the operator lifts it, never the COO)');
   await yesNo('enforcement.routeWriteGuard', 'Gate 3: block main-session code writes while an R2/R3 ticket is open');
+  await choice('enforcement.dispatchGate',
+    'Gate 2: ask on every Writer dispatch, or only when the brief\'s Ticket: <REF> is in no active PLAN',
+    ['always', 'off-plan']);
 
   output.write('\n-- verify --\n');
   const commands = [];

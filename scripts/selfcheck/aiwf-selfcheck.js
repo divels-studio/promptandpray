@@ -255,7 +255,7 @@ function writeFixture(root, pluginVersion) {
       qal: { enabled: true, engine: 'codex', model: 'codex-atom-1', effort: 'high' },
     },
     loop: { correctionRoundsCap: 2 },
-    enforcement: { routeWriteGuard: true },
+    enforcement: { routeWriteGuard: true, dispatchGate: 'always' },
     verify: {
       commands: [{ name: 'unit', run: 'npm test', cwd: '.' }],
       e2e: { enabled: true, cwd: 'app', runner: 'npx playwright test', specDir: 'e2e', outputDir: 'test-results/aiwf-qa' },
@@ -403,10 +403,13 @@ function sectionGate1Identity(tmpRoot) {
 }
 
 // ---------------------------------------------------------------------------
-// SECTION 2 - Gate 2: every Writer dispatch is an operator click
+// SECTION 2 - Gate 2: the dispatch gate in its factory mode (a project with no config)
 // ---------------------------------------------------------------------------
 function sectionGate2(tmpRoot) {
-  section('GATE 2 - every Writer dispatch raises a native Yes/No dialog');
+  section('GATE 2 - in its factory mode, every Writer dispatch raises a native Yes/No dialog');
+  // The project dir here carries NO aiwf.config.json, so this whole section is the FACTORY posture
+  // ("always"). The configured modes - and the fact that only an exact "off-plan" leaves this one -
+  // are the next section's subject.
   const root = path.join(tmpRoot, 'g2');
   fs.mkdirSync(root, { recursive: true });
   const envelope = (toolInput, extra) => Object.assign({
@@ -450,6 +453,198 @@ function sectionGate2(tmpRoot) {
     check('empty stdin -> ASK via the fail-to-ask wrapper (NOT deny)',
       ask(r) && r.reason.includes('fail-to-ask'), r.reason.slice(0, 60));
   }
+}
+
+// ---------------------------------------------------------------------------
+// SECTION 2b - Gate 2's per-project MODE (enforcement.dispatchGate)
+// ---------------------------------------------------------------------------
+// The mode is read from the PROJECT's aiwf.config.json, so every case here builds a project dir and
+// varies the config and the plans directory. Two directions are under test at once:
+//   - the SAFE one, exactly as in the Gate 3 toggle: anything that is not the literal string
+//     "off-plan" - no config, a corrupt one, a missing key, the wrong case - leaves the gate asking
+//     on every Writer dispatch. A broken config costs clicks, never silence.
+//   - the OFF-PLAN one: the single silent path is "the brief names a ticket that really is in an
+//     active PLAN". Every other outcome - no ticket line, a ref in no plan, a near-miss ref, an
+//     unreadable plans directory - is an ask, and nothing here ever denies.
+// Every check has a flipping counterpart in the same fixture family (a pair that differs by one
+// fact), so no path passes by being unreachable.
+function sectionGate2Mode(tmpRoot) {
+  section('GATE 2 MODE - enforcement.dispatchGate: off-plan is silent ONLY on a ticket in an active PLAN');
+  let n = 0;
+  // `configRaw === null` writes no config file; `plans === null` builds no plans directory at all.
+  // A `plans` entry is { dir: 'a/b/c', files: { 'PLAN_X.md': <text> | null } }, where a null text
+  // makes that name a DIRECTORY instead of a file.
+  const mkProject = (name, configRaw, plans) => {
+    const root = path.join(tmpRoot, `g2m-${name}-${n += 1}`);
+    fs.mkdirSync(path.join(root, '.claude', 'aiwf-native'), { recursive: true });
+    if (configRaw !== null) fs.writeFileSync(path.join(root, '.claude', 'aiwf-native', 'aiwf.config.json'), configRaw);
+    for (const p of (plans || [])) {
+      const dir = path.join(root, ...p.dir.split('/'));
+      fs.mkdirSync(dir, { recursive: true });
+      for (const [file, text] of Object.entries(p.files || {})) {
+        if (text === null) fs.mkdirSync(path.join(dir, file), { recursive: true }); // a DIRECTORY named PLAN_*.md
+        else fs.writeFileSync(path.join(dir, file), text);
+      }
+    }
+    return root;
+  };
+  const cfg = (enforcement, paths) => JSON.stringify(Object.assign(
+    { project: { name: 'Mode' }, enforcement }, paths === undefined ? {} : { paths }));
+  const mode = (m) => ({ routeWriteGuard: true, dispatchGate: m });
+  const DEFAULT_PLANS = 'docs/backlogs/active';
+  const planWith = (ref) => `# PLAN DEMO\n\n## ${ref} - the ticket this plan carries\n\nBody.\n`;
+  const onPlan = (dir) => [{ dir, files: { 'PLAN_DEMO.md': planWith('DEMO-1') } }];
+
+  const D = (root, prompt, subagentType) => runHook(GATE2, {
+    session_id: '9a1c1a44-0000-4000-8000-000000000000', permission_mode: 'default',
+    hook_event_name: 'PreToolUse', tool_name: 'Agent',
+    tool_input: { description: 'Implement a ticket', prompt, subagent_type: subagentType || 'writer', model: 'opus' },
+    tool_use_id: 'toolu_02selfcheckDispatchMode',
+  }, root);
+  const silent = (r) => r.decision === 'allow(passthrough)' && r.exit === 0;
+  const ask = (r) => r.decision === 'ask' && r.exit === 0;
+  const TICKET = 'Ticket: DEMO-1\n\nImplement the thing.';
+
+  // --- the one silent path, and the four asks that surround it --------------------------------
+  const offPlan = mkProject('offplan', cfg(mode('off-plan')), onPlan(DEFAULT_PLANS));
+  check('off-plan + the ref IS in an active PLAN -> SILENT passthrough (the common path)',
+    silent(D(offPlan, TICKET)));
+  {
+    const r = D(offPlan, 'Ticket: DEMO-2\n\nImplement the thing.');
+    check('off-plan + a ref in NO active PLAN -> ASK naming the ref and the directory searched',
+      ask(r) && r.reason.includes('DEMO-2') && r.reason.includes('PLAN_*.md'), r.reason.slice(0, 70));
+  }
+  {
+    const r = D(offPlan, 'Implement the thing. No ticket line anywhere.');
+    check('off-plan + no "Ticket: <REF>" line at all -> ASK', ask(r) && r.reason.includes('no ticket'), r.reason.slice(0, 70));
+  }
+  check('off-plan + the ref only inside a PROSE line -> ASK (the marker must be a line of its own)',
+    ask(D(offPlan, 'This one relates to Ticket: DEMO-1 as mentioned above.')));
+  check('off-plan + a NON-WRITER subagent -> silent, whatever its prompt says (the gate judges the Writer only)',
+    silent(D(offPlan, 'Ticket: DEMO-2', 'reviewer')));
+
+  // WHOLE-IDENTIFIER match, not substring and not `\b`: each fixture below holds ONE ref that a
+  // weaker matcher would let clear another. `-` is not a regex word character, so `\bDEMO-1\b` finds
+  // a boundary inside "DEMO-1-EXTRA" and after the "-" of "X-DEMO-1"; the last pair is the mirror
+  // case, a ref that itself ends in a dash. Every one of them is a PAIR - the same plan, the ref
+  // that must clear it and the ref that must not - so neither half can pass by being unreachable.
+  const onePlan = (name, ref) => mkProject(name, cfg(mode('off-plan')), [{ dir: DEFAULT_PLANS, files: { 'PLAN_DEMO.md': planWith(ref) } }]);
+  const brief = (ref) => `Ticket: ${ref}\n\nImplement the thing.`;
+
+  const nearMiss = onePlan('nearmiss', 'DEMO-10');
+  check('off-plan + brief says DEMO-1 while the plan holds only DEMO-10 -> ASK (longer NUMERIC tail)',
+    ask(D(nearMiss, TICKET)));
+  check('off-plan + that same plan and a brief that says DEMO-10 -> silent (the control for the line above)',
+    silent(D(nearMiss, brief('DEMO-10'))));
+
+  const suffixDash = onePlan('suffixdash', 'DEMO-1-EXTRA');
+  check('off-plan + brief says DEMO-1 while the plan holds only DEMO-1-EXTRA -> ASK (a dashed SUFFIX is not a boundary)',
+    ask(D(suffixDash, TICKET)));
+  check('off-plan + that same plan and a brief that says DEMO-1-EXTRA -> silent (the control)',
+    silent(D(suffixDash, brief('DEMO-1-EXTRA'))));
+
+  const prefixDash = onePlan('prefixdash', 'X-DEMO-1');
+  check('off-plan + brief says DEMO-1 while the plan holds only X-DEMO-1 -> ASK (a dashed PREFIX is not a boundary)',
+    ask(D(prefixDash, TICKET)));
+  check('off-plan + that same plan and a brief that says X-DEMO-1 -> silent (the control)',
+    silent(D(prefixDash, brief('X-DEMO-1'))));
+
+  // The ref grammar admits a trailing dash, so the boundary has to work on that side too.
+  check('off-plan + the ref ABC- present EXACTLY in the plan -> silent (a trailing dash still matches itself)',
+    silent(D(onePlan('trailingdash', 'ABC-'), brief('ABC-'))));
+  check('off-plan + the ref ABC- while the plan holds only ABC-X -> ASK (the control: the dash is not the end of the identifier)',
+    ask(D(onePlan('trailingdashx', 'ABC-X'), brief('ABC-'))));
+
+  {
+    const noDir = mkProject('noplansdir', cfg(mode('off-plan')), null);
+    const r = D(noDir, TICKET);
+    check('off-plan + the active PLAN directory does not exist -> ASK naming it (never a silent clear)',
+      ask(r) && r.reason.includes('missing or unreadable'), r.reason.slice(0, 70));
+  }
+
+  // --- paths.plansDir is really READ ----------------------------------------------------------
+  const CUSTOM = 'docs/plans/active';
+  const custom = mkProject('custom', cfg(mode('off-plan'), { plansDir: 'docs/plans' }), onPlan(CUSTOM));
+  check('off-plan + a custom paths.plansDir, plan in THAT directory -> silent (the configured path is used)',
+    silent(D(custom, TICKET)));
+  const customWrongPlace = mkProject('custom-wrongplace', cfg(mode('off-plan'), { plansDir: 'docs/plans' }), onPlan(DEFAULT_PLANS));
+  check('off-plan + a custom paths.plansDir while the plan sits in the DEFAULT one -> ASK (the control: the value is not ignored)',
+    ask(D(customWrongPlace, TICKET)));
+  const noPlansKey = mkProject('noplanskey', cfg(mode('off-plan'), { scratchDir: '.aiwf' }), onPlan(DEFAULT_PLANS));
+  check('off-plan + paths block WITHOUT plansDir -> the schema default docs/backlogs is used (silent)',
+    silent(D(noPlansKey, TICKET)));
+  const emptyPlansKey = mkProject('emptyplanskey', cfg(mode('off-plan'), { plansDir: '   ' }), onPlan(DEFAULT_PLANS));
+  check('off-plan + a blank plansDir value -> the schema default, not an empty path (silent)',
+    silent(D(emptyPlansKey, TICKET)));
+
+  // --- one unusable PLAN entry must not decide for the others ---------------------------------
+  {
+    // A DIRECTORY named PLAN_*.md is the deterministic, cross-platform form of "an entry that is not
+    // a readable plan". Alphabetically FIRST, so the skip really happens before the match.
+    const withDir = mkProject('plandir', cfg(mode('off-plan')),
+      [{ dir: DEFAULT_PLANS, files: { 'PLAN_AAA.md': null, 'PLAN_ZZZ.md': planWith('DEMO-1') } }]);
+    check('off-plan + a DIRECTORY named PLAN_*.md next to a real plan -> skipped, the real plan still matches (silent)',
+      silent(D(withDir, TICKET)));
+    const onlyDir = mkProject('plandir-only', cfg(mode('off-plan')), [{ dir: DEFAULT_PLANS, files: { 'PLAN_AAA.md': null } }]);
+    check('off-plan + that directory ALONE -> ASK (the control: it never counts as a plan that cleared the ref)',
+      ask(D(onlyDir, TICKET)));
+  }
+  {
+    // The per-file read failure, exercised only where the platform can really produce one. chmod is
+    // advisory on Windows (it toggles the read-only attribute, which does not stop a read), so the
+    // condition is PROVEN here rather than assumed - and when it cannot be produced, this is a NOTE,
+    // never a pass.
+    const withBad = mkProject('planunreadable', cfg(mode('off-plan')),
+      [{ dir: DEFAULT_PLANS, files: { 'PLAN_AAA.md': planWith('DEMO-1'), 'PLAN_ZZZ.md': planWith('DEMO-1') } }]);
+    const onlyBad = mkProject('planunreadable-only', cfg(mode('off-plan')),
+      [{ dir: DEFAULT_PLANS, files: { 'PLAN_AAA.md': planWith('DEMO-1') } }]);
+    const bad = [path.join(withBad, ...DEFAULT_PLANS.split('/'), 'PLAN_AAA.md'),
+      path.join(onlyBad, ...DEFAULT_PLANS.split('/'), 'PLAN_AAA.md')];
+    let reallyUnreadable = true;
+    for (const f of bad) {
+      try { fs.chmodSync(f, 0o000); fs.readFileSync(f, 'utf8'); reallyUnreadable = false; } catch (e) { /* unreadable, as wanted */ }
+    }
+    if (!reallyUnreadable) {
+      note('an UNREADABLE PLAN file is skipped while the others still decide',
+        'this platform cannot make a file unreadable to its own owner (chmod is advisory here), so the read-failure branch was not exercised; the PLAN_*.md-is-a-directory pair above covers the unusable-entry branch that IS reproducible everywhere');
+    } else {
+      check('off-plan + an UNREADABLE plan next to a readable one that names the ref -> silent (the bad file is skipped)',
+        silent(D(withBad, TICKET)));
+      check('off-plan + the unreadable plan ALONE -> ASK (the control: an unreadable plan never clears a ref)',
+        ask(D(onlyBad, TICKET)));
+    }
+    for (const f of bad) { try { fs.chmodSync(f, 0o600); } catch (e) { /* best-effort, for the cleanup */ } }
+  }
+
+  // --- every non-"off-plan" state is the ALWAYS mode -------------------------------------------
+  // Each of these carries a plan that DOES hold the ref, so the only reason they ask is the mode
+  // itself - the pair with the first check of this section is what proves that.
+  const always = mkProject('always', cfg(mode('always')), onPlan(DEFAULT_PLANS));
+  check('mode "always" + the ref IS in an active PLAN -> ASK anyway (the factory posture)', ask(D(always, TICKET)));
+  check('NO config file + the ref IS in an active PLAN -> ASK (a project with no config layer is "always")',
+    ask(D(mkProject('noconfig', null, onPlan(DEFAULT_PLANS)), TICKET)));
+  check('CORRUPT config -> ASK (a broken config is not a way to make a gate quieter)',
+    ask(D(mkProject('corrupt', '{ not json ', onPlan(DEFAULT_PLANS)), TICKET)));
+  check('config is a JSON array -> ASK (not a plain object = factory posture)',
+    ask(D(mkProject('array', '[]', onPlan(DEFAULT_PLANS)), TICKET)));
+  check('config without an enforcement block -> ASK (missing key = "always")',
+    ask(D(mkProject('nokey', JSON.stringify({ project: { name: 'Mode' } }), onPlan(DEFAULT_PLANS)), TICKET)));
+  check('dispatchGate "OFF-PLAN" (wrong case) -> ASK (exact string match, no case folding)',
+    ask(D(mkProject('wrongcase', cfg(mode('OFF-PLAN')), onPlan(DEFAULT_PLANS)), TICKET)));
+  check('dispatchGate "off-plan " (trailing space) -> ASK (no trimming of the mode value)',
+    ask(D(mkProject('spaced', cfg(mode('off-plan ')), onPlan(DEFAULT_PLANS)), TICKET)));
+  check('dispatchGate true (a boolean) -> ASK (no coercion)',
+    ask(D(mkProject('boolmode', cfg(mode(true)), onPlan(DEFAULT_PLANS)), TICKET)));
+  check('dispatchGate null -> ASK (only the exact string "off-plan" leaves the always mode)',
+    ask(D(mkProject('nullmode', cfg(mode(null)), onPlan(DEFAULT_PLANS)), TICKET)));
+
+  // --- the fail direction is unchanged in off-plan mode ----------------------------------------
+  {
+    const r = runHook(GATE2, '', offPlan);
+    check('off-plan + empty stdin -> ASK via the fail-to-ask wrapper (NEVER deny, even with a mode configured)',
+      ask(r) && r.reason.includes('fail-to-ask') && r.decision !== 'deny', r.reason.slice(0, 60));
+  }
+  check('off-plan + a non-object payload -> ASK, not deny', ask(runHook(GATE2, '[]', offPlan)));
 }
 
 // ---------------------------------------------------------------------------
@@ -3304,6 +3499,7 @@ function main() {
   try {
     sectionGate1Identity(tmpRoot);
     sectionGate2(tmpRoot);
+    sectionGate2Mode(tmpRoot);
     sectionGate3(tmpRoot);
     sectionGate3Toggle(tmpRoot);
     sectionConfigSchema(tmpRoot);
@@ -3325,7 +3521,10 @@ function main() {
   const failed = results.filter((r) => !r.ok);
   console.log('\n---- COVERAGE (honest) ----');
   console.log('EXECUTED: both enforcement hooks, run as the harness runs them (identity matrix, the two');
-  console.log('captured live payloads, the dispatch gate\'s ask/passthrough matrix, and the route-state');
+  console.log('captured live payloads, the dispatch gate\'s ask/passthrough matrix in its factory mode AND its');
+  console.log('enforcement.dispatchGate off-plan mode - where the only silent path is a Ticket: <REF> line whose');
+  console.log('ref is really in an active PLAN, the configured paths.plansDir is proven to be read, and every');
+  console.log('non-"off-plan" state of the key asks anyway - and the route-state');
   console.log('guard across R2/R3/unusable/cleared/absent state, and its enforcement.routeWriteGuard toggle,');
   console.log('whose every failure mode leaves the guard ARMED) - the role resolver at its real entrypoint,');
   console.log('including the claude factory fallback and the qal enabled gate - and the config validator at');

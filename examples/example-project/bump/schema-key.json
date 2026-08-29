@@ -1,9 +1,9 @@
 {
   "$comment": "The schema half of the simulated version bump. A real plugin release that introduces a config key ships the migration AND the schema that admits it, in the same payload - so this file is not a test convenience, it is the other half of the same release. The cycle driver splices `schema` into schema/aiwf.config.schema.json under properties.<at>.properties.<property> of the copied payload before it validates the payload. No `default` is declared here on purpose: the DEFAULT lives in the migration's add-config-key op, which is what makes the migration do something rather than be satisfied by the schema's own defaults on a fresh install.",
   "at": "enforcement",
-  "property": "dispatchGate",
+  "property": "exampleToggle",
   "schema": {
     "type": "boolean",
-    "description": "Gate 2. Introduced by the 0002_example-bump migration; the operator is asked for its value while the migration runs."
+    "description": "A demonstration-only enforcement toggle. Introduced by the 0002_example-bump migration; the operator is asked for its value while the migration runs. It is deliberately NOT a key the shipped payload carries - a key the real schema already admits could not demonstrate a migration adding one."
   }
 }

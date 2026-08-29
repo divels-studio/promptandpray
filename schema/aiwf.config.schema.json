@@ -270,8 +270,14 @@
     "enforcement": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["routeWriteGuard"],
+      "required": ["routeWriteGuard", "dispatchGate"],
       "properties": {
+        "dispatchGate": {
+          "type": "string",
+          "enum": ["always", "off-plan"],
+          "default": "always",
+          "description": "Gate 2. \"always\" (or a config/key the hook cannot read) = every Writer dispatch raises the native Yes/No dialog. \"off-plan\" = a dispatch whose brief carries a Ticket: <REF> line naming a ticket found in <plansDir>/active/PLAN_*.md passes silently, while a missing line, a ref in no active PLAN or an unreadable plans directory raises the dialog. Only the exact string \"off-plan\" leaves the always mode; Gate 1 (non-writer subagents cannot write) is never affected by this key."
+        },
         "routeWriteGuard": {
           "type": "boolean",
           "default": true,

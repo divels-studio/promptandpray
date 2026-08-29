@@ -4,10 +4,10 @@
   "operations": [
     {
       "op": "add-config-key",
-      "path": "enforcement.dispatchGate",
+      "path": "enforcement.exampleToggle",
       "default": true,
       "askOperator": true,
-      "question": "Keep the native Yes/No dialog on every Writer dispatch?"
+      "question": "Keep the example toggle this simulated release introduces?"
     },
     {
       "op": "rerender-managed-region",

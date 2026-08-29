@@ -73,7 +73,7 @@ exit 1 - and the project is byte-identical afterwards
 
 ```json
 {
-  "0002_example-bump/0/enforcement.dispatchGate": { "kind": "answer", "value": false },
+  "0002_example-bump/0/enforcement.exampleToggle": { "kind": "answer", "value": false },
   "0002_example-bump/1/CLAUDE.md#aiwf-core": { "kind": "conflict", "resolution": "keep-mine" }
 }
 ```

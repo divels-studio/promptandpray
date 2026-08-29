@@ -60,9 +60,10 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
 ## Step 2 - Interview
 
 Run the interview. It asks only the keys with an operator character - project identity, OS channel,
-operator language and role nicknames, the roles (engine / model / effort each), the VERIFY commands,
-the E2E surface, the paths, the product-boundary lines - and offers every default from the schema,
-or from the installed config on a re-run.
+operator language and role nicknames, the roles (engine / model / effort each), the correction-round
+cap, the two enforcement gates, the VERIFY commands, the E2E surface, the paths, the
+product-boundary lines - and offers every default from the schema, or from the installed config on a
+re-run.
 
 ```powershell
 node "${CLAUDE_PLUGIN_ROOT}/scripts/setup/interview.mjs" --project-root "<root>"
@@ -72,11 +73,15 @@ Non-interactive (CI, or a scripted install): put the same answers in a JSON file
 `--answers-file <path>`. Both paths converge on the same generator, so a scripted install cannot
 drift from an interactive one.
 
-Two constraints worth stating before the operator answers:
+Three constraints worth stating before the operator answers:
 
 - a **claude**-hosted reviewer/qa takes a TIER ALIAS as its model (`fable|opus|sonnet|haiku`) - a
   full model id is valid only for the Writer's own frontmatter;
-- `paths.plansDir` is the **parent** of `active/` and `archive/`; setup creates both.
+- `paths.plansDir` is the **parent** of `active/` and `archive/`; setup creates both;
+- `enforcement.dispatchGate` has exactly two values. `always` (the factory one) raises the Yes/No
+  dialog on **every** Writer dispatch. `off-plan` raises it only when the brief's `Ticket: <REF>`
+  line names no ticket in `<plansDir>/active/PLAN_*.md` - quieter, and it only means anything in a
+  project that really keeps its plans there.
 
 ## Step 3 - Dry run, then generate
 

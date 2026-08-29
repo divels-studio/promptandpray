@@ -18,7 +18,7 @@
     "qal": { "enabled": false, "engine": "codex", "model": "unset", "effort": "high" }
   },
   "loop": { "correctionRoundsCap": 2 },
-  "enforcement": { "routeWriteGuard": true },
+  "enforcement": { "routeWriteGuard": true, "dispatchGate": "always" },
   "verify": {
     "commands": [
       { "name": "syntax", "run": "node --check src/hello.mjs", "cwd": "." }

@@ -39,7 +39,8 @@ How you execute is **route-conditional**:
   `/pnp:review`, then `/pnp:qa` for observable runtime/UI behavior, then the operator's commit
   click. **Never pass `model` to the Agent tool when dispatching the Writer** - its model is pinned
   in the agent's frontmatter, and the override silently replaces that pin with a tier alias
-  (payload `docs/LOOP.md`).
+  (payload `docs/LOOP.md`). Every Writer brief carries `Ticket: <REF>` on a **line of its own** -
+  Gate 2 reads that line (see below).
 - **Doctrine preflight:** before the FIRST Writer dispatch of a session - and before authoring any
   R2/R3 ticket brief - read payload `docs/WORKFLOW.md`, payload `docs/LOOP.md` AND
   `{{config.paths.overridesDoc}}` IN FULL. This file is a thin entry point; knowing a rule's
@@ -49,8 +50,11 @@ How you execute is **route-conditional**:
   `/pnp:work` (ad-hoc work under full doctrine), or no command for a free conversation (payload
   `docs/OPERATOR_PROTOCOL.md`).
 
-Approvals are native permission dialogs: every Writer dispatch (Gate 2), commit, and
-push/merge/rebase (plus destructive commands) surface a visual **Yes/No**. The commit dialog IS the
+Approvals are native permission dialogs: the Writer dispatch (Gate 2), commit, and
+push/merge/rebase (plus destructive commands) surface a visual **Yes/No**. Gate 2 runs in this
+project's configured mode, `{{config.enforcement.dispatchGate}}`: `always` = a dialog on every
+Writer dispatch; `off-plan` = silent when the brief's `Ticket: <REF>` names a ticket found in
+`{{config.paths.plansDir}}/active/PLAN_*.md`, and a dialog when it names none. The commit dialog IS the
 commit approval - the operator clicks and types nothing. Push/merge/rebase additionally require the
 operator's **explicit word** in chat (the doctrine gate) on top of their dialog. All of this holds
 for matching command forms, in a normal permission mode; accident-grade, see payload `docs/LOOP.md`

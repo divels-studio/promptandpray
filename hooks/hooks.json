@@ -1,5 +1,5 @@
 {
-  "description": "PromptAndPray enforcement gates: Gate 1 (non-writer subagents cannot write) and Gate 2 (every Writer dispatch is an operator click).",
+  "description": "PromptAndPray enforcement gates: Gate 1 (non-writer subagents cannot write) and Gate 2 (the Writer dispatch gate - a click on every dispatch, or only on one the active PLANs cannot account for, per enforcement.dispatchGate).",
   "hooks": {
     "PreToolUse": [
       {

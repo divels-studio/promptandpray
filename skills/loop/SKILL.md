@@ -62,7 +62,10 @@ and `docs/LOOP.md` (the one-page native mapping).
    `subagent_type: "writer"`). Give it the outcome, scope, acceptance criteria, risk threshold,
    and stop condition. Tests are part of implementation, not polish. The Writer returns
    `DONE` (+ diff + tests + VERIFY output with exact exit codes) or `BLOCKED: <reason>`.
-   Every Writer dispatch surfaces a native **Yes/No** dialog (Gate 2) - the operator clicks.
+   Carry `Ticket: <REF>` on a line of its own in the brief. Gate 2 then decides in the project's
+   configured mode (`enforcement.dispatchGate`): `always` = every dispatch surfaces a native
+   **Yes/No** dialog and the operator clicks; `off-plan` = a ref found in
+   `{{config.paths.plansDir}}/active/PLAN_*.md` passes silently and everything else raises the dialog.
 3. **Review.** Run `/pnp:review <TICKET_REF>` over the Writer's diff.
 4. **QA (conditional).** If - and only if - the ticket declares observable runtime/UI behavior,
    run `/pnp:qa <TICKET_REF>`. Otherwise skip QA entirely.
@@ -104,7 +107,8 @@ and `docs/LOOP.md` (the one-page native mapping).
   Gate 1 catches the Edit/Write family and the boundary is tool-availability + convention + git
   reversibility, with NO OS cell - the hard OS boundary applies only on the codex read-only path.
 - No new state files or counters - this loop is convention + the native click-based permission
-  gates plus two tiny stateless hooks (Gate 1, Gate 2).
+  gates plus two tiny stateless hooks (Gate 1, Gate 2). Gate 2 reads the project config and the
+  active PLANs; it writes nothing and remembers nothing between dispatches.
 - The round cap is `{{config.loop.correctionRoundsCap}}`; the stop condition and risk threshold are
   mandatory in every R2/R3 brief.
 - Push/merge/rebase run from the session only after the operator's explicit word **and** a native

@@ -543,7 +543,7 @@ try {
   // -- 7. apply ---------------------------------------------------------------
   step('7 - apply, answering the new config key and keeping the hand-edited region');
   const resolutionsHash = writeJsonExclusive(RESOLUTIONS, {
-    [`${bump.migration}/0/enforcement.dispatchGate`]: { kind: 'answer', value: false },
+    [`${bump.migration}/0/enforcement.exampleToggle`]: { kind: 'answer', value: false },
     [`${bump.migration}/1/${CLAUDE_KEY}`]: { kind: 'conflict', resolution: 'keep-mine' },
   });
   recordCreatedFile('resolutions.json', resolutionsHash);
@@ -562,7 +562,7 @@ try {
       entry.override === true && typeof entry.upstream === 'string' && entry.upstream !== entry.local,
       `override=${entry.override}`);
     check('add-config-key applied the OPERATOR\'s answer, not the op\'s default (true)',
-      cfg.enforcement && cfg.enforcement.dispatchGate === false, JSON.stringify(cfg.enforcement));
+      cfg.enforcement && cfg.enforcement.exampleToggle === false, JSON.stringify(cfg.enforcement));
     check('reconcile-ask-ruleset applied', apply.out.includes('ask ruleset reconciled'), tail(apply, 6));
     check('and it left the project\'s own foreign rule alone', ask.includes(FOREIGN_RULE));
     check('the note reached the CHANGES report, with its docRefs', !!changes && changes.includes('example-bump') && changes.includes('docs/LOOP.md'));

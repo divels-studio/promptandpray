@@ -106,6 +106,12 @@ Session summary: *"The dispatch was blocked by AIWF gate 2 (\"Writer dispatch\")
 starting the writer requires operator approval, so the subagent never ran and no
 reply was produced."* - the hook's own reason text, surfaced through the harness.
 
+Note on the mode: the throwaway repo carried no `aiwf.config.json`, so this run
+observed Gate 2 in its factory `always` mode - which is exactly the state a
+project with no config layer is in. The `off-plan` mode of
+`enforcement.dispatchGate` was added later and is asserted by the expectation
+tables in `run-spikes.mjs` and by the self-check, not by this live observation.
+
 Note for future readers: the result JSON reports this tool as `"Task"`, while the
 `PreToolUse` matcher and payload call it `"Agent"`. The `"Agent"` matcher is the
 correct one - the hook fired, and its internal `tool_name !== 'Agent'` guard did

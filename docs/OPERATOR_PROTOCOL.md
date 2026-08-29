@@ -34,10 +34,15 @@ The rules do not rely on the session "remembering" them - they are enforced mech
 - **Gate 1 (hook)** - the Reviewer and QA are physically read-only: the PreToolUse mutation guard
   blocks the Edit/Write family from every subagent except the Writer, and their tool allowlist is
   `Read, Grep, Glob` only.
-- **Gate 2 (hook)** - every Writer dispatch through the Agent tool surfaces a native **Yes/No**
-  dialog at your end, so no reviewed (R2/R3) implementation starts without your click. It gates the
-  Writer path, not every write: routine R1 work and the session's own docs edits are main-session
-  work and do not raise this dialog - Gate 3 below is what bounds them while a ticket is open.
+- **Gate 2 (hook)** - a Writer dispatch through the Agent tool surfaces a native **Yes/No** dialog
+  at your end. You choose how often, in `enforcement.dispatchGate`: `always` (the factory value) is
+  a dialog on **every** dispatch, so no reviewed (R2/R3) implementation starts without your click;
+  `off-plan` is a dialog only when the brief's `Ticket: <REF>` line names no ticket in an active
+  PLAN - work nobody planned - and silence otherwise. Anything the hook cannot read (no config, a
+  broken one, a value it does not know) behaves as `always`: a broken config costs you clicks, never
+  silence. Either way it gates the Writer path, not every write: routine R1 work and the session's
+  own docs edits are main-session work and do not raise this dialog - Gate 3 below is what bounds
+  them while a ticket is open.
 - **Gate 3 (hook)** - while a ticket is dispatched, the main session cannot edit code: with an open
   R2/R3 route recorded in `.aiwf/route-state.json` it may write only docs, `.aiwf/` and root
   `*.md`. Code goes to the Writer, where the review gates are.

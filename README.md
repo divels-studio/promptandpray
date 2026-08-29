@@ -8,7 +8,7 @@ Routine work stays direct - the loop is a route you choose, not a ceremony every
 The part that is not advice: **every operator gate that CAN be a native dialog IS a native dialog.**
 Writer dispatch, commit, push and the destructive commands surface Claude Code's own Yes/No
 permission prompt, and two PreToolUse hooks stand behind them - one deciding who may write at all,
-one turning a Writer dispatch into a click - so the protection does not depend on a model
+one deciding which Writer dispatch becomes a click - so the protection does not depend on a model
 remembering the rules. What the hooks cannot reach - a mutation performed through a shell command,
 the roles' own judgment - stays doctrine, and this repository says so at each such place instead of
 claiming a guarantee it does not have.
@@ -29,8 +29,10 @@ What is here:
   date cannot be the two that refuse to run.
 - **Two enforcement hooks** (`hooks/hooks.json`): the mutation guard - Gate 1, non-writer subagents
   cannot use the Edit/Write family, plus Gate 3, the route-state write guard that keeps the main
-  session out of code while an R2/R3 ticket is open - and the dispatch gate, Gate 2, which turns
-  every Writer dispatch into an operator click.
+  session out of code while an R2/R3 ticket is open - and the dispatch gate, Gate 2, which puts the
+  operator in the way of a Writer dispatch: a click on every one of them, or (per
+  `enforcement.dispatchGate`) only on a dispatch whose `Ticket: <REF>` line names no ticket in an
+  active PLAN.
 - **The role resolver and the Codex wrappers** (`scripts/native/ps/` on Windows,
   `scripts/native/sh/` on Linux/macOS - two channels that mirror each other): one review role
   resolved to

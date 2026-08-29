@@ -125,7 +125,7 @@ const baseAnswers = (overrides = {}) => ({
     qal: { enabled: false, engine: 'codex', model: 'unset', effort: 'high' },
   },
   loop: { correctionRoundsCap: 2 },
-  enforcement: { routeWriteGuard: true },
+  enforcement: { routeWriteGuard: true, dispatchGate: 'always' },
   verify: { commands: [{ name: 'unit', run: 'npm test', cwd: '.' }] },
   paths: { scratchDir: '.aiwf', plansDir: 'docs/backlogs', overridesDoc: 'docs/ai/PROJECT_OVERRIDES.md' },
   review: { productBoundaryChecks: [] },
@@ -163,7 +163,7 @@ const askRules = (projectDir) => ((readJson(at(projectDir, SETTINGS_REL)) || {})
 // really is.
 const FIXTURE_NOTE = { op: 'note', id: 'fixture-note', text: 'The fixture migration exercises every operation type.', docRefs: ['docs/LOOP.md#commit-gate'] };
 const ALL_OPS = [
-  { op: 'add-config-key', path: 'enforcement.dispatchGate', default: true, askOperator: true, question: 'Keep the native Yes/No dialog on every Writer dispatch?' },
+  { op: 'add-config-key', path: 'enforcement.exampleToggle', default: true, askOperator: true, question: 'Keep the example toggle this fixture release introduces?' },
   { op: 'rerender-managed-region', file: 'CLAUDE.md', region: 'aiwf-core', template: 'templates/CLAUDE.md.tmpl#aiwf-core' },
   { op: 'rerender-managed-region', file: WRITER_REL, region: null, template: 'templates/agents/writer.md.tmpl' },
   { op: 'reconcile-ask-ruleset', ruleset: 'templates/settings.ask-ruleset.json' },
@@ -173,10 +173,10 @@ const NEW_ASK_RULE = 'Bash(pnp-fixture-new:*)';
 const DROPPED_ASK_RULE = 'Bash(git stash:*)';
 
 /** Adds the config key the fixture migration introduces, so the bumped payload's schema admits it. */
-function addDispatchGateToSchema(dir) {
+function addExampleToggleToSchema(dir) {
   patch(at(dir, 'schema/aiwf.config.schema.json'),
     '"routeWriteGuard": {',
-    '"dispatchGate": { "type": "boolean", "description": "fixture key added by a migration" },\n        "routeWriteGuard": {');
+    '"exampleToggle": { "type": "boolean", "description": "fixture key added by a migration" },\n        "routeWriteGuard": {');
 }
 /** Makes the payload RENDER differently, which is half of the conflict predicate. */
 function changeTemplates(dir) {
@@ -215,11 +215,11 @@ function makePayload(name, { version, migrations, tweak = null }) {
 const P020 = makePayload('020', {
   version: '0.2.0',
   migrations: [{ id: '0002_fixture', version: '0.2.0', ops: ALL_OPS }],
-  tweak: (dir) => { addDispatchGateToSchema(dir); changeTemplates(dir); changeRuleset(dir); },
+  tweak: (dir) => { addExampleToggleToSchema(dir); changeTemplates(dir); changeRuleset(dir); },
 });
 
 const FULL_RESOLUTIONS = {
-  '0002_fixture/0/enforcement.dispatchGate': { kind: 'answer', value: false },
+  '0002_fixture/0/enforcement.exampleToggle': { kind: 'answer', value: false },
   '0002_fixture/1/CLAUDE.md#aiwf-core': { kind: 'conflict', resolution: 'take-new' },
   [`0002_fixture/2/${WRITER_REL}`]: { kind: 'conflict', resolution: 'take-new' },
 };
@@ -265,7 +265,7 @@ const upgraded = project('upgrade');
   check('the version stamps moved together', bk.installedPluginVersion === '0.2.0' && bk.lastMigrationApplied === '0002_fixture',
     `${bk.installedPluginVersion} / ${bk.lastMigrationApplied}`);
   check('the journal is cleared', bk.migrationJournal === null);
-  check('add-config-key wrote the OPERATOR answer, not the default', cfg.enforcement.dispatchGate === false, JSON.stringify(cfg.enforcement));
+  check('add-config-key wrote the OPERATOR answer, not the default', cfg.enforcement.exampleToggle === false, JSON.stringify(cfg.enforcement));
   check('the re-rendered region really changed in the project', (read(at(upgraded, 'CLAUDE.md')) || '').includes('## Your role (v2)'));
   check('text OUTSIDE the markers was preserved', (read(at(upgraded, 'CLAUDE.md')) || '').includes('<!-- END aiwf-core -->'));
   check('the whole-file artifact was re-rendered', (read(at(upgraded, WRITER_REL)) || '').includes('A line the next payload version added.'));
@@ -330,7 +330,7 @@ section('4 - the conflict matrix: no branch mutates the target, and every run re
   // A migration whose FIRST operation applies cleanly, so every conflict below can be checked for
   // "the operations before it survived".
   const conflictOps = (rerender) => [
-    { op: 'add-config-key', path: 'enforcement.dispatchGate', default: true, askOperator: false },
+    { op: 'add-config-key', path: 'enforcement.exampleToggle', default: true, askOperator: false },
     rerender,
     FIXTURE_NOTE,
   ];
@@ -340,11 +340,11 @@ section('4 - the conflict matrix: no branch mutates the target, and every run re
   // Two payloads: one whose templates CHANGED (upstream predicate) and one whose templates did not.
   const upstreamPayload = (name, rerender) => makePayload(name, {
     version: '0.2.0', migrations: [{ id: '0002_conflict', version: '0.2.0', ops: conflictOps(rerender) }],
-    tweak: (dir) => { addDispatchGateToSchema(dir); changeTemplates(dir); },
+    tweak: (dir) => { addExampleToggleToSchema(dir); changeTemplates(dir); },
   });
   const samePayload = (name, rerender) => makePayload(name, {
     version: '0.2.0', migrations: [{ id: '0002_conflict', version: '0.2.0', ops: conflictOps(rerender) }],
-    tweak: (dir) => { addDispatchGateToSchema(dir); },
+    tweak: (dir) => { addExampleToggleToSchema(dir); },
   });
 
   const editRegion = (dir) => patch(at(dir, 'CLAUDE.md'), 'You are the **Orchestrator / COO**', 'You are the **Orchestrator / COO** (I edited this)');
@@ -382,7 +382,7 @@ section('4 - the conflict matrix: no branch mutates the target, and every run re
     check(`${c.name}: the message names the address`, r.out.includes(`0002_conflict/1/${c.key}`), why(r));
     check(`${c.name}: the conflicting target was NOT mutated`, read(at(p, c.target)) === targetBefore);
     check(`${c.name}: the earlier operation survived (config key applied, journal says so)`,
-      (readJson(at(p, CONFIG_REL)) || {}).enforcement.dispatchGate === true
+      (readJson(at(p, CONFIG_REL)) || {}).enforcement.exampleToggle === true
       && (bookkeeping(p).migrationJournal || {}).opIndex === 0);
     check(`${c.name}: only the config was touched by the operations that did apply`,
       diffSnapshots(before, snapshot(p)).join(',') === CONFIG_REL, diffSnapshots(before, snapshot(p)).join(', '));
@@ -471,7 +471,7 @@ section('5 - settings: ownership without takeover, and a shape the engine will n
         { id: '0002_fixture', version: '0.2.0', ops: ALL_OPS },
         { id: '0003_again', version: '0.3.0', ops: [{ op: 'reconcile-ask-ruleset', ruleset: 'templates/settings.ask-ruleset.json' }] },
       ],
-      tweak: (dir) => { addDispatchGateToSchema(dir); changeTemplates(dir); changeRuleset(dir); },
+      tweak: (dir) => { addExampleToggleToSchema(dir); changeTemplates(dir); changeRuleset(dir); },
     });
     const rr = update(p, ['--apply'], { payload: p3 });
     return rr.status === 0 && !askRules(p).includes(victim);
@@ -605,60 +605,60 @@ section('8 - add-config-key: idempotent, answered, and never guessed');
   install(p);
   const payload = makePayload('configkey', {
     version: '0.2.0',
-    migrations: [{ id: '0002_key', version: '0.2.0', ops: [{ op: 'add-config-key', path: 'enforcement.dispatchGate', default: true, askOperator: true, question: 'Keep the dialog?' }] }],
-    tweak: addDispatchGateToSchema,
+    migrations: [{ id: '0002_key', version: '0.2.0', ops: [{ op: 'add-config-key', path: 'enforcement.exampleToggle', default: true, askOperator: true, question: 'Keep the dialog?' }] }],
+    tweak: addExampleToggleToSchema,
   });
   const missing = update(p, ['--apply'], { payload });
   check('a question with no answer in scripted mode STOPS with exit 1', missing.status === 1, why(missing));
-  check('and it names the address', missing.out.includes('0002_key/0/enforcement.dispatchGate'), why(missing));
-  check('nothing was written', (readJson(at(p, CONFIG_REL)) || {}).enforcement.dispatchGate === undefined);
+  check('and it names the address', missing.out.includes('0002_key/0/enforcement.exampleToggle'), why(missing));
+  check('nothing was written', (readJson(at(p, CONFIG_REL)) || {}).enforcement.exampleToggle === undefined);
 
   const answered = update(p, ['--apply', '--resolution-file', resolutionFile('answer', {
-    '0002_key/0/enforcement.dispatchGate': { kind: 'answer', value: false },
+    '0002_key/0/enforcement.exampleToggle': { kind: 'answer', value: false },
   })], { payload });
   check('with an answer record the run completes', answered.status === 0, why(answered));
-  check('the answer landed (false, not the default true)', (readJson(at(p, CONFIG_REL)) || {}).enforcement.dispatchGate === false);
+  check('the answer landed (false, not the default true)', (readJson(at(p, CONFIG_REL)) || {}).enforcement.exampleToggle === false);
 
   // Idempotency: the same migration, replayed onto a project that already carries the key.
   const p2 = project('config-key-present');
   install(p2);
   const cfg = readJson(at(p2, CONFIG_REL));
-  cfg.enforcement.dispatchGate = true;
+  cfg.enforcement.exampleToggle = true;
   writeJson(at(p2, CONFIG_REL), cfg);
   const r = update(p2, ['--apply'], { payload });
   check('an existing key needs no answer at all (idempotent no-op)', r.status === 0, why(r));
-  check('and its value is untouched', (readJson(at(p2, CONFIG_REL)) || {}).enforcement.dispatchGate === true);
+  check('and its value is untouched', (readJson(at(p2, CONFIG_REL)) || {}).enforcement.exampleToggle === true);
 
   // A wrong-kind record is refused rather than coerced.
   const p3 = project('config-key-wrongkind');
   install(p3);
   const wrong = update(p3, ['--apply', '--resolution-file', resolutionFile('wrongkind', {
-    '0002_key/0/enforcement.dispatchGate': { kind: 'conflict', resolution: 'take-new' },
+    '0002_key/0/enforcement.exampleToggle': { kind: 'conflict', resolution: 'take-new' },
   })], { payload });
   check('a conflict record where an answer is due stops with exit 1', wrong.status === 1, why(wrong));
   const p4 = project('config-key-unknownfield');
   install(p4);
   const unknownField = update(p4, ['--apply', '--resolution-file', resolutionFile('unknownfield', {
-    '0002_key/0/enforcement.dispatchGate': { kind: 'answer', value: false, mergedFile: 'x' },
+    '0002_key/0/enforcement.exampleToggle': { kind: 'answer', value: false, mergedFile: 'x' },
   })], { payload });
   check('an unknown field in a record stops with exit 1', unknownField.status === 1, why(unknownField));
   const p5 = project('config-key-unknownkind');
   install(p5);
   const unknownKind = update(p5, ['--apply', '--resolution-file', resolutionFile('unknownkind', {
-    '0002_key/0/enforcement.dispatchGate': { kind: 'whatever', value: false },
+    '0002_key/0/enforcement.exampleToggle': { kind: 'whatever', value: false },
   })], { payload });
   check('an unknown record kind stops with exit 1', unknownKind.status === 1, why(unknownKind));
   const p6 = project('config-key-novalue');
   install(p6);
   const noValue = update(p6, ['--apply', '--resolution-file', resolutionFile('novalue', {
-    '0002_key/0/enforcement.dispatchGate': { kind: 'answer' },
+    '0002_key/0/enforcement.exampleToggle': { kind: 'answer' },
   })], { payload });
   check('an answer record without a value stops with exit 1', noValue.status === 1, why(noValue));
 
   // A migration that would add a key the payload schema forbids is caught BEFORE any write.
   const badSchema = makePayload('badschema', {
     version: '0.2.0',
-    migrations: [{ id: '0002_key', version: '0.2.0', ops: [{ op: 'add-config-key', path: 'enforcement.dispatchGate', default: true, askOperator: false }] }],
+    migrations: [{ id: '0002_key', version: '0.2.0', ops: [{ op: 'add-config-key', path: 'enforcement.exampleToggle', default: true, askOperator: false }] }],
   });
   const p7 = project('config-key-schema');
   install(p7);
@@ -672,7 +672,7 @@ section('8 - add-config-key: idempotent, answered, and never guessed');
 section('9 - crash at every write boundary, resumed by a FRESH process');
 {
   const BOUNDARIES = ['after-journal-prepared', 'after-target-apply', 'after-applied-flip'];
-  const ADDRESS_OF = ['0002_fixture/0/enforcement.dispatchGate', '0002_fixture/1/CLAUDE.md#aiwf-core', `0002_fixture/2/${WRITER_REL}`];
+  const ADDRESS_OF = ['0002_fixture/0/enforcement.exampleToggle', '0002_fixture/1/CLAUDE.md#aiwf-core', `0002_fixture/2/${WRITER_REL}`];
   // opIndex 0 is a CONFIG-target operation (the projection hashing), 1 a region, 2 a whole file.
   for (const opIndex of [0, 1, 2]) {
     for (const boundary of BOUNDARIES) {
@@ -698,7 +698,7 @@ section('9 - crash at every write boundary, resumed by a FRESH process');
       check(`op ${opIndex} @ ${boundary}: the end state is correct`,
         bk.installedPluginVersion === '0.2.0' && bk.lastMigrationApplied === '0002_fixture' && bk.migrationJournal === null);
       check(`op ${opIndex} @ ${boundary}: the operator's answer survived the crash`,
-        (readJson(at(p, CONFIG_REL)) || {}).enforcement.dispatchGate === false);
+        (readJson(at(p, CONFIG_REL)) || {}).enforcement.exampleToggle === false);
       check(`op ${opIndex} @ ${boundary}: the re-rendered artifacts are in place`,
         (read(at(p, 'CLAUDE.md')) || '').includes('## Your role (v2)') && (read(at(p, WRITER_REL)) || '').includes('A line the next payload version added.'));
       check(`op ${opIndex} @ ${boundary}: no stage material is left behind`, !exists(at(p, STAGE_REL)));
@@ -923,7 +923,7 @@ section('11 - the recovery state machine has no dead ends, and no decision is ap
     !!thrown && thrown.message.includes('changed while the update was deciding'), thrown ? thrown.message.slice(0, 140) : '');
   check('the target still carries the operator\'s mid-dialog edit, untouched by the engine',
     (read(target) || '').includes('(edited mid-dialog)') && !(read(target) || '').includes('## Your role (v2)'));
-  check('the operation before it stayed applied', (readJson(at(p, CONFIG_REL)) || {}).enforcement.dispatchGate === false);
+  check('the operation before it stayed applied', (readJson(at(p, CONFIG_REL)) || {}).enforcement.exampleToggle === false);
 }
 {
   // --resolve carries the same open-dialog gap, so it carries the same re-check.
@@ -951,11 +951,11 @@ section('11 - the recovery state machine has no dead ends, and no decision is ap
   // is re-planned against the state that is really there - but the operator's answer travels with
   // the resume, so the question is never asked twice. Both resumes below run WITHOUT a resolution
   // file: anything that had to ask would stop with exit 1.
-  const ADDRESS = '0002_key/0/enforcement.dispatchGate';
+  const ADDRESS = '0002_key/0/enforcement.exampleToggle';
   const payload = makePayload('replan-answer', {
     version: '0.2.0',
-    migrations: [{ id: '0002_key', version: '0.2.0', ops: [{ op: 'add-config-key', path: 'enforcement.dispatchGate', default: true, askOperator: true, question: 'Keep the dialog?' }] }],
-    tweak: addDispatchGateToSchema,
+    migrations: [{ id: '0002_key', version: '0.2.0', ops: [{ op: 'add-config-key', path: 'enforcement.exampleToggle', default: true, askOperator: true, question: 'Keep the dialog?' }] }],
+    tweak: addExampleToggleToSchema,
   });
   const crashAndMove = (name, move) => {
     const p = project(`replan-${name}`);
@@ -975,15 +975,15 @@ section('11 - the recovery state machine has no dead ends, and no decision is ap
     check('a moved config re-plans WITHOUT asking the staged question again', resumed.status === 0, why(resumed));
     check('and it says the answer was replayed', resumed.out.includes('replayed from the stage'), why(resumed));
     const cfg = readJson(at(p, CONFIG_REL)) || {};
-    check('the staged answer is what landed (false, not the default true)', cfg.enforcement.dispatchGate === false);
+    check('the staged answer is what landed (false, not the default true)', cfg.enforcement.exampleToggle === false);
     check('the external edit was preserved', cfg.project.description === 'edited while the update was down');
     check('the end state is complete', (cfg._aiwf || {}).installedPluginVersion === '0.2.0' && (cfg._aiwf || {}).migrationJournal === null);
   }
   {
-    const p = crashAndMove('key-now-present', (cfg) => { cfg.enforcement.dispatchGate = true; });
+    const p = crashAndMove('key-now-present', (cfg) => { cfg.enforcement.exampleToggle = true; });
     const resumed = update(p, ['--apply'], { payload });
     check('a key that is present by the time of the resume is a no-op, with no question', resumed.status === 0, why(resumed));
-    check('the value already there is left exactly as it is', (readJson(at(p, CONFIG_REL)) || {}).enforcement.dispatchGate === true);
+    check('the value already there is left exactly as it is', (readJson(at(p, CONFIG_REL)) || {}).enforcement.exampleToggle === true);
     check('the run still completed', bookkeeping(p).installedPluginVersion === '0.2.0' && bookkeeping(p).migrationJournal === null);
   }
 }

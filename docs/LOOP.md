@@ -98,11 +98,23 @@ is denied. This was confirmed against the real harness: the native `writer` suba
 input carries `agent_type: "writer"` (Gate 1 -> **allow**) while a `general-purpose` subagent
 carries `agent_type: "general-purpose"` (Gate 1 -> **deny**).
 
-**Gate 2** (the plugin's PreToolUse dispatch gate) turns every Writer dispatch through the Agent
-tool into a native **Yes/No** dialog: no repo write starts without an operator click. The matcher
-for a subagent dispatch is the `Agent` tool name (the SDK reports the same call as `Task` in its
-permission records - the two names sit on different layers, and `Agent` is the empirically correct
-matcher).
+**Gate 2** (the plugin's PreToolUse dispatch gate) puts the operator in the way of a Writer dispatch
+through the Agent tool, in one of two modes chosen by `enforcement.dispatchGate` in
+`aiwf.config.json`:
+
+- **`always`** (the factory default) - EVERY Writer dispatch becomes a native **Yes/No** dialog: no
+  repo write starts without an operator click.
+- **`off-plan`** - the dispatch is judged instead of counted. The brief's `Ticket: <REF>` line is
+  read out of the prompt and `<REF>` is looked up in `<plansDir>/active/PLAN_*.md`: a ticket that is
+  in an active PLAN passes **silently** (dispatching the Writer inside an approved plan is the COO's
+  job), while a missing line, a ref in no active PLAN, or a plans directory that cannot be read
+  raises the dialog naming the ref.
+
+Every other state of the key - absent, misspelled, the wrong case, a non-string, or a config that
+cannot be read at all - is `always`. For an ask-gate that is the safe direction: a broken config
+costs clicks, never silence. The matcher for a subagent dispatch is the `Agent` tool name (the SDK
+reports the same call as `Task` in its permission records - the two names sit on different layers,
+and `Agent` is the empirically correct matcher).
 
 **Gate 3** (the route-state write guard, which lives INSIDE the Gate 1 hook file, so the wired-hook
 count stays two) keeps the main session out of code-class files while an R2/R3 ticket is

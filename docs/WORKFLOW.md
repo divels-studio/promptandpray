@@ -27,8 +27,9 @@ overrides") - not every ticket is a ceremony.
   subagents cannot write - and on a Claude review host this tool-availability + convention
   block is the read-only boundary itself, with no OS cell (the OS cell is codex-only); the main
   session *can* write - R1 requires it - so the COO's not writing implementation code in the
-  R2/R3 cycle is doctrine, not a hook. Gate 2, the dispatch gate, turns every Writer dispatch
-  into a native Yes/No dialog.)
+  R2/R3 cycle is doctrine, not a hook. Gate 2, the dispatch gate, puts the operator in the way
+  of a Writer dispatch - a native Yes/No dialog on every one of them, or only on one whose
+  `Ticket: <REF>` line names no ticket in an active PLAN, per `enforcement.dispatchGate`.)
 - **Reviewer / Code Reviewer** - read-only adversarial code/design review; not browser QA.
   **Engine-neutral**: the host is data in the project's `.claude/aiwf-native/roles.json`
   (resolved by the plugin's role resolver - `scripts/native/ps/aiwf-roles.ps1` on os `windows`,
@@ -299,9 +300,13 @@ Working branch     - only when different from the default integration branch
 Reviewer/QA can loop forever.
 
 Every Writer brief additionally carries the ticket ref on a **line of its own**, `Ticket: <REF>` -
-the machine-readable form of the ref the contract already requires. Gate 2 raises a native
-Yes/No dialog on every Writer dispatch, so a dispatch that cannot name a ticket is exactly the
-accident worth one operator click.
+the machine-readable form of the ref the contract already requires. That line is not decoration: it
+is the contract Gate 2 reads. In the factory mode (`enforcement.dispatchGate: "always"`) the gate
+raises a native Yes/No dialog on every Writer dispatch. In `off-plan` mode it looks `<REF>` up in
+`<plansDir>/active/PLAN_*.md` and stays **silent** when the ticket is really in an active PLAN,
+raising the dialog only for a brief with no ticket line, a ref that is in no active PLAN, or a plans
+directory it cannot read - because a dispatch that cannot name a ticket in an active PLAN is work
+nobody planned, which is exactly the accident worth one operator click.
 
 At the same moment - dispatch of an R2/R3 ticket - the COO writes the **route state**, the
 gitignored `.aiwf/route-state.json`, as `{ "ticket": "<REF>", "route": "R2"|"R3" }`, and on

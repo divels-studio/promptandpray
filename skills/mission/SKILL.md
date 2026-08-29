@@ -53,8 +53,11 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
 ## Hard rules carried by this skill
 
 - Writer dispatch goes through the Agent tool with `subagent_type: "writer"` and a `Ticket: <REF>`
-  line naming a ticket that exists in an active plan. Gate 2 turns every such dispatch into a native
-  Yes/No dialog for the operator.
+  line naming a ticket that exists in an active plan. Gate 2 then either turns every dispatch into a
+  native Yes/No dialog for the operator (`enforcement.dispatchGate: "always"`, the factory mode) or
+  lets an on-plan ref through silently and raises the dialog for anything it cannot find in an
+  active PLAN (`"off-plan"`). The `Ticket:` line is written either way - it is what the second mode
+  reads, and what the ledger is kept by.
 - Subagent model policy: an explicit `model` always; `haiku` for mechanical scans, `sonnet` for
   evidence-with-judgment; the loop roles are never run inline in the main session.
 - With an open R2/R3 ticket the main session writes only `docs/**`, `.aiwf/**` and root-level
