@@ -543,7 +543,8 @@ function planRerender(ctx, op, addressOf) {
   if (!isPlainObject(previous)) {
     throw new UpdateError(
       `invariant violated: "${key}" is not recorded in _aiwf.managedRegions, so this update has no idea what the project ` +
-      'last accepted there. An update never adopts a file it did not write - re-run /pnp:setup first.',
+      'last accepted there. An update never adopts a file it did not write - that is /pnp:setup\'s '
+      + 'business, and `--adopt` is the flag that bootstraps ownership over a surface already on disk.',
     );
   }
 

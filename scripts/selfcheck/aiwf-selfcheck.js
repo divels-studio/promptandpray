@@ -1911,6 +1911,21 @@ function listFiles(dir, filter, acc) {
   return acc;
 }
 
+/**
+ * Every long flag the setup skill documents, and the ones no setup entrypoint parses. A line naming
+ * another command (/pnp:update, scripts/update/) documents THAT command's flags, so it is skipped
+ * whole. Pure, and takes its inputs as text, so the same function can be run on constructed input.
+ */
+function setupFlagFindings(skillText, cliSources) {
+  const documented = new Set();
+  for (const line of String(skillText).split('\n')) {
+    if (line.includes('/pnp:update') || line.includes('scripts/update/')) continue;
+    for (const m of line.match(/--[a-z][a-z0-9-]*/g) || []) documented.add(m);
+  }
+  const list = [...documented].sort();
+  return { documented: list, unparsed: list.filter((f) => !cliSources.some((src) => src.includes(`'${f}'`))) };
+}
+
 function sectionPayloadIntegrity() {
   section('PAYLOAD INTEGRITY - skills, cross-references, command prefix');
   const skillsDir = path.join(PLUGIN_ROOT, 'skills');
@@ -1992,6 +2007,30 @@ function sectionPayloadIntegrity() {
       && fs.existsSync(path.join(PLUGIN_ROOT, 'scripts/native/sh/aiwf-roles.sh'))
       && !fs.existsSync(path.join(PLUGIN_ROOT, 'scripts/native/sh/nonexistent.sh')),
       `${hits.length} matched on constructed input`);
+  }
+
+  // Doc <-> code drift, on the one surface where a skill can promise something the engine does not
+  // have: its FLAGS. /pnp:setup now documents --adopt and --adopt-file next to --dry-run and the
+  // rest, and a flag a skill names while no setup entrypoint parses it is not a documentation
+  // wrinkle - it is an instruction that fails in the operator's hands, with the skill still reading
+  // green. Lines about a DIFFERENT command carry that command's flags and are skipped by name.
+  {
+    const skillText = readText(path.join(skillsDir, 'setup', 'SKILL.md')) || '';
+    const cliSources = ['interview.mjs', 'generate.mjs']
+      .map((f) => readText(path.join(PLUGIN_ROOT, 'scripts', 'setup', f)) || '');
+    const findings = setupFlagFindings(skillText, cliSources);
+    check('the /pnp:setup skill documents flags the setup CLI really parses',
+      findings.unparsed.length === 0,
+      findings.unparsed.length ? findings.unparsed.join(', ') : `${findings.documented.length} flag(s) checked`);
+    // The needle on constructed input: "nothing unparsed" is also what a scan that matched NOTHING
+    // reports, so the extractor is shown to both find a real flag and report a fabricated one.
+    const probe = setupFlagFindings(
+      'run it with --adopt and --not-a-real-flag\nand see `/pnp:update --resolve <key>` for later\n',
+      ["has('--adopt')"],
+    );
+    check('and that check can fail: a fabricated flag is reported, an update-only one is not scanned',
+      probe.unparsed.length === 1 && probe.unparsed[0] === '--not-a-real-flag' && !probe.documented.includes('--resolve'),
+      `${probe.documented.join(' ')} -> ${probe.unparsed.join(' ')}`);
   }
 
   // Command prefix: the payload speaks /pnp:, never the originating project's prefix.

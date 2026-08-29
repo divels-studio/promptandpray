@@ -21,7 +21,13 @@
  *      back (the tombstone);
  *   8. the self-check is the install's OWN last step: a fresh install runs it and reports PASS,
  *      --no-selfcheck skips it out loud, and a self-check that cannot be run at all makes the
- *      install exit 1 rather than report a green it never obtained.
+ *      install exit 1 rather than report a green it never obtained;
+ *   9. ADOPT (--adopt), the whole matrix: an encountered file identical to the render is adopted
+ *      clean and in silence, a different one is decided by the operator (keep-mine keeps every byte,
+ *      take-new applies the render), a decision nobody can answer STOPS the run with zero bytes
+ *      written, an answer for an address nobody asked about is refused by name, "merge" is not an
+ *      adopt word, an installed project is refused outright, the pre-adopt blockers keep their exact
+ *      force, and the superseded-legacy list is advisory text that touches nothing.
  *
  * WHY MOST CASES PASS --no-selfcheck
  *   Every install below would otherwise pay for a full self-check run (300+ assertions, a fresh
@@ -36,7 +42,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { sha256 } from './generate.mjs';
+import { scanSupersededLegacy, sha256 } from './generate.mjs';
 import { runInterview } from './interview.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -82,6 +88,20 @@ function install(projectDir, answers, extra = [], opts = {}) {
   if (!opts.selfcheck && !extra.includes('--no-selfcheck')) args.push('--no-selfcheck');
   if (!opts.autoRoot) args.push('--project-root', projectDir);
   const r = spawnSync(process.execPath, args, { encoding: 'utf8', cwd: opts.cwd || process.cwd() });
+  return { status: r.status, out: (r.stdout || '') + (r.stderr || '') };
+}
+
+// The OTHER entrypoint. Some refusals must hold on both, and a guard asserted only through
+// interview.mjs says nothing about the direct generator path an operator or a script can take.
+function generateInstall(projectDir, answers, extra = []) {
+  const answersFile = path.join(tmpRoot, `answers-gen-${path.basename(projectDir)}-${Math.random().toString(36).slice(2, 8)}.json`);
+  fs.writeFileSync(answersFile, JSON.stringify(answers, null, 2));
+  const args = [
+    path.join(PLUGIN_ROOT, 'scripts', 'setup', 'generate.mjs'),
+    '--answers-file', answersFile, '--plugin-root', PLUGIN_ROOT, '--project-root', projectDir, ...extra,
+  ];
+  if (!extra.includes('--no-selfcheck')) args.push('--no-selfcheck');
+  const r = spawnSync(process.execPath, args, { encoding: 'utf8' });
   return { status: r.status, out: (r.stdout || '') + (r.stderr || '') };
 }
 
@@ -420,7 +440,7 @@ section('9 - the project root resolves from git when it is not passed');
 }
 
 // ---------------------------------------------------------------------------
-section('10 - an unadopted pre-existing artifact is never taken over');
+section('10 - WITHOUT --adopt, a pre-existing artifact is never taken over (section 18 is the adopt path)');
 {
   const p12 = project('unadopted');
   fs.mkdirSync(at(p12, '.claude/aiwf-native'), { recursive: true });
@@ -428,7 +448,8 @@ section('10 - an unadopted pre-existing artifact is never taken over');
   const before = snapshot(p12);
   const r = install(p12, baseAnswers(), ['--no-seeds']);
   check('the run is BLOCKED (exit 1)', r.status === 1, `exit ${r.status}`);
-  check('the message says setup does not adopt files it did not write', r.out.includes('not recorded in _aiwf.managedRegions'));
+  check('the message says setup will not take over a file it did not write, and names --adopt as the deliberate way',
+    r.out.includes('not recorded in _aiwf.managedRegions') && r.out.includes('--adopt'));
   check('the operator\'s file is untouched and nothing else was written', diffSnapshots(before, snapshot(p12)).length === 0);
 }
 
@@ -612,6 +633,529 @@ section('17 - the self-check is the install\'s own last step, and "could not che
     r.out.includes('WERE written') && r.out.includes('nothing was rolled back'), why(r, true).slice(0, 200));
   check('which is true: the project layer really is on disk',
     exists(at(p23, CONFIG_REL)) && exists(at(p23, ROLES_REL)) && exists(at(p23, 'CLAUDE.md')));
+}
+
+// ---------------------------------------------------------------------------
+// ADOPT MODE. Every case below installs into a project that ALREADY carries an AIWF surface, which
+// is the only situation --adopt exists for. The properties under test are the ones an adopt run can
+// get catastrophically wrong: a silent overwrite, a deletion, and a bookkeeping record that
+// describes something other than what is on disk. So each case asserts the FILE (byte for byte) and
+// the RECORD (both hashes and the override flag), never just the exit code.
+section('18 - adopt: identical is adopted silently, different is decided, nothing is ever guessed');
+const ADOPT_KEY = ROLES_REL;
+const CLAUDE_KEY = 'CLAUDE.md#aiwf-core';
+const MINE_ROLES = '{\n  "reviewer": { "engine": "claude", "model": "haiku", "effort": "low" }\n}\n';
+// The render, obtained from a real install with the same answers rather than re-implemented here:
+// a test that renders the artifact itself proves the test can render, not that the engine can.
+const refProject = project('adopt-reference');
+const refInstall = install(refProject, baseAnswers(), ['--no-seeds']);
+check('the reference install (for the render bytes) exits 0', refInstall.status === 0, why(refInstall));
+const RENDER_ROLES = read(at(refProject, ROLES_REL)) || '';
+const RENDER_ROLES_HASH = sha256(RENDER_ROLES);
+// The rendered CLAUDE.md REGION, taken from that same real install. The region carries no
+// project-root value (the template has no {{resolvedRoot}} inside the markers), so the region one
+// project renders is the region every project with these answers renders - which is what makes it a
+// legitimate EXPECTED value here rather than a second implementation of the renderer.
+const regionOfFile = (text) => {
+  const start = (text || '').indexOf('<!-- BEGIN aiwf-core -->');
+  const end = (text || '').indexOf('<!-- END aiwf-core -->');
+  return start === -1 || end === -1 ? '' : text.slice(start, end + '<!-- END aiwf-core -->'.length);
+};
+const RENDER_REGION = regionOfFile(read(at(refProject, 'CLAUDE.md')));
+check('the reference render carries a non-empty managed region (the expected value below is real)',
+  RENDER_REGION.length > 0 && RENDER_REGION.includes('BEGIN aiwf-core'));
+
+function adoptFile(name, table) {
+  const file = path.join(tmpRoot, `adopt-${name}.json`);
+  fs.writeFileSync(file, JSON.stringify(table, null, 2));
+  return file;
+}
+function legacyProject(name, rolesText) {
+  const dir = project(name);
+  fs.mkdirSync(at(dir, '.claude/aiwf-native'), { recursive: true });
+  fs.writeFileSync(at(dir, ROLES_REL), rolesText);
+  return dir;
+}
+const record = (dir, key) => ((readJson(at(dir, CONFIG_REL)) || {})._aiwf || {}).managedRegions[key] || {};
+
+// (a) identical to the render -> adopted CLEAN, in silence. Planted with CRLF on purpose: the hash
+// is taken over LF-normalised text, so a CRLF checkout must read as identical - and because nothing
+// is written, the file must still be CRLF afterwards.
+{
+  const mine = RENDER_ROLES.replace(/\n/g, '\r\n');
+  const dir = legacyProject('adopt-identical', mine);
+  const r = install(dir, baseAnswers(), ['--no-seeds', '--adopt']);
+  check('(a) an identical pre-existing artifact adopts with NO resolution supplied at all', r.status === 0, why(r));
+  check('(a) the report classifies it as identical and says nothing was written for it',
+    r.out.includes('identical - adopted clean'), why(r, true).slice(0, 160));
+  check('(a) the file is byte-identical, CRLF and all - an adopt of identical content writes nothing',
+    read(at(dir, ROLES_REL)) === mine);
+  const e = record(dir, ADOPT_KEY);
+  check('(a) the record is CLEAN: upstream == local == sha256(render), override false',
+    e.upstream === RENDER_ROLES_HASH && e.local === RENDER_ROLES_HASH && e.override === false, JSON.stringify(e));
+  const before = snapshot(dir);
+  const again = install(dir, baseAnswers(), ['--no-seeds']);
+  check('(a) and the ordinary re-run afterwards is a zero diff',
+    again.status === 0 && diffSnapshots(before, snapshot(dir)).length === 0, diffSnapshots(before, snapshot(dir)).join(', '));
+}
+
+// (b) different + keep-mine -> the bootstrap. Not one byte of the operator's file is touched, and
+// the two hashes describe two different things on purpose.
+{
+  const dir = legacyProject('adopt-keep-mine', MINE_ROLES);
+  const file = adoptFile('keep-mine', { [ADOPT_KEY]: 'keep-mine' });
+  const r = install(dir, baseAnswers(), ['--no-seeds', '--adopt', '--adopt-file', file]);
+  check('(b) different + keep-mine exits 0', r.status === 0, why(r));
+  check('(b) the operator\'s file is byte-untouched', read(at(dir, ROLES_REL)) === MINE_ROLES);
+  const e = record(dir, ADOPT_KEY);
+  check('(b) the record is local = sha256(what is on disk), upstream = sha256(render), override TRUE',
+    e.local === sha256(MINE_ROLES) && e.upstream === RENDER_ROLES_HASH && e.override === true, JSON.stringify(e));
+  check('(b) the report names the decision', r.out.includes('keep-mine: yours stays'), why(r, true).slice(0, 160));
+
+  // (h) idempotence: the ordinary re-run reads that record and re-applies nothing.
+  const before = snapshot(dir);
+  const again = install(dir, baseAnswers(), ['--no-seeds']);
+  check('(h) a re-run after adopt is a zero diff, byte for byte',
+    again.status === 0 && diffSnapshots(before, snapshot(dir)).length === 0, diffSnapshots(before, snapshot(dir)).join(', '));
+  check('(h) and it says the artifact is held by the operator', again.out.includes('held by the operator (override)'));
+}
+
+// (c) different + take-new -> the render replaces the file, and the record is clean.
+{
+  const dir = legacyProject('adopt-take-new', MINE_ROLES);
+  const file = adoptFile('take-new', { [ADOPT_KEY]: 'take-new' });
+  const r = install(dir, baseAnswers(), ['--no-seeds', '--adopt', '--adopt-file', file]);
+  check('(c) different + take-new exits 0', r.status === 0, why(r));
+  check('(c) the file IS the render now', read(at(dir, ROLES_REL)) === RENDER_ROLES);
+  const e = record(dir, ADOPT_KEY);
+  check('(c) the record is CLEAN: upstream == local == sha256(render), override false',
+    e.upstream === RENDER_ROLES_HASH && e.local === RENDER_ROLES_HASH && e.override === false, JSON.stringify(e));
+  const before = snapshot(dir);
+  const again = install(dir, baseAnswers(), ['--no-seeds']);
+  check('(c) and the re-run afterwards is a zero diff',
+    again.status === 0 && diffSnapshots(before, snapshot(dir)).length === 0);
+}
+
+// (d) different, nobody to ask -> FAIL-STOP with the address named, and zero bytes written. This is
+// the case a guessing engine would "solve" by picking a default; the whole point is that it stops.
+{
+  const dir = legacyProject('adopt-unanswered', MINE_ROLES);
+  const before = snapshot(dir);
+  const r = install(dir, baseAnswers(), ['--no-seeds', '--adopt']);
+  check('(d) a decision with nobody to ask BLOCKS (exit 1)', r.status === 1, `exit ${r.status}`);
+  check('(d) the message names the address that needs an answer', r.out.includes(ADOPT_KEY), why(r, true).slice(0, 200));
+  check('(d) and says there is nobody to ask (not interactive, no --adopt-file)',
+    r.out.includes('not interactive') && r.out.includes('--adopt-file'), why(r, true).slice(0, 200));
+  check('(d) NOT ONE BYTE was written', diffSnapshots(before, snapshot(dir)).length === 0, diffSnapshots(before, snapshot(dir)).join(', '));
+  check('(d) and the classification is still reported, so the operator can answer it',
+    r.out.includes('DECISION PENDING'), why(r, true).slice(0, 200));
+}
+
+// (d2) --dry-run never asks: it classifies, marks the decision pending and writes nothing.
+{
+  const dir = legacyProject('adopt-dryrun', MINE_ROLES);
+  const before = snapshot(dir);
+  const r = install(dir, baseAnswers(), ['--no-seeds', '--adopt', '--dry-run']);
+  check('(d2) --adopt --dry-run exits 0 - a preview is not a refusal', r.status === 0, why(r));
+  check('(d2) it shows the classification AND the pending decision',
+    r.out.includes('ADOPT - the AIWF surface') && r.out.includes('DECISION PENDING'), why(r, true).slice(0, 200));
+  check('(d2) it previews both sides of the decision', r.out.includes('yours  :') && r.out.includes('payload:'), why(r, true).slice(0, 200));
+  check('(d2) and wrote nothing at all', diffSnapshots(before, snapshot(dir)).length === 0, diffSnapshots(before, snapshot(dir)).join(', '));
+}
+
+// (e) an adopt file naming an address this run never had to decide -> refused BY NAME. An answer
+// that lands in no decision is a typo, and proceeding on it means an operator decision went nowhere.
+{
+  const dir = legacyProject('adopt-unknown-address', MINE_ROLES);
+  const before = snapshot(dir);
+  const file = adoptFile('unknown', { [ADOPT_KEY]: 'keep-mine', '.claude/aiwf-native/rolez.json': 'take-new' });
+  const r = install(dir, baseAnswers(), ['--no-seeds', '--adopt', '--adopt-file', file]);
+  check('(e) an unconsumed address BLOCKS the run', r.status === 1, `exit ${r.status}`);
+  check('(e) and it is named', r.out.includes('.claude/aiwf-native/rolez.json'), why(r, true).slice(0, 200));
+  check('(e) nothing was written', diffSnapshots(before, snapshot(dir)).length === 0);
+}
+
+// (e2) "merge" is not an adopt word: it is the update engine's, and adopt says where to get it.
+{
+  const dir = legacyProject('adopt-merge', MINE_ROLES);
+  const before = snapshot(dir);
+  const file = adoptFile('merge', { [ADOPT_KEY]: 'merge' });
+  const r = install(dir, baseAnswers(), ['--no-seeds', '--adopt', '--adopt-file', file]);
+  check('(e2) resolution "merge" at adopt time is refused', r.status === 1, `exit ${r.status}`);
+  check('(e2) and it points at /pnp:update --resolve, which does have merge',
+    r.out.includes('/pnp:update --resolve') && r.out.includes('keep-mine'), why(r, true).slice(0, 200));
+  check('(e2) nothing was written', diffSnapshots(before, snapshot(dir)).length === 0);
+}
+
+// (e3) the two flag-shape refusals: a resolution file for a mode this run is not in would be read by
+// nobody, and a flag with no value would be a silent fallback to "there is no file".
+{
+  const dir = legacyProject('adopt-flag-shapes', MINE_ROLES);
+  const before = snapshot(dir);
+  const file = adoptFile('orphan', { [ADOPT_KEY]: 'keep-mine' });
+  const noMode = install(dir, baseAnswers(), ['--no-seeds', '--adopt-file', file]);
+  check('(e3) --adopt-file without --adopt is refused', noMode.status === 1 && noMode.out.includes('only means something with --adopt'), why(noMode, true).slice(0, 160));
+  const noValue = install(dir, baseAnswers(), ['--no-seeds', '--adopt', '--adopt-file']);
+  check('(e3) --adopt-file with no path is refused, not treated as "no file"',
+    noValue.status === 1 && noValue.out.includes('needs the path'), why(noValue, true).slice(0, 160));
+  check('(e3) neither refusal wrote anything', diffSnapshots(before, snapshot(dir)).length === 0);
+}
+
+// (f) a CLAUDE.md carrying a FOREIGN aiwf-core region: the region is adopted, the text around it is
+// not the plugin's business in this branch any more than in any other.
+{
+  const dir = project('adopt-claude-region');
+  const mine = '# My project\n\nMy own instructions.\n\n<!-- BEGIN aiwf-core -->\nSomeone else wrote this core.\n<!-- END aiwf-core -->\n\n## My tail\n\nStill mine.\n';
+  fs.writeFileSync(at(dir, 'CLAUDE.md'), mine);
+  const file = adoptFile('claude', { [CLAUDE_KEY]: 'keep-mine' });
+  const r = install(dir, baseAnswers(), ['--no-seeds', '--adopt', '--adopt-file', file]);
+  check('(f) adopting a foreign managed region exits 0', r.status === 0, why(r));
+  check('(f) CLAUDE.md is byte-identical - keep-mine writes nothing, inside or outside the markers',
+    read(at(dir, 'CLAUDE.md')) === mine);
+  const e = record(dir, CLAUDE_KEY);
+  check('(f) the record holds the region hashes: local = the region on disk, override TRUE',
+    e.local === sha256(regionOfFile(mine)) && e.override === true, JSON.stringify(e));
+  // The EXACT value, not "differs from something": upstream is the hash of the rendered REGION, and
+  // an assertion that only says "not the whole file" is satisfied by any unrelated digest.
+  check('(f) upstream is exactly sha256(the rendered region)',
+    e.upstream === sha256(RENDER_REGION), `${e.upstream} vs ${sha256(RENDER_REGION)}`);
+  const before = snapshot(dir);
+  const again = install(dir, baseAnswers(), ['--no-seeds']);
+  check('(f) and the re-run afterwards is a zero diff', again.status === 0 && diffSnapshots(before, snapshot(dir)).length === 0);
+}
+
+// (f2) the same region, adopted with take-new, over a CRLF file. This is the case that proves the
+// write path: the region must be replaced, and every byte around it - line endings included - must
+// come out of the file exactly as it went in.
+{
+  const dir = project('adopt-claude-take-new');
+  const head = '# My project\r\n\r\nMy own instructions.\r\n\r\n';
+  const tail = '\r\n\r\n## My tail\r\n\r\nStill mine.\r\n';
+  const mine = `${head}<!-- BEGIN aiwf-core -->\r\nSomeone else wrote this core.\r\n<!-- END aiwf-core -->${tail}`;
+  fs.writeFileSync(at(dir, 'CLAUDE.md'), mine);
+  const file = adoptFile('claude-take-new', { [CLAUDE_KEY]: 'take-new' });
+  const r = install(dir, baseAnswers(), ['--no-seeds', '--adopt', '--adopt-file', file]);
+  check('(f2) adopting a foreign region with take-new exits 0', r.status === 0, why(r));
+  const after = read(at(dir, 'CLAUDE.md')) || '';
+  check('(f2) the region really was replaced by the render',
+    sha256(regionOfFile(after)) === sha256(RENDER_REGION));
+  check('(f2) the text OUTSIDE the markers is byte-identical, CRLF and all',
+    after.slice(0, head.length) === head && after.slice(-tail.length) === tail, JSON.stringify(after.slice(0, 24)));
+  check('(f2) the written region uses the file\'s own convention, so not one line ending in the file moved',
+    /<!-- BEGIN aiwf-core -->\r\n/.test(after) && !/[^\r]\n/.test(after), `${(after.match(/\r\n/g) || []).length} CRLF, ${(after.match(/[^\r]\n/g) || []).length} bare LF`);
+  const e = record(dir, CLAUDE_KEY);
+  check('(f2) the record is CLEAN and both hashes are exactly sha256(the rendered region)',
+    e.local === sha256(RENDER_REGION) && e.upstream === sha256(RENDER_REGION) && e.override === false, JSON.stringify(e));
+  const before = snapshot(dir);
+  const again = install(dir, baseAnswers(), ['--no-seeds']);
+  check('(f2) and the re-run over the CRLF file is a zero diff',
+    again.status === 0 && diffSnapshots(before, snapshot(dir)).length === 0, diffSnapshots(before, snapshot(dir)).join(', '));
+}
+
+// (g) --adopt on a project that already has an installation: refused in one line. Adopt bootstraps a
+// LEGACY surface; re-deciding a recorded artifact is /pnp:update --resolve, which has a journal.
+{
+  const dir = project('adopt-already-installed');
+  check('(g) the ordinary install first exits 0', install(dir, baseAnswers(), ['--no-seeds']).status === 0);
+  const before = snapshot(dir);
+  const r = install(dir, baseAnswers(), ['--no-seeds', '--adopt']);
+  check('(g) --adopt on an installed project is refused (exit 1)', r.status === 1, `exit ${r.status}`);
+  check('(g) the refusal says there is nothing to adopt and points at /pnp:update --resolve',
+    r.out.includes('nothing here to adopt') && r.out.includes('/pnp:update --resolve'), why(r, true).slice(0, 200));
+  check('(g) nothing was written', diffSnapshots(before, snapshot(dir)).length === 0);
+}
+
+// (i) the ownership-without-takeover machinery is unchanged by adopt: a rule that was already in
+// settings.json is never claimed as ours, in this mode as in every other.
+{
+  const dir = legacyProject('adopt-settings', MINE_ROLES);
+  fs.mkdirSync(at(dir, '.claude'), { recursive: true });
+  fs.writeFileSync(at(dir, '.claude/settings.json'), JSON.stringify({
+    permissions: { allow: ['Bash(ls:*)'], deny: [], ask: ['Bash(my-own-tool:*)', 'Bash(git commit:*)'] },
+  }, null, 2));
+  const file = adoptFile('settings', { [ADOPT_KEY]: 'keep-mine' });
+  const r = install(dir, baseAnswers(), ['--no-seeds', '--adopt', '--adopt-file', file]);
+  check('(i) the adopt run exits 0', r.status === 0, why(r));
+  const settings = readJson(at(dir, '.claude/settings.json')) || {};
+  const ask = (settings.permissions || {}).ask || [];
+  const bk = (readJson(at(dir, CONFIG_REL)) || {})._aiwf || {};
+  check('(i) a pre-existing identical ask rule did NOT become owned', !bk.ownedAskRules.includes('Bash(git commit:*)'));
+  check('(i) the foreign rule is still there and is not owned either',
+    ask.includes('Bash(my-own-tool:*)') && !bk.ownedAskRules.includes('Bash(my-own-tool:*)'));
+  check('(i) the project\'s own allow posture was not replaced',
+    JSON.stringify((settings.permissions || {}).allow) === JSON.stringify(['Bash(ls:*)']));
+  check('(i) and every owned rule really is in settings.json', bk.ownedAskRules.length > 0 && bk.ownedAskRules.every((rule) => ask.includes(rule)));
+}
+
+// (j) the blockers adopt must NOT weaken.
+{
+  const dir = project('adopt-stale-foreign');
+  fs.mkdirSync(at(dir, '.claude/agents'), { recursive: true });
+  const foreign = '---\nname: qa\n---\nSomeone else wrote this.\n';
+  fs.writeFileSync(at(dir, '.claude/agents/qa.md'), foreign);
+  const before = snapshot(dir);
+  const r = install(dir, baseAnswers(), ['--no-seeds', '--adopt', '--confirm-remove-stale']);
+  check('(j) a foreign file at a path this config renders NOTHING at still blocks under --adopt', r.status === 1, `exit ${r.status}`);
+  check('(j) the message says adopt does not cover it and why',
+    r.out.includes('not recorded in _aiwf.managedRegions') && r.out.includes('--adopt does not cover it'), why(r, true).slice(0, 200));
+  check('(j) the foreign file survived, flag or no flag', read(at(dir, '.claude/agents/qa.md')) === foreign);
+  check('(j) nothing else was written either', diffSnapshots(before, snapshot(dir)).length === 0);
+}
+{
+  // A hand-edited RECORDED artifact is bookkeeping's business, not adopt's - and because that
+  // project has an _aiwf block, --adopt is refused before the conflict is even reached. Both halves
+  // are asserted: the refusal WITH the flag, and the untouched hand-edit blocker without it.
+  const dir = project('adopt-hand-edited');
+  check('(j) the ordinary install exits 0', install(dir, baseAnswers(), ['--no-seeds']).status === 0);
+  const edited = (read(at(dir, ROLES_REL)) || '').replace('"effort": "high"', '"effort": "low"');
+  fs.writeFileSync(at(dir, ROLES_REL), edited);
+  const before = snapshot(dir);
+  const withFlag = install(dir, baseAnswers(), ['--no-seeds', '--adopt']);
+  check('(j) --adopt over a recorded install is refused, so it cannot launder a hand edit',
+    withFlag.status === 1 && withFlag.out.includes('nothing here to adopt'), why(withFlag, true).slice(0, 200));
+  const without = install(dir, baseAnswers(), ['--no-seeds']);
+  check('(j) and without the flag the hand-edit blocker is exactly what it always was',
+    without.status === 1 && without.out.includes('was edited by hand') && without.out.includes('/pnp:update --resolve'),
+    why(without, true).slice(0, 200));
+  check('(j) neither run wrote anything', diffSnapshots(before, snapshot(dir)).length === 0);
+  check('(j) and the hand edit is still there', read(at(dir, ROLES_REL)) === edited);
+}
+
+// (k) the ADVISORY superseded-legacy list: reported by name, and not one of them is touched.
+{
+  const dir = project('adopt-superseded');
+  fs.mkdirSync(at(dir, '.claude/hooks'), { recursive: true });
+  const hook = '// the project\'s own hand-maintained copy\nprocess.exit(0);\n';
+  fs.writeFileSync(at(dir, '.claude/hooks/pretooluse-mutation-guard.js'), hook);
+  fs.mkdirSync(at(dir, '.claude/commands'), { recursive: true });
+  fs.writeFileSync(at(dir, '.claude/commands/review.md'), 'my own review command\n');
+  const r = install(dir, baseAnswers(), ['--no-seeds', '--adopt']);
+  check('(k) an adopt run with nothing to decide exits 0', r.status === 0, why(r));
+  check('(k) the advisory list names the planted hook',
+    r.out.includes('possible superseded legacy files') && r.out.includes('.claude/hooks/pretooluse-mutation-guard.js'),
+    why(r, true).slice(0, 200));
+  check('(k) and the planted command file, matched by skill name', r.out.includes('.claude/commands/review.md'), why(r, true).slice(0, 200));
+  check('(k) it says plainly that nothing was touched and removal is a separate decision',
+    r.out.includes('ADVISORY') && r.out.includes('never deletes'), why(r, true).slice(0, 200));
+  check('(k) the hook file is byte-identical', read(at(dir, '.claude/hooks/pretooluse-mutation-guard.js')) === hook);
+  check('(k) and the command file too', read(at(dir, '.claude/commands/review.md')) === 'my own review command\n');
+  check('(k) the install itself really happened', exists(at(dir, CONFIG_REL)) && exists(at(dir, ROLES_REL)));
+}
+
+// ---------------------------------------------------------------------------
+// (b2) a PARTIALLY answered adopt file. Working through a legacy surface a few files at a time is
+// the normal way to use this, so the preview must show the answered ones classified and the rest
+// pending - and exit 0, because a dry run that refuses to preview is not a preview. The same file
+// without --dry-run still blocks by name: only the writing run demands a complete table.
+{
+  const dir = legacyProject('adopt-partial', MINE_ROLES);
+  fs.writeFileSync(at(dir, 'CLAUDE.md'), '# Mine\n\n<!-- BEGIN aiwf-core -->\nnot the render\n<!-- END aiwf-core -->\n');
+  const file = adoptFile('partial', { [ADOPT_KEY]: 'keep-mine' }); // CLAUDE.md#aiwf-core deliberately unanswered
+  const before = snapshot(dir);
+  const dry = install(dir, baseAnswers(), ['--no-seeds', '--adopt', '--adopt-file', file, '--dry-run']);
+  check('(b2) a partial adopt file with --dry-run previews instead of refusing (exit 0)', dry.status === 0, why(dry, true).slice(0, 200));
+  check('(b2) the answered address shows its decision', dry.out.includes('keep-mine: yours stays'), why(dry, true).slice(0, 200));
+  check('(b2) the unanswered one shows as pending, named', dry.out.includes(CLAUDE_KEY) && dry.out.includes('DECISION PENDING'), why(dry, true).slice(0, 200));
+  check('(b2) and the dry run wrote nothing', diffSnapshots(before, snapshot(dir)).length === 0);
+  const wet = install(dir, baseAnswers(), ['--no-seeds', '--adopt', '--adopt-file', file]);
+  check('(b2) the SAME partial file without --dry-run blocks', wet.status === 1, `exit ${wet.status}`);
+  check('(b2) naming the address that is still open', wet.out.includes(CLAUDE_KEY) && wet.out.includes('has no entry for it'), why(wet, true).slice(0, 200));
+  check('(b2) and that run wrote nothing either', diffSnapshots(before, snapshot(dir)).length === 0);
+}
+
+// (b3) the advisory scan is bounded in TRAVERSAL, not just in what it prints. Driven in-process
+// with an injected readdir, because "it stopped early" is a claim about how much it read, and an
+// output-only assertion cannot tell a capped list from a complete one.
+{
+  const dir = project('adopt-scan-bound');
+  const planted = 12;
+  for (let i = 0; i < planted; i += 1) {
+    fs.mkdirSync(at(dir, `docs/area-${String(i).padStart(2, '0')}`), { recursive: true });
+    fs.writeFileSync(at(dir, `docs/area-${String(i).padStart(2, '0')}/WORKFLOW.md`), 'mine\n');
+  }
+  let dirsRead = 0;
+  const counting = (d) => { dirsRead += 1; return fs.readdirSync(d, { withFileTypes: true }); };
+  const capped = scanSupersededLegacy({ pluginRoot: PLUGIN_ROOT, projectRoot: dir, readdir: counting, limit: 5 });
+  check('(b3) the scan returns at most its cap', capped.hits.length === 5, `${capped.hits.length} hit(s)`);
+  check('(b3) and says the list is truncated rather than presenting it as complete', capped.truncated === true);
+  check('(b3) it stopped READING once the cap was full (it never enumerated all 12 directories)',
+    dirsRead <= 7 && capped.dirsRead === dirsRead, `${dirsRead} directories read for ${planted} planted`);
+  // The control: with room for all of them it finds all of them, so the bound above is the cap
+  // doing its job and not a scan that simply cannot see past five files.
+  dirsRead = 0;
+  const full = scanSupersededLegacy({ pluginRoot: PLUGIN_ROOT, projectRoot: dir, readdir: counting, limit: 50 });
+  check('(b3) with room, the same scan finds every planted file and reports no truncation',
+    full.hits.length === planted && full.truncated === false, `${full.hits.length} hit(s)`);
+  check('(b3) the truncated result names its cause, so a report can say WHY it is a sample',
+    capped.causes.includes('hitLimit') && full.causes.length === 0, capped.causes.join(', '));
+}
+
+// (b3-i) THE HIT CAP IS NOT A TRAVERSAL BOUND. A sparse tree with nothing matching satisfies the hit
+// cap forever, so without a separate directory budget the scan would read a whole repository to
+// print nothing - and report that nothing as complete.
+{
+  const dir = project('adopt-scan-sparse');
+  const planted = 30;
+  for (let i = 0; i < planted; i += 1) {
+    fs.mkdirSync(at(dir, `docs/empty-${String(i).padStart(2, '0')}`), { recursive: true });
+    fs.writeFileSync(at(dir, `docs/empty-${String(i).padStart(2, '0')}/notes.md`), 'nothing that matches\n');
+  }
+  let dirsRead = 0;
+  const counting = (d) => { dirsRead += 1; return fs.readdirSync(d, { withFileTypes: true }); };
+  const bounded = scanSupersededLegacy({ pluginRoot: PLUGIN_ROOT, projectRoot: dir, readdir: counting, limit: 1, maxDirs: 5 });
+  check('(b3-i) with NO matches at all, the directory budget still stops the walk',
+    dirsRead === 5 && bounded.dirsRead === 5, `${dirsRead} directories read`);
+  check('(b3-i) and the empty result is reported as TRUNCATED, not as "nothing is here"',
+    bounded.truncated === true && bounded.hits.length === 0 && bounded.causes.includes('traversal'), bounded.causes.join(', '));
+  dirsRead = 0;
+  const whole = scanSupersededLegacy({ pluginRoot: PLUGIN_ROOT, projectRoot: dir, readdir: counting, limit: 1, maxDirs: 500 });
+  check('(b3-i) control: with a budget that fits, the same tree is walked whole and is NOT truncated',
+    dirsRead === planted + 1 && whole.truncated === false && whole.hits.length === 0, `${dirsRead} directories read`);
+}
+
+// (b3-ii) the class-root boundary: the hit cap filling exactly at the END of one root must not leave
+// the next root unvisited AND the result claiming to be complete. Two hooks fill a cap of two; the
+// matching doc under docs/ is then never seen.
+{
+  const dir = project('adopt-scan-boundary');
+  fs.mkdirSync(at(dir, '.claude/hooks'), { recursive: true });
+  fs.writeFileSync(at(dir, '.claude/hooks/pretooluse-mutation-guard.js'), 'mine\n');
+  fs.writeFileSync(at(dir, '.claude/hooks/pretooluse-dispatch-gate.js'), 'mine\n');
+  fs.mkdirSync(at(dir, 'docs'), { recursive: true });
+  fs.writeFileSync(at(dir, 'docs/WORKFLOW.md'), 'mine\n');
+  const atBoundary = scanSupersededLegacy({ pluginRoot: PLUGIN_ROOT, projectRoot: dir, limit: 2 });
+  check('(b3-ii) the cap filled exactly at the end of the first root returns exactly the cap',
+    atBoundary.hits.length === 2 && atBoundary.hits.every((h) => h.rel.startsWith('.claude/hooks/')), atBoundary.hits.map((h) => h.rel).join(', '));
+  check('(b3-ii) and the unvisited root makes the result TRUNCATED, not silently complete',
+    atBoundary.truncated === true && atBoundary.causes.includes('hitLimit'), atBoundary.causes.join(', '));
+  const roomy = scanSupersededLegacy({ pluginRoot: PLUGIN_ROOT, projectRoot: dir, limit: 50 });
+  check('(b3-ii) control: with room, the file in the second root IS found and nothing is truncated',
+    roomy.hits.length === 3 && roomy.hits.some((h) => h.rel === 'docs/WORKFLOW.md') && roomy.truncated === false,
+    roomy.hits.map((h) => h.rel).join(', '));
+}
+
+// (b3-iii) the depth cutoff and (b3-iv) the per-directory cutoff are stops too, and a stop that does
+// not say so is the same defect as a cap that does not say so.
+{
+  const deep = project('adopt-scan-deep');
+  const chain = Array.from({ length: 10 }, (_, i) => `l${i}`).join('/');
+  fs.mkdirSync(at(deep, `docs/${chain}`), { recursive: true });
+  fs.writeFileSync(at(deep, `docs/${chain}/WORKFLOW.md`), 'too deep to see\n');
+  const cut = scanSupersededLegacy({ pluginRoot: PLUGIN_ROOT, projectRoot: deep });
+  check('(b3-iii) a tree deeper than the scan follows marks the result truncated, with the cause',
+    cut.truncated === true && cut.causes.includes('depth') && cut.hits.length === 0, cut.causes.join(', '));
+
+  const shallow = project('adopt-scan-shallow');
+  fs.mkdirSync(at(shallow, 'docs/one'), { recursive: true });
+  fs.writeFileSync(at(shallow, 'docs/one/WORKFLOW.md'), 'visible\n');
+  const ok = scanSupersededLegacy({ pluginRoot: PLUGIN_ROOT, projectRoot: shallow });
+  check('(b3-iii) control: a shallow tree is found in full and is NOT truncated',
+    ok.truncated === false && ok.hits.length === 1 && ok.causes.length === 0, ok.causes.join(', '));
+
+  const wide = project('adopt-scan-wide');
+  fs.mkdirSync(at(wide, 'docs'), { recursive: true });
+  for (let i = 0; i < 5; i += 1) fs.writeFileSync(at(wide, `docs/file-${i}.md`), 'nothing that matches\n');
+  const clipped = scanSupersededLegacy({ pluginRoot: PLUGIN_ROOT, projectRoot: wide, maxPerDir: 2 });
+  check('(b3-iv) a directory with more entries than the scan reads marks the result truncated',
+    clipped.truncated === true && clipped.causes.includes('perDir'), clipped.causes.join(', '));
+  const readAll = scanSupersededLegacy({ pluginRoot: PLUGIN_ROOT, projectRoot: wide, maxPerDir: 50 });
+  check('(b3-iv) control: with the per-directory bound above the entry count, nothing is truncated',
+    readAll.truncated === false && readAll.causes.length === 0, readAll.causes.join(', '));
+}
+
+// (b3-v) and the report SAYS it: a truncated scan that found nothing must not print as silence.
+{
+  const dir = project('adopt-scan-report');
+  fs.mkdirSync(at(dir, '.claude/hooks'), { recursive: true });
+  fs.writeFileSync(at(dir, '.claude/hooks/pretooluse-mutation-guard.js'), 'mine\n');
+  const chain = Array.from({ length: 10 }, (_, i) => `l${i}`).join('/');
+  fs.mkdirSync(at(dir, `docs/${chain}`), { recursive: true });
+  fs.writeFileSync(at(dir, `docs/${chain}/WORKFLOW.md`), 'too deep to see\n');
+  const r = install(dir, baseAnswers(), ['--no-seeds', '--adopt']);
+  check('(b3-v) the adopt run exits 0', r.status === 0, why(r));
+  check('(b3-v) the report says the scan STOPPED EARLY and names the cause',
+    r.out.includes('STOPPED EARLY') && r.out.includes('deeper than this scan follows'), why(r, true).slice(0, 240));
+  check('(b3-v) and says plainly that the list is a sample, not an inventory',
+    r.out.includes('sample, not an inventory'), why(r, true).slice(0, 240));
+}
+
+// (b4) the --adopt refusal is decided on the PRESENCE of _aiwf, never on its shape. A malformed
+// block is the dangerous case: adopting over it would stamp a fresh one and destroy whatever it
+// recorded. Both entrypoints, because a refusal that lives in only one of them is not a refusal.
+for (const [name, value] of [['a list', []], ['a string', 'corrupt'], ['null', null]]) {
+  const viaInterview = project(`adopt-aiwf-${name.replace(/\W+/g, '-')}-interview`);
+  const viaGenerate = project(`adopt-aiwf-${name.replace(/\W+/g, '-')}-generate`);
+  for (const [dir, run, label] of [[viaInterview, install, 'interview.mjs'], [viaGenerate, generateInstall, 'generate.mjs']]) {
+    fs.mkdirSync(at(dir, '.claude/aiwf-native'), { recursive: true });
+    fs.writeFileSync(at(dir, CONFIG_REL), JSON.stringify({ _aiwf: value }, null, 2));
+    const before = snapshot(dir);
+    const r = run(dir, baseAnswers(), ['--no-seeds', '--adopt']);
+    check(`(b4) _aiwf = ${name} refuses --adopt via ${label} (exit 1)`, r.status === 1, `exit ${r.status}`);
+    check(`(b4) _aiwf = ${name} via ${label}: the message names the malformed bookkeeping`,
+      r.out.includes('is not a bookkeeping object'), why(r, true).slice(0, 200));
+    check(`(b4) _aiwf = ${name} via ${label}: nothing was written over it`,
+      diffSnapshots(before, snapshot(dir)).length === 0, diffSnapshots(before, snapshot(dir)).join(', '));
+  }
+}
+{
+  // The control: a config WITHOUT the key is not refused, so the rule above is about presence and
+  // not about "a config file exists".
+  const dir = project('adopt-config-no-aiwf');
+  fs.mkdirSync(at(dir, '.claude/aiwf-native'), { recursive: true });
+  fs.writeFileSync(at(dir, CONFIG_REL), JSON.stringify({ os: 'windows' }, null, 2));
+  const r = install(dir, baseAnswers(), ['--no-seeds', '--adopt']);
+  check('(b4) a config with no _aiwf key at all is NOT refused - adopt proceeds', r.status === 0, why(r, true).slice(0, 200));
+  check('(b4) and it now carries real bookkeeping', !!((readJson(at(dir, CONFIG_REL)) || {})._aiwf || {}).managedRegions);
+}
+
+// ---------------------------------------------------------------------------
+// The one managed file that also holds the operator's own text is CLAUDE.md, and every branch that
+// writes it splices bytes rather than re-encoding the file. This section is about the WRITE, not
+// about adopt: the append and re-render branches predate it and are asserted here for the first
+// time. A CRLF checkout is the case that catches a whole-file normalisation - the region comes out
+// right and every line around it is silently rewritten.
+section('19 - CLAUDE.md: the bytes outside the markers survive every write branch, CRLF included');
+{
+  const dir = project('crlf-claude');
+  const head = '# My project\r\n\r\nMy own instructions.\r\n';
+  fs.writeFileSync(at(dir, 'CLAUDE.md'), head);
+  const r = install(dir, baseAnswers(), ['--no-seeds']);
+  check('append into a CRLF CLAUDE.md exits 0', r.status === 0, why(r));
+  let after = read(at(dir, 'CLAUDE.md')) || '';
+  check('the operator\'s bytes are still there, byte for byte', after.slice(0, head.length) === head);
+  check('the region was appended', after.includes('<!-- BEGIN aiwf-core -->') && after.includes('<!-- END aiwf-core -->'));
+  check('and NOT ONE line ending in the file was rewritten (no bare LF anywhere)',
+    !/[^\r]\n/.test(after), `${(after.match(/[^\r]\n/g) || []).length} bare LF`);
+  const beforeRerun = snapshot(dir);
+  const again = install(dir, baseAnswers(), ['--no-seeds']);
+  check('a re-run over the CRLF file is a zero diff', again.status === 0 && diffSnapshots(beforeRerun, snapshot(dir)).length === 0,
+    diffSnapshots(beforeRerun, snapshot(dir)).join(', '));
+
+  // The clean RE-RENDER branch, on the same CRLF file. `project.name` is rendered INSIDE the
+  // markers (templates/CLAUDE.md.tmpl line 6), so changing it is what actually re-renders the
+  // region - a value from the template's operator zone would leave this branch untaken.
+  const changed = baseAnswers();
+  changed.project.name = 'Renamed';
+  const rr = install(dir, changed, ['--no-seeds']);
+  after = read(at(dir, 'CLAUDE.md')) || '';
+  check('the re-render exits 0 and really re-rendered the region',
+    rr.status === 0 && regionOfFile(after).includes('Renamed'), why(rr, true).slice(0, 160));
+  check('the operator\'s bytes are STILL byte-identical after a re-render', after.slice(0, head.length) === head);
+  check('and the re-rendered file still has no bare LF', !/[^\r]\n/.test(after), `${(after.match(/[^\r]\n/g) || []).length} bare LF`);
+  const beforeIdem = snapshot(dir);
+  const idem = install(dir, changed, ['--no-seeds']);
+  check('and the re-run after the re-render is a zero diff', idem.status === 0 && diffSnapshots(beforeIdem, snapshot(dir)).length === 0);
+}
+{
+  // The control for "no bare LF": an LF project must stay LF, or the assertion above would be true
+  // of an engine that simply wrote CRLF everywhere.
+  const dir = project('lf-claude');
+  const head = '# My project\n\nMy own instructions.\n';
+  fs.writeFileSync(at(dir, 'CLAUDE.md'), head);
+  const r = install(dir, baseAnswers(), ['--no-seeds']);
+  const after = read(at(dir, 'CLAUDE.md')) || '';
+  check('an LF CLAUDE.md stays LF (the CRLF assertions are not true of every branch)',
+    r.status === 0 && after.slice(0, head.length) === head && !after.includes('\r'), why(r));
 }
 
 // ---------------------------------------------------------------------------

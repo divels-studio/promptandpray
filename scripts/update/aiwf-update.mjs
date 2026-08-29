@@ -53,6 +53,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { previewLines, promptSync } from '../setup/dialog.mjs';
 import { resolveProjectRoot } from '../setup/generate.mjs';
 import { finishWithSelfCheck } from '../selfcheck/run-selfcheck.mjs';
 import { PayloadError } from './validate-payload.mjs';
@@ -63,40 +64,10 @@ import {
 
 const MODES = ['--check', '--dry-run', '--apply', '--resolve'];
 
-// ---------------------------------------------------------------------------
-// A synchronous prompt, so the engine stays synchronous
-// ---------------------------------------------------------------------------
-// The engine's write sequence is deliberately synchronous: every write boundary is a point a crash
-// must be recoverable from, and an await between the journal and the target would add boundaries the
-// journal does not describe. So the interactive adapter reads stdin synchronously rather than
-// turning the whole engine async for the sake of the one path a machine never takes.
-function promptSync(text) {
-  process.stdout.write(text);
-  const buf = Buffer.alloc(4096);
-  let out = '';
-  for (;;) {
-    let n = 0;
-    try {
-      n = fs.readSync(0, buf, 0, buf.length, null);
-    } catch (e) {
-      if (e.code === 'EAGAIN') { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20); continue; }
-      if (e.code === 'EOF') break;
-      throw e;
-    }
-    if (n === 0) break;
-    out += buf.toString('utf8', 0, n);
-    if (out.includes('\n')) break;
-  }
-  return out.split('\n')[0].trim();
-}
-
-const preview = (label, text) => {
-  if (text === null || text === undefined) return [`  ${label}: (not on disk)`];
-  const lines = text.split('\n');
-  const head = lines.slice(0, 6).map((l) => `    | ${l}`);
-  if (lines.length > 6) head.push(`    | ... (${lines.length - 6} more line(s))`);
-  return [`  ${label}: ${lines.length} line(s)`, ...head];
-};
+// The conflict dialog's two primitives - the synchronous stdin read and the content preview - are
+// shared with the setup engine's adopt dialog (scripts/setup/dialog.mjs). Both dialogs describe the
+// same kind of file to the same operator, so they read from one implementation.
+const preview = (label, text) => previewLines(label, text);
 
 function interactiveResolver() {
   return (address, expectedKind, info) => {

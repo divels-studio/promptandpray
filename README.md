@@ -40,6 +40,9 @@ What is here:
   default.
 - **The setup engine and the config schema**: an interview, a plan-then-write generator that never
   overwrites your own content, and a JSON Schema that is the single authority for the config shape.
+  `--adopt` installs into a project that already carries an AIWF surface: identical files are adopted
+  clean and silently, different ones are one operator decision each (keep-mine / take-new), an
+  unanswered decision stops the run with nothing written, and nothing is ever deleted.
 - **The update engine and the migration runner**: an ordered migration manifest, a two-hash conflict
   machine (take-new / keep-mine / merge), a write-ahead journal with deterministic crash recovery,
   and a generated CHANGES report. A new plugin version reaches an installed project without
@@ -61,9 +64,10 @@ What is **not** here yet:
   mirror the PowerShell ones flag for flag, `/pnp:setup` accepts all three OS channels, and the CI
   matrix runs the gates on ubuntu and macos runners. What is missing is field use: the POSIX legs
   first execute on the operator's first push, and no POSIX machine has hosted a real loop yet.
-- **The dogfood installation.** No real project has adopted this plugin yet. The install and update
-  paths are proven by the acceptance suites and by an end-to-end cycle over committed data, not yet
-  by a project that lives on it.
+- **The dogfood installation.** No real project runs on this plugin yet. The install and update
+  paths - including the adopt mode that installs over an existing AIWF surface - are proven by the
+  acceptance suites and by an end-to-end cycle over committed data, not yet by a project that lives
+  on it.
 
 ## Three names
 

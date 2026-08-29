@@ -30,14 +30,50 @@
  *                                            manual edit too, so it is a CONFLICT, never a silent
  *                                            re-create (which would also wipe an override record).
  *                                            Same for a marker region deleted out of a live file.
- *     on disk, no bookkeeping entry       -> not ours to touch. Stop. Adopting pre-existing files
- *                                            is the adopt path, not a side effect of setup.
+ *     on disk, no bookkeeping entry       -> not ours to touch. Stop - unless the run is an ADOPT
+ *                                            run, which is the one deliberate way to take ownership
+ *                                            of pre-existing files (see below). Never a side effect.
  *   Nothing here overwrites in any branch, and content OUTSIDE the markers is never read as ours.
  *   A file is DELETED only when all three hold: it is recorded as ours, its content still hashes to
  *   the recorded render, and the operator passed --confirm-remove-stale. The flag confirms removing
  *   the stale render setup reported - not whatever happens to sit at that path.
  *
- * HASHES are sha256 over the LF-normalised text, so a CRLF checkout does not read as an edit.
+ * ADOPT MODE (--adopt) - installing into a project that ALREADY carries an AIWF surface
+ *   A legacy project can hold hand-maintained copies of exactly the files this engine manages. Adopt
+ *   BOOTSTRAPS the two-hash bookkeeping over what it finds instead of blocking, and it does that
+ *   without a single silent write:
+ *     the file is ABSENT              -> the ordinary fresh write, unchanged
+ *     encountered content == render   -> adopted CLEAN in silence: local = upstream = hash(render),
+ *                                        override false. Nothing is written (the bytes are already
+ *                                        the render) and nothing is asked - the question would have
+ *                                        exactly one answer.
+ *     encountered content != render   -> a per-artifact OPERATOR DECISION, two words only:
+ *                                        keep-mine (the default bootstrap): nothing is written,
+ *                                          local = hash(yours), upstream = hash(render),
+ *                                          override = true. `/pnp:update --resolve <key>` later
+ *                                          reopens it with the full vocabulary, merge included.
+ *                                        take-new: the render replaces the file; recorded clean.
+ *                                        There is NO merge here on purpose: merging is the update
+ *                                        engine's machinery, and a bootstrap has to stay decidable
+ *                                        one file at a time.
+ *   Adopt applies ONLY to files no bookkeeping records. A config carrying an `_aiwf` KEY - whatever
+ *   its shape, a malformed one included - is refused outright (there is nothing to adopt, and a block
+ *   this engine cannot read must not be stamped over; `/pnp:update --resolve` is that project's path),
+ *   every conflict rule above keeps its exact force in both modes, and ADOPT NEVER DELETES
+ *   ANYTHING - the report lists possible superseded legacy files as ADVISORY text and touches none
+ *   of them. Text outside the CLAUDE.md markers, an existing overrides document and foreign
+ *   permission rules stay untouchable in adopt mode exactly as everywhere else.
+ *   Resolutions come from --adopt-file <json> (an artifact key -> "keep-mine" | "take-new"), or from
+ *   an interactive prompt on a TTY. With neither, the run STOPS naming every address it needed - a
+ *   guessed resolution is a silent overwrite with extra steps. --dry-run never asks: it prints the
+ *   classification, marks the pending decisions and writes nothing.
+ *
+ * HASHES are sha256 over the LF-normalised text, so a CRLF checkout does not read as an edit. That
+ * is about COMPARING, never about writing: CLAUDE.md - the one managed file that also holds the
+ * operator's own text - is written back with its existing bytes untouched and only the managed
+ * region re-encoded into the line-ending convention that file already uses. Normalising the whole
+ * file would rewrite every line around the markers, which is exactly what "text outside the markers
+ * is never touched" forbids.
  *
  * MEMORY SEEDS are PRINTED for the operator, never written into any memory store: the store's
  * format and location are machine-local and are not the plugin's to assume.
@@ -51,7 +87,8 @@
  *
  * CLI
  *   node generate.mjs --answers-file <answers.json> [--project-root <dir>] [--plugin-root <dir>]
- *                     [--confirm-remove-stale] [--no-seeds] [--dry-run] [--quiet] [--no-selfcheck]
+ *                     [--confirm-remove-stale] [--adopt] [--adopt-file <json>] [--no-seeds]
+ *                     [--dry-run] [--quiet] [--no-selfcheck]
  *   exit 0 = applied (or dry-run clean); exit 1 = blocked with nothing written, or a red/unrunnable
  *   self-check after a successful write; exit 2 = cannot start.
  */
@@ -60,6 +97,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { previewLines, promptSync } from './dialog.mjs';
 import { collectDefaults, formatErrors, loadSchema, validate } from './validate-config.mjs';
 import { validatePayload } from '../update/validate-payload.mjs';
 import { finishWithSelfCheck } from '../selfcheck/run-selfcheck.mjs';
@@ -94,6 +132,20 @@ const toPosix = (p) => p.split(path.sep).join('/');
 // engines, and a second copy of these three lines is precisely how they would drift apart.
 export const lf = (text) => text.replace(/\r\n/g, '\n');
 export const sha256 = (text) => crypto.createHash('sha256').update(lf(text), 'utf8').digest('hex');
+
+// LINE ENDINGS - hashes are LF, BYTES ON DISK ARE THE FILE'S OWN
+// Every hash in this engine is taken over LF-normalised text, so a CRLF checkout never reads as an
+// edit. That is a statement about COMPARISON, and it must not leak into writing: a file that carries
+// the operator's own text (CLAUDE.md is the only one) is written back with its existing bytes
+// untouched, and the managed region is re-encoded into the convention that file already uses.
+// Otherwise "text outside the markers is never touched" would be false for every CRLF checkout - the
+// region would be correct and every line around it rewritten.
+export function dominantEol(text) {
+  const crlfCount = (text.match(/\r\n/g) || []).length;
+  const lfCount = (text.match(/\n/g) || []).length - crlfCount;
+  return crlfCount > lfCount ? '\r\n' : '\n';
+}
+export const encodeEol = (text, eol) => (eol === '\r\n' ? lf(text).replace(/\n/g, '\r\n') : lf(text));
 const readText = (p) => { try { return fs.readFileSync(p, 'utf8'); } catch { return null; } };
 export const jsonText = (value) => JSON.stringify(value, null, 2) + '\n';
 
@@ -309,6 +361,272 @@ export function planAskRules({ desired, actual, owned, suppressed }) {
 }
 
 // ---------------------------------------------------------------------------
+// Adopt mode
+// ---------------------------------------------------------------------------
+// The whole vocabulary, and it is deliberately SHORTER than the update engine's: `merge` is not an
+// option at bootstrap time. Merging needs a base to merge against, and the base is exactly what a
+// project that never had this bookkeeping does not have; keep-mine + `/pnp:update --resolve <key>`
+// reaches the same place through the machinery built for it.
+export const ADOPT_RESOLUTIONS = ['keep-mine', 'take-new'];
+
+export const ADOPT_ALREADY_INSTALLED =
+  '--adopt is for a project that carries a legacy AIWF surface, and this project already has an '
+  + 'installation recorded in _aiwf - there is nothing here to adopt. Re-run without --adopt, and use '
+  + '`/pnp:update --resolve <key>` to re-decide a single artifact.';
+
+/**
+ * The `--adopt` refusal, decided on the PRESENCE of the `_aiwf` key, never on its shape - and shared
+ * by both entrypoints so they cannot disagree about the same config. A malformed block (`null`, a
+ * list, a string) is the case that matters: it is bookkeeping this engine cannot read, and adopting
+ * over it would REPLACE it with a freshly stamped one, destroying whatever record it held. Refusing
+ * is the fail-closed answer; repairing it is not adopt's job.
+ * Returns the refusal message, or null when --adopt may proceed.
+ */
+export function adoptRefusal(existingConfig) {
+  if (!isPlainObject(existingConfig)) return null;
+  if (!Object.prototype.hasOwnProperty.call(existingConfig, '_aiwf')) return null;
+  if (isPlainObject(existingConfig._aiwf)) return ADOPT_ALREADY_INSTALLED;
+  const found = existingConfig._aiwf === null ? 'null' : (Array.isArray(existingConfig._aiwf) ? 'a list' : typeof existingConfig._aiwf);
+  return `${toPosix(CONFIG_REL)} carries an "_aiwf" key that is not a bookkeeping object (found ${found}) - `
+    + '--adopt refuses rather than stamp a fresh block over bookkeeping it cannot read, because whatever that '
+    + 'key was meant to record would be gone. Fix or remove the key deliberately, then re-run.';
+}
+
+/**
+ * One entry of an adopt file: an artifact key mapped to one of the two words. Anything else STOPS
+ * the run naming the address - a resolution that had to be interpreted is not a resolution.
+ */
+export function checkAdoptRecord(value, address) {
+  const where = `adopt resolution for "${address}"`;
+  if (value === 'merge') {
+    throw new SetupError(
+      `${where}: adopt has no "merge" - a bootstrap has no recorded base to merge against. Adopt it as `
+      + `"keep-mine" and then run \`/pnp:update --resolve ${address}\`, which does have the merge path.`,
+    );
+  }
+  if (typeof value !== 'string' || !ADOPT_RESOLUTIONS.includes(value)) {
+    throw new SetupError(
+      `${where}: must be ${ADOPT_RESOLUTIONS.map((r) => `"${r}"`).join(' or ')}, found ${JSON.stringify(value)} - `
+      + 'an adopt file maps an artifact key directly to one of those two words.',
+    );
+  }
+  return value;
+}
+
+// An adopt resolver is `(key, info) => { resolution }` or `{ pending: true, blocking, reason }`.
+// "Pending" is not an error: a dry run has nobody to ask on purpose, and a non-interactive run with
+// no file has nobody to ask by accident - the first is a preview, the second is a blocker, and the
+// resolver is what knows which. A MALFORMED answer is different from no answer and throws.
+
+/** The dry-run adapter: classify everything, decide nothing, block nothing. */
+export const adoptPreviewResolver = () => () => ({
+  pending: true,
+  blocking: false,
+  reason: 'a dry run never asks - the classification above is exactly what this preview exists to show. '
+    + 'Answer it with --adopt-file, or run without --dry-run.',
+});
+
+/** The adapter that cannot answer at all: a non-interactive run with no adopt file. */
+export function adoptStopResolver(reason) {
+  return () => ({ pending: true, blocking: true, reason });
+}
+
+/**
+ * The scripted adapter. A missing entry does not throw: it is reported as a pending decision, so one
+ * run names every address the file still has to answer instead of one per re-run. `knownAddresses`
+ * is read back by the planner, which refuses a file naming an address this run never had to decide -
+ * an unconsumed address is a typo or a stale table, and proceeding on it means the operator's
+ * decision went somewhere nobody read.
+ *
+ * `dryRun` makes an unanswered address NON-blocking. A partially filled adopt file is the normal way
+ * to work through a large legacy surface, and the preview is what tells the operator which addresses
+ * are still open; a dry run that exits 1 on an unanswered decision would refuse to show exactly the
+ * thing it exists to show. The answered entries are still applied as classification in that preview.
+ */
+export function adoptFileResolver(table, { label = 'the adopt file', dryRun = false } = {}) {
+  if (!isPlainObject(table)) {
+    throw new SetupError(`${label} must be a JSON object mapping an artifact key to "keep-mine" or "take-new".`);
+  }
+  const resolver = (key) => {
+    if (!Object.prototype.hasOwnProperty.call(table, key)) {
+      return {
+        pending: true,
+        blocking: !dryRun,
+        reason: `${label} has no entry for it - add ${JSON.stringify(key)}: "keep-mine" (keep what is on disk) `
+          + `or "take-new" (let the payload render replace it). Nothing is guessed.${dryRun ? ' (This is a dry run: nothing was written either way.)' : ''}`,
+      };
+    }
+    return { resolution: checkAdoptRecord(table[key], key) };
+  };
+  resolver.knownAddresses = Object.keys(table);
+  resolver.label = label;
+  return resolver;
+}
+
+/** The interactive adapter: shows both sides and asks. The transport is injectable for tests. */
+export function adoptInteractiveResolver({ prompt = promptSync, log = console.log } = {}) {
+  return (key, info) => {
+    log(`\nADOPT ${key}`);
+    log('  this file is already here and PromptAndPray did not write it, and it differs from the render.');
+    for (const line of previewLines('yours  ', info.actual)) log(line);
+    for (const line of previewLines('payload', info.render)) log(line);
+    for (;;) {
+      const answer = prompt(`  ${ADOPT_RESOLUTIONS.join(' / ')}: `);
+      if (ADOPT_RESOLUTIONS.includes(answer)) return { resolution: answer };
+      if (answer === 'merge') {
+        log(`  adopt has no merge - take "keep-mine" now and run \`/pnp:update --resolve ${key}\` to merge.`);
+        continue;
+      }
+      log(`  answer with one of: ${ADOPT_RESOLUTIONS.join(', ')}`);
+    }
+  };
+}
+
+/** Builds the resolver a CLI run needs. Both setup entrypoints go through this one function. */
+export function makeAdoptResolver({ adoptFile, dryRun = false, interactive = process.stdin.isTTY } = {}) {
+  if (adoptFile) {
+    const file = path.resolve(adoptFile);
+    let table;
+    try { table = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) {
+      throw new SetupError(`--adopt-file "${file}" cannot be read (${e.message}).`);
+    }
+    // dryRun is threaded INTO the file adapter rather than checked before it: a partially answered
+    // file plus --dry-run must preview (the answered entries classified, the rest pending), not stop.
+    return adoptFileResolver(table, { label: `--adopt-file ${path.basename(file)}`, dryRun });
+  }
+  if (dryRun) return adoptPreviewResolver();
+  if (interactive) return adoptInteractiveResolver();
+  return adoptStopResolver('this run is not interactive and no --adopt-file was passed, so there is nobody to ask.');
+}
+
+// ---------------------------------------------------------------------------
+// The ADVISORY superseded-legacy inventory
+// ---------------------------------------------------------------------------
+// A legacy AIWF surface is more than the artifacts this engine manages: hooks, wrappers, doctrine
+// docs and command files were maintained by hand before the payload existed. Setup reports the ones
+// whose NAME matches something the payload now ships, and stops there. It reads; it never proposes a
+// command, never stages a deletion and never touches a byte - removing any of them is a separate,
+// operator-gated step, and a name match is a hint, not a verdict about what a file contains.
+const SCAN_SKIP_DIRS = new Set(['.git', 'node_modules', '.next', 'dist', 'build']);
+export const SCAN_MAX_HITS = 200;
+export const SCAN_MAX_DIRS = 2000;
+export const SCAN_MAX_DEPTH = 8;
+export const SCAN_MAX_PER_DIR = 2000;
+
+// The five ways this scan can stop before it has seen everything. Each one is a REASON the list is a
+// sample, and each is reported by name: a bounded scan whose result cannot say "I stopped early" is
+// indistinguishable from a complete one, and the operator reads this list to decide what to delete.
+// The hit cap alone is not a traversal bound either - a sparse tree with no matches would satisfy it
+// forever while reading every directory in the repository.
+export const SCAN_STOP_REASONS = {
+  hitLimit: 'the list cap was reached',
+  traversal: 'the directory-read budget was reached',
+  depth: 'a tree deeper than this scan follows',
+  perDir: 'a directory with more entries than this scan reads',
+  unreadable: 'a directory that could not be read',
+};
+
+function readdirNames(dir, filter) {
+  try { return fs.readdirSync(dir).filter(filter); } catch { return []; }
+}
+
+/**
+ * Walks one class root and pushes ONLY the matches. Filtering after a full walk would read an entire
+ * repository into memory to produce an advisory paragraph, and one wide directory is all that takes.
+ *
+ * TWO INDEPENDENT BUDGETS, because they bound different things: `limit` caps the HITS (how long the
+ * printed list may get) and `maxDirs` caps the TRAVERSAL (how much of the tree may be read at all).
+ * A hit cap is no traversal bound - with nothing matching, it is never reached. Both, plus the depth
+ * and per-directory cutoffs and an unreadable directory, mark the run truncated with their cause.
+ * `readdir`, `limit`, `maxDirs` and `maxPerDir` are injectable so every bound is testable without a
+ * fixture the size of the thing it is protecting against.
+ */
+function walkMatches(dir, base, budget, match, hits, depth = 0) {
+  if (hits.length >= budget.limit) { budget.causes.hitLimit = true; return; }
+  if (budget.dirsRead >= budget.maxDirs) { budget.causes.traversal = true; return; }
+  if (depth > SCAN_MAX_DEPTH) { budget.causes.depth = true; return; }
+  let entries = [];
+  try { entries = budget.readdir(dir); } catch { budget.causes.unreadable = true; return; }
+  budget.dirsRead += 1;
+  if (entries.length > budget.maxPerDir) { entries = entries.slice(0, budget.maxPerDir); budget.causes.perDir = true; }
+  for (const entry of entries) {
+    if (hits.length >= budget.limit) { budget.causes.hitLimit = true; return; }
+    if (budget.dirsRead >= budget.maxDirs) { budget.causes.traversal = true; return; }
+    if (SCAN_SKIP_DIRS.has(entry.name)) continue;
+    const p = path.join(dir, entry.name);
+    if (entry.isDirectory()) { walkMatches(p, base, budget, match, hits, depth + 1); continue; }
+    const found = match(entry.name);
+    if (found) hits.push({ rel: toPosix(path.relative(base, p)), ...found });
+  }
+}
+
+const stemOf = (name) => name.replace(/\.[^.]+$/, '');
+
+/**
+ * Returns { hits: [{ rel, what, why }], truncated, causes, dirsRead } - advisory only, sorted, and
+ * bounded in BOTH directions (hits and directories read). `truncated` and the named `causes` are
+ * part of the result because a capped list presented as a complete one would be a quiet lie in
+ * exactly the report an operator uses to decide what to remove.
+ */
+export function scanSupersededLegacy({
+  pluginRoot, projectRoot,
+  readdir = (d) => fs.readdirSync(d, { withFileTypes: true }),
+  limit = SCAN_MAX_HITS,
+  maxDirs = SCAN_MAX_DIRS,
+  maxPerDir = SCAN_MAX_PER_DIR,
+}) {
+  const skills = readdirNames(path.join(pluginRoot, 'skills'), (n) => fs.existsSync(path.join(pluginRoot, 'skills', n, 'SKILL.md')));
+  const classes = [
+    {
+      what: 'hook',
+      root: path.join('.claude', 'hooks'),
+      names: new Set(readdirNames(path.join(pluginRoot, 'scripts', 'engine'), (n) => n.endsWith('.js'))),
+      why: 'the payload ships a hook script of this name under scripts/engine/',
+    },
+    {
+      what: 'wrapper',
+      root: path.join('scripts', 'native'),
+      names: new Set([
+        ...readdirNames(path.join(pluginRoot, 'scripts', 'native', 'ps'), (n) => n.endsWith('.ps1')),
+        ...readdirNames(path.join(pluginRoot, 'scripts', 'native', 'sh'), (n) => n.endsWith('.sh')),
+      ]),
+      why: 'the payload ships a wrapper of this name under scripts/native/',
+    },
+    {
+      what: 'doctrine doc',
+      root: 'docs',
+      names: new Set(readdirNames(path.join(pluginRoot, 'docs'), (n) => n.endsWith('.md'))),
+      why: 'the payload carries a document of this name under docs/',
+    },
+    {
+      what: 'command file',
+      root: path.join('.claude', 'commands'),
+      names: new Set(skills),
+      byStem: true,
+      why: 'the payload ships a /pnp: skill of this name',
+    },
+  ];
+
+  const budget = { limit, maxDirs, maxPerDir, readdir, dirsRead: 0, causes: {} };
+  const hits = [];
+  for (const cls of classes) {
+    if (cls.names.size === 0) continue;
+    const dir = path.join(projectRoot, cls.root);
+    if (!fs.existsSync(dir)) continue;
+    // The budgets are checked HERE too, not only inside the walk: a limit reached exactly at the end
+    // of one class root would otherwise leave the next root unvisited and the result claiming to be
+    // complete - the whole point being that this class of file lives under FOUR different roots.
+    if (hits.length >= budget.limit) { budget.causes.hitLimit = true; continue; }
+    if (budget.dirsRead >= budget.maxDirs) { budget.causes.traversal = true; continue; }
+    const match = (name) => (cls.names.has(cls.byStem ? stemOf(name) : name) ? { what: cls.what, why: cls.why } : null);
+    walkMatches(dir, projectRoot, budget, match, hits);
+  }
+  hits.sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0));
+  const causes = Object.keys(SCAN_STOP_REASONS).filter((k) => budget.causes[k] === true);
+  return { hits, truncated: causes.length > 0, causes, dirsRead: budget.dirsRead };
+}
+
+// ---------------------------------------------------------------------------
 // Planning
 // ---------------------------------------------------------------------------
 function templatePath(pluginRoot, ...rel) { return path.join(pluginRoot, 'templates', ...rel); }
@@ -329,13 +647,24 @@ function regionOf(rendered) {
 
 /**
  * Decides the whole installation without touching the filesystem.
- * Returns { config, actions, blockers, notes, artifacts } - `actions` is what apply() will do.
+ * Returns { config, actions, blockers, notes, artifacts, askPlan, adopt } - `actions` is what
+ * apply() will do, and `adopt` is null unless this is an adopt run.
  */
-export function planInstall({ pluginRoot, projectRoot, answers, confirmRemoveStale = false, schema }) {
+export function planInstall({
+  pluginRoot, projectRoot, answers, confirmRemoveStale = false, schema,
+  adopt = false, resolveAdopt = null,
+}) {
   const blockers = [];
   const notes = [];
   const actions = [];
   const abs = (rel) => path.join(projectRoot, rel);
+  // The inventory of what adopt met, and the decision taken on each - reported whether the run ends
+  // written, blocked or previewed, because it is the operator's map of the surface already there.
+  const adoptEntries = [];
+  const adoptAsked = new Set();
+  const stopped = () => ({ config: null, actions: [], blockers, notes, artifacts: [], askPlan: null, adopt: null });
+  const resolveAdoptFn = resolveAdopt
+    || adoptStopResolver('this run supplied no adopt resolver at all, so there is nobody to ask.');
 
   const pluginJson = JSON.parse(fs.readFileSync(path.join(pluginRoot, '.claude-plugin', 'plugin.json'), 'utf8'));
   const activeSchema = schema || loadSchema(path.join(pluginRoot, 'schema', 'aiwf.config.schema.json'));
@@ -350,7 +679,7 @@ export function planInstall({ pluginRoot, projectRoot, answers, confirmRemoveSta
   const payload = validatePayload(pluginRoot);
   if (payload.errors.length) {
     blockers.push(`the plugin's migration payload is not coherent, so nothing was installed:\n  - ${payload.errors.join('\n  - ')}`);
-    return { config: null, actions: [], blockers, notes, artifacts: [], askPlan: null };
+    return stopped();
   }
   const freshInstallMigration = payload.manifest[payload.manifest.length - 1].id;
 
@@ -362,10 +691,18 @@ export function planInstall({ pluginRoot, projectRoot, answers, confirmRemoveSta
       // Stop here rather than plan around it: every later step reads this file's bookkeeping, and a
       // plan built on "there is no previous state" would report conflicts that do not exist.
       blockers.push(`${toPosix(CONFIG_REL)} exists but is not valid JSON (${e.message}) - setup will not overwrite a config it cannot read.`);
-      return { config: null, actions: [], blockers, notes, artifacts: [], askPlan: null };
+      return stopped();
     }
   }
   const previousAiwf = (existing && isPlainObject(existing._aiwf)) ? existing._aiwf : null;
+  // Adopt is a BOOTSTRAP. Re-adopting a project this engine already records would mean deciding
+  // again about files whose ownership is already written down - which is `/pnp:update --resolve`,
+  // a different mechanism with a journal behind it. Refused in one line, before anything is read,
+  // on the PRESENCE of the key rather than on its shape (see adoptRefusal).
+  if (adopt) {
+    const refusal = adoptRefusal(existing);
+    if (refusal) { blockers.push(refusal); return stopped(); }
+  }
   const base = collectDefaults(activeSchema) || {};
   const carried = existing ? { ...existing } : {};
   delete carried.$schema;
@@ -379,7 +716,7 @@ export function planInstall({ pluginRoot, projectRoot, answers, confirmRemoveSta
   const shapeErrors = validate({ ...merged, _aiwf: PROBE_AIWF }, activeSchema).filter((e) => !e.path.startsWith('/_aiwf'));
   if (shapeErrors.length) {
     blockers.push(`the answers do not satisfy the config schema:\n${formatErrors(shapeErrors)}`);
-    return { config: null, actions: [], blockers, notes, artifacts: [], askPlan: null };
+    return stopped();
   }
 
   // Configured paths are PROJECT-RELATIVE by contract. An absolute path, or one that climbs out of
@@ -390,7 +727,7 @@ export function planInstall({ pluginRoot, projectRoot, answers, confirmRemoveSta
     const outside = path.isAbsolute(value) || path.relative(projectRoot, path.resolve(projectRoot, value)).split(/[\\/]/)[0] === '..';
     if (outside) blockers.push(`paths.${key} ("${value}") is not inside the project - configured paths are project-relative.`);
   }
-  if (blockers.length) return { config: null, actions: [], blockers, notes, artifacts: [], askPlan: null };
+  if (blockers.length) return stopped();
 
   // ---- 2. render every managed artifact ------------------------------------
   const resolvedRoot = projectRoot;
@@ -444,17 +781,96 @@ export function planInstall({ pluginRoot, projectRoot, answers, confirmRemoveSta
     `and setup never silently recreates a managed artifact - resolve it with ` +
     `\`/pnp:update --resolve ${key}\` (which can re-render it deliberately). Nothing was written.`;
 
+  // The advice DEPENDS on whether this project has an installation, because --adopt is refused on one
+  // that has: pointing a recorded project at a flag it cannot use would be a dead end in a message
+  // whose whole job is to say what to do next.
+  const adoptHint = previousAiwf
+    ? 'This project already has an installation, so --adopt is not the path (it bootstraps a project that has '
+      + 'none): move the file aside and re-run, or remove it deliberately if it is a leftover.'
+    : 'Re-run with --adopt to bootstrap ownership over the AIWF surface already here (an identical file is '
+      + 'adopted silently, a different one asks you first, and nothing is ever deleted), or move it aside.';
+  const unrecordedArtifact = (key) =>
+    `${key} already exists but is not recorded in _aiwf.managedRegions - setup will not take over a file `
+    + `it did not write. ${adoptHint}`;
+
+  /**
+   * The adopt classification for ONE unrecorded pre-existing artifact. Returns the decision and
+   * RECORDS the inventory entry; the caller does the stamping, because what a decision means for
+   * the bookkeeping is the caller's business (a whole file and a marker region hash different
+   * things). `identical` never reaches the resolver: that question has exactly one answer.
+   */
+  const adoptDecide = (key, actualContent, renderContent) => {
+    if (sha256(actualContent) === sha256(renderContent)) {
+      adoptEntries.push({ key, state: 'identical', resolution: null, pending: false });
+      return { identical: true };
+    }
+    adoptAsked.add(key);
+    const answer = resolveAdoptFn(key, { key, actual: actualContent, render: renderContent }) || {};
+    if (answer.pending) {
+      adoptEntries.push({
+        key, state: 'different', resolution: null, pending: true, reason: answer.reason,
+        actual: actualContent, render: renderContent,
+      });
+      return { pending: true, blocking: answer.blocking === true, reason: answer.reason };
+    }
+    if (!ADOPT_RESOLUTIONS.includes(answer.resolution)) {
+      throw new SetupError(
+        `the adopt resolver answered ${JSON.stringify(answer.resolution)} for "${key}" - the vocabulary is `
+        + `${ADOPT_RESOLUTIONS.join(' and ')}, and nothing is guessed from anything else.`,
+      );
+    }
+    adoptEntries.push({
+      key, state: 'different', resolution: answer.resolution, pending: false,
+      actual: actualContent, render: renderContent,
+    });
+    return { resolution: answer.resolution };
+  };
+
+  /** Records a pending decision. Blocking or not, NOTHING is stamped and nothing is written. */
+  const adoptPending = (key, decision) => {
+    if (decision.blocking) {
+      blockers.push(`${key} is already here and PromptAndPray did not write it, so adopt needs a decision on it: ${decision.reason}`);
+    } else {
+      notes.push(`${key}: adopt decision pending - ${decision.reason}`);
+    }
+  };
+
+  // keep-mine is the ONLY branch that writes an asymmetric record: `local` describes what stays on
+  // disk (the operator's file), `upstream` what the payload would have written, and `override` says
+  // a human chose between them. A later /pnp:update reads exactly this and re-applies nothing.
+  const stampKeepMine = (key, renderContent, actualContent) => {
+    managedRegions[key] = { upstream: sha256(renderContent), local: sha256(actualContent), override: true };
+  };
+
   for (const artifact of artifacts) {
     const actual = readText(artifact.file);
     const previous = previousRegions[artifact.key];
     if (actual === null) {
       if (previous) { blockers.push(deletedArtifact(artifact.key)); continue; }
+      if (adopt) adoptEntries.push({ key: artifact.key, state: 'absent', resolution: null, pending: false });
       actions.push({ kind: 'write', file: artifact.file, rel: artifact.rel, content: artifact.content, why: 'created' });
       stamp(artifact.key, artifact.content, null);
       continue;
     }
     if (!previous) {
-      blockers.push(`${artifact.key} already exists but is not recorded in _aiwf.managedRegions - setup will not adopt a file it did not write. Move it aside (or adopt the installation) and re-run.`);
+      if (!adopt) { blockers.push(unrecordedArtifact(artifact.key)); continue; }
+      const decision = adoptDecide(artifact.key, actual, artifact.content);
+      if (decision.pending) { adoptPending(artifact.key, decision); continue; }
+      if (decision.identical) {
+        // The bytes on disk ALREADY are the render, so there is nothing to write and nothing to ask:
+        // adopting it clean is a bookkeeping fact, not a change to the project.
+        stamp(artifact.key, artifact.content, null);
+        continue;
+      }
+      if (decision.resolution === 'take-new') {
+        actions.push({
+          kind: 'write', file: artifact.file, rel: artifact.rel, content: artifact.content,
+          why: 'adopted take-new: the payload render replaces the file that was here',
+        });
+        stamp(artifact.key, artifact.content, null);
+        continue;
+      }
+      stampKeepMine(artifact.key, artifact.content, actual); // keep-mine: not one byte is written
       continue;
     }
     if (sha256(actual) !== previous.local) {
@@ -484,21 +900,30 @@ export function planInstall({ pluginRoot, projectRoot, answers, confirmRemoveSta
     // edit, not an invitation to recreate the file.
     if (previousClaude) blockers.push(deletedArtifact(claudeKey));
     else {
+      if (adopt) adoptEntries.push({ key: claudeKey, state: 'absent', resolution: null, pending: false });
       actions.push({ kind: 'write', file: claudeFile, rel: 'CLAUDE.md', content: claudeMdRendered, why: 'created with the managed region' });
       stamp(claudeKey, claudeRegion, null);
     }
   } else {
+    // Every branch below writes a file that already carries the operator's text, so all of them are
+    // VERBATIM writes: the existing bytes are spliced, never re-encoded, and only the managed region
+    // is rendered - in the convention this file already uses.
+    const claudeEol = dominantEol(claudeActual);
+    const regionBytes = () => encodeEol(claudeRegion, claudeEol);
     const start = claudeActual.indexOf(REGION_BEGIN);
     const end = claudeActual.indexOf(REGION_END);
     if (start === -1 && end === -1) {
       // The file is here but the markers are not. With a bookkeeping entry that means the REGION was
       // deleted out of the file - a manual edit again, so appending a fresh one would silently undo
-      // it. Without an entry it is an ordinary CLAUDE.md that has never been managed: append.
+      // it. Without an entry it is an ordinary CLAUDE.md that has never been managed: append. Adopt
+      // changes NOTHING here: the region is absent, so there is no encountered content to decide
+      // about, and the append already leaves every existing line where it was.
       if (previousClaude) { blockers.push(deletedArtifact(claudeKey)); } else {
+        if (adopt) adoptEntries.push({ key: claudeKey, state: 'absent', resolution: null, pending: false });
         const joiner = claudeActual.endsWith('\n') ? '\n' : '\n\n';
         actions.push({
           kind: 'write', file: claudeFile, rel: 'CLAUDE.md', why: 'managed region appended (existing text untouched)',
-          content: claudeActual + joiner + claudeRegion + '\n',
+          content: claudeActual + encodeEol(joiner + claudeRegion + '\n', claudeEol), verbatim: true,
         });
         stamp(claudeKey, claudeRegion, null);
       }
@@ -506,8 +931,28 @@ export function planInstall({ pluginRoot, projectRoot, answers, confirmRemoveSta
       blockers.push(`CLAUDE.md carries only one of the ${REGION_ID} markers - setup will not guess where the managed region ends.`);
     } else {
       const actualRegion = claudeActual.slice(start, end + REGION_END.length);
-      if (!previousClaude) {
-        blockers.push(`CLAUDE.md already carries an ${REGION_ID} region that is not recorded in _aiwf.managedRegions - setup will not adopt it.`);
+      const spliceRegion = (replacement) => claudeActual.slice(0, start) + replacement + claudeActual.slice(end + REGION_END.length);
+      if (!previousClaude && !adopt) {
+        blockers.push(
+          `CLAUDE.md already carries an ${REGION_ID} region that is not recorded in _aiwf.managedRegions - `
+          + `setup will not take it over. ${adoptHint} (The text OUTSIDE the markers is yours and is never `
+          + 'read as ours, in every branch including adopt.)',
+        );
+      } else if (!previousClaude) {
+        // ADOPT over the REGION only. Every branch below rewrites at most the marked span, so the
+        // operator's own CLAUDE.md text is untouched here exactly as it is everywhere else.
+        const decision = adoptDecide(claudeKey, actualRegion, claudeRegion);
+        if (decision.pending) adoptPending(claudeKey, decision);
+        else if (decision.identical) stamp(claudeKey, claudeRegion, null);
+        else if (decision.resolution === 'take-new') {
+          actions.push({
+            kind: 'write', file: claudeFile, rel: 'CLAUDE.md', content: spliceRegion(regionBytes()), verbatim: true,
+            why: 'adopted take-new: the managed region was replaced by the render (text outside the markers preserved byte for byte)',
+          });
+          stamp(claudeKey, claudeRegion, null);
+        } else {
+          stampKeepMine(claudeKey, claudeRegion, actualRegion); // keep-mine: CLAUDE.md is not written at all
+        }
       } else if (sha256(actualRegion) !== previousClaude.local) {
         blockers.push(`${claudeKey} was edited by hand inside the markers. Nothing was overwritten - resolve it with \`/pnp:update --resolve ${claudeKey}\`. (Text OUTSIDE the markers is yours and is never read as ours.)`);
       } else if (previousClaude.override === true) {
@@ -516,8 +961,8 @@ export function planInstall({ pluginRoot, projectRoot, answers, confirmRemoveSta
       } else {
         if (sha256(actualRegion) !== sha256(claudeRegion)) {
           actions.push({
-            kind: 'write', file: claudeFile, rel: 'CLAUDE.md', why: 'managed region re-rendered (text outside the markers preserved)',
-            content: claudeActual.slice(0, start) + claudeRegion + claudeActual.slice(end + REGION_END.length),
+            kind: 'write', file: claudeFile, rel: 'CLAUDE.md', why: 'managed region re-rendered (text outside the markers preserved byte for byte)',
+            content: spliceRegion(regionBytes()), verbatim: true,
           });
         }
         stamp(claudeKey, claudeRegion, previousClaude);
@@ -604,7 +1049,10 @@ export function planInstall({ pluginRoot, projectRoot, answers, confirmRemoveSta
   for (const { rel, key, actual } of stale) {
     const previous = previousRegions[key];
     if (!previous) {
-      blockers.push(`${key} exists but is not recorded in _aiwf.managedRegions - setup will not adopt (or delete) a file it did not write, even though the ${key.includes('reviewer') ? 'reviewer' : 'qa'} role is codex-hosted now. Move it aside and re-run.`);
+      // --adopt does not reach this path either, and that is not an oversight: this configuration
+      // renders NO artifact at that path (the role is codex-hosted), so there is no render to adopt
+      // the file as - ownership of a file the payload would never write again is not ownership.
+      blockers.push(`${key} exists but is not recorded in _aiwf.managedRegions - setup will not adopt (or delete) a file it did not write, even though the ${key.includes('reviewer') ? 'reviewer' : 'qa'} role is codex-hosted now. --adopt does not cover it: this configuration renders nothing at that path, so there is nothing to take ownership OF. Move it aside and re-run.`);
     } else if (sha256(actual) !== previous.local) {
       blockers.push(`${key} is a stale render that was ALSO edited by hand (its content no longer matches the recorded local hash), so it is not the file the removal flag confirms. Nothing was deleted - resolve it with \`/pnp:update --resolve ${key}\`.`);
     } else if (!confirmRemoveStale) {
@@ -613,6 +1061,30 @@ export function planInstall({ pluginRoot, projectRoot, answers, confirmRemoveSta
       actions.push({ kind: 'remove', file: abs(rel), rel: toPosix(rel), why: 'stale render: the role is codex-hosted (recorded, unmodified, removal confirmed)' });
     }
   }
+
+  // ---- 8b. adopt: the answers nobody asked for, and the advisory inventory ---
+  // An adopt file naming an address this run never had to decide is a typo, a copy from another
+  // project, or a leftover from a previous attempt - and in all three cases an operator decision was
+  // written down and then read by nobody. Named, not ignored.
+  if (adopt && Array.isArray(resolveAdoptFn.knownAddresses)) {
+    const unused = resolveAdoptFn.knownAddresses.filter((key) => !adoptAsked.has(key));
+    if (unused.length) {
+      blockers.push(
+        `${resolveAdoptFn.label || 'the adopt file'} answers ${unused.length} address(es) this run never had to `
+        + `decide: ${unused.join(', ')}. Either the key is misspelled, or that artifact is absent or already `
+        + 'identical to the render here - nothing was written, and no answer was applied to a different file.',
+      );
+    }
+  }
+  const supersededScan = adopt ? scanSupersededLegacy({ pluginRoot, projectRoot }) : null;
+  const adoptReport = adopt
+    ? {
+      entries: adoptEntries,
+      superseded: supersededScan.hits,
+      supersededTruncated: supersededScan.truncated,
+      supersededCauses: supersededScan.causes,
+    }
+    : null;
 
   // ---- 9. the final config, and it must validate ---------------------------
   const config = orderConfig({
@@ -640,7 +1112,7 @@ export function planInstall({ pluginRoot, projectRoot, answers, confirmRemoveSta
     });
   }
 
-  return { config, actions, blockers, notes, artifacts, askPlan };
+  return { config, actions, blockers, notes, artifacts, askPlan, adopt: adoptReport };
 }
 
 // ---------------------------------------------------------------------------
@@ -657,7 +1129,10 @@ function applyPlan(plan) {
   for (const action of plan.actions) {
     if (action.kind === 'write') {
       fs.mkdirSync(path.dirname(action.file), { recursive: true });
-      fs.writeFileSync(action.file, lf(action.content), 'utf8');
+      // A VERBATIM action carries bytes that are already exactly what must land: the operator's own
+      // text spliced around a region encoded in that file's convention. Normalising it here would
+      // rewrite every line ending outside the markers - the very thing the contract forbids.
+      fs.writeFileSync(action.file, action.verbatim ? action.content : lf(action.content), 'utf8');
     } else if (action.kind === 'remove') {
       fs.rmSync(action.file, { force: true });
     } else continue;
@@ -679,19 +1154,74 @@ export function readMemorySeeds(pluginRoot) {
  */
 export function generateProject(options) {
   const plan = planInstall(options);
+  // A pending adopt decision must never survive into a run that WRITES. Only the preview resolver
+  // produces a non-blocking one, and it exists for --dry-run alone; pairing it with a real write
+  // would stamp a config that quietly forgets an artifact this run met and decided nothing about.
+  const pending = plan.adopt ? plan.adopt.entries.filter((e) => e.pending) : [];
+  if (!options.dryRun && pending.length) {
+    plan.blockers.push(
+      `${pending.length} adopt decision(s) are still unanswered (${pending.map((e) => e.key).join(', ')}) - `
+      + 'a run that writes never proceeds past one. Answer them with --adopt-file, or re-run interactively.',
+    );
+  }
   if (plan.blockers.length || options.dryRun) return { ...plan, applied: [], blocked: plan.blockers.length > 0 };
   const applied = applyPlan(plan);
   return { ...plan, applied, blocked: false };
+}
+
+const ADOPT_VERDICT = {
+  absent: 'absent    - not here yet, written fresh',
+  identical: 'identical - adopted clean (nothing written, nothing to decide)',
+  pending: 'different - DECISION PENDING',
+  'keep-mine': 'different - keep-mine: yours stays, the render is recorded as upstream (override)',
+  'take-new': 'different - take-new: the render replaces yours, recorded clean',
+};
+
+/**
+ * The adopt half of the report: what was already here, how it was classified, what was decided -
+ * and the ADVISORY list of files whose names the payload now also ships. Printed on a blocked run
+ * too, because that is exactly the run whose operator needs the map in order to answer.
+ */
+function adoptLines(adopt) {
+  if (!adopt) return [];
+  const lines = ['', 'ADOPT - the AIWF surface already in this project:'];
+  if (!adopt.entries.length) lines.push('  (no managed artifact of this configuration exists here yet)');
+  for (const entry of adopt.entries) {
+    const verdict = ADOPT_VERDICT[entry.pending ? 'pending' : (entry.resolution || entry.state)];
+    lines.push(`  ${entry.key.padEnd(34)} ${verdict}`);
+    if (entry.pending) lines.push(`    ${entry.reason}`);
+    if (entry.state === 'different') {
+      for (const l of previewLines('yours  ', entry.actual, 4)) lines.push(`  ${l}`);
+      for (const l of previewLines('payload', entry.render, 4)) lines.push(`  ${l}`);
+    }
+  }
+  // A TRUNCATED scan is reported even when it found nothing: "no superseded files" and "I stopped
+  // looking before I had seen everything" are different statements, and printing neither is how the
+  // second one gets read as the first.
+  if (adopt.superseded.length || adopt.supersededTruncated) {
+    const count = adopt.supersededTruncated ? `${adopt.superseded.length}+` : `${adopt.superseded.length}`;
+    lines.push('', `possible superseded legacy files (${count}) - ADVISORY, nothing was touched:`);
+    for (const s of adopt.superseded) lines.push(`  ${s.rel}  (${s.what}: ${s.why})`);
+    if (adopt.supersededTruncated) {
+      const why = (adopt.supersededCauses || []).map((c) => SCAN_STOP_REASONS[c]).filter(Boolean);
+      lines.push(`  (the scan STOPPED EARLY - ${why.join('; ') || 'a scan bound was reached'} - so this is a`);
+      lines.push('   sample, not an inventory: there may be more it never looked at.)');
+    }
+    lines.push('  Setup never deletes any of these. Removing one is a separate step and your decision.');
+  }
+  return lines;
 }
 
 export function formatReport(report, { projectRoot, seeds = [] }) {
   const lines = [];
   lines.push(`project: ${projectRoot}`);
   if (report.blocked) {
+    lines.push(...adoptLines(report.adopt));
     lines.push('', 'BLOCKED - nothing was written:');
     for (const b of report.blockers) lines.push(`  - ${b}`);
     return lines.join('\n');
   }
+  lines.push(...adoptLines(report.adopt));
   const changes = report.applied.length ? report.applied : report.actions;
   if (changes.length === 0) lines.push('', 'no changes - the project layer already matches the config (re-run is a zero diff).');
   else {
@@ -726,7 +1256,21 @@ if (isMain()) {
     if (!projectRoot) throw new SetupError('cannot resolve the project root - pass --project-root <dir> (this directory is not a git worktree).');
     if (!answersFile) throw new SetupError('--answers-file <answers.json> is required when generate.mjs is run directly (the interactive path is interview.mjs).');
     const answers = JSON.parse(fs.readFileSync(path.resolve(answersFile), 'utf8'));
-    const report = generateProject({ pluginRoot, projectRoot, answers, confirmRemoveStale: has('--confirm-remove-stale'), dryRun: has('--dry-run') });
+    const adopt = has('--adopt');
+    if (!adopt && has('--adopt-file')) throw new SetupError('--adopt-file only means something with --adopt - a resolution file for a mode this run is not in would be read by nobody.');
+    // A missing value must not degrade into "no file": the next flag would be read as a path, or the
+    // run would silently fall back to having nobody to ask. Same shape as --resolve in /pnp:update.
+    const adoptFileArg = flag('--adopt-file');
+    if (has('--adopt-file') && (!adoptFileArg || adoptFileArg.startsWith('--'))) {
+      throw new SetupError('--adopt-file needs the path of the JSON file that answers the adopt decisions.');
+    }
+    const report = generateProject({
+      pluginRoot, projectRoot, answers,
+      confirmRemoveStale: has('--confirm-remove-stale'),
+      dryRun: has('--dry-run'),
+      adopt,
+      resolveAdopt: adopt ? makeAdoptResolver({ adoptFile: adoptFileArg, dryRun: has('--dry-run') }) : null,
+    });
     const seeds = (has('--no-seeds') || report.blocked || has('--dry-run')) ? [] : readMemorySeeds(pluginRoot);
     if (!has('--quiet') || report.blocked) console.log(formatReport(report, { projectRoot, seeds }));
     process.exit(finishWithSelfCheck({

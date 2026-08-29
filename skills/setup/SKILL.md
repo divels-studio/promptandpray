@@ -37,6 +37,25 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
   (`scripts/native/ps/`), `linux` and `macos` the bash ones (`scripts/native/sh/`). The interview
   refuses anything outside those three fail-closed: an unknown channel would name wrappers that do
   not exist, and an installation this version cannot run is worse than a refusal.
+- **A legacy AIWF surface without an installation** - files at the managed paths (`CLAUDE.md` with
+  an `aiwf-core` region, `.claude/aiwf-native/roles.json`, `.claude/agents/*.md`) while
+  `<root>/.claude/aiwf-native/aiwf.config.json` does not exist, or exists without an `_aiwf` block:
+  offer **adopt** (`--adopt`) instead of telling the operator to move files aside. Say what it does,
+  in these words:
+  - a file **identical** to what the payload would render is adopted **silently and clean** - nothing
+    is written, nothing is asked, and the bookkeeping simply starts recording it;
+  - a file that **differs** is one question, per file, with two answers: **keep-mine** (the default
+    bootstrap - not one byte of the operator's file is touched; the render is recorded as `upstream`
+    and the artifact is held under `override`) or **take-new** (the render replaces it, recorded
+    clean). There is deliberately no `merge` here: `/pnp:update --resolve <key>` reopens any adopted
+    artifact later with the full vocabulary, merge included;
+  - a decision **nobody can answer** stops the run with every address named and zero bytes written;
+  - **nothing is ever deleted.** The run also prints an ADVISORY list of *possible superseded legacy
+    files* - project files whose names match payload hooks, wrappers, docs or skills. It is a
+    name match and nothing more: setup touches none of them, and removing any is a separate,
+    operator-gated step, never part of the install.
+  - adopt is for a project that has **no** installation. On a project that already has one, `--adopt`
+    is refused in one line - re-deciding a recorded artifact is `/pnp:update --resolve <key>`.
 
 ## Step 2 - Interview
 
@@ -69,14 +88,34 @@ The generator plans everything before it writes anything, so a blocked run leave
 
 - a managed artifact was edited by hand (`actual != local`): a conflict, resolved by
   `/pnp:update --resolve <key>`, never by an overwrite here;
-- a file it would manage already exists without bookkeeping: setup does not adopt files it did not
-  write;
+- a file it would manage already exists without bookkeeping **and this is not an adopt run**: setup
+  never takes over a file it did not write by accident. With `--adopt` that same file becomes the
+  decision described in Step 1 instead of a blocker - and an adopt decision that is left unanswered
+  is itself a blocker, so no branch of adopt writes before every question has an answer;
 - a stale Claude agent file sits next to a role that is now codex-hosted. Removing it is
   destructive, so it needs `--confirm-remove-stale` - which is an operator decision, exactly like
-  any other delete.
+  any other delete. `--adopt` does not touch this case: the configuration renders nothing at that
+  path, so there is nothing to take ownership of.
 
 Text OUTSIDE the `aiwf-core` markers in `CLAUDE.md`, an existing overrides document, and foreign
-permission rules are never touched in any branch.
+permission rules are never touched in any branch, adopt included - **byte for byte**, line endings
+included: a `CLAUDE.md` write splices the existing bytes and renders only the region, in whichever
+convention (CRLF or LF) that file already uses.
+
+Adopt, non-interactively (CI, or a scripted migration) - the file maps an artifact key to one of the
+two words, and an address nobody asked about is refused by name rather than ignored:
+
+```powershell
+node "${CLAUDE_PLUGIN_ROOT}/scripts/setup/interview.mjs" --project-root "<root>" `
+  --answers-file <answers.json> --adopt --adopt-file <adopt.json>
+```
+
+```json
+{ ".claude/aiwf-native/roles.json": "keep-mine", "CLAUDE.md#aiwf-core": "take-new" }
+```
+
+`--adopt --dry-run` never asks: it prints the classification with a preview of both sides, marks
+every pending decision and writes nothing. That is the run to show the operator first.
 
 ## Step 4 - Self-check (the CLI already ran it)
 
