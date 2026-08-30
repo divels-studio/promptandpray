@@ -39,6 +39,9 @@ Arguments: the ticket ref and an optional scope hint.
    Exit 0 = this project is current. Any non-zero exit = migrations are pending (or an interrupted
    update is in flight): **stop** and point the operator at `/pnp:update`. The command reads only.
    Two skills are documented exceptions and run anyway: `/pnp:update` and `/pnp:selfcheck`.
+4. **Reading is not a shell job.** Read or inspect files with the Read/Grep/Glob tools - never
+   `cat`/`grep`/`ls`/`head`/`node -e` through the shell for reading; the shell is for execution
+   (tests, git, build).
 
 Notation: `{{config.some.key}}` in this document means *substitute the value you read in step 2*.
 
@@ -67,6 +70,31 @@ path is built from the root resolved in Step 0. If the resolver exits non-zero (
 stderr - stop and report the misconfiguration to the COO; do not guess a host. `$role.engine`
 selects the branch below; `$role.model` is the model that branch runs.
 
+## Step 0c - Engine by ticket class (the class can override the configured host)
+
+Read the `Class:` line of the ticket brief the COO authored - `Class: docs | code`, and **`code`
+when the line is absent**. It decides the host together with Step 0b:
+
+- **`Class: docs`** - plans, the overrides document, README, skill/doc prose, any diff with **no
+  executable artifact** in it - takes the **Claude host** (Step 3, claude branch) regardless of
+  `roles.reviewer.engine`. Prose is judged by reading the tree, and a paid external pass buys
+  nothing here that the Claude host does not already give.
+- **`Class: code`** - anything that runs, is imported, or is tested - uses the engine Step 0b
+  resolved.
+
+**What "the Claude host" means on a codex-configured install:** `/pnp:setup` renders
+`.claude/agents/reviewer.md` only when `roles.reviewer.engine` is `claude` - that is by design and
+stays so - so when this override selects the Claude host while Step 0b resolved `codex` there is no
+rendered `reviewer` agent to dispatch (and `$role.model` is a Codex model name the Agent tool would
+reject); the host is then an **ad-hoc read-only Claude subagent** -
+`subagent_type: "general-purpose"`, `model: "opus"`, brief prefixed with the read-only reviewer
+preamble in Step 3's claude branch.
+
+Say in one line which branch you took and why (`class=docs -> claude host (engine codex
+overridden)`), so the COO's record shows the engine was chosen, not defaulted. A docs-class ticket
+that gained an executable artifact is code class - the same rule that ends R1
+(`docs/WORKFLOW.md` § Routes).
+
 ## Step 1 - Gather the review scope (read-only)
 
 - Confirm the branch and tree state you intend to review. Run git **bare** from `<root>` (which is
@@ -86,6 +114,10 @@ authored. **For a plan-readiness check, use the readiness brief shape below inst
 
 ```
 Review the diff for ticket <TICKET_REF> on branch <branch>.
+
+Class: docs | code
+  (the COO fills this in - `code` is the default when the line is absent; it selects the host in
+  Step 0c and it is what "an executable artifact ends docs class" is judged against)
 
 SCOPE / DIFF:
 <the exact diff or a precise description of the files+ranges to review>
@@ -117,6 +149,36 @@ raise a blocker that was already visible):
 
 Substitute the checklist path when you write the brief: the Reviewer runs outside this session and
 cannot expand `${CLAUDE_PLUGIN_ROOT}` itself, so paste the resolved absolute path.
+
+## Step 2b - Fact-check gate before a paid pass
+
+**Before dispatching to a paid external engine (the codex branch), the COO runs ONE cheap
+read-only scan agent over the PROSE of the diff.** A pass on a paid engine is an operator quota
+gate, and the Reviewer's job is to verify DECISIONS - not to discover that a path, a line number,
+a count or a command in the text does not exist. Those are checkable by anything that can read the
+tree, and finding them at review price is the most expensive way to find them
+(`docs/WORKFLOW.md` § "COO-authored text is reviewed like the Writer's").
+
+Dispatch it with the **Agent tool**, `subagent_type: "Explore"` (or whichever read-only scan agent
+this harness ships), `model: sonnet`, and exactly this task - written here so it is reusable
+verbatim:
+
+```
+Verify every factual claim in the prose of this diff - path, line number, count, command,
+engine/hook behavior - against the tree as it is now. Return ONLY the list of claims that are
+FALSE or UNVERIFIABLE, each with file:line and the correct value. No verdict, no review, no
+suggestions, no summary of what is correct.
+
+DIFF:
+<the same diff the review brief carries>
+```
+
+Then: the COO fixes every returned claim, and **only then** dispatches the paid pass, over the
+corrected tree. The gate is skipped only when Step 0c resolved the claude branch (there is no paid
+pass to protect) - and even then it is cheap enough to be worth running on a prose-heavy diff.
+
+The fact-check agent is **not** a review: it returns no verdict, and it never replaces the
+Reviewer's pass.
 
 ## Plan-readiness mode (durable R2/R3 plans, before execution)
 
@@ -200,18 +262,47 @@ foreign shell, start an interactive `pwsh` (or `bash`) session, or put the block
 and run it there; do not inline it through another shell's quoting. The two channels are mirrors,
 not alternatives: never invoke the `.sh` wrapper on a windows install or the `.ps1` on a POSIX one.
 
-### Step 3 - claude branch (`$role.engine -eq 'claude'`) - dispatch the reviewer subagent
+### Step 3 - claude branch - dispatch a read-only Claude reviewer
 
-Invoke the **Agent tool** with `subagent_type: "reviewer"`, `model: <$role.model>`, and the
-completed Step-2 brief as the task - with the **FULL diff pasted in** (the Claude reviewer cannot
-run git). The subagent is read-only (`Read, Grep, Glob` only; Gate 1 blocks any Edit/Write). It
-returns the verdict; it never edits.
+This branch runs in **two** cases: Step 0b resolved `$role.engine -eq 'claude'`, **or** Step 0c
+selected the Claude host for a `docs`-class ticket on a codex-configured install. Either way, invoke
+the **Agent tool** with the completed Step-2 brief as the task and the **FULL diff pasted in** (the
+Claude reviewer cannot run git). *Which* agent and *which* model you pass depends on the engine
+Step 0b resolved, because the rendered `reviewer` agent file exists only on a claude-configured
+install:
+
+**Resolved engine `claude`** - `subagent_type: "reviewer"`, `model: <$role.model>`. The rendered
+subagent is read-only (`Read, Grep, Glob` only; Gate 1 blocks any Edit/Write) and carries its effort
+in its own frontmatter. Nothing else changes.
+
+**Resolved engine `codex`, class `docs`** (the Step 0c override) - there is no rendered `reviewer`
+agent, and `$role.model` names a Codex model the Agent tool's model enum would reject. Dispatch
+`subagent_type: "general-purpose"` with `model: "opus"` - a review is judgment work, not a scan, so
+the scan-tier model policy (`haiku`/`sonnet`) does not apply to it - and prefix the Step-2 brief with
+exactly this role preamble, so the ad-hoc agent has the role the rendered one gets from its
+frontmatter:
+
+```
+You are a read-only, adversarial code/design REVIEWER. Use ONLY the Read, Grep and Glob tools:
+never edit, write, stage, commit, push, or run anything - report only, you do not fix what you
+find. Judge the diff below against the review checklist at <absolute path to the plugin's
+docs/REVIEW_CHECKLIST.md> and return the verdict in exactly the shape the OUTPUT CONTRACT
+specifies - first line `pass` / `pass-with-notes` / `fail` (or `PASS` / `NEEDS-FIX` for a
+plan-readiness pass), blockers first with file:line, then notes.
+```
+
+Read-only on this fallback is **Gate 1** - which denies the Edit/Write family to every subagent whose
+`agent_type` is not `writer` - plus the preamble above and git reversibility. It is one notch weaker
+than the rendered agent, which is additionally confined by a `Read, Grep, Glob` tool allowlist (Gate
+1's own honest limit is that a mutation performed through Bash is not caught), and both are far
+weaker than the codex branch's OS cell. That is why this fallback is scoped to `docs`-class diffs.
 
 **Effort (Claude branch):** the Agent tool has **no per-invocation `effort` parameter**, so the
 reviewer's reasoning effort comes from its **agent frontmatter** (`effort:` in the rendered
 `reviewer` agent), which is kept in sync with `roles.json`'s `reviewer.effort` - the selfcheck
-engine asserts they match, and drift fails it. Pass only `model: <$role.model>`; do **not** try to
-pass `effort` to the Agent tool.
+engine asserts they match, and drift fails it. Pass only the `model` above; do **not** try to pass
+`effort` to the Agent tool. The `general-purpose` fallback has no such frontmatter, so it runs at the
+session default effort - accepted, because that path carries prose only.
 
 ## Step 4 - Relay the verdict to the COO
 

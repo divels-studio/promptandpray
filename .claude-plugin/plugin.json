@@ -1,6 +1,6 @@
 {
   "name": "pnp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "PromptAndPray - a disciplined four-role working loop for Claude Code (Orchestrator/COO, Writer, Reviewer, QA) with native operator gates.",
   "author": {
     "name": "Desislav Yosifov"

@@ -15,6 +15,16 @@ document remain the source of truth.
 | **R2 - product (runtime/UI)** | Observable runtime/UI behavior | `COO -> Writer subagent -> /pnp:review -> /pnp:qa -> COO`. Same cap. |
 | **R3 - critical** | Migrations / access policy / auth / destructive / push | Plan-first: COO-approved mini-plan + plan-readiness review (Reviewer, read-only) **before** Writer starts, on `r3/<topic>`, then Writer -> `/pnp:review` -> `/pnp:qa` (if runtime) -> COO synthesis -> **operator** commit/merge gate. |
 
+**The review ENGINE follows the ticket's class in both R2 rows (and in R3).** The review brief
+carries `Class: docs | code` - default `code` when absent. A `docs`-class ticket (plans, the
+overrides document, README, skill/doc prose with no executable artifact) is reviewed by a read-only
+**Claude** subagent whatever `roles.reviewer.engine` says; a `code`-class ticket uses the configured
+engine (`docs/WORKFLOW.md` § Routes). On a **codex-configured** install that Claude host is an
+**ad-hoc** read-only Claude subagent (`general-purpose`, `model: opus`, reviewer preamble in the
+brief), not a rendered agent file - `.claude/agents/reviewer.md` exists only for a claude-hosted
+role. Before any pass on a PAID engine, `/pnp:review` Step 2b runs the cheap fact-check gate over
+the prose of the diff.
+
 `/pnp:loop` states this sequence as a convention. There is **no runtime state machine and no
 counters** - the loop is convention + the native click-based permission gates only.
 

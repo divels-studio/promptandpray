@@ -17,7 +17,7 @@ Born in a real production project, then extracted and genericized.
 
 ## Status
 
-**v0.1.0. Pre-release, private, and not published to any marketplace.**
+**v0.1.1. Pre-release, private, and not published to any marketplace.**
 
 What is here:
 
@@ -66,10 +66,13 @@ What is **not** here yet:
   mirror the PowerShell ones flag for flag, `/pnp:setup` accepts all three OS channels, and the CI
   matrix runs the gates on ubuntu and macos runners. What is missing is field use: the POSIX legs
   first execute on the operator's first push, and no POSIX machine has hosted a real loop yet.
-- **The dogfood installation.** No real project runs on this plugin yet. The install and update
-  paths - including the adopt mode that installs over an existing AIWF surface - are proven by the
-  acceptance suites and by an end-to-end cycle over committed data, not yet by a project that lives
-  on it.
+- **A version update taken by a CONSUMER installation.** The install and update paths - including
+  the adopt mode that installs over an existing AIWF surface - are proven by the acceptance suites
+  and by an end-to-end cycle over committed data, and this repository's own self-install has taken
+  one real bump (0.1.0 -> 0.1.1, migration `0002_operator-word-and-hygiene`). What is missing is a
+  project OTHER than this one carrying its own history through a version bump: that is where "a new
+  version reaches a project without stepping on its own voice" stops being an assertion about
+  fixtures and about the plugin's own tree.
 
 ## Three names
 

@@ -1,6 +1,6 @@
 {
-  "migration": "0002_example-bump",
-  "targetPluginVersion": "0.2.0",
+  "migration": "0003_example-bump",
+  "targetPluginVersion": "0.3.0",
   "operations": [
     {
       "op": "add-config-key",

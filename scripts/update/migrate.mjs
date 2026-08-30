@@ -7,9 +7,10 @@
  *   Everything below exists to make that true even when the process dies halfway.
  *
  * WHAT IT SHARES WITH SETUP, AND WHAT IT DELIBERATELY DOES NOT
- *   It imports the primitives from ../setup/generate.mjs - `sha256`, `renderTemplate`, `planAskRules`,
- *   `lf`, `orderConfig`, `jsonText` - so a rendered artifact and its hash mean exactly the same
- *   thing in both engines. The CONFLICT STATE MACHINE is NOT setup's and is not shared: setup
+ *   It imports the primitives from ../setup/generate.mjs - `sha256`, `renderTemplate`,
+ *   `templateContext`, `planAskRules`, `lf`, `orderConfig`, `jsonText` - so a rendered artifact and
+ *   its hash mean exactly the same thing in both engines. The CONFLICT STATE MACHINE is NOT setup's
+ *   and is not shared: setup
  *   cleanly RE-RENDERS whenever `actual == local` (its legitimate re-render path), while an update
  *   treats EITHER predicate as a conflict -
  *     (a) `actual != local`     the operator edited the artifact,
@@ -81,7 +82,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   CONFIG_REL, ROLES_REL, SETTINGS_REL,
-  jsonText, lf, orderConfig, planAskRules, renderTemplate, sha256, wrapperContext,
+  jsonText, lf, orderConfig, planAskRules, renderTemplate, sha256, templateContext,
 } from '../setup/generate.mjs';
 import { formatErrors, loadSchema, validate } from '../setup/validate-config.mjs';
 import { compareVersions, parseVersion, validatePayload } from './validate-payload.mjs';
@@ -319,15 +320,14 @@ function setConfigPath(config, dotted, value) {
 }
 
 function renderContext(projectRoot, config) {
-  // The same context shape setup renders with, so an identical template yields identical bytes:
-  // the payload half of the config, the resolved root, and the OS-derived wrapper channel.
+  // The same context setup renders with - built by setup's OWN templateContext(), not by a second
+  // copy of its shape here, which is exactly how the two engines would drift into different bytes.
   // `$schema` and `_aiwf` are stripped because setup renders from the answers, which never carry
-  // them. `wrappers` is COMPUTED from config.os by the same function setup uses - a second copy of
-  // that mapping here is exactly how the two engines would drift into different bytes.
+  // them.
   const payloadHalf = { ...config };
   delete payloadHalf.$schema;
   delete payloadHalf._aiwf;
-  return { config: payloadHalf, resolvedRoot: projectRoot, wrappers: wrapperContext(payloadHalf.os) };
+  return templateContext(payloadHalf, projectRoot);
 }
 
 function renderRef(pluginRoot, ref, context) {
@@ -686,15 +686,12 @@ function planReconcile(ctx, op, address) {
     owned: Array.isArray(bk.ownedAskRules) ? bk.ownedAskRules : [],
     suppressed: Array.isArray(bk.suppressedAskRules) ? bk.suppressedAskRules : [],
   });
-  // The update-only half of the formula. PLAN: to-remove = owned n (old desired - new desired).
-  // `owned` is by construction a subset of the OLD desired set (only rules setup/update really
-  // inserted are ever owned), so owned n (old - new) == owned - new - which is computable WITHOUT
-  // the previous payload's ruleset. Nothing foreign and nothing pre-existing can land in this set.
-  const desiredSet = new Set(desired);
-  const toRemove = plan.owned.filter((rule) => !desiredSet.has(rule));
-  const removedSet = new Set(toRemove);
-  const ask = plan.ask.filter((rule) => !removedSet.has(rule));
-  const owned = plan.owned.filter((rule) => !removedSet.has(rule));
+  // to-remove = owned n (old desired - new desired) is computed INSIDE planAskRules (see its
+  // header): `owned` is by construction a subset of the OLD desired set, so owned n (old - new) ==
+  // owned - new, computable without the previous payload's ruleset. It used to be recomputed here,
+  // which is how setup and update came to disagree about a stale `<projectRoot>` render; the
+  // formula now has one home and this function only reports what it decided.
+  const { toRemove, ask, owned } = plan;
 
   const next = { ...settings, permissions: { ...permissions, ask } };
   const content = jsonText(next);

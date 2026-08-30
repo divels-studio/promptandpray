@@ -60,6 +60,24 @@ One honest limitation: the permission rules are **prefix matches** on the comman
 accident-grade protection against a role acting out of turn, not an adversary-proof boundary. The
 one hard boundary in the system is the OS sandbox on the Codex review path.
 
+## Worktrees and memory
+
+A git worktree is a **different path**, and Claude Code keys a project - including its memory
+directory, `~/.claude/projects/<path-slug>/memory` - by that path. So a second worktree of the same
+repository is a second project to the harness: it starts with **empty memory**, and anything the
+session learned in the main worktree is not there.
+
+Nothing in the plugin changes this, and nothing in the plugin should: memory is a harness surface,
+not a PromptAndPray mechanism. What it means for you in practice:
+
+- copying memory into a worktree is a manual copy, and merging what both sides learned is a manual
+  merge - there is no sync;
+- the durable knowledge that must survive the worktree is exactly the knowledge that belongs in Git
+  anyway (the PLAN, the overrides document, the changelog) - that is the point of "durable knowledge
+  lives in Git";
+- deleting a memory directory under `~/.claude/projects/` is a destructive operator action like any
+  other: your call, made deliberately, never a cleanup step an agent performs on its own.
+
 ## What is doctrine rather than a hook
 
 Two things are carried by the doctrine text and the roles' own briefs, not by a hook. First,

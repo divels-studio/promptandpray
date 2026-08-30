@@ -1,8 +1,8 @@
 {
   "$schema": "D:/promptandpray/schema/aiwf.config.schema.json",
   "_aiwf": {
-    "installedPluginVersion": "0.1.0",
-    "lastMigrationApplied": "0001_initial",
+    "installedPluginVersion": "0.1.1",
+    "lastMigrationApplied": "0002_operator-word-and-hygiene",
     "migrationJournal": null,
     "managedRegions": {
       ".claude/aiwf-native/roles.json": {
@@ -11,13 +11,13 @@
         "override": false
       },
       ".claude/agents/writer.md": {
-        "upstream": "38c4674b64033940beb21dbe9015f006a6256235399c9c00ea4f606055b3fbee",
-        "local": "38c4674b64033940beb21dbe9015f006a6256235399c9c00ea4f606055b3fbee",
+        "upstream": "89f9a4e5d64498b9ede463c0c113a580d7f5d0524cffd412d8756cc5db65da66",
+        "local": "89f9a4e5d64498b9ede463c0c113a580d7f5d0524cffd412d8756cc5db65da66",
         "override": false
       },
       "CLAUDE.md#aiwf-core": {
-        "upstream": "ef60c53484b244e1beaf2f66f3451b2d539d5138d5a4a9406f02e2e27f613213",
-        "local": "ef60c53484b244e1beaf2f66f3451b2d539d5138d5a4a9406f02e2e27f613213",
+        "upstream": "dd23aaf3a6ee417db0080c1e96128a723085bcf7ae58c3071f31f6d5a7fcbd7b",
+        "local": "dd23aaf3a6ee417db0080c1e96128a723085bcf7ae58c3071f31f6d5a7fcbd7b",
         "override": false
       }
     },
@@ -36,7 +36,6 @@
       "Bash(git stash:*)",
       "Bash(git config:*)",
       "Bash(git remote:*)",
-      "Bash(git -C:*)",
       "Bash(git -c:*)",
       "Bash(npm run db:*)",
       "Bash(npm run seed:*)",

@@ -46,6 +46,9 @@ Arguments: the ticket ref and an optional acceptance-criteria hint.
    Exit 0 = this project is current. Any non-zero exit = migrations are pending (or an interrupted
    update is in flight): **stop** and point the operator at `/pnp:update`. The command reads only.
    Two skills are documented exceptions and run anyway: `/pnp:update` and `/pnp:selfcheck`.
+4. **Reading is not a shell job.** Read or inspect files with the Read/Grep/Glob tools - never
+   `cat`/`grep`/`ls`/`head`/`node -e` through the shell for reading; the shell is for execution
+   (tests, git, build).
 
 Notation: `{{config.some.key}}` in this document means *substitute the value you read in step 2*.
 

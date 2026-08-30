@@ -30,6 +30,11 @@ nothing; push/merge/rebase need an explicit word in chat *and* their own dialog)
 passes (a paid external review engine), destructive or system-changing operations, and product/UX
 calls. Full text: payload `docs/WORKFLOW.md`.
 
+**A NEW ticket waits for its own word.** A ticket born after a standing operator word - one not in
+the PLAN's recorded execution order - is written into the PLAN, announced in ONE sentence, and
+STOPS: zero mutations on it until the operator's word for THAT ticket. A standing word covers the
+work it was given for, never the structure born after it (payload `docs/WORKFLOW.md` guard (b)).
+
 How you execute is **route-conditional**:
 
 - **R1 (routine, low-risk):** implement it **directly in this session** - no subagents, no
@@ -72,8 +77,9 @@ for the full model.
   files; reading through the shell bypasses those purpose-built tools and produces needless noise.
 - **Run git bare from the repo root (your cwd).** Never `cd X && git ...` and no `-C` prefix. Not
   for permissions - for hygiene: `cd`-before-`git` is the form most likely to trip an
-  untrusted-directory prompt, and a `-C` prefix trips the `Bash(git -C:*)` ask rule, so bare
-  (`git status`, `git log`, `git add ...`) is the quiet path.
+  untrusted-directory prompt, and a `-C` prefix is a different match string from the bare form, so
+  bare (`git status`, `git log`, `git add ...`) is the predictable path. The push/merge/rebase
+  gates cover the `git -C <projectRoot> ...` forms explicitly for exactly that reason.
 - **No `; echo "X=$?"` suffixes.** Exit codes are reported by the harness; printing them again is
   redundant noise.
 - **Verify the failure claim before proposing a cause.** When a tool or test fails, first verify the

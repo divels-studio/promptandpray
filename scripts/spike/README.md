@@ -127,14 +127,26 @@ a blanket block on the Agent tool.
 Final state of the throwaway repo after all three runs: still only the two
 fixture files, `route-state.json` unchanged, no `src/`.
 
-### DEFERRED - the one step not yet observed
+### (b4) The native dialog itself - OBSERVED
 
 `-p` is non-interactive, so an `ask` decision cannot render its native Yes/No
-dialog there; headless it surfaces as the gated call recorded in (b2). Seeing the
-dialog itself needs one interactive session:
+dialog there; headless it surfaces as the gated call recorded in (b2). The dialog
+itself was observed in an interactive session on 2026-08-29, during the first
+dogfood run of the loop through the plugin (ticket P6c2):
+
+- **dispatch #1**, with `enforcement.dispatchGate: "always"` - the native Yes/No
+  permission dialog appeared for the Writer dispatch, carrying the `[plugin:pnp]`
+  tag; the dispatch ran only after the operator's click.
+- **dispatch #2**, with `enforcement.dispatchGate: "off-plan"` and a brief whose
+  `Ticket: <REF>` line named a ticket present in an active PLAN - **no dialog**,
+  the dispatch passed silently, which is the whole point of that mode.
+
+Both halves of Gate 2's contract are therefore observed live, not only headless.
+
+The reproduction recipe, unchanged - run it after any change to the gate:
 
 > Open `claude --plugin-dir <plugin-repo>` **from a throwaway repo** (never from a
 > real project whose own settings already wire these gates) and ask it to dispatch
-> the `writer` subagent. Expected, not yet observed: a Yes/No permission dialog
-> reading `Writer dispatch: "<description>". ... [AIWF gate 2: Writer dispatch]`.
+> the `writer` subagent. Expected: a Yes/No permission dialog reading
+> `Writer dispatch: "<description>". ... [AIWF gate 2: Writer dispatch]`.
 > Answering No must leave the dispatch unexecuted.

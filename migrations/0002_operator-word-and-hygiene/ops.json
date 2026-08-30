@@ -1,0 +1,31 @@
+{
+  "migration": "0002_operator-word-and-hygiene",
+  "targetPluginVersion": "0.1.1",
+  "operations": [
+    {
+      "op": "rerender-managed-region",
+      "file": "CLAUDE.md",
+      "region": "aiwf-core",
+      "template": "templates/CLAUDE.md.tmpl#aiwf-core"
+    },
+    {
+      "op": "rerender-managed-region",
+      "file": ".claude/agents/writer.md",
+      "region": null,
+      "template": "templates/agents/writer.md.tmpl"
+    },
+    {
+      "op": "reconcile-ask-ruleset",
+      "ruleset": "templates/settings.ask-ruleset.json"
+    },
+    {
+      "op": "note",
+      "id": "operator-word-and-hygiene",
+      "text": "Doctrine: a ticket born after a standing operator word is written into the PLAN, announced in ONE sentence and STOPS - zero mutations on it until an explicit word for THAT ticket (the earlier 'announcement, not a question' reading is revoked). Review: the brief now carries `Class: docs | code`, a docs-class ticket is reviewed on the Claude host whatever roles.reviewer.engine says, and a cheap fact-check pass over the prose of the diff runs before any paid pass; a second paid pass is for correction rounds that touched code. Permissions: the blanket `Bash(git -C:*)` ask rule is gone from the factory ruleset - it gated read-only -C forms against any repository while adding nothing to the push/merge/rebase gate, which keeps its three rendered `git -C <projectRoot> ...` forms. This migration removes that rule only where this plugin inserted it; a rule you added or edited yourself is untouched.",
+      "docRefs": [
+        "docs/WORKFLOW.md",
+        "docs/LOOP.md"
+      ]
+    }
+  ]
+}

@@ -256,9 +256,53 @@ function renderNodes(nodes, scope) {
   return out;
 }
 
-/** Renders one template. `context` is `{ config, resolvedRoot, wrappers }`. Never mutates it. */
+// TEMPLATE CONTRACT BLOCKS ARE NOT OUTPUT.
+// Every template opens with an HTML comment addressed to THIS engine (`<!-- TEMPLATE CONTRACT ...`)
+// - why the file is conditional, which placeholder is render-time, what must never be rendered raw.
+// It is documentation for whoever edits the template, and it was reaching the rendered agent file,
+// where its first line ("read by the P2 generate engine, not by the Writer") is addressed to nobody
+// present. Stripped here, in the ONE function both engines render through, so a re-render by the
+// update engine cannot disagree with a fresh install about what the artifact contains.
+// Deliberately narrow: only a comment whose FIRST token is `TEMPLATE CONTRACT` goes, so an ordinary
+// HTML comment a template wants in its output (the CLAUDE.md region markers, for one) is untouched.
+const TEMPLATE_CONTRACT_BLOCK = /^[ \t]*<!--[ \t]*TEMPLATE CONTRACT[\s\S]*?-->[ \t]*\r?\n(?:[ \t]*\r?\n)?/gm;
+export function stripTemplateContract(text) {
+  return text.replace(TEMPLATE_CONTRACT_BLOCK, '');
+}
+
+/**
+ * THE render context - built in ONE place so setup and update cannot drift into different bytes for
+ * the same template (the update engine imports this instead of assembling its own).
+ *   config            the PAYLOAD half of the config (no `$schema`, no `_aiwf`)
+ *   resolvedRoot      the project root resolved at render time, never `config.project.root` raw
+ *   wrappers          the OS channel, COMPUTED from config.os by wrapperContext()
+ *   overridesDocPath  the overrides document as ONE absolute path in the native form of config.os.
+ *                     Composed here rather than in a template, because `{{resolvedRoot}}/{{...}}`
+ *                     spells a Windows root and a POSIX separator into the same string and renders
+ *                     a mixed-slash path (a backslashed root, then forward slashes) into a doctrine
+ *                     file nobody re-reads.
+ */
+export function templateContext(config, resolvedRoot) {
+  const context = { config, resolvedRoot, wrappers: wrapperContext(config.os) };
+  // Set only when the config really carries the path. A config that does not (a hand-corrupted one
+  // reaching the update engine) must fail the way it always did - the template's own "unresolvable
+  // template path" render error, naming what is missing - and NOT as a TypeError here or, worse, as
+  // the string "null" written into a doctrine file.
+  const rel = isPlainObject(config.paths) ? config.paths.overridesDoc : undefined;
+  if (typeof rel === 'string') context.overridesDocPath = nativePath(config.os, `${resolvedRoot}/${rel}`);
+  return context;
+}
+
+// One separator for the whole path, chosen by the CHANNEL the installation is for - not by the
+// separator of the machine that happens to be rendering. An install is generated for exactly one
+// OS channel, and that channel is where the rendered file will be read.
+export function nativePath(os, p) {
+  return os === 'windows' ? p.split('/').join('\\') : p.split('\\').join('/');
+}
+
+/** Renders one template. `context` is what templateContext() builds. Never mutates it. */
 export function renderTemplate(text, context) {
-  const tree = parseBlocks(tokenize(stripStandaloneTags(text)));
+  const tree = parseBlocks(tokenize(stripStandaloneTags(stripTemplateContract(text))));
   return renderNodes(tree.children, context);
 }
 
@@ -340,22 +384,38 @@ export function orderConfig(config) {
 // ---------------------------------------------------------------------------
 // Ask-ruleset merge (ownership WITHOUT takeover)
 // ---------------------------------------------------------------------------
-// Formulas from the update contract, applied at install time:
-//   to-add   = (desired - actual) - suppressed      (a tombstone is never forced back)
-//   owned'   = (owned n actual) + to-add            (only rules setup really INSERTED are owned)
+// ONE function for both engines - setup and the update engine's `reconcile-ask-ruleset` call the
+// same formulas, so "what the ask list becomes" cannot mean two things:
+//   to-add    = (desired - actual) - suppressed      (a tombstone is never forced back)
+//   to-remove = owned' - desired                     (the engine retiring its OWN render)
+//   owned''   = ((owned n actual) + to-add) - to-remove
 //   tombstone: an owned rule missing from actual moves to suppressed and is reported
+//
+// TO-REMOVE, AND WHY IT IS NOT A TOMBSTONE
+//   `owned` is by construction a subset of the desired set of the payload/root that inserted it, so
+//   `owned - desired` is exactly the rules THIS engine wrote and no longer wants: a rule the payload
+//   dropped, or - the case that made this half necessary at install time - a `<projectRoot>` render
+//   carrying a root the project no longer has (a repo moved, a worktree, a rename). Nothing foreign
+//   and nothing pre-existing can land in that set, because neither is ever owned.
+//   It is NOT recorded as suppressed: a tombstone means "the OPERATOR removed this, never force it
+//   back", and stamping one here would silence a rule the payload might legitimately ship again.
+//   The two halves cannot collide, either - a tombstoned rule has already left `owned`.
 export function planAskRules({ desired, actual, owned, suppressed }) {
   const actualSet = new Set(actual);
+  const desiredSet = new Set(desired);
   const suppressedSet = new Set(suppressed);
   const newlyTombstoned = owned.filter((r) => !actualSet.has(r));
   for (const r of newlyTombstoned) suppressedSet.add(r);
   const toAdd = desired.filter((r) => !actualSet.has(r) && !suppressedSet.has(r));
   const ownedNext = owned.filter((r) => actualSet.has(r)).concat(toAdd);
+  const toRemove = ownedNext.filter((r) => !desiredSet.has(r));
+  const removedSet = new Set(toRemove);
   return {
     toAdd,
+    toRemove,
     newlyTombstoned,
-    ask: actual.concat(toAdd),
-    owned: ownedNext,
+    ask: actual.concat(toAdd).filter((r) => !removedSet.has(r)),
+    owned: ownedNext.filter((r) => !removedSet.has(r)),
     suppressed: [...suppressedSet],
   };
 }
@@ -731,9 +791,9 @@ export function planInstall({
 
   // ---- 2. render every managed artifact ------------------------------------
   const resolvedRoot = projectRoot;
-  // `wrappers` is COMPUTED from merged.os (see wrapperContext): the templates name a wrapper by
-  // role, never by OS, so one template renders both channels.
-  const context = { config: merged, resolvedRoot, wrappers: wrapperContext(merged.os) };
+  // The whole context comes from templateContext() - the same function the update engine renders
+  // through, so an identical template yields identical bytes in both (see its doc comment).
+  const context = templateContext(merged, resolvedRoot);
   const artifacts = [];
   const addArtifact = (key, rel, content) => { artifacts.push({ key, rel, file: abs(rel), content }); };
 
@@ -1004,7 +1064,7 @@ export function planInstall({
     settings = null;
   }
 
-  let askPlan = { toAdd: [], newlyTombstoned: [], ask: [], owned: [], suppressed: [] };
+  let askPlan = { toAdd: [], toRemove: [], newlyTombstoned: [], ask: [], owned: [], suppressed: [] };
   if (settings) {
     const ruleset = JSON.parse(fs.readFileSync(templatePath(pluginRoot, 'settings.ask-ruleset.json'), 'utf8'));
     const desired = ruleset.permissions.ask.map((rule) => rule.split('<projectRoot>').join(resolvedRoot));
@@ -1024,13 +1084,22 @@ export function planInstall({
     const nextSettings = { ...settings, permissions: nextPermissions };
     const content = jsonText(nextSettings);
     if (settingsRaw === null || lf(settingsRaw) !== lf(content)) {
+      const mergeWhy = `ask ruleset merged (+${askPlan.toAdd.length}`
+        + (askPlan.toRemove.length ? ` / -${askPlan.toRemove.length} owned, no longer desired` : '')
+        + ' rule(s), foreign rules untouched)';
       actions.push({
         kind: 'write', file: settingsFile, rel: SETTINGS_REL, content,
-        why: settingsRaw === null ? 'created with the ask ruleset' : `ask ruleset merged (+${askPlan.toAdd.length} rule(s), foreign rules untouched)`,
+        why: settingsRaw === null ? 'created with the ask ruleset' : mergeWhy,
       });
     }
     for (const rule of askPlan.newlyTombstoned) {
       notes.push(`owned ask rule "${rule}" is absent from settings.json - recorded as a tombstone in _aiwf.suppressedAskRules and never forced back.`);
+    }
+    // A rule this engine wrote and no longer wants (a dropped payload rule, or a `<projectRoot>`
+    // render carrying a root this project no longer has). Reported, never tombstoned: a tombstone
+    // means the OPERATOR removed it.
+    for (const rule of askPlan.toRemove) {
+      notes.push(`owned ask rule "${rule}" is no longer in the payload's desired set for this project root - removed from settings.json and from _aiwf.ownedAskRules (not tombstoned: nobody removed it by hand).`);
     }
   }
 

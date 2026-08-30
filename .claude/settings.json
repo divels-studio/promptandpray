@@ -19,7 +19,6 @@
       "Bash(git stash:*)",
       "Bash(git config:*)",
       "Bash(git remote:*)",
-      "Bash(git -C:*)",
       "Bash(git -c:*)",
       "Bash(npm run db:*)",
       "Bash(npm run seed:*)",

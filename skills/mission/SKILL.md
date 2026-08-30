@@ -22,6 +22,9 @@ git, and this skill reconstructs it.
    Exit 0 = this project is current. Any non-zero exit = migrations are pending (or an interrupted
    update is in flight): **stop** and point the operator at `/pnp:update`. The command reads only.
    Two skills are documented exceptions and run anyway: `/pnp:update` and `/pnp:selfcheck`.
+4. **Reading is not a shell job.** Read or inspect files with the Read/Grep/Glob tools - never
+   `cat`/`grep`/`ls`/`head`/`node -e` through the shell for reading; the shell is for execution
+   (tests, git, build).
 
 Notation: `{{config.some.key}}` in this document means *substitute the value you read in step 2*.
 
@@ -49,6 +52,10 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
    what it needs (gates, model, blockers). Then WAIT for the operator's word - dispatch never starts
    on reconstruction alone. Data the operator supplies is INPUT for the ticket, never the order to
    execute it.
+   **A NEWLY BORN ticket - one that is not in the PLAN's recorded execution order - is written into
+   the PLAN, announced in ONE sentence, and STOPS the same way.** No dispatch, no route state, no
+   mutation on it until the operator's own word for THAT ticket: a standing word covers the work it
+   was given for, never a ticket born after it.
 
 ## Hard rules carried by this skill
 

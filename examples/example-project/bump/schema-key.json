@@ -4,6 +4,6 @@
   "property": "exampleToggle",
   "schema": {
     "type": "boolean",
-    "description": "A demonstration-only enforcement toggle. Introduced by the 0002_example-bump migration; the operator is asked for its value while the migration runs. It is deliberately NOT a key the shipped payload carries - a key the real schema already admits could not demonstrate a migration adding one."
+    "description": "A demonstration-only enforcement toggle. Introduced by the example-bump migration; the operator is asked for its value while the migration runs. It is deliberately NOT a key the shipped payload carries - a key the real schema already admits could not demonstrate a migration adding one."
   }
 }

@@ -4,6 +4,85 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.1.1] - 2026-08-30
+
+Hygiene from the first real run of the loop through the plugin, one doctrine correction learned
+from an observed violation, and the first migration with operations
+(`0002_operator-word-and-hygiene`) - so an installed project takes all of it through
+`/plugin update` + `/pnp:update`.
+
+### Added
+
+- **A ticket born after a standing word waits for its own word (P8)** - `docs/WORKFLOW.md` guard
+  (b), the managed `CLAUDE.md` region, `/pnp:mission` and `/pnp:work`: a NEW ticket (one not in the
+  PLAN's recorded execution order) is written into the PLAN, announced in ONE sentence, and STOPS -
+  zero mutations on it until the operator's word for THAT ticket. The earlier reading, "the
+  announcement is a notification, not a question", is explicitly REVOKED: it allowed a ticket to be
+  born and started in the same turn without a word.
+- **Review engine by ticket class (P8)** - the review brief carries `Class: docs | code` (`code`
+  when absent) and `/pnp:review` Step 0c branches on it: a docs-class ticket is reviewed by the
+  `reviewer` Claude subagent whatever `roles.reviewer.engine` says, a code-class one by the
+  configured engine.
+- **Fact-check gate before a paid pass (P8)** - `/pnp:review` Step 2b: one cheap read-only scan
+  agent over the PROSE of the diff, returning only the false or unverifiable claims with
+  `file:line`, before any pass on a paid external engine. The Reviewer verifies decisions; it is
+  not the mechanism that discovers a wrong path or a wrong count.
+- **A second paid pass only when the correction round touched code (P8)** - in the not-configurable
+  half of `docs/WORKFLOW.md` § "Loop shape and its overrides". Prose-only corrections are verified
+  by the fact-check gate plus the COO's own first-hand check, recorded in the completion record; the
+  operator may always ask for a paid pass explicitly.
+- **"Reading is not a shell job" as a skill instruction (P8)** - one identical sentence in Step 0 of
+  `/pnp:mission`, `/pnp:work`, `/pnp:setup`, `/pnp:review`, `/pnp:qa` and `/pnp:loop`, and in the
+  writer agent.
+- **A `## VERIFY` section in the writer agent (P8)** - run every VERIFY command literally, report
+  the exact exit code the harness shows, never append `; echo "X=$?"`.
+- **Worktrees and memory (P8)** - a short section in `docs/OPERATOR_PROTOCOL.md`: a git worktree is
+  a separate project path and therefore a separate memory directory; copying and merging memory is
+  manual, and it is a harness fact, not a plugin mechanism.
+- **A PAYLOAD DOCTRINE section in the self-check (P8)** - the rules that exist only as text are
+  asserted as text, each with its own flipping control (including one that only REWORDS a rule), and
+  the project layer now proves an owned ask rule belongs to the ruleset rendered for the CURRENT
+  project root.
+
+### Changed
+
+- **The template-contract comment is stripped from every render (P8)** - `<!-- TEMPLATE CONTRACT`
+  blocks are notes for whoever edits a template and no longer reach the rendered agent, overrides
+  document or managed region. Both engines render through one shared context builder, so setup and
+  update cannot disagree about the bytes.
+- **`0002_operator-word-and-hygiene` re-renders the managed `CLAUDE.md` region and
+  `.claude/agents/writer.md` and reconciles the ask ruleset (P8)** - deliberately with no op for
+  `agents/reviewer.md` / `agents/qa.md`, which are absent on a codex-hosted install; the migration's
+  `NOTES.md` states that limit and the two ways to re-render them.
+- **The Gate 2 dialog spike is recorded as OBSERVED (P8)** - `scripts/spike/README.md`: the native
+  Yes/No dialog was seen in `always` mode carrying the `[plugin:pnp]` tag, and a dispatch naming an
+  on-plan ticket passed silently in `off-plan`. The procedure stays as the reproduction recipe.
+
+### Fixed
+
+- **A re-run no longer keeps ask rules rendered for a project root that is gone (P8)** - the
+  to-remove half of the reconcile formula now lives in `planAskRules` itself, so setup and update
+  apply it identically: an owned rule that is not in the desired set for the CURRENT root leaves
+  `settings.json` and `ownedAskRules`. It is NOT tombstoned - a tombstone means the operator removed
+  it - and a foreign rule that merely mentions the old path is untouched.
+- **The blanket `Bash(git -C:*)` ask rule is gone from the factory ruleset (P8)** - it gated every
+  `-C` form of every git command, read-only ones included, while adding nothing to the
+  push/merge/rebase gate, which keeps its three rendered `Bash(git -C <projectRoot> ...)` forms.
+  Consumers lose it through the migration's `reconcile-ask-ruleset` op only where the plugin
+  inserted it.
+- **The rendered writer agent no longer carries the template-contract comment or a mixed-slash
+  overrides path (P8)** - the overrides document is now one absolute path in the native separator of
+  `config.os`.
+
+### Known limits (stated, not hidden)
+
+- The hooks trust the harness identity fields and the permission rules match by command prefix:
+  accident-grade, not adversary-proof. Mutations performed through shell commands are doctrine,
+  not enforcement.
+- On a claude-hosted reviewer or qa role, `agents/reviewer.md` / `agents/qa.md` keep the
+  template-contract comment until they are re-rendered by `/pnp:setup` or
+  `/pnp:update --resolve <key>` - see the migration's `NOTES.md`.
+
 ## [0.1.0] - 2026-08-29
 
 First tagged version. Pre-release, private, not published to any marketplace. Extracted from a
@@ -77,11 +156,13 @@ that project (adopt mode, two Writer dispatches through the plugin-hosted loop, 
 - The hooks trust the harness identity fields and the permission rules match by command prefix:
   accident-grade, not adversary-proof. Mutations performed through shell commands are doctrine,
   not enforcement.
-- Ask-rule reconciliation on re-run is additive and tombstone-only: a rule already present in
-  `settings.json` is never rewritten, and a removed owned rule becomes a tombstone rather than
-  being deleted from the bookkeeping. The factory ruleset carries a blanket `Bash(git -C:*)`
-  ask rule that a project with a deliberately silent sibling repository will want to remove.
+- Ask-rule reconciliation on re-run is additive: an owned rule that is no longer desired - a rule
+  the payload dropped, or one rendered for a project root that has moved - stays in
+  `settings.json`. (Fixed in 0.1.1.)
+- The factory ruleset carries a blanket `Bash(git -C:*)` ask rule that a project with a
+  deliberately silent sibling repository will want to remove. (Fixed in 0.1.1.)
 - The `writer` template renders its template-contract comment and a mixed-slash overrides path
-  into the project's `agents/writer.md` (cosmetic).
+  into the project's `agents/writer.md` (cosmetic). (Fixed in 0.1.1.)
 
+[0.1.1]: https://github.com/divels-studio/promptandpray/releases/tag/v0.1.1
 [0.1.0]: https://github.com/divels-studio/promptandpray/releases/tag/v0.1.0

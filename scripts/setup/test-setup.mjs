@@ -181,7 +181,19 @@ check('memory seeds are PRINTED for the operator', r1.out.includes('MEMORY SEEDS
   const bk = cfg._aiwf || {};
   const plugin = readJson(path.join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json')) || {};
   check('_aiwf stamps the payload version', bk.installedPluginVersion === plugin.version, `${bk.installedPluginVersion} vs ${plugin.version}`);
-  check('_aiwf stamps a fresh-install migration id', bk.lastMigrationApplied === '0001_initial', String(bk.lastMigrationApplied));
+  // A fresh install stamps the LAST manifest entry: it already generates the current state, so
+  // every shipped migration counts as applied. Read from the manifest rather than pinned to a
+  // literal id - a pinned one says "0001_initial" and starts failing on the payload's second
+  // migration, which is a true statement about the test and nothing about the engine.
+  {
+    const manifest = readJson(path.join(PLUGIN_ROOT, 'migrations', 'index.json')) || [];
+    const last = manifest.length ? manifest[manifest.length - 1].id : null;
+    check('_aiwf stamps the LAST manifest entry as the fresh-install migration id',
+      !!last && bk.lastMigrationApplied === last, `${bk.lastMigrationApplied} vs manifest last ${last}`);
+    check('and that entry targets the payload version (so "up to date" and "installed == payload" agree)',
+      manifest.length > 0 && manifest[manifest.length - 1].targetPluginVersion === plugin.version,
+      `${manifest.length ? manifest[manifest.length - 1].targetPluginVersion : '(no manifest)'} vs ${plugin.version}`);
+  }
   check('_aiwf journal is clear', bk.migrationJournal === null);
   check('$schema points at the payload schema', typeof cfg.$schema === 'string' && cfg.$schema.endsWith('schema/aiwf.config.schema.json'), String(cfg.$schema));
   // Both enforcement keys are REQUIRED by the schema, so a fresh install carries them whatever the
@@ -1185,6 +1197,95 @@ section('19 - CLAUDE.md: the bytes outside the markers survive every write branc
   const after = read(at(dir, 'CLAUDE.md')) || '';
   check('an LF CLAUDE.md stays LF (the CRLF assertions are not true of every branch)',
     r.status === 0 && after.slice(0, head.length) === head && !after.includes('\r'), why(r));
+}
+
+// ---------------------------------------------------------------------------
+// The template-contract comment is documentation for whoever edits a template; it addresses the
+// generate engine and has no reader in the rendered artifact. Both directions are asserted here,
+// because "the render does not contain it" is also what a scan of an empty file reports: the
+// TEMPLATE still carries the block, the RENDER does not.
+section('20 - the TEMPLATE CONTRACT block is stripped from every render');
+{
+  const dir = project('contract-strip');
+  const r = install(dir, baseAnswers(), ['--no-seeds']);
+  check('install exits 0', r.status === 0, why(r));
+  const writer = read(at(dir, '.claude/agents/writer.md')) || '';
+  const reviewer = read(at(dir, '.claude/agents/reviewer.md')) || '';
+  const overrides = read(at(dir, 'docs/ai/PROJECT_OVERRIDES.md')) || '';
+  const claudeMd = read(at(dir, 'CLAUDE.md')) || '';
+  check('the rendered writer agent carries no TEMPLATE CONTRACT block', !writer.includes('TEMPLATE CONTRACT'));
+  check('nor does the rendered reviewer agent', !reviewer.includes('TEMPLATE CONTRACT'));
+  check('nor does the seeded overrides document', !overrides.includes('TEMPLATE CONTRACT'));
+  check('nor does CLAUDE.md', !claudeMd.includes('TEMPLATE CONTRACT'));
+  // The control: the TEMPLATES still carry the block, so the assertions above are about the
+  // stripping and not about a payload that never had the text.
+  const tmplWriter = read(path.join(PLUGIN_ROOT, 'templates', 'agents', 'writer.md.tmpl')) || '';
+  const tmplOverrides = read(path.join(PLUGIN_ROOT, 'templates', 'PROJECT_OVERRIDES.md.tmpl')) || '';
+  check('the writer TEMPLATE still carries it (the control: there was something to strip)',
+    tmplWriter.includes('<!-- TEMPLATE CONTRACT'));
+  check('and so does the overrides TEMPLATE', tmplOverrides.includes('<!-- TEMPLATE CONTRACT'));
+  // Stripping is NARROW: an ordinary HTML comment a template really wants in its output survives.
+  check('an ordinary HTML comment survives the render (the region markers are one)',
+    claudeMd.includes('<!-- BEGIN aiwf-core -->') && claudeMd.includes('Managed by PromptAndPray'));
+  // The rendered writer's overrides path is ONE native path, not a Windows root joined to a POSIX
+  // separator. os is `windows` in baseAnswers(), so the whole path is backslashed.
+  const line = writer.split('\n').find((l) => l.includes('PROJECT_OVERRIDES.md')) || '';
+  check('the overrides path in the rendered writer is native for config.os (no mixed slashes)',
+    line.includes(`${dir}\\docs\\ai\\PROJECT_OVERRIDES.md`), line.trim().slice(0, 160));
+  // ... and the other channel really renders the other separator.
+  const posix = project('contract-strip-posix');
+  const linuxAnswers = baseAnswers();
+  linuxAnswers.os = 'linux';
+  const r2 = install(posix, linuxAnswers, ['--no-seeds']);
+  const writerPosix = read(at(posix, '.claude/agents/writer.md')) || '';
+  const linePosix = writerPosix.split('\n').find((l) => l.includes('PROJECT_OVERRIDES.md')) || '';
+  check('a linux install exits 0', r2.status === 0, why(r2));
+  check('and renders the overrides path with forward slashes only',
+    linePosix.includes('/docs/ai/PROJECT_OVERRIDES.md') && !linePosix.includes('\\'), linePosix.trim().slice(0, 160));
+}
+
+// ---------------------------------------------------------------------------
+// A `<projectRoot>` render carries the root it was made for. Move the project (a rename, a copy,
+// a worktree) and those owned rules are addressed to a directory this project no longer has. The
+// re-run must RETIRE its own stale renders - without touching a foreign rule that merely mentions
+// the old path, and without tombstoning (a tombstone means the OPERATOR removed it).
+section('21 - a changed project root retires the owned rules rendered for the old one');
+{
+  const oldRoot = project('root-a');
+  const r1 = install(oldRoot, baseAnswers(), ['--no-seeds']);
+  check('the install at root A exits 0', r1.status === 0, why(r1));
+  const ownedA = ((readJson(at(oldRoot, CONFIG_REL)) || {})._aiwf || {}).ownedAskRules || [];
+  const staleRules = ownedA.filter((rule) => rule.includes(oldRoot));
+  check('the fixture precondition holds: root A rules are owned', staleRules.length === 3, `${staleRules.length} rules`);
+
+  // The project MOVES: same tree, new path. A foreign rule that happens to mention the old root
+  // goes in by hand - it is the operator's, and nothing here may touch it.
+  const newRoot = path.join(tmpRoot, 'root-b');
+  copyTree(oldRoot, newRoot);
+  const FOREIGN = `Bash(my-own-tool --repo ${oldRoot}:*)`;
+  const settingsB = readJson(at(newRoot, '.claude/settings.json'));
+  settingsB.permissions.ask.push(FOREIGN);
+  fs.writeFileSync(at(newRoot, '.claude/settings.json'), JSON.stringify(settingsB, null, 2));
+
+  const r2 = install(newRoot, baseAnswers(), ['--no-seeds']);
+  check('the re-run at root B exits 0', r2.status === 0, why(r2));
+  const bk = (readJson(at(newRoot, CONFIG_REL)) || {})._aiwf || {};
+  const ask = (readJson(at(newRoot, '.claude/settings.json')) || {}).permissions.ask || [];
+  check('every root-A rule left settings.json', !staleRules.some((rule) => ask.includes(rule)),
+    staleRules.filter((rule) => ask.includes(rule)).join(', '));
+  check('and left ownedAskRules', !staleRules.some((rule) => (bk.ownedAskRules || []).includes(rule)));
+  check('none of them was tombstoned (the engine retired its own render; nobody removed it by hand)',
+    !staleRules.some((rule) => (bk.suppressedAskRules || []).includes(rule)), JSON.stringify(bk.suppressedAskRules));
+  check('the root-B rules are there instead', ask.includes(`Bash(git -C ${newRoot} push:*)`)
+    && (bk.ownedAskRules || []).includes(`Bash(git -C ${newRoot} push:*)`));
+  check('the FOREIGN rule naming the old root is untouched', ask.includes(FOREIGN));
+  check('and it never became owned', !(bk.ownedAskRules || []).includes(FOREIGN));
+  check('the report says what it removed', r2.out.includes('no longer in the payload\'s desired set'), why(r2, true).slice(0, 200));
+  // Idempotent: the retirement happens once, and the next run has nothing left to do.
+  const before = snapshot(newRoot);
+  const r3 = install(newRoot, baseAnswers(), ['--no-seeds']);
+  check('the next re-run at root B is a zero diff', r3.status === 0 && diffSnapshots(before, snapshot(newRoot)).length === 0,
+    diffSnapshots(before, snapshot(newRoot)).join(', '));
 }
 
 // ---------------------------------------------------------------------------

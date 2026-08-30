@@ -134,7 +134,7 @@ const baseAnswers = (overrides = {}) => ({
 
 // `selfcheck: true` lets the run perform its integrated self-check; everything else passes
 // --no-selfcheck, which is the operator's own flag and not a test-only bypass.
-function install(projectDir, { payload = PLUGIN_ROOT, answers = baseAnswers(), extra = [], selfcheck = false } = {}) {
+function install(projectDir, { payload = BASE, answers = baseAnswers(), extra = [], selfcheck = false } = {}) {
   const answersFile = path.join(tmpRoot, `answers-${path.basename(projectDir)}-${Math.random().toString(36).slice(2, 8)}.json`);
   writeJson(answersFile, answers);
   const r = spawnSync(process.execPath, [
@@ -145,7 +145,7 @@ function install(projectDir, { payload = PLUGIN_ROOT, answers = baseAnswers(), e
   return { status: r.status, out: (r.stdout || '') + (r.stderr || '') };
 }
 
-function update(projectDir, args, { payload = PLUGIN_ROOT, env = null, selfcheck = false } = {}) {
+function update(projectDir, args, { payload = BASE, env = null, selfcheck = false } = {}) {
   const r = spawnSync(process.execPath, [
     path.join(payload, 'scripts', 'update', 'aiwf-update.mjs'),
     ...args, '--plugin-root', payload, '--project-root', projectDir,
@@ -191,13 +191,29 @@ function changeRuleset(dir) {
   writeJson(file, json);
 }
 
+// THE BASELINE THIS SUITE LIVES ON, and why it is not simply "the payload as it ships".
+// Every payload built here starts from the shipped plugin with its manifest TRUNCATED to the first
+// entry (and the real migration directories above it removed, so no orphan directory fails
+// validation). The fixture migrations are then appended as `0002_*`, `0003_*` - which is what their
+// hardcoded ids and resolution addresses say throughout this file.
+// Without the truncation, every fixture id would have to be renumbered the day the payload ships
+// its own second migration, and the suite would be asserting the shipped migration COUNT instead of
+// the engine's behaviour. The engine is what is under test here; the shipped manifest is covered by
+// validate-payload and the self-check.
+const REAL_MANIFEST = readJson(path.join(PLUGIN_ROOT, 'migrations', 'index.json')) || [];
+const BASELINE = REAL_MANIFEST[0];
+if (!BASELINE) { console.error('the payload manifest is empty - the update suite has no baseline to build on'); process.exit(2); }
+
 function makePayload(name, { version, migrations, tweak = null }) {
   const dir = path.join(tmpRoot, `payload-${name}`);
   copyTree(PLUGIN_ROOT, dir);
   const pluginJson = readJson(at(dir, '.claude-plugin/plugin.json'));
   pluginJson.version = version;
   writeJson(at(dir, '.claude-plugin/plugin.json'), pluginJson);
-  const manifest = readJson(at(dir, 'migrations/index.json'));
+  for (const entry of REAL_MANIFEST.slice(1)) {
+    fs.rmSync(at(dir, `migrations/${entry.id}`), { recursive: true, force: true });
+  }
+  const manifest = [{ id: BASELINE.id, targetPluginVersion: BASELINE.targetPluginVersion }];
   for (const m of migrations) {
     manifest.push({ id: m.id, targetPluginVersion: m.version });
     const mdir = at(dir, `migrations/${m.id}`);
@@ -209,6 +225,11 @@ function makePayload(name, { version, migrations, tweak = null }) {
   if (tweak) tweak(dir);
   return dir;
 }
+
+// The payload every project here is INSTALLED from: the shipped plugin at its baseline migration.
+// `install()` and `update()` default to it, so "an already-current project" means current against
+// this baseline - a stable statement that does not move when the payload ships a new migration.
+const BASE = makePayload('base', { version: BASELINE.targetPluginVersion, migrations: [] });
 
 // The payload every "real upgrade" case runs against: 0.2.0, one migration, all four op types, and
 // templates + ruleset that really changed.
@@ -788,7 +809,10 @@ section('10 - a dry run writes nothing, and preflight refuses an incoherent proj
 {
   const p = project('downgrade');
   install(p, { payload: P020 });
-  const r = update(p, ['--apply']); // the SHIPPED 0.1.0 payload against a 0.2.0 project
+  // BASE is not "the shipped 0.1.0 payload": it is the CURRENT payload tree truncated to the
+  // baseline migration and stamped with that migration's target version. Offering it to a 0.2.0
+  // project is the downgrade under test.
+  const r = update(p, ['--apply']);
   check('a downgrade is refused with exit 1', r.status === 1, why(r));
   check('the message says downgrade', r.out.toLowerCase().includes('downgrade'), why(r));
 }

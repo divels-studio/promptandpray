@@ -117,6 +117,15 @@ announced explicitly in the commit summary.
 text must already be in the tree when the pass is dispatched - the review covers the whole diff,
 not the Writer's half of it. Blockers cluster precisely where COO-written prose escaped a pass.
 
+**But the Reviewer verifies DECISIONS; it is not the mechanism that discovers factual errors.**
+A wrong path, a wrong line number, a wrong count, a command that does not exist, a claim about
+how an engine or a hook behaves - those are checkable against the tree by anything that can read
+it, and paying a review pass to find them buys at the most expensive tier what the cheapest one
+proves. They are caught by the **fact-check gate** (`/pnp:review` Step 2b): one cheap read-only
+scan agent over the prose of the diff, run BEFORE any paid pass, returning only the false or
+unverifiable claims with `file:line` and the correct value. The COO fixes those, and only then
+dispatches the review.
+
 ## The operator does not arbitrate engineering decisions
 
 Scope structuring, brief content, technical sequencing, and what-lands-in-which-ticket (within
@@ -156,11 +165,16 @@ change of COO model, and each of these was learned from an observed violation.
 - **(b) Dispatch waits for the word; data is not an order.** A ticket is written and then STOPS;
   starting the work is the operator's call, ticket by ticket - the content of the ticket is not.
   Values and facts the operator supplies are DATA for the ticket, not permission to execute.
-  After the word, the loop runs to the end without asking again. **Refinement:** the birth of a
-  NEW ticket is announced explicitly - "opening ticket `<REF>` for `<what>`" - BEFORE its dispatch,
-  even when a standing operator word covers the work it belongs to. The announcement is a
-  notification (the ticket's content stays the COO's call), not a question; a standing word covers
-  the work, never silently the structure born after it.
+  After the word, the loop runs to the end without asking again. **A ticket born after a standing
+  word waits for its own word.** When the work in flight produces a NEW ticket - one that is not
+  already in the PLAN's recorded execution order - the COO does exactly three things: writes it
+  into the PLAN, announces it in ONE sentence ("opening ticket `<REF>` for `<what>` - waiting for
+  your word"), and STOPS. Zero mutations on that ticket until the operator answers: no Writer
+  dispatch, no route state, no code, no docs edit belonging to it. The earlier reading of this
+  rule - that the announcement is a *notification rather than a question*, so the dispatch may
+  follow it in the same turn - is REVOKED: it was observed to let a ticket be born AND started
+  without an operator word, which is exactly what (b) exists to prevent. The ticket's CONTENT
+  stays the COO's call; its START never is.
 - **(c) Brief constraints are read literally.** An explicit constraint is read literally; a
   "temporary and reverted" violation is still a violation. A loose reading is never
   self-granted - if the COO believes the constraint means something else, it asks the author of
@@ -208,6 +222,13 @@ Not configurable, and enforced here regardless of the project:
   entry.
 - Plan readiness keeps its own two-pass contract (below), independent of the correction cap.
 - The risk threshold and the stop condition are mandatory in every R2/R3 brief.
+- **A second PAID pass only when the correction round touched code.** A pass on a paid external
+  engine is an operator quota gate, and a correction round whose whole delta is PROSE does not buy
+  a second one: it is verified by the fact-check gate (one cheap scan agent over the changed text)
+  plus the COO's own first-hand verification of the delta, and both are recorded in the ticket's
+  completion record. The moment a correction round changes code, the second pass runs on the
+  configured engine as usual. The operator may always ask for a paid pass explicitly - this rule
+  removes a default, never an option.
 
 ## Planning lock
 
@@ -482,6 +503,22 @@ Reviewer at all.
 
 Correction rounds are capped (see "Loop shape and its overrides"). Local commit after the loop
 passes and a human approves (the commit `ask` dialog - see Commit & Push Authority).
+
+**The engine follows the ticket's CLASS, not only the configuration.** Every review brief carries
+`Class: docs | code` (default `code` when the line is absent), and `/pnp:review` reads it before
+it resolves the host:
+
+- **`Class: docs`** - plans, the overrides document, README, skill/doc prose with **no executable
+  artifact** in the diff - is reviewed by a read-only **Claude** subagent, whatever
+  `roles.reviewer.engine` says. Prose is judged by reading the tree, which the Claude host does at
+  no external-quota cost. On a **codex-configured** install that host is an **ad-hoc** read-only
+  Claude subagent (`subagent_type: "general-purpose"`, `model: "opus"`, the brief prefixed with a
+  read-only reviewer preamble), not a rendered agent file: `.claude/agents/reviewer.md` is rendered
+  only for a claude-hosted role (`/pnp:review` Step 3).
+- **`Class: code`** - anything that runs, is imported, or is tested - uses the configured engine.
+
+The class is the COO's call and follows the R1 rule above: the moment a docs-class ticket gains an
+executable artifact it is code class, in the review engine as in the route.
 
 ### R3 - critical (migrations / access policy / auth / destructive / push)
 

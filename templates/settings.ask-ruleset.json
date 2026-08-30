@@ -1,7 +1,7 @@
 {
   "_comment": "Factory default permission posture for a PromptAndPray install. `ask` is the desired set that setup/update set-merges into the project's .claude/settings.json; only the rules setup actually INSERTED are recorded in aiwf.config.json._aiwf.ownedAskRules, and an owned rule the operator later removes becomes a tombstone in _aiwf.suppressedAskRules and is never forced back. Foreign rules are never touched.",
   "_allowDenyComment": "`allow` and `deny` below are the FACTORY DEFAULT posture, not owned rules: a blanket Bash allow with an empty deny, so that protection comes from the explicit ask gate plus the PreToolUse hooks rather than from a brittle command allowlist. Setup applies them only when the project has no permissions block of its own; it never overwrites an existing one.",
-  "_placeholderComment": "`<projectRoot>` is rendered by setup from the resolved project root. The three `git -C <projectRoot> ...` forms exist because a -C-prefixed command is a DIFFERENT match string from the bare form, and the push/merge/rebase gate must hold for every form.",
+  "_placeholderComment": "`<projectRoot>` is rendered by setup from the resolved project root. The three `git -C <projectRoot> ...` forms exist because a -C-prefixed command is a DIFFERENT match string from the bare form, and the push/merge/rebase gate must hold for every form. There is deliberately no blanket -C rule (one matching `git -C` with no verb): it gated every -C form of every git command, read-only ones included, so an ordinary `git -C <another repo> log` raised a dialog while adding nothing to the push/merge/rebase gate the three rendered forms already hold.",
   "_osComment": "ONE OS-NEUTRAL SUPERSET, deliberately not a per-OS render: the ruleset ships identically on windows, linux and macos. A rule matches by command prefix, so the Windows-only forms (Remove-Item, del, git.exe) are inert on a POSIX host and the POSIX forms (rm, rmdir, bare git) are inert on Windows - carrying both costs nothing, while an OS-conditional ruleset would add a rendering branch to the one file whose whole job is that a gate is never missing.",
   "_stackComment": "The package-manager, migration-tool and container rules are the default set proven in a Node + SQL project. They cost nothing on a project that never runs those commands; the interview may narrow them.",
   "permissions": {
@@ -24,7 +24,6 @@
       "Bash(git stash:*)",
       "Bash(git config:*)",
       "Bash(git remote:*)",
-      "Bash(git -C:*)",
       "Bash(git -c:*)",
       "Bash(npm run db:*)",
       "Bash(npm run seed:*)",

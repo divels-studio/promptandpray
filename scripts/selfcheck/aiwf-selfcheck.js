@@ -2201,6 +2201,180 @@ function setupFlagFindings(skillText, cliSources) {
   return { documented: list, unparsed: list.filter((f) => !cliSources.some((src) => src.includes(`'${f}'`))) };
 }
 
+// ---------------------------------------------------------------------------
+// PAYLOAD DOCTRINE - the rules that exist ONLY as text, and can therefore rot silently
+// ---------------------------------------------------------------------------
+// A gate that can be a hook IS a hook in this plugin; what is left over is doctrine carried by the
+// skill and template text, and text has no compiler. Each rule below was written because it was
+// VIOLATED in a real session, so "the sentence is still in the file" is the only regression test
+// there is. Findings take the plugin root as an argument, so the controls can run the same function
+// over a sabotaged copy - the marketplace section's pattern, for the same reason.
+//
+// The Read/Grep/Glob rule is asserted as ONE canonical sentence in all six skills rather than as a
+// per-skill paraphrase: six wordings drift into six meanings, and a check that accepts any of them
+// proves nothing about the sixth.
+const DOCTRINE_READING_SENTENCE =
+  '**Reading is not a shell job.** Read or inspect files with the Read/Grep/Glob tools - never '
+  + '`cat`/`grep`/`ls`/`head`/`node -e` through the shell for reading; the shell is for execution '
+  + '(tests, git, build).';
+const DOCTRINE_READING_SKILLS = ['mission', 'work', 'setup', 'review', 'qa', 'loop'];
+const DOCTRINE_NEWBORN_SENTENCE =
+  'A NEWLY BORN ticket - one that is not in the PLAN\'s recorded execution order - is written into '
+  + 'the PLAN, announced in ONE sentence, and STOPS the same way.';
+const DOCTRINE_NEWBORN_SKILLS = ['mission', 'work'];
+const BLANKET_GIT_C_RULE = 'Bash(git -C:*)';
+// Step 0c is THREE claims, and each rots on its own: that the brief carries the class at all, that
+// `Class: docs` BEATS the configured engine, and that "the Claude host" it selects is dispatchable
+// on the installs the override was written for. The last one is not decoration: `.claude/agents/
+// reviewer.md` is rendered only when the role's engine is `claude` (scripts/setup/generate.mjs), so
+// on a codex-configured project there is no `reviewer` subagent and `roles.reviewer.model` is a
+// Codex model name the Agent tool would reject - without the ad-hoc fallback the docs-class route
+// is undispatchable exactly where it matters. Asserting only the heading proved none of that.
+const DOCTRINE_REVIEW_CLASS_OVERRIDE = 'regardless of `roles.reviewer.engine`';
+const DOCTRINE_REVIEW_CLASS_FALLBACK = 'subagent_type: "general-purpose"';
+// Line breaks are formatting, not meaning: the payload wraps at 100 columns and a re-wrap must not
+// read as a missing rule. Whitespace is collapsed on BOTH sides before comparing.
+const collapseWs = (s) => String(s).replace(/\s+/g, ' ').trim();
+
+function payloadDoctrineFindings(pluginRoot) {
+  const out = [];
+  const add = (id, name, ok, detail) => out.push({ id, name, ok: !!ok, detail: detail || '' });
+  const skillText = (name) => readText(path.join(pluginRoot, 'skills', name, 'SKILL.md'));
+
+  const missingReading = DOCTRINE_READING_SKILLS.filter(
+    (n) => !collapseWs(skillText(n) || '').includes(collapseWs(DOCTRINE_READING_SENTENCE)),
+  );
+  add('doctrine-reading-not-shell',
+    `all ${DOCTRINE_READING_SKILLS.length} session skills carry the identical "reading is not a shell job" instruction`,
+    missingReading.length === 0,
+    missingReading.length ? `missing in: ${missingReading.join(', ')}` : DOCTRINE_READING_SKILLS.join(', '));
+
+  const missingNewborn = DOCTRINE_NEWBORN_SKILLS.filter(
+    (n) => !collapseWs(skillText(n) || '').includes(collapseWs(DOCTRINE_NEWBORN_SENTENCE)),
+  );
+  add('doctrine-newborn-ticket',
+    'the two session skills carry the newborn-ticket rule (write it into the PLAN, announce it in ONE sentence, STOP)',
+    missingNewborn.length === 0,
+    missingNewborn.length ? `missing in: ${missingNewborn.join(', ')}` : DOCTRINE_NEWBORN_SKILLS.join(', '));
+
+  const review = skillText('review') || '';
+  add('doctrine-review-factcheck',
+    '/pnp:review carries Step 2b - the fact-check gate that runs before a paid pass',
+    /##\s*Step 2b\b/.test(review) && /fact-check/i.test(review)
+    && review.includes('Verify every factual claim in the prose of this diff'),
+    /##\s*Step 2b\b/.test(review) ? 'Step 2b present' : 'no Step 2b heading');
+  const reviewFlat = collapseWs(review);
+  const classMissing = [];
+  if (!review.includes('Class: docs | code')) classMissing.push('no "Class: docs | code" line in the brief template');
+  if (!/##\s*Step 0c\b/.test(review)) classMissing.push('no Step 0c heading');
+  if (!reviewFlat.includes(collapseWs(DOCTRINE_REVIEW_CLASS_OVERRIDE))) {
+    classMissing.push(`no engine-override sentence ("${DOCTRINE_REVIEW_CLASS_OVERRIDE}")`);
+  }
+  if (!reviewFlat.includes(collapseWs(DOCTRINE_REVIEW_CLASS_FALLBACK))) {
+    classMissing.push(`no codex-install fallback dispatch (${DOCTRINE_REVIEW_CLASS_FALLBACK})`);
+  }
+  add('doctrine-review-class',
+    '/pnp:review takes the ticket class as an explicit brief input (Class: docs | code), lets `docs` OVERRIDE the configured engine, and names a dispatchable Claude host for a codex-configured install',
+    classMissing.length === 0,
+    classMissing.length ? classMissing.join('; ') : 'Class line, Step 0c, the engine override and the codex-install fallback are all present');
+
+  const ruleset = readJson(path.join(pluginRoot, 'templates', 'settings.ask-ruleset.json'));
+  const ask = (ruleset && ruleset.permissions && Array.isArray(ruleset.permissions.ask)) ? ruleset.permissions.ask : null;
+  add('doctrine-no-blanket-git-c',
+    `the factory ruleset carries no blanket "${BLANKET_GIT_C_RULE}" (it gated read-only -C forms too)`,
+    ask !== null && !ask.includes(BLANKET_GIT_C_RULE),
+    ask === null ? 'the ruleset declares no permissions.ask list' : `${ask.length} rules`);
+  // The rendered `git -C <projectRoot> ...` forms are the reason the blanket rule was removable at
+  // all: the push/merge/rebase gate must still hold for the -C form of THIS repository.
+  add('doctrine-git-c-project-forms',
+    'the three rendered "git -C <projectRoot>" push/merge/rebase forms are still there',
+    ask !== null && ['push', 'merge', 'rebase'].every((verb) => ask.includes(`Bash(git -C <projectRoot> ${verb}:*)`)),
+    ask === null ? 'no ask list' : `${ask.filter((r) => r.includes('git -C <projectRoot>')).length} -C forms`);
+  return out;
+}
+
+// The files the doctrine findings read - the only ones a control copy needs.
+function copyDoctrineFiles(from, to) {
+  for (const name of DOCTRINE_READING_SKILLS) {
+    fs.mkdirSync(path.join(to, 'skills', name), { recursive: true });
+    fs.copyFileSync(path.join(from, 'skills', name, 'SKILL.md'), path.join(to, 'skills', name, 'SKILL.md'));
+  }
+  fs.mkdirSync(path.join(to, 'templates'), { recursive: true });
+  fs.copyFileSync(path.join(from, 'templates', 'settings.ask-ruleset.json'), path.join(to, 'templates', 'settings.ask-ruleset.json'));
+}
+
+const doctrineSkill = (root, name, fn) => {
+  const p = path.join(root, 'skills', name, 'SKILL.md');
+  fs.writeFileSync(p, fn(readText(p)));
+};
+const doctrineRuleset = (root, fn) => {
+  const p = path.join(root, 'templates', 'settings.ask-ruleset.json');
+  const j = JSON.parse(readText(p));
+  fn(j);
+  fs.writeFileSync(p, JSON.stringify(j, null, 2) + '\n');
+};
+// The assertions above collapse whitespace before comparing, because the payload wraps at 100
+// columns and a re-wrap is not a missing rule. A control must do the same: a literal
+// `split(phrase)` on a phrase that happens to straddle a newline replaces NOTHING, the sabotaged
+// copy stays clean, and the control silently proves the opposite of what it claims. So sabotage
+// through a whitespace-tolerant regex, and REFUSE (throw, which the runner reports) when the
+// phrase is not found at all.
+const phraseRe = (phrase) => new RegExp(
+  phrase.trim().split(/\s+/).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s+'), 'g');
+const doctrinePhrase = (root, skill, phrase, replacement) => doctrineSkill(root, skill, (t) => {
+  if (!phraseRe(phrase).test(t)) throw new Error(`the phrase is not in skills/${skill}/SKILL.md: ${phrase}`);
+  return t.replace(phraseRe(phrase), replacement);
+});
+const DOCTRINE_CONTROLS = [
+  { id: 'doctrine-reading-not-shell', label: 'the reading rule dropped from one of the six skills',
+    apply: (r) => doctrineSkill(r, 'qa', (t) => t.split('**Reading is not a shell job.**').join('**Reading is fine in a shell.**')) },
+  { id: 'doctrine-reading-not-shell', label: 'the reading rule REWORDED in one skill (six wordings are not one rule)',
+    apply: (r) => doctrineSkill(r, 'loop', (t) => t.split('`cat`/`grep`/`ls`/`head`/`node -e`').join('shell commands')) },
+  { id: 'doctrine-newborn-ticket', label: 'the newborn-ticket rule dropped from /pnp:work',
+    apply: (r) => doctrineSkill(r, 'work', (t) => t.split('A NEWLY BORN ticket').join('A ticket')) },
+  { id: 'doctrine-review-factcheck', label: 'Step 2b (the fact-check gate) removed from /pnp:review',
+    apply: (r) => doctrineSkill(r, 'review', (t) => t.split('## Step 2b').join('## Step 2c-removed')) },
+  { id: 'doctrine-review-factcheck', label: 'Step 2b kept as a heading but its reusable prompt text gone',
+    apply: (r) => doctrineSkill(r, 'review', (t) => t.split('Verify every factual claim in the prose of this diff').join('Do a quick sanity pass')) },
+  { id: 'doctrine-review-class', label: 'the Class input line removed from the review brief template',
+    apply: (r) => doctrineSkill(r, 'review', (t) => t.split('Class: docs | code').join('Class: whatever')) },
+  { id: 'doctrine-review-class', label: 'Step 0c kept, but `Class: docs` no longer OVERRIDES the configured engine',
+    apply: (r) => doctrinePhrase(r, 'review', DOCTRINE_REVIEW_CLASS_OVERRIDE, 'in line with `roles.reviewer.engine`') },
+  { id: 'doctrine-review-class', label: 'the codex-install fallback dispatch gone - the docs-class route points at an agent file that install never renders',
+    apply: (r) => doctrinePhrase(r, 'review', DOCTRINE_REVIEW_CLASS_FALLBACK, 'subagent_type: "reviewer"') },
+  { id: 'doctrine-no-blanket-git-c', label: 'the blanket git -C rule put back into the factory ruleset',
+    apply: (r) => doctrineRuleset(r, (j) => { j.permissions.ask.push(BLANKET_GIT_C_RULE); }) },
+  { id: 'doctrine-git-c-project-forms', label: 'a rendered git -C <projectRoot> form dropped with it',
+    apply: (r) => doctrineRuleset(r, (j) => { j.permissions.ask = j.permissions.ask.filter((x) => x !== 'Bash(git -C <projectRoot> push:*)'); }) },
+];
+
+function sectionPayloadDoctrine(tmpRoot) {
+  section('PAYLOAD DOCTRINE - the rules that live only as text (each one learned from a violation)');
+  for (const f of payloadDoctrineFindings(PLUGIN_ROOT)) check(f.name, f.ok, f.detail);
+
+  section('PAYLOAD DOCTRINE CONTROLS - each of those assertions is proven able to FAIL');
+  const base = path.join(tmpRoot, 'doctrine-base');
+  copyDoctrineFiles(PLUGIN_ROOT, base);
+  const pristine = payloadDoctrineFindings(base);
+  check('the control copy is clean before any sabotage', pristine.every((f) => f.ok),
+    pristine.filter((f) => !f.ok).map((f) => f.id).join(', ') || `${pristine.length} checks`);
+  let i = 0;
+  const covered = new Set();
+  for (const m of DOCTRINE_CONTROLS) {
+    const broken = path.join(tmpRoot, `doctrine-neg-${i += 1}`);
+    copyDoctrineFiles(base, broken);
+    try { m.apply(broken); } catch (e) { check(`control could be applied: ${m.label}`, false, String(e.message)); continue; }
+    const target = payloadDoctrineFindings(broken).find((f) => f.id === m.id);
+    if (!target) { check(`control "${m.label}" targets a live check (id "${m.id}")`, false, 'no check with that id was produced'); continue; }
+    covered.add(m.id);
+    check(`sabotage detected [${m.id}]: ${m.label}`, target.ok === false, target.ok ? 'still PASS - the check is vacuous' : 'FAIL as required');
+    try { fs.rmSync(broken, { recursive: true, force: true }); } catch (e) { /* best-effort */ }
+  }
+  for (const id of pristine.filter((f) => !covered.has(f.id)).map((f) => f.id)) {
+    note(`no negative control for payload-doctrine check "${id}"`, 'no control defined - add one or state why it cannot fail');
+  }
+}
+
 function sectionPayloadIntegrity() {
   section('PAYLOAD INTEGRITY - skills, cross-references, command prefix');
   const skillsDir = path.join(PLUGIN_ROOT, 'skills');
@@ -3285,9 +3459,9 @@ const EXAMPLE_CONTROLS = [
   { id: 'example-bump-json', label: 'an extra field smuggled into bump.json',
     apply: (r) => mutateJson(r, ['examples', 'example-project', 'bump', 'bump.json'], (b) => { b.extra = 'nope'; }) },
   { id: 'example-bump-migration', label: 'the migration ops.json claims another migration id',
-    apply: (r) => mutateJson(r, ['examples', 'example-project', 'bump', '0002_example-bump', 'ops.json'], (o) => { o.migration = '0009_other'; }) },
+    apply: (r) => mutateJson(r, ['examples', 'example-project', 'bump', '0003_example-bump', 'ops.json'], (o) => { o.migration = '0009_other'; }) },
   { id: 'example-bump-ops-types', label: 'the note operation dropped, so one op type is undemonstrated',
-    apply: (r) => mutateJson(r, ['examples', 'example-project', 'bump', '0002_example-bump', 'ops.json'],
+    apply: (r) => mutateJson(r, ['examples', 'example-project', 'bump', '0003_example-bump', 'ops.json'],
       (o) => { o.operations = o.operations.filter((x) => x.op !== 'note'); }) },
   { id: 'example-bump-id', label: 'the bump renumbered so it follows a manifest entry that does not exist',
     apply: (r) => mutateJson(r, ['examples', 'example-project', 'bump', 'bump.json'], (b) => { b.migration = '0009_example-bump'; }) },
@@ -3298,7 +3472,7 @@ const EXAMPLE_CONTROLS = [
   { id: 'example-bump-schema-key', label: 'schema-key.json declares a default, which would make the migration a no-op on a fresh install',
     apply: (r) => mutateJson(r, ['examples', 'example-project', 'bump', 'schema-key.json'], (s) => { s.schema.default = true; }) },
   { id: 'example-bump-key-agrees', label: 'the migration adds a different key from the one the schema admits',
-    apply: (r) => mutateJson(r, ['examples', 'example-project', 'bump', '0002_example-bump', 'ops.json'],
+    apply: (r) => mutateJson(r, ['examples', 'example-project', 'bump', '0003_example-bump', 'ops.json'],
       (o) => { o.operations.find((x) => x.op === 'add-config-key').path = 'enforcement.somethingElse'; }) },
   { id: 'example-answers-valid', label: 'the answers file pinned to an OS channel that does not exist',
     apply: (r) => mutateJson(r, ['examples', 'example-project', 'answers.json'], (a) => { a.os = 'solaris'; }) },
@@ -3489,6 +3663,14 @@ const NEGATIVE_CONTROLS = [
     apply: (r) => mutateJson(r, ['.claude', 'settings.json'], (s) => { s.permissions.ask.push('Bash(git -C <projectRoot> push:*)'); }) },
   { id: 'owned-from-payload', label: 'a locally invented rule recorded as owned',
     apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => { c._aiwf.ownedAskRules.push('Bash(totally-invented:*)'); }) },
+  // The stale-root case, which is the one a project really produces: the rule IS a payload rule -
+  // it is just rendered for a project root this project no longer has (a move, a rename, a
+  // worktree). "Owned subset of desired" must be read against the CURRENT root, or a re-run keeps
+  // carrying dead rules addressed to a directory that is not here.
+  { id: 'owned-from-payload', label: 'an owned rule rendered with a FOREIGN project root',
+    apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
+      c._aiwf.ownedAskRules.push(`Bash(git -C ${path.join(path.dirname(r), 'some-other-project')} push:*)`);
+    }) },
   { id: 'roles-match-reviewer', label: 'roles.json reviewer drifted from the config',
     apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'roles.json'], (j) => { j.reviewer.model = 'haiku'; }) },
   { id: 'roles-match-qa', label: 'roles.json qa engine drifted from the config',
@@ -3657,6 +3839,7 @@ function main() {
     sectionShWrappers(tmpRoot);
     sectionResolver(tmpRoot);
     sectionPayloadIntegrity();
+    sectionPayloadDoctrine(tmpRoot);
     sectionProvenance(tmpRoot);
     sectionExampleFixture(tmpRoot);
     sectionProjectLayer(PROJECT, selfAuthored);
@@ -3707,6 +3890,19 @@ function main() {
   console.log('reports the same "0 hits" as a clean payload. What is NOT proven: that the three name');
   console.log('digests have the preimages they claim - a payload that must not contain those names cannot');
   console.log('carry the proof, so the controls prove the mechanism and the digests are stated data.');
+  console.log('PAYLOAD DOCTRINE: the rules that exist only as TEXT are asserted as text, because text has no');
+  console.log('compiler and every one of them was written after a real violation - the identical');
+  console.log('"reading is not a shell job" instruction in all six session skills (one canonical sentence, not');
+  console.log('six paraphrases), the newborn-ticket rule (write it into the PLAN, announce it in ONE sentence,');
+  console.log('STOP) in /pnp:mission and /pnp:work, Step 2b of /pnp:review with its reusable fact-check prompt,');
+  console.log('the "Class: docs | code" brief input with its Step 0c host branch - asserted as all three of its');
+  console.log('claims: the brief line, the sentence that `docs` overrides roles.reviewer.engine, and the ad-hoc');
+  console.log('read-only Claude dispatch that makes that override reachable on a codex-configured install (where');
+  console.log('no reviewer agent file is rendered) - and the factory ruleset\'s');
+  console.log('freedom from the blanket git -C rule while the three rendered <projectRoot> push/merge/rebase');
+  console.log('forms stay. Each has its own control on a sabotaged copy of those files, including one that only');
+  console.log('REWORDS a rule rather than deleting it. What is NOT proven, and cannot be from here: that a');
+  console.log('session actually OBEYS any of them - only that the instruction is present and intact.');
   console.log('MARKETPLACE: the repository is its own local marketplace - the manifest exists, parses, names');
   console.log('itself and its owner, carries exactly one plugin entry whose name is plugin.json\'s, whose');
   console.log('source is "./" and which carries NO version (plugin.json is the only version source); each');
@@ -3715,7 +3911,9 @@ function main() {
   console.log('flag switched in the argv while the old word survives in a comment still fails), the hook');
   console.log('wiring, the wrapper sources of BOTH channels (ASCII-only everywhere, LF-only for the bash');
   console.log('one, counted at byte level), and the payload cross-references.');
-  console.log('PROJECT LAYER: owned/suppressed ask-rule bookkeeping, rendered artifacts agreeing with the');
+  console.log('PROJECT LAYER: owned/suppressed ask-rule bookkeeping - including that every OWNED rule is a');
+  console.log('member of the payload ruleset rendered for THIS project root, so a rule left behind by a moved');
+  console.log('or renamed project fails as loudly as an invented one - rendered artifacts agreeing with the');
   console.log('config, the conditional-render contract (a Claude agent file exists iff its role is');
   console.log('claude-hosted), and version bookkeeping - proven able to fail by the negative controls,');
   console.log('which run against a fixture this script synthesises for that purpose alone. Checks with no');

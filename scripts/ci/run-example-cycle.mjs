@@ -416,8 +416,8 @@ function createOwnedDir(name) {
   return target;
 }
 
-const PAYLOAD_1 = path.join(workDir, 'payload-0.1.0');
-const PAYLOAD_2 = path.join(workDir, 'payload-0.2.0');
+const PAYLOAD_1 = path.join(workDir, 'payload-shipped');
+const PAYLOAD_2 = path.join(workDir, 'payload-bumped');
 const PROJECT = path.join(workDir, 'project');
 const RESOLUTIONS = path.join(workDir, 'resolutions.json');
 const RESOLVE_TAKE_NEW = path.join(workDir, 'resolve-take-new.json');
@@ -448,7 +448,7 @@ try {
   // spawns this driver with each bad --work-dir and requires exit 2 with nothing created.
   // createOwnedDir brings each entry into existence and records it in the same breath, so a copy
   // that dies halfway still leaves a directory the cleanup knows about.
-  createOwnedDir('payload-0.1.0');
+  createOwnedDir('payload-shipped');
   copyTree(REPO_ROOT, PAYLOAD_1);
   createOwnedDir('project');
   copyTree(path.join(EXAMPLE_DIR, 'seed'), PROJECT);
@@ -485,7 +485,7 @@ try {
 
   // -- 3. the simulated version bump -----------------------------------------
   step(`3 - build the bumped payload (${payload1Version} -> ${bump.targetPluginVersion}) from examples/example-project/bump/`);
-  createOwnedDir('payload-0.2.0');
+  createOwnedDir('payload-bumped');
   copyTree(PAYLOAD_1, PAYLOAD_2);
   {
     const pluginJson = readJson(path.join(PAYLOAD_2, '.claude-plugin', 'plugin.json'));

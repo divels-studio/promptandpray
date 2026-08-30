@@ -26,6 +26,9 @@ seeded once and then owned by the operator forever.
    and point the operator at `/pnp:update` - a re-interview over an out-of-date project would
    re-render artifacts the pending migrations are about to touch. On a fresh install there is no
    config and nothing to check.
+4. **Reading is not a shell job.** Read or inspect files with the Read/Grep/Glob tools - never
+   `cat`/`grep`/`ls`/`head`/`node -e` through the shell for reading; the shell is for execution
+   (tests, git, build).
 
 Notation: `{{config.some.key}}` in this document means *substitute the value you read in step 2*.
 
