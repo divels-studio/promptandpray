@@ -141,7 +141,7 @@
 
 ## Completion records
 
-### DEV-001 — IMPLEMENTED 2026-08-29 (main сесия, bootstrap изключение); чака ревю + commit
+### DEV-001 — DONE, commit `0276128` (2026-08-30; main сесия, bootstrap изключение)
 - Дифф: `dev/README.md`, `dev/backlogs/active/PLAN_PROMPTANDPRAY_0_1_1.md` (пренесен + т. 12a spike
   референция), `dev/backlogs/archive/README.md` (pointer към Furnissimo архив 009),
   `.claude-plugin/marketplace.json` (+ top-level `description` — `claude plugin validate` иначе дава
@@ -163,7 +163,36 @@
   бележка: sandbox-ът не може да пусне selfcheck — EPERM за temp fixture; 691/691 остава от
   имплементатора). Bootstrap `.claude/aiwf-native/roles.json` (DEV-002 стойности) е написан untracked
   само за да върви wrapper-ът — НЕ влиза в commit-а на DEV-001.
-- Отворено: commit клик.
+- Commit `0276128` по операторска дума 2026-08-30. Следващ: DEV-002 (self-install) — чака дума.
+
+### DEV-002 — DONE (размразен и довършен 2026-08-30 по операторска дума; commit виж по-долу)
+- Свършено (main сесия, bootstrap изключение — writer агентът е продукт на тикета):
+  `dev/answers.json` (по спецификацията); `/pnp:setup --answers-file dev/answers.json --adopt`
+  (bootstrap `roles.json` → take-new) → `.claude/aiwf-native/{aiwf.config.json,roles.json}`,
+  `.claude/agents/writer.md`, `.claude/settings.json`, root `CLAUDE.md` (managed регион +
+  операторска зона EN); `dev/PROJECT_OVERRIDES.md` авторстван (0 placeholder-и).
+- VERIFY (всички exit 0): selfcheck `--project-fixture "D:\promptandpray"` 688/688 (и след doc
+  корекциите); `aiwf-update.mjs --check` up to date; plugin validate чист; validate-payload;
+  setup 278/278; update 389/389; example cycle win/linux 37/37; spikes 99/99; Cyrillic grep по
+  payload празен.
+- Одитор (Codex) рунд 1: `fail` — 5 блокера, всички в COO-авторствания текст (генерираният слой
+  потвърден точен: dry-run нулев дифф, хешове, пълен ask-ruleset). Петте корекции са приложени:
+  (1) docs/ триене само през миграция, която го именува; (2) слоен договор — payload включва
+  `examples/`, `.claude-plugin/`; engines пишат managed артефактите под bookkeeping; hooks четат
+  config/roles/active PLANs/route-state; (3) Gate 1 и 3 DENY, Gate 2 ASK; (4) миграционен layout
+  `migrations/index.json` + per-migration `ops.json`/`NOTES.md`; (5) non-generic съдържание =
+  `dev/` И self-install слоят. Рунд 2 бе стартиран и спрян по операторска дума — НЕ е проведен.
+- Състояние на дървото при замразяване: untracked `.claude/`, `CLAUDE.md`, `dev/PROJECT_OVERRIDES.md`,
+  `dev/answers.json`; modified `dev/backlogs/active/PLAN_PNP_DEV.md` (ledger). Нищо не е стейджнато.
+- Довършване (2026-08-30): fact-check агент (Explore/sonnet, 34 твърдения) → 2 находки, поправени:
+  `dev/README.md` selfcheck командата без `--project-fixture .` (без флага се проверява синтетичен
+  fixture, не self-install-ът); spike референцията `c2626789^` е hash в origin repo-то — отбелязан
+  като такъв. VERIFY повторен след поправките (exit кодовете в commit съобщението и по-долу).
+- **Ревю = Одитор рунд 1 (Codex, fail ×5, всички фактически в COO текста) + fact-check агент +
+  първолична верификация; операторско решение по разход.** Codex рунд 2 не се провежда —
+  тикетът е docs-class.
+- Gate 2 доказателството (тих диспач `Ticket: DEV-003` в off-plan) остава за СЛЕДВАЩА сесия
+  (hook-овете се зареждат при старт) и за операторски разговор — не се пуска от тази сесия.
 
 ## Гейтове
 - Дума за диспач на всеки тикет (нов тикет = дума — правилото, което P8 кодифицира,

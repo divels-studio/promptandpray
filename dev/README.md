@@ -37,7 +37,7 @@ node scripts/setup/test-setup.mjs
 node scripts/update/test-update.mjs
 node scripts/ci/run-example-cycle.mjs
 node scripts/ci/run-example-cycle.mjs --answers examples/example-project/answers-linux.json
-node scripts/selfcheck/aiwf-selfcheck.js --plugin-root .
+node scripts/selfcheck/aiwf-selfcheck.js --plugin-root . --project-fixture .   # the real self-install, not a synthetic fixture
 node scripts/spike/run-spikes.mjs
 claude plugin validate .
 git grep -nP "[\x{0400}-\x{04FF}]" -- docs skills templates scripts schema hooks migrations   # must print nothing (by code point; a byte-range class also matches em-dashes)

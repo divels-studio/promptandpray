@@ -1,0 +1,5 @@
+{
+  "reviewer": { "engine": "codex", "model": "gpt-5.6-sol", "effort": "high" },
+  "qa": { "engine": "codex", "model": "gpt-5.6-sol", "effort": "high" },
+  "qal": { "enabled": false, "engine": "codex", "model": "gpt-5.6-sol", "effort": "high" }
+}

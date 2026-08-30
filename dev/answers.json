@@ -1,0 +1,47 @@
+{
+  "project": {
+    "name": "PromptAndPray",
+    "description": "the pnp Claude Code plugin - a disciplined four-role working loop with native operator gates; this repository is the plugin itself, self-installed so its own development runs under the loop it ships",
+    "stack": "Node.js (zero dependencies), PowerShell + bash wrappers, Claude Code plugin (skills, hooks, agents, templates, migrations)",
+    "root": "auto",
+    "defaultBranch": "main"
+  },
+  "os": "windows",
+  "operator": {
+    "language": "bg",
+    "roleNicknames": { "writer": "Колега", "reviewer": "Одитор", "qa": "QA" }
+  },
+  "roles": {
+    "writer": { "model": "claude-opus-5[1m]", "effort": "high" },
+    "reviewer": { "engine": "codex", "model": "gpt-5.6-sol", "effort": "high" },
+    "qa": { "engine": "codex", "model": "gpt-5.6-sol", "effort": "high" },
+    "qal": { "enabled": false, "engine": "codex", "model": "gpt-5.6-sol", "effort": "high" }
+  },
+  "loop": { "correctionRoundsCap": 2 },
+  "enforcement": { "routeWriteGuard": true, "dispatchGate": "off-plan" },
+  "verify": {
+    "commands": [
+      { "name": "validate-payload", "run": "node scripts/update/validate-payload.mjs --plugin-root .", "cwd": "." },
+      { "name": "setup-suite", "run": "node scripts/setup/test-setup.mjs", "cwd": "." },
+      { "name": "update-suite", "run": "node scripts/update/test-update.mjs", "cwd": "." },
+      { "name": "example-cycle-windows", "run": "node scripts/ci/run-example-cycle.mjs", "cwd": "." },
+      { "name": "example-cycle-linux", "run": "node scripts/ci/run-example-cycle.mjs --answers examples/example-project/answers-linux.json", "cwd": "." },
+      { "name": "selfcheck", "run": "node scripts/selfcheck/aiwf-selfcheck.js --plugin-root . --project-fixture .", "cwd": "." },
+      { "name": "spikes", "run": "node scripts/spike/run-spikes.mjs", "cwd": "." },
+      { "name": "plugin-validate", "run": "claude plugin validate .", "cwd": "." }
+    ],
+    "e2e": { "enabled": false, "cwd": ".", "runner": "npx playwright test", "specDir": "e2e", "outputDir": "test-results/aiwf-qa" }
+  },
+  "paths": {
+    "scratchDir": ".aiwf",
+    "plansDir": "dev/backlogs",
+    "overridesDoc": "dev/PROJECT_OVERRIDES.md"
+  },
+  "review": {
+    "productBoundaryChecks": [
+      "Payload stays generic: no origin-project names, no Cyrillic, no absolute paths (the provenance section of the self-check is the gate)",
+      "A managed-artifact change ships as a migration + version bump, never silently",
+      "Every operator gate that can be a native dialog is a native dialog"
+    ]
+  }
+}
