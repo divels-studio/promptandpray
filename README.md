@@ -81,11 +81,24 @@ What is **not** here yet:
 
 ## Install
 
-There is no marketplace entry yet. The plugin is loaded from a local checkout:
+The plugin is not published to any public marketplace. Two ways to load it from a local checkout:
 
 ```
 claude --plugin-dir <path-to-this-repo>
 ```
+
+or install it from this repository as a **local marketplace** (the repo ships its own
+`.claude-plugin/marketplace.json`), at project scope from the project you want it in:
+
+```
+/plugin marketplace add <path-to-this-repo>
+/plugin install pnp@promptandpray
+```
+
+That install is a snapshot; Claude Code picks up a newer payload only when `version` in
+`plugin.json` changes - then `/plugin marketplace update`, `/plugin update pnp@promptandpray`, and
+`/pnp:update` inside the project. Development of the plugin itself lives in `dev/` (not payload);
+`dev/README.md` says how a development session runs.
 
 Then, from the project you want it in:
 

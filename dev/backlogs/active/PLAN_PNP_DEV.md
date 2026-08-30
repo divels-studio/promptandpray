@@ -61,6 +61,10 @@
 ## Тикети (ред: DEV-001 → DEV-002 → DEV-003 → после P8)
 
 ### DEV-001 [R2, plugin repo] — dev зона, self-host изключения, marketplace, .gitignore
+- **Bootstrap изключение (операторска дума, 2026-08-29):** няма рендериран writer агент преди
+  DEV-002 (`.claude/agents/writer.md` е продукт на self-install), а Gate 1 пуска Edit/Write само от
+  main сесията или от `agent_type: "writer"` — main сесията пише DEV-001 директно; ревюто остава R2
+  (`/pnp:review` след 21:54 или първолична верификация с дума). Не се заобикаля Gate 1 с друг агент.
 - `dev/README.md` (как се работи по плъгина: сесия с `--plugin-dir` от repo-то,
   `/pnp:mission`, плановете в `dev/backlogs`, VERIFY сетът, „payload е код: всяка промяна
   в skills/docs/templates/scripts е R2", release = version bump + миграция + tag).
@@ -134,6 +138,32 @@
   за двете (destructive), в същата сесия.
 - VERIFY: Furnissimo `git status` чисто след commit-а; `/pnp:selfcheck` exit 0 без
   `--plugin-dir`; `git worktree list` без `-pnp`.
+
+## Completion records
+
+### DEV-001 — IMPLEMENTED 2026-08-29 (main сесия, bootstrap изключение); чака ревю + commit
+- Дифф: `dev/README.md`, `dev/backlogs/active/PLAN_PROMPTANDPRAY_0_1_1.md` (пренесен + т. 12a spike
+  референция), `dev/backlogs/archive/README.md` (pointer към Furnissimo архив 009),
+  `.claude-plugin/marketplace.json` (+ top-level `description` — `claude plugin validate` иначе дава
+  warning; entry-то е без `version`), `.gitignore`, `scripts/selfcheck/aiwf-selfcheck.js`
+  (PROV_SKIP_DIRS + dev/.claude/.aiwf, PROV_SKIP_ROOT_FILES=CLAUDE.md само на root, `.gitignore`
+  класифициран като текст; 5 нови provenance assertions + 5 нови flipping контрола; нова секция
+  MARKETPLACE с 8 assertions + 8 контрола; coverage summary обновен), `README.md`, `docs/README.md`.
+- VERIFY (всички от `D:\promptandpray`): validate-payload 0; test-setup 278/278 → 0; test-update
+  389/389 → 0; example cycle win 37/37 → 0, linux 37/37 → 0; selfcheck 691/691 → 0; spikes 99/99 → 0;
+  `claude plugin validate` 0 (без warnings); Cyrillic grep по code point
+  (`git grep -nP "[\x{0400}-\x{04FF}]" -- docs skills templates scripts schema hooks migrations`) →
+  празно. Бележка: байтовата форма `[А-я]` от тикета мачва em-dash/§ и е подменена с code-point
+  формата в `dev/README.md`.
+- Одитор (Codex gpt-5.6-sol/high, read-only): рунд 1 `fail` — 2×P2: (1) `PROV_SKIP_DIRS` по basename на
+  всяка дълбочина → `docs/dev/`, `templates/.claude/` биха се пропуснали; (2) coverage summary не
+  описваше новите изключения и MARKETPLACE. Корекция: `PROV_SKIP_ROOT_DIRS` (root-only) отделно от
+  `.git`/`node_modules` (any depth) + 3 контрола (`docs/dev/`, `templates/.claude/`, `scripts/.aiwf/`
+  → FAIL) + walk assertion, summary обновен. Рунд 2 `pass-with-notes` (без материални находки;
+  бележка: sandbox-ът не може да пусне selfcheck — EPERM за temp fixture; 691/691 остава от
+  имплементатора). Bootstrap `.claude/aiwf-native/roles.json` (DEV-002 стойности) е написан untracked
+  само за да върви wrapper-ът — НЕ влиза в commit-а на DEV-001.
+- Отворено: commit клик.
 
 ## Гейтове
 - Дума за диспач на всеки тикет (нов тикет = дума — правилото, което P8 кодифицира,

@@ -1055,6 +1055,86 @@ function sectionHookWiring() {
 }
 
 // ---------------------------------------------------------------------------
+// SECTION - the local marketplace manifest
+// ---------------------------------------------------------------------------
+// The repository is its own marketplace (`/plugin marketplace add <repo>`): one manifest, one plugin
+// entry, `source: "./"`. The entry deliberately carries NO version - plugin.json is the single
+// source of the version, and Claude Code picks up an update only when THAT value changes; a second
+// copy in the marketplace entry is a second place to forget.
+const MKT_FILES = ['plugin.json', 'marketplace.json'];
+function marketplaceFindings(pluginRoot) {
+  const out = [];
+  const add = (id, name, ok, detail) => { out.push({ id, name, ok: !!ok, detail: detail || '' }); return !!ok; };
+  const file = path.join(pluginRoot, '.claude-plugin', 'marketplace.json');
+  const pluginJson = readJson(path.join(pluginRoot, '.claude-plugin', 'plugin.json')) || {};
+  const raw = readText(file);
+  if (!add('marketplace-file', '.claude-plugin/marketplace.json exists', raw !== null)) return out;
+  let m = null;
+  try { m = JSON.parse(raw); } catch (e) { m = null; }
+  if (!add('marketplace-json', 'marketplace.json parses as a JSON object', isPlainObject(m))) return out;
+  add('marketplace-name', 'the marketplace has a string name', typeof m.name === 'string' && m.name.length > 0, `name=${JSON.stringify(m.name)}`);
+  add('marketplace-owner', 'the marketplace names its owner (owner.name)',
+    isPlainObject(m.owner) && typeof m.owner.name === 'string' && m.owner.name.length > 0);
+  const plugins = Array.isArray(m.plugins) ? m.plugins : [];
+  if (!add('marketplace-single', 'exactly one plugin entry', plugins.length === 1 && isPlainObject(plugins[0]), `${plugins.length} entries`)) return out;
+  const entry = plugins[0];
+  add('marketplace-entry-name', 'the entry name equals plugin.json name', entry.name === pluginJson.name,
+    `entry=${JSON.stringify(entry.name)} plugin.json=${JSON.stringify(pluginJson.name)}`);
+  add('marketplace-entry-source', 'the entry source is exactly "./" (the repo IS the plugin)', entry.source === './', `source=${JSON.stringify(entry.source)}`);
+  const hasVersion = Object.prototype.hasOwnProperty.call(entry, 'version');
+  add('marketplace-entry-noversion', 'the entry carries NO version (plugin.json is the only version source)',
+    !hasVersion, hasVersion ? `version=${JSON.stringify(entry.version)}` : 'absent');
+  return out;
+}
+const mktMutate = (r, fn) => mutateJson(r, ['.claude-plugin', 'marketplace.json'], fn);
+const MARKETPLACE_CONTROLS = [
+  { id: 'marketplace-file', label: 'marketplace.json deleted',
+    apply: (r) => fs.rmSync(path.join(r, '.claude-plugin', 'marketplace.json')) },
+  { id: 'marketplace-json', label: 'marketplace.json corrupted',
+    apply: (r) => fs.writeFileSync(path.join(r, '.claude-plugin', 'marketplace.json'), '{ not json ') },
+  { id: 'marketplace-name', label: 'the marketplace name removed', apply: (r) => mktMutate(r, (m) => { delete m.name; }) },
+  { id: 'marketplace-owner', label: 'owner.name removed', apply: (r) => mktMutate(r, (m) => { m.owner = {}; }) },
+  { id: 'marketplace-single', label: 'a second plugin entry added',
+    apply: (r) => mktMutate(r, (m) => { m.plugins.push({ name: 'other', source: './' }); }) },
+  { id: 'marketplace-entry-name', label: 'the entry name differs from plugin.json',
+    apply: (r) => mktMutate(r, (m) => { m.plugins[0].name = 'not-the-plugin'; }) },
+  { id: 'marketplace-entry-source', label: 'the entry source points elsewhere',
+    apply: (r) => mktMutate(r, (m) => { m.plugins[0].source = './plugin'; }) },
+  { id: 'marketplace-entry-noversion', label: 'a version smuggled into the entry',
+    apply: (r) => mktMutate(r, (m) => { m.plugins[0].version = '0.0.1'; }) },
+];
+function copyMarketplaceFiles(from, to) {
+  fs.mkdirSync(path.join(to, '.claude-plugin'), { recursive: true });
+  for (const f of MKT_FILES) fs.copyFileSync(path.join(from, '.claude-plugin', f), path.join(to, '.claude-plugin', f));
+}
+
+function sectionMarketplace(tmpRoot) {
+  section('MARKETPLACE - the repo is its own local marketplace, and plugin.json is the only version source');
+  for (const f of marketplaceFindings(PLUGIN_ROOT)) check(f.name, f.ok, f.detail);
+
+  section('MARKETPLACE CONTROLS - each of those assertions is proven able to FAIL');
+  const base = path.join(tmpRoot, 'mkt-base');
+  copyMarketplaceFiles(PLUGIN_ROOT, base);
+  const pristine = marketplaceFindings(base);
+  check('the control copy is clean before any sabotage', pristine.every((f) => f.ok), `${pristine.length} checks`);
+  let i = 0;
+  const covered = new Set();
+  for (const m of MARKETPLACE_CONTROLS) {
+    const broken = path.join(tmpRoot, `mkt-neg-${i += 1}`);
+    copyMarketplaceFiles(base, broken);
+    try { m.apply(broken); } catch (e) { check(`control could be applied: ${m.label}`, false, String(e.message)); continue; }
+    const target = marketplaceFindings(broken).find((f) => f.id === m.id);
+    if (!target) { check(`control "${m.label}" targets a live check (id "${m.id}")`, false, 'no check with that id was produced'); continue; }
+    covered.add(m.id);
+    check(`sabotage detected [${m.id}]: ${m.label}`, target.ok === false, target.ok ? 'still PASS - the check is vacuous' : 'FAIL as required');
+    try { fs.rmSync(broken, { recursive: true, force: true }); } catch (e) { /* best-effort */ }
+  }
+  for (const id of pristine.filter((f) => !covered.has(f.id)).map((f) => f.id)) {
+    note(`no negative control for marketplace check "${id}"`, 'no control defined - add one or state why it cannot fail');
+  }
+}
+
+// ---------------------------------------------------------------------------
 // SECTION 5 - Codex wrapper flag locks (static source checks)
 // ---------------------------------------------------------------------------
 function sectionWrappers() {
@@ -2286,8 +2366,22 @@ const PROV_ORIGIN_LENGTHS = [10, 7, 7];
 // Text file types of the payload. `.sh` joined the list with the bash wrapper channel: the scan is
 // the payload's, not one OS channel's, and an unclassified file type FAILS rather than being skipped.
 const PROV_TEXT_EXT = new Set(['.md', '.mjs', '.js', '.json', '.tmpl', '.ps1', '.sh', '.yml']);
-const PROV_TEXT_NAMES = new Set(['LICENSE', '.gitattributes']);
+const PROV_TEXT_NAMES = new Set(['LICENSE', '.gitattributes', '.gitignore']);
+// Skipped at EVERY depth: never payload wherever they sit.
 const PROV_SKIP_DIRS = new Set(['.git', 'node_modules']);
+// Skipped at the ROOT ONLY. `dev`, `.claude` and `.aiwf` are not payload: the repository hosts its
+// own development (`dev/` carries plans and notes in the operator's own language) and is
+// self-installed with the plugin (`.claude/` is the generated project layer, `.aiwf/` its scratch).
+// None of them ships as a plugin component, so none is held to the payload's rules - but a
+// directory of the same NAME below the root (`docs/dev/`, `templates/.claude/`) is payload and is
+// scanned: a by-basename skip would be a hole exactly the size of a plausible directory name. The
+// controls prove both directions: a forbidden pattern planted at the root zones stays green, the
+// same pattern under docs/ or under a same-named payload subdirectory still fails.
+const PROV_SKIP_ROOT_DIRS = new Set(['dev', '.claude', '.aiwf']);
+// The root CLAUDE.md is the self-install's managed entry point (rendered by /pnp:setup, with an
+// operator zone), not payload. Skipped by name at the ROOT ONLY - a CLAUDE.md anywhere deeper is
+// payload and is scanned.
+const PROV_SKIP_ROOT_FILES = new Set(['CLAUDE.md']);
 // Every top-level area of the payload must contribute at least one scanned file, root files
 // included. This is the half of the coverage assertion that a raw count cannot express: a scan
 // that stopped descending after two directories still returns a large, plausible number.
@@ -2357,7 +2451,13 @@ function provenanceWalk(root, { readdir = fs.readdirSync } = {}) {
     catch (e) { unreadableDirs.push(`${provRel(root, dir)} (${provWhy(e)})`); return; }
     for (const e of entries) {
       const p = path.join(dir, e.name);
-      if (e.isDirectory()) { if (!PROV_SKIP_DIRS.has(e.name)) rec(p); continue; }
+      if (e.isDirectory()) {
+        if (PROV_SKIP_DIRS.has(e.name)) continue;
+        if (dir === root && PROV_SKIP_ROOT_DIRS.has(e.name)) continue;
+        rec(p);
+        continue;
+      }
+      if (dir === root && PROV_SKIP_ROOT_FILES.has(e.name)) continue;
       const rel = provRel(root, p);
       if (PROV_TEXT_EXT.has(path.extname(e.name).toLowerCase()) || PROV_TEXT_NAMES.has(e.name)) scanned.push(rel);
       else unclassified.push(rel);
@@ -2506,6 +2606,16 @@ const PROVENANCE_CONTROLS = [
     apply: (r) => appendText(r, 'scripts/engine/aiwf-lib.js', `\n// contact: someone@${'example.com'}\n`) },
   { id: 'provenance-cyrillic', label: 'one Cyrillic character planted in a template',
     apply: (r) => appendText(r, 'templates/PROJECT_OVERRIDES.md.tmpl', '\nnote: \u0414\n') },
+  { id: 'provenance-cyrillic', label: 'a NEW file with a Cyrillic character dropped under docs/ (the skip is by name, not by novelty)',
+    apply: (r) => fs.writeFileSync(path.join(r, 'docs', 'x.md'), '\u0414\n', 'utf8') },
+  { id: 'provenance-cyrillic', label: 'a CLAUDE.md with a Cyrillic character planted BELOW the root (only the root one is the project layer)',
+    apply: (r) => fs.writeFileSync(path.join(r, 'docs', 'CLAUDE.md'), '\u0414\n', 'utf8') },
+  { id: 'provenance-cyrillic', label: 'a Cyrillic character planted under docs/dev/ (the dev skip is root-only, not by basename)',
+    apply: (r) => { fs.mkdirSync(path.join(r, 'docs', 'dev'), { recursive: true }); fs.writeFileSync(path.join(r, 'docs', 'dev', 'x.md'), '\u0414\n', 'utf8'); } },
+  { id: 'provenance-cyrillic', label: 'a Cyrillic character planted under templates/.claude/ (the .claude skip is root-only)',
+    apply: (r) => { fs.mkdirSync(path.join(r, 'templates', '.claude'), { recursive: true }); fs.writeFileSync(path.join(r, 'templates', '.claude', 'x.md'), '\u0414\n', 'utf8'); } },
+  { id: 'provenance-cyrillic', label: 'a Cyrillic character planted under scripts/.aiwf/ (the .aiwf skip is root-only)',
+    apply: (r) => { fs.mkdirSync(path.join(r, 'scripts', '.aiwf'), { recursive: true }); fs.writeFileSync(path.join(r, 'scripts', '.aiwf', 'x.json'), '"\u0414"\n', 'utf8'); } },
   { id: 'provenance-abs-path', label: 'a new drive-letter absolute path planted in a script',
     apply: (r) => appendText(r, 'scripts/setup/generate.mjs', `\n// see ${'C:' + '\\Users\\someone\\notes.txt'}\n`) },
   { id: 'provenance-abs-path', label: 'an ALLOWLISTED literal planted in a file it does not belong to',
@@ -2565,6 +2675,43 @@ function sectionProvenance(tmpRoot) {
   const armedClean = provenanceFindings(base, PROV_ARMED).filter((f) => !f.ok);
   check('.git is not payload, and arming alone finds nothing: every forbidden pattern planted in .git/ with the canary armed leaves the copy green',
     armedClean.length === 0, armedClean.length ? armedClean.map((f) => f.id).join(', ') : 'still green');
+
+  // The self-hosting zones, the same way: every forbidden pattern planted in dev/, .claude/, .aiwf/
+  // and the root CLAUDE.md - and the copy must stay green, AND none of those paths may appear in the
+  // scanned list (a green result that came from scanning them would mean the plant did not land).
+  const plant = `${PROV_CANARY}\ncontact someone@${'example.com'}\n\u0414\n${'C:' + '\\Users\\someone\\secret'}\n`;
+  for (const rel of ['dev/x.md', 'dev/backlogs/active/PLAN_X.md', '.claude/agents/writer.md', '.aiwf/route-state.json']) {
+    fs.mkdirSync(path.dirname(path.join(base, ...rel.split('/'))), { recursive: true });
+    fs.writeFileSync(path.join(base, ...rel.split('/')), plant, 'utf8');
+  }
+  fs.writeFileSync(path.join(base, 'CLAUDE.md'), plant, 'utf8');
+  const selfHostClean = provenanceFindings(base, PROV_ARMED).filter((f) => !f.ok);
+  check('dev/, .claude/, .aiwf/ and the root CLAUDE.md are not payload: every forbidden pattern planted there with the canary armed leaves the copy green',
+    selfHostClean.length === 0, selfHostClean.length ? selfHostClean.map((f) => f.id).join(', ') : 'still green');
+  const walked = provenanceWalk(base).scanned;
+  const leaked = walked.filter((rel) => rel === 'CLAUDE.md' || /^(dev|\.claude|\.aiwf)\//.test(rel));
+  check('none of those paths is in the scanned list (the skip is real, not a lucky pattern miss)',
+    leaked.length === 0, leaked.length ? `scanned: ${leaked.join(', ')}` : `${walked.length} files scanned, none of them`);
+  check('a CLAUDE.md below the root IS scanned (the root skip is by depth, not by file name)',
+    (() => {
+      const deep = path.join(base, 'templates', 'CLAUDE.md');
+      fs.writeFileSync(deep, 'payload\n', 'utf8');
+      const seen = provenanceWalk(base).scanned.includes('templates/CLAUDE.md');
+      fs.rmSync(deep);
+      return seen;
+    })());
+  check('dev/, .claude/ and .aiwf/ BELOW the root ARE walked (the directory skip is by depth, not by basename)',
+    (() => {
+      const deep = ['docs/dev/x.md', 'templates/.claude/x.md', 'scripts/.aiwf/x.json'];
+      for (const rel of deep) {
+        fs.mkdirSync(path.dirname(path.join(base, ...rel.split('/'))), { recursive: true });
+        fs.writeFileSync(path.join(base, ...rel.split('/')), 'payload\n', 'utf8');
+      }
+      const walked2 = provenanceWalk(base).scanned;
+      const seen = deep.every((rel) => walked2.includes(rel));
+      for (const rel of deep) fs.rmSync(path.dirname(path.join(base, ...rel.split('/'))), { recursive: true, force: true });
+      return seen;
+    })());
 
   let i = 0;
   const covered = new Set();
@@ -3505,6 +3652,7 @@ function main() {
     sectionConfigSchema(tmpRoot);
     sectionMigrationPayload(tmpRoot);
     sectionHookWiring();
+    sectionMarketplace(tmpRoot);
     sectionWrappers();
     sectionShWrappers(tmpRoot);
     sectionResolver(tmpRoot);
@@ -3545,8 +3693,11 @@ function main() {
   console.log('one above it, one reached through a junction into it, one that is not empty and one whose parent');
   console.log('does not exist, and each must exit 2 having created nothing - that directory is deleted when the');
   console.log('run ends, so a guard asserted by reading its source would only prove the source says so.');
-  console.log('PROVENANCE: every text file of the payload - defined by extension/known name, .git and');
-  console.log('node_modules excluded, with an unclassified file, an unreadable file and a directory that');
+  console.log('PROVENANCE: every text file of the payload - defined by extension/known name; .git and');
+  console.log('node_modules excluded at any depth; the self-hosting zones dev/, .claude/, .aiwf/ and the');
+  console.log('root CLAUDE.md excluded at the ROOT ONLY (a same-named directory or file below the root is');
+  console.log('scanned, and controls plant forbidden content in both places to prove the boundary sits');
+  console.log('where it is claimed); with an unclassified file, an unreadable file and a directory that');
   console.log('could not be enumerated each counted as a FAILURE rather than skipped (a dropped subtree');
   console.log('leaves every other number in the section plausible) - is');
   console.log('scanned for the origin project\'s names (held as digests, never as text), for email');
@@ -3556,6 +3707,10 @@ function main() {
   console.log('reports the same "0 hits" as a clean payload. What is NOT proven: that the three name');
   console.log('digests have the preimages they claim - a payload that must not contain those names cannot');
   console.log('carry the proof, so the controls prove the mechanism and the digests are stated data.');
+  console.log('MARKETPLACE: the repository is its own local marketplace - the manifest exists, parses, names');
+  console.log('itself and its owner, carries exactly one plugin entry whose name is plugin.json\'s, whose');
+  console.log('source is "./" and which carries NO version (plugin.json is the only version source); each');
+  console.log('of those has its own negative control on a sabotaged copy of the two manifests.');
   console.log('STATIC: the wrapper flag locks, asserted as exact ARGV PAIRS rather than bare words (so a');
   console.log('flag switched in the argv while the old word survives in a comment still fails), the hook');
   console.log('wiring, the wrapper sources of BOTH channels (ASCII-only everywhere, LF-only for the bash');

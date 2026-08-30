@@ -13,3 +13,8 @@ it lives in the generated project overrides document (`paths.overridesDoc`).
 - `QA_BROWSER_INVESTIGATION.md` - the conclusion the QA/QAL split rests on.
 - `OPERATOR_PROTOCOL.md` - the operator's entry page: the three doors and what the gates guarantee.
 - `SESSION_BRIEF_RECIPE.md` - the recipe `/pnp:brief` applies.
+
+Development of the plugin itself lives in `dev/` at the repo root - not payload, not shipped, and
+outside the provenance scan. A project installs the plugin from this repo as a local marketplace
+(`/plugin marketplace add <path-to-this-repo>`, `/plugin install pnp@promptandpray`; later
+`/plugin marketplace update` + `/plugin update pnp@promptandpray`, then `/pnp:update`).
