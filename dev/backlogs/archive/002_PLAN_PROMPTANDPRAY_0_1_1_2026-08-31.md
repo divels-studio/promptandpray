@@ -191,5 +191,8 @@ push (отделна дума). Нищо не се изпълнява преди
   Обявен тикет **P9 — update без фалшиви конфликти** (R2; предикатът + dry-run текстът +
   `skills/update/SKILL.md` + test-update случаи; без миграция — не пипа managed артефакт;
   bump 0.1.2 при release). Чака дума; ражда се в нов план.
-- т.12 остатък: Furnissimo `.claude/aiwf-native/README.md:52` `D:\Furnissimo-pnp` →
-  `D:\Furnissimo` — един ред, docs commit в сесията там.
+- т.12 остатък DONE: Furnissimo `.claude/aiwf-native/README.md:52` `D:\Furnissimo-pnp` →
+  `D:\Furnissimo`, Furnissimo commit `0fdf5930` (2026-08-31); `git grep "Furnissimo-pnp"`
+  там → само трите tombstone реда в `aiwf.config.json:27-29` (acceptance критерият).
+- **P8 DONE.** Планът е 100% изпълнен → архивиран в същата сесия. Няма открит дълг; P9 е
+  отделен план, ражда се с дума.
