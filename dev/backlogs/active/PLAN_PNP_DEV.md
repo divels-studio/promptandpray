@@ -165,7 +165,7 @@
   само за да върви wrapper-ът — НЕ влиза в commit-а на DEV-001.
 - Commit `0276128` по операторска дума 2026-08-30. Следващ: DEV-002 (self-install) — чака дума.
 
-### DEV-002 — DONE (размразен и довършен 2026-08-30 по операторска дума; commit виж по-долу)
+### DEV-002 — DONE, commit `1e76e1c` (2026-08-30; размразен и довършен по операторска дума)
 - Свършено (main сесия, bootstrap изключение — writer агентът е продукт на тикета):
   `dev/answers.json` (по спецификацията); `/pnp:setup --answers-file dev/answers.json --adopt`
   (bootstrap `roles.json` → take-new) → `.claude/aiwf-native/{aiwf.config.json,roles.json}`,
