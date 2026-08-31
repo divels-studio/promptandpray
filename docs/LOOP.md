@@ -22,8 +22,10 @@ overrides document, README, skill/doc prose with no executable artifact) is revi
 engine (`docs/WORKFLOW.md` § Routes). On a **codex-configured** install that Claude host is an
 **ad-hoc** read-only Claude subagent (`general-purpose`, `model: opus`, reviewer preamble in the
 brief), not a rendered agent file - `.claude/agents/reviewer.md` exists only for a claude-hosted
-role. Before any pass on a PAID engine, `/pnp:review` Step 2b runs the cheap fact-check gate over
-the prose of the diff.
+role. The class override covers **implementation diffs only**: a plan-readiness pass always runs on
+the configured engine (`docs/WORKFLOW.md` § Plan readiness review), with a Claude ad-hoc pre-pass
+allowed before it but carrying no verdict. Before any pass on a PAID engine, `/pnp:review` Step 2b
+runs the cheap fact-check gate over the prose of the diff.
 
 `/pnp:loop` states this sequence as a convention. There is **no runtime state machine and no
 counters** - the loop is convention + the native click-based permission gates only.

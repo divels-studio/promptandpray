@@ -49,7 +49,10 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
 
 ## Rules in force (summary - the doctrine text is authoritative)
 
-- The operator's four gates: the commit/push word, expensive quota passes, destructive or
+- The operator's four gates: the commit click / the push word (a commit is the native dialog alone;
+  push/merge/rebase need an explicit word plus their dialog), review passes BEYOND the review
+  contract (a third readiness pass, a correction round past the cap - each its own explicit word,
+  while the passes the route prescribes run on the ticket's standing word), destructive or
   system-changing operations, and product/UX choices (stop-and-wait when 2+ variants exist).
 - The Writer is the only repo writer for R2/R3; dispatch via the Agent tool with a `Ticket: <REF>`
   line; never pass `model` when dispatching the Writer (its pin lives in its frontmatter, and the

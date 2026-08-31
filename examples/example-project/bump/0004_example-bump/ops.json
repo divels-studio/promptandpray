@@ -1,5 +1,5 @@
 {
-  "migration": "0003_example-bump",
+  "migration": "0004_example-bump",
   "targetPluginVersion": "0.3.0",
   "operations": [
     {
@@ -24,6 +24,12 @@
       "id": "example-bump",
       "text": "This migration exists so a reader can see all four operation types in one place, in a run they can execute themselves.",
       "docRefs": ["docs/LOOP.md", "migrations/README.md"]
+    },
+    {
+      "op": "rerender-managed-region",
+      "file": ".claude/agents/writer.md",
+      "region": null,
+      "template": "templates/agents/writer.md.tmpl"
     }
   ]
 }

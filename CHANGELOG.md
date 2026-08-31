@@ -4,6 +4,58 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.1.2] - 2026-08-31
+
+The first consumer update (0.1.0 -> 0.1.1 on a real installation) produced two take-new dialogs for
+artifacts the operator had never opened. A question that cannot be answered wrongly is not a gate, so
+the update engine now asks only where there is operator content to lose - and says in the CHANGES
+report what happened to every managed artifact.
+
+### Changed
+
+- **A payload change alone is no longer a conflict (P9)** - `scripts/update/migrate.mjs`: an unheld
+  artifact the operator has not edited, whose payload render changed, is applied WITHOUT a dialog,
+  through the same take-new path an operator decision goes through (same journal, same stage, same
+  resume). The run says why: `<key>: the payload version applied (you had not edited it)`. A dialog is
+  still raised - and the file still left untouched - when the operator edited the artifact, when it is
+  GONE, and when a held artifact was edited again; a held, untouched artifact is still recorded as
+  upstream and never re-applied. `/pnp:update`'s dry run now stops only where a decision is genuinely
+  needed (a config key that asks, or a real edit of yours).
+- **The CHANGES report names each artifact's final state (P9)** - every `rerender-managed-region`
+  line in "Applied" carries `payload-current` or `held (your version kept)`, derived from the final
+  bookkeeping only, so the report is identical whether the update ran in one process or resumed after
+  a crash. One header sentence says which artifacts were applied without a dialog, which were asked
+  about and which were only recorded. Accepted boundaries, stated in
+  `migrations/0003_quiet-rerender/NOTES.md`: auto and operator take-new are not distinguished, and
+  neither are applied and already-current.
+- **Plan-readiness reviews always run on the configured engine (P9)** - the docs-class engine
+  override from 0.1.1 applies to IMPLEMENTATION diffs only (`/pnp:review` Step 0c and its
+  plan-readiness mode, `docs/WORKFLOW.md`, `docs/LOOP.md`). A cheap Claude pre-pass before the first
+  pass is allowed, without a verdict, exactly like the fact-check gate.
+- **The quota gate names its mechanics (P9)** - `docs/WORKFLOW.md` and the managed
+  `CLAUDE.md#aiwf-core` region listed "expensive-quota passes" as an operator gate with no mechanics,
+  which read literally made the orchestrator ask before EVERY paid pass. The gate is now the passes
+  BEYOND the review contract - a third plan-readiness pass, a correction round past the cap - while
+  the passes the route already prescribes run on the ticket's standing word. `0003_quiet-rerender`
+  carries that region re-render, which on an unedited region applies with no dialog at all: the new
+  conflict rule's first proof on a real installation.
+- **The example cycle proves both halves of the rule (P9)** - `0004_example-bump` (renumbered from
+  `0003_example-bump`, which the ascend-by-1 rule requires now that the payload ships a third
+  migration) gains a second `rerender-managed-region`, over an artifact the cycle never edits: zero
+  dialogs for it, `payload-current` in the report, and the hand-edited region still takes the
+  keep-mine path.
+
+### Fixed
+
+- **The 0.1.0 entry below overstated the example cycle (P9)** - it exercises `keep-mine` and
+  `take-new` (`merge` lives in the update suite) and contains no crash injection (resume after an
+  interrupted migration is proven in the update suite, section 9). Corrected in place.
+- **The self-check pins the new rule and the readiness carve-out (P9)** - `/pnp:update`'s conflict
+  sentence and the plan-readiness clause are asserted as text with their own flipping controls,
+  `/pnp:update` joins the six skills carrying the canonical "reading is not a shell job" sentence,
+  and the example-fixture controls read the bump's id from `bump.json` instead of hardcoding a number
+  that legitimately moves.
+
 ## [0.1.1] - 2026-08-30
 
 Hygiene from the first real run of the loop through the plugin, one doctrine correction learned
@@ -137,9 +189,10 @@ that project (adopt mode, two Writer dispatches through the plugin-hosted loop, 
   outside an allowlist), and negative controls proving every assertion can fail. It is the final
   step of `setup` and `update`; a red self-check after a successful write exits 1 and says so.
 - **Example project and CI** (`examples/example-project/`, `.github/workflows/ci.yml`): the full
-  setup -> simulated 0.1.0 -> 0.2.0 bump -> update -> self-check cycle, all three conflict
-  decisions and resume after an interrupted migration; OS matrix Windows / Linux / macOS
-  (shellcheck on the bash channel).
+  setup -> simulated bump -> update -> self-check cycle, exercising `keep-mine` and `take-new`
+  (`merge` and crash-resume are proven in the update suite, not here); OS matrix
+  Windows / Linux / macOS (shellcheck on the bash channel). (Corrected in 0.1.2 - the original entry
+  claimed all three conflict decisions and resume after an interrupted migration.)
 - **Doctrine as payload** (`docs/`): `WORKFLOW.md`, `LOOP.md`, `REVIEW_CHECKLIST.md`,
   `OPERATOR_PROTOCOL.md`, `SESSION_BRIEF_RECIPE.md`, `CODEX_REVIEW_QA_RECIPE.md`,
   `QA_BROWSER_INVESTIGATION.md` - read under the installed plugin root, never copied into a
@@ -164,5 +217,6 @@ that project (adopt mode, two Writer dispatches through the plugin-hosted loop, 
 - The `writer` template renders its template-contract comment and a mixed-slash overrides path
   into the project's `agents/writer.md` (cosmetic). (Fixed in 0.1.1.)
 
+[0.1.2]: https://github.com/divels-studio/promptandpray/releases/tag/v0.1.2
 [0.1.1]: https://github.com/divels-studio/promptandpray/releases/tag/v0.1.1
 [0.1.0]: https://github.com/divels-studio/promptandpray/releases/tag/v0.1.0

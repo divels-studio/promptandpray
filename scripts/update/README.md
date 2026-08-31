@@ -11,9 +11,11 @@ The update engine behind `/pnp:update`.
 
 Two properties everything here exists to protect:
 
-- **no silent overwrite.** A conflict is raised when EITHER the project edited an artifact or the
-  payload changed it; the operator picks take-new / keep-mine / merge, and a held artifact is never
-  re-applied by a later update.
+- **nothing of yours is overwritten.** A conflict is raised exactly when there is operator content
+  to lose: the project edited the artifact, the artifact is gone, or a held artifact was edited
+  again; the operator then picks take-new / keep-mine / merge, and a held artifact is never
+  re-applied by a later update. A payload change to an artifact nobody edited is not a conflict -
+  it is applied without a dialog and listed in the CHANGES report.
 - **deterministic recovery.** The accepted result of each operation is staged before the journal
   records it, so a process killed at any write boundary resumes into the same end state without
   asking the same question twice. `PNP_UPDATE_CRASH_AT="<migration>/<opIndex>/<boundary>"` is the

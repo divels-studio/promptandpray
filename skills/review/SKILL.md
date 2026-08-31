@@ -73,7 +73,8 @@ selects the branch below; `$role.model` is the model that branch runs.
 ## Step 0c - Engine by ticket class (the class can override the configured host)
 
 Read the `Class:` line of the ticket brief the COO authored - `Class: docs | code`, and **`code`
-when the line is absent**. It decides the host together with Step 0b:
+when the line is absent**. It decides the host together with Step 0b, and it applies to
+**implementation diffs only**:
 
 - **`Class: docs`** - plans, the overrides document, README, skill/doc prose, any diff with **no
   executable artifact** in it - takes the **Claude host** (Step 3, claude branch) regardless of
@@ -90,8 +91,15 @@ reject); the host is then an **ad-hoc read-only Claude subagent** -
 `subagent_type: "general-purpose"`, `model: "opus"`, brief prefixed with the read-only reviewer
 preamble in Step 3's claude branch.
 
+A plan-readiness pass is NOT an implementation diff and never takes this override: it always runs on
+the configured engine Step 0b resolved. Readiness is where a missed blocker costs a whole ticket, and
+this project's readiness blockers have been found there; a Claude ad-hoc pass may be run first as a
+cheap pre-pass, WITHOUT a verdict, exactly like the fact-check gate, but it never replaces the pass
+on the configured engine.
+
 Say in one line which branch you took and why (`class=docs -> claude host (engine codex
-overridden)`), so the COO's record shows the engine was chosen, not defaulted. A docs-class ticket
+overridden)`, or `plan-readiness -> configured engine (no class override)`), so the COO's record
+shows the engine was chosen, not defaulted. A docs-class ticket
 that gained an executable artifact is code class - the same rule that ends R1
 (`docs/WORKFLOW.md` § Routes).
 
@@ -185,6 +193,9 @@ Reviewer's pass.
 If the brief is a **plan-readiness** check - reviewing a durable R2/R3 **plan** *before*
 implementation, not a code diff - the contract is different:
 
+- **Host:** the engine Step 0b resolved, always - the Step 0c class override is for implementation
+  diffs and does not reach here. A Claude ad-hoc pre-pass before pass 1 is allowed, but it returns no
+  verdict and does not count as a pass.
 - **Step 1 scope** is the whole plan + repo prerequisites, not a diff.
 - **Brief:** name the plan file + branch, still carry the ticket **risk threshold** and **stop
   condition** (and the BUDGET TARGET line), and set the OUTPUT CONTRACT verdict to

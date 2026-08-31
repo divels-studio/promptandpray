@@ -130,10 +130,14 @@ dispatches the review.
 
 Scope structuring, brief content, technical sequencing, and what-lands-in-which-ticket (within
 an approved plan) are the COO's calls - decided and REPORTED with a one-line rationale, not
-offered as questions. The operator's gates are exactly: the commit/push word, expensive-quota
-passes (e.g. a paid external review engine), destructive or system-changing operations, and
-product/UX choices (what the user sees or loses as functionality). A question outside those
-gates blocks the operator without adding value - asking it is a workflow defect, not politeness.
+offered as questions. The operator's gates are exactly: the commit click / the push word (a
+commit is the native dialog alone; push/merge/rebase need an explicit word plus their dialog),
+review passes BEYOND the review contract (a third readiness pass, a correction round past the cap -
+each needs its own explicit word; the passes the route already prescribes - the implementation
+pass, the two readiness passes, the second paid pass after a correction round that touched code -
+run on the ticket's standing word), destructive or system-changing operations, and product/UX
+choices (what the user sees or loses as functionality). A question outside those gates blocks the
+operator without adding value - asking it is a workflow defect, not politeness.
 
 ### How the COO speaks to the operator
 
@@ -274,6 +278,12 @@ policy-required tests, file/directory naming, local module boundaries, and step 
 asks the operator before readiness only when missing authority or an unresolved alternative would
 materially change product intent, an architecture boundary, security/external risk or cost, or an
 irreversible outcome and cannot be resolved from the repo.
+
+**Readiness always runs on the configured engine.** The docs/code class override that can move an
+implementation review to a Claude host (see "Routes") does not reach this mode: a plan is where a
+missed blocker costs a whole ticket, so both passes go to the engine `roles.reviewer.engine` names. A
+Claude ad-hoc pre-pass before pass 1 is allowed and cheap - but it returns no verdict and does not
+count as one of the passes, exactly like the fact-check gate.
 
 The same Reviewer performs a minimum of two full passes:
 
@@ -518,7 +528,9 @@ it resolves the host:
 - **`Class: code`** - anything that runs, is imported, or is tested - uses the configured engine.
 
 The class is the COO's call and follows the R1 rule above: the moment a docs-class ticket gains an
-executable artifact it is code class, in the review engine as in the route.
+executable artifact it is code class, in the review engine as in the route. The override covers
+**implementation diffs only**: a plan-readiness pass always runs on the configured engine (see "Plan
+readiness review"), whatever class the ticket it plans will carry.
 
 ### R3 - critical (migrations / access policy / auth / destructive / push)
 

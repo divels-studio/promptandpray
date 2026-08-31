@@ -308,6 +308,11 @@ const CONFIG_REL = '.claude/aiwf-native/aiwf.config.json';
 const SETTINGS_REL = '.claude/settings.json';
 const STAGE_REL = '.claude/aiwf-native/update-stage';
 const CLAUDE_KEY = 'CLAUDE.md#aiwf-core';
+// The second managed artifact of the bump: a whole-file one the operator never touches. It is what
+// makes the cycle show BOTH halves of the re-render rule - a dialog where the operator edited, none
+// where they did not.
+const WRITER_REL = '.claude/agents/writer.md';
+const WRITER_NEW_LINE = 'A line the simulated next release added to the Writer agent.';
 const FOREIGN_RULE = 'Bash(example-project-own-tool:*)';
 const SEED_PROSE = 'This file existed before PromptAndPray was installed';
 
@@ -506,7 +511,16 @@ try {
     if (!host || !host.properties) throw new Error(`schema-key.json names "${schemaKey.at}", which is not an object block in the payload schema`);
     host.properties[schemaKey.property] = schemaKey.schema;
     writeJson(path.join(PAYLOAD_2, 'schema', 'aiwf.config.schema.json'), schema);
+
+    // The other half of the same release: the Writer agent template really changes. Without this the
+    // migration's second re-render would meet an artifact whose render is identical, and the cycle
+    // would exercise the "already current" branch instead of the silent-apply one it is here for.
+    const writerTemplate = path.join(PAYLOAD_2, 'templates', 'agents', 'writer.md.tmpl');
+    fs.appendFileSync(writerTemplate, `\n${WRITER_NEW_LINE}\n`, 'utf8');
   }
+  const writerBefore = read(path.join(PROJECT, ...WRITER_REL.split('/')));
+  check('precondition: the installed Writer agent does not yet carry the new payload line',
+    writerBefore !== null && !writerBefore.includes(WRITER_NEW_LINE));
   const validate = run(CMD_VALIDATE);
   check('the bumped payload is coherent (validate-payload exits 0)', validate.status === 0, tail(validate));
   check('and the validator confirms the new migration count', validate.out.includes(`${(readJson(path.join(PAYLOAD_2, 'migrations', 'index.json')) || []).length} migration(s)`), tail(validate, 1));
@@ -547,6 +561,10 @@ try {
     [`${bump.migration}/1/${CLAUDE_KEY}`]: { kind: 'conflict', resolution: 'keep-mine' },
   });
   recordCreatedFile('resolutions.json', resolutionsHash);
+  // Note what this table does NOT contain: any record for operation 4, the re-render of
+  // `.claude/agents/writer.md`. The resolution-file adapter stops the run naming the address when a
+  // decision it needs has no record - so an apply that exits 0 with this table is itself the proof
+  // that the untouched artifact was never asked about.
   const apply = run(CMD_APPLY);
   check('--apply exits 0', apply.status === 0, tail(apply, 6));
   {
@@ -565,7 +583,24 @@ try {
       cfg.enforcement && cfg.enforcement.exampleToggle === false, JSON.stringify(cfg.enforcement));
     check('reconcile-ask-ruleset applied', apply.out.includes('ask ruleset reconciled'), tail(apply, 6));
     check('and it left the project\'s own foreign rule alone', ask.includes(FOREIGN_RULE));
+    const writerAfter = read(path.join(PROJECT, ...WRITER_REL.split('/'))) || '';
+    const writerEntry = (bk.managedRegions || {})[WRITER_REL] || {};
+    check('the artifact the operator never touched was applied WITHOUT a dialog (no record for it in the resolution file, and the run still exits 0)',
+      writerAfter.includes(WRITER_NEW_LINE) && !JSON.stringify(readJson(RESOLUTIONS) || {}).includes(WRITER_REL),
+      `applied=${writerAfter.includes(WRITER_NEW_LINE)}`);
+    check('and the run said WHY it did not ask',
+      apply.out.includes(`${WRITER_REL}: the payload version applied (you had not edited it)`), tail(apply, 8));
+    check('its bookkeeping is a plain take-new: upstream == local, override false',
+      writerEntry.override === false && typeof writerEntry.local === 'string' && writerEntry.local === writerEntry.upstream,
+      `override=${writerEntry.override}`);
     check('the note reached the CHANGES report, with its docRefs', !!changes && changes.includes('example-bump') && changes.includes('docs/LOOP.md'));
+    check('the CHANGES report labels the silently applied artifact `payload-current`',
+      !!changes && changes.includes(`\`rerender-managed-region\` ${WRITER_REL} - payload-current`),
+      (changes || '').split('\n').filter((l) => l.includes('rerender-managed-region')).join(' | '));
+    check('and it labels the artifact the operator kept `held (your version kept)`',
+      !!changes && changes.includes(`\`rerender-managed-region\` ${CLAUDE_KEY} - held (your version kept)`));
+    check('the report says in one sentence what was applied without a dialog and what was not',
+      !!changes && changes.includes('An unheld artifact you had not edited, whose payload render changed, was applied without a dialog; edited ones were asked about; held ones were recorded, not applied.'));
     check('the CHANGES report was written at the project root', changes !== null);
     check('the version stamps moved together',
       bk.installedPluginVersion === bump.targetPluginVersion && bk.lastMigrationApplied === bump.migration,

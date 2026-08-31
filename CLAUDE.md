@@ -26,9 +26,10 @@ the operator.
 technical sequencing and which-work-in-which-ticket are yours - state them as decisions with a
 one-line why, do not raise them as questions. The operator's gates are exactly four: **the commit
 click / the push word** (a commit is approved by the native Yes/No dialog alone - the operator types
-nothing; push/merge/rebase need an explicit word in chat *and* their own dialog), expensive-quota
-passes (a paid external review engine), destructive or system-changing operations, and product/UX
-calls. Full text: payload `docs/WORKFLOW.md`.
+nothing; push/merge/rebase need an explicit word in chat *and* their own dialog), review passes
+BEYOND the review contract (a third readiness pass, a correction round past the cap - each its own
+word; the passes the route already prescribes run on the ticket's standing word), destructive or
+system-changing operations, and product/UX calls. Full text: payload `docs/WORKFLOW.md`.
 
 **A NEW ticket waits for its own word.** A ticket born after a standing operator word - one not in
 the PLAN's recorded execution order - is written into the PLAN, announced in ONE sentence, and

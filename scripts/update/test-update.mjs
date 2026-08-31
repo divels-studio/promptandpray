@@ -17,8 +17,11 @@
  *      result; a FRESH install from that payload stamps its last manifest entry;
  *   3. the interlock stops a stale project, and every non-exception skill really runs it;
  *   4. the conflict matrix - {you edited it, the payload changed it, both} x {whole file, region},
- *      plus a missing file and a missing region - stops WITHOUT mutating the target, keeps the
- *      operations already applied, and resumes; all three resolutions work, merge included;
+ *      plus a missing file and a missing region. SIX of the eight stop WITHOUT mutating the target,
+ *      keep the operations already applied, and resume; the two upstream-only cases - the payload
+ *      moved, the operator never touched the artifact - are applied SILENTLY, with no resolution
+ *      file in reach, which is what proves nobody was asked. All three resolutions work, merge
+ *      included, and a held artifact is never re-applied;
  *   5. ownership without takeover survives an update, and a settings shape the engine does not
  *      understand is never rewritten;
  *   6. --resolve leaves an override outside any version bump;
@@ -178,7 +181,11 @@ function addExampleToggleToSchema(dir) {
     '"routeWriteGuard": {',
     '"exampleToggle": { "type": "boolean", "description": "fixture key added by a migration" },\n        "routeWriteGuard": {');
 }
-/** Makes the payload RENDER differently, which is half of the conflict predicate. */
+/**
+ * Makes the payload RENDER differently. On its own that is no longer a conflict - an artifact the
+ * operator never edited is re-rendered without a dialog - so this is what the silent path and the
+ * "both" conflicts are built on, not a predicate by itself.
+ */
 function changeTemplates(dir) {
   patch(at(dir, 'templates/CLAUDE.md.tmpl'), '## Your role', '## Your role (v2)');
   fs.appendFileSync(at(dir, 'templates/agents/writer.md.tmpl'), '\nA line the next payload version added.\n', 'utf8');
@@ -222,8 +229,31 @@ function makePayload(name, { version, migrations, tweak = null }) {
     fs.writeFileSync(path.join(mdir, 'NOTES.md'), `# ${m.id}\n\nFixture migration written by the update acceptance suite.\n`, 'utf8');
   }
   writeJson(at(dir, 'migrations/index.json'), manifest);
+  renumberExampleBump(dir, manifest);
   if (tweak) tweak(dir);
   return dir;
+}
+
+/**
+ * The committed example fixture travels with every payload copy, and the self-check - which a real
+ * `--apply` runs against the payload it applied - holds it to the manifest of the payload it sits
+ * in: the entry numbered NNNN-1 must really exist. The manifest here is FABRICATED (truncated to the
+ * baseline, then fixture migrations appended), so the example bump is renumbered to follow it.
+ * Without this the fixture's number would silently depend on how many migrations the payload ships.
+ */
+function renumberExampleBump(dir, manifest) {
+  const bumpDir = at(dir, 'examples/example-project/bump');
+  const bump = readJson(path.join(bumpDir, 'bump.json'));
+  if (!bump || typeof bump.migration !== 'string') return;
+  const slug = bump.migration.replace(/^\d+_/, '');
+  const nextId = `${String(manifest.length + 1).padStart(4, '0')}_${slug}`;
+  if (nextId === bump.migration) return;
+  fs.renameSync(path.join(bumpDir, bump.migration), path.join(bumpDir, nextId));
+  const ops = readJson(path.join(bumpDir, nextId, 'ops.json'));
+  ops.migration = nextId;
+  writeJson(path.join(bumpDir, nextId, 'ops.json'), ops);
+  bump.migration = nextId;
+  writeJson(path.join(bumpDir, 'bump.json'), bump);
 }
 
 // The payload every project here is INSTALLED from: the shipped plugin at its baseline migration.
@@ -239,10 +269,12 @@ const P020 = makePayload('020', {
   tweak: (dir) => { addExampleToggleToSchema(dir); changeTemplates(dir); changeRuleset(dir); },
 });
 
+// ONE record for five operations. The two `rerender-managed-region` operations need no record at
+// all: the projects built here never edit those artifacts, so the payload change is applied without
+// a dialog. Keeping take-new records for them would have hidden exactly the regression this suite
+// now watches for - a run that asks about content that is not the operator's.
 const FULL_RESOLUTIONS = {
   '0002_fixture/0/enforcement.exampleToggle': { kind: 'answer', value: false },
-  '0002_fixture/1/CLAUDE.md#aiwf-core': { kind: 'conflict', resolution: 'take-new' },
-  [`0002_fixture/2/${WRITER_REL}`]: { kind: 'conflict', resolution: 'take-new' },
 };
 function resolutionFile(name, table) {
   const p = path.join(tmpRoot, `resolutions-${name}.json`);
@@ -374,8 +406,12 @@ section('4 - the conflict matrix: no branch mutates the target, and every run re
   const cases = [
     { name: 'edited-only, whole file', payload: samePayload('edit-file', FILE_OP), mutate: editFile, key: WRITER_REL, target: WRITER_REL },
     { name: 'edited-only, region', payload: samePayload('edit-region', REGION_OP), mutate: editRegion, key: 'CLAUDE.md#aiwf-core', target: 'CLAUDE.md' },
-    { name: 'upstream-only, whole file', payload: upstreamPayload('up-file', FILE_OP), mutate: null, key: WRITER_REL, target: WRITER_REL },
-    { name: 'upstream-only, region', payload: upstreamPayload('up-region', REGION_OP), mutate: null, key: 'CLAUDE.md#aiwf-core', target: 'CLAUDE.md' },
+    // The two SILENT cases: the payload moved and the operator never touched the artifact. There is
+    // nothing of theirs to lose, so there is no question to ask - and no resolution file is passed,
+    // which is what makes "exit 0" a proof rather than a claim: a run that needed a decision here
+    // would have nobody to ask and would stop with exit 1 naming the address.
+    { name: 'upstream-only, whole file', payload: upstreamPayload('up-file', FILE_OP), mutate: null, key: WRITER_REL, target: WRITER_REL, silent: 'A line the next payload version added.' },
+    { name: 'upstream-only, region', payload: upstreamPayload('up-region', REGION_OP), mutate: null, key: 'CLAUDE.md#aiwf-core', target: 'CLAUDE.md', silent: '## Your role (v2)' },
     { name: 'both, whole file', payload: upstreamPayload('both-file', FILE_OP), mutate: editFile, key: WRITER_REL, target: WRITER_REL },
     { name: 'both, region', payload: upstreamPayload('both-region', REGION_OP), mutate: editRegion, key: 'CLAUDE.md#aiwf-core', target: 'CLAUDE.md' },
     { name: 'the file is GONE', payload: upstreamPayload('gone-file', FILE_OP), mutate: (d) => fs.rmSync(at(d, WRITER_REL)), key: WRITER_REL, target: WRITER_REL, gone: true },
@@ -399,6 +435,27 @@ section('4 - the conflict matrix: no branch mutates the target, and every run re
     const targetBefore = read(at(p, c.target));
     const before = snapshot(p);
     const r = update(p, ['--apply'], { payload: c.payload });
+
+    if (c.silent) {
+      check(`${c.name}: COMPLETES with exit 0 - no dialog, no resolution file, nothing to lose`, r.status === 0, why(r));
+      check(`${c.name}: the run said why it did not ask`,
+        r.out.includes(`${c.key}: the payload version applied (you had not edited it)`), why(r));
+      check(`${c.name}: the payload render really landed in the project`,
+        (read(at(p, c.target)) || '').includes(c.silent) && read(at(p, c.target)) !== targetBefore);
+      const entry = bookkeeping(p).managedRegions[c.key] || {};
+      check(`${c.name}: bookkeeping is a plain take-new - upstream == local, override false`,
+        entry.override === false && typeof entry.local === 'string' && entry.local === entry.upstream,
+        JSON.stringify(entry).slice(0, 120));
+      check(`${c.name}: the journal is cleared and the version stamps moved`,
+        bookkeeping(p).migrationJournal === null && bookkeeping(p).installedPluginVersion === '0.2.0');
+      check(`${c.name}: nothing was left in the stage`, !exists(at(p, STAGE_REL)));
+      const changes = read(at(p, 'CHANGES_0.1.0-to-0.2.0.md')) || '';
+      check(`${c.name}: CHANGES labels it payload-current`,
+        changes.includes(`\`rerender-managed-region\` ${c.key} - payload-current`),
+        changes.split('\n').filter((l) => l.includes('rerender-managed-region')).join(' | '));
+      continue;
+    }
+
     check(`${c.name}: STOPS with exit 1`, r.status === 1, why(r));
     check(`${c.name}: the message names the address`, r.out.includes(`0002_conflict/1/${c.key}`), why(r));
     check(`${c.name}: the conflicting target was NOT mutated`, read(at(p, c.target)) === targetBefore);
@@ -426,9 +483,12 @@ section('4 - the conflict matrix: no branch mutates the target, and every run re
   }
 }
 {
-  // The third resolution, with a real hand-merged file.
+  // The third resolution, with a real hand-merged file. The artifact is edited first: merge is an
+  // answer to "your content and the payload's disagree", and without an edit of the operator's there
+  // is no disagreement and no dialog to answer.
   const p = project('conflict-merge');
   install(p);
+  fs.appendFileSync(at(p, WRITER_REL), '\nMy own note in the agent file.\n', 'utf8');
   const payload = makePayload('merge', {
     version: '0.2.0',
     migrations: [{ id: '0002_conflict', version: '0.2.0', ops: [{ op: 'rerender-managed-region', file: WRITER_REL, region: null, template: 'templates/agents/writer.md.tmpl' }] }],
@@ -457,12 +517,99 @@ section('4 - the conflict matrix: no branch mutates the target, and every run re
   const held = read(at(p, WRITER_REL));
   const r2 = update(p, ['--apply'], { payload: payload030 });
   check('override survival: the later update needs NO dialog for the held artifact', r2.status === 0, why(r2));
+  check('override survival: and it says exactly what it did - recorded, not applied',
+    r2.out.includes(`${WRITER_REL} is held by you (override) - the new render was recorded as upstream, not applied`), why(r2));
   check('override survival: the artifact is byte-identical', read(at(p, WRITER_REL)) === held);
   const entry2 = bookkeeping(p).managedRegions[WRITER_REL] || {};
   check('override survival: upstream moved, local did not, override still true',
     entry2.override === true && entry2.local === entry.local && entry2.upstream !== entry.upstream);
   const changes = read(at(p, 'CHANGES_0.2.0-to-0.3.0.md')) || '';
   check('override survival: CHANGES reports the held artifact', changes.includes('Held by you') && changes.includes(WRITER_REL));
+  check('override survival: and labels the merged, held artifact `held (your version kept)`',
+    changes.includes(`\`rerender-managed-region\` ${WRITER_REL} - held (your version kept)`),
+    changes.split('\n').filter((l) => l.includes('rerender-managed-region')).join(' | '));
+
+  // (a) HELD AND EDITED AGAIN is the one held case that still asks. The operator's content is at
+  // stake twice over, so it is never applied over - and nothing is written while the run stops.
+  fs.appendFileSync(at(p, WRITER_REL), '\nAnd another line of mine, after the hold.\n', 'utf8');
+  const mineAgain = read(at(p, WRITER_REL));
+  const payload040 = makePayload('040', {
+    version: '0.4.0',
+    migrations: [
+      { id: '0002_conflict', version: '0.2.0', ops: [{ op: 'rerender-managed-region', file: WRITER_REL, region: null, template: 'templates/agents/writer.md.tmpl' }] },
+      { id: '0003_more', version: '0.3.0', ops: [{ op: 'rerender-managed-region', file: WRITER_REL, region: null, template: 'templates/agents/writer.md.tmpl' }] },
+      { id: '0004_yet-more', version: '0.4.0', ops: [{ op: 'rerender-managed-region', file: WRITER_REL, region: null, template: 'templates/agents/writer.md.tmpl' }] },
+    ],
+    tweak: (dir) => {
+      changeTemplates(dir);
+      fs.appendFileSync(at(dir, 'templates/agents/writer.md.tmpl'), '\nAnd one more line in 0.3.0.\n\nAnd another in 0.4.0.\n', 'utf8');
+    },
+  });
+  const r3 = update(p, ['--apply'], { payload: payload040 });
+  check('held AND edited again: the run STOPS and asks (exit 1)', r3.status === 1, why(r3));
+  check('held AND edited again: the message names the address', r3.out.includes(`0004_yet-more/0/${WRITER_REL}`), why(r3));
+  check('held AND edited again: the operator content is untouched', read(at(p, WRITER_REL)) === mineAgain);
+  check('held AND edited again: the artifact is still held, with the local hash it had',
+    (bookkeeping(p).managedRegions[WRITER_REL] || {}).override === true);
+}
+{
+  // (d) The report's two labels, on the four outcomes bookkeeping can tell apart. Operator take-new
+  // and "already current" both end at `override:false` and are therefore ONE label - that is the
+  // stated boundary of the report, not an oversight.
+  const p = project('changes-labels');
+  install(p);
+  // The region is edited by hand: a real conflict, resolved take-new by the operator. The whole-file
+  // artifact is left alone: applied without a dialog. Both must end up `payload-current`.
+  patch(at(p, 'CLAUDE.md'), 'You are the **Orchestrator / COO**', 'You are the **Orchestrator / COO** (mine)');
+  const r = update(p, ['--apply', '--resolution-file', resolutionFile('labels', {
+    ...FULL_RESOLUTIONS,
+    '0002_fixture/1/CLAUDE.md#aiwf-core': { kind: 'conflict', resolution: 'take-new' },
+  })], { payload: P020 });
+  check('labels: the run completes', r.status === 0, why(r));
+  const changes = read(at(p, 'CHANGES_0.1.0-to-0.2.0.md')) || '';
+  const lines = changes.split('\n').filter((l) => l.includes('rerender-managed-region')).join(' | ');
+  check('labels: an operator take-new is `payload-current`',
+    changes.includes('`rerender-managed-region` CLAUDE.md#aiwf-core - payload-current'), lines);
+  check('labels: a silent take-new is `payload-current` too - the report describes the END STATE, not who decided it',
+    changes.includes(`\`rerender-managed-region\` ${WRITER_REL} - payload-current`), lines);
+  check('labels: the header says in one sentence what was applied without a dialog and what was not',
+    changes.includes('An unheld artifact you had not edited, whose payload render changed, was applied without a dialog; edited ones were asked about; held ones were recorded, not applied.'),
+    changes.split('\n').slice(0, 8).join(' | '));
+
+  // An "already current" artifact - a later migration that re-renders an unchanged template - is the
+  // same label: nothing distinguishes it in the bookkeeping, and the report never invents what the
+  // bookkeeping does not know.
+  const payload030 = makePayload('labels-030', {
+    version: '0.3.0',
+    migrations: [
+      { id: '0002_fixture', version: '0.2.0', ops: ALL_OPS },
+      { id: '0003_current', version: '0.3.0', ops: [{ op: 'rerender-managed-region', file: WRITER_REL, region: null, template: 'templates/agents/writer.md.tmpl' }] },
+    ],
+    tweak: (dir) => { addExampleToggleToSchema(dir); changeTemplates(dir); changeRuleset(dir); },
+  });
+  const r2 = update(p, ['--apply'], { payload: payload030 });
+  check('labels: a re-render of an artifact nothing changed completes with no dialog', r2.status === 0, why(r2));
+  check('labels: and the engine calls it already current', r2.out.includes('already current (neither the project nor the payload changed it)'), why(r2));
+  const changes2 = read(at(p, 'CHANGES_0.2.0-to-0.3.0.md')) || '';
+  check('labels: an already-current artifact is `payload-current` as well',
+    changes2.includes(`\`rerender-managed-region\` ${WRITER_REL} - payload-current`),
+    changes2.split('\n').filter((l) => l.includes('rerender-managed-region')).join(' | '));
+}
+{
+  // ... and keep-mine, the other half of the label pair, on its own.
+  const p = project('changes-labels-held');
+  install(p);
+  patch(at(p, 'CLAUDE.md'), 'You are the **Orchestrator / COO**', 'You are the **Orchestrator / COO** (mine)');
+  const r = update(p, ['--apply', '--resolution-file', resolutionFile('labels-held', {
+    ...FULL_RESOLUTIONS,
+    '0002_fixture/1/CLAUDE.md#aiwf-core': { kind: 'conflict', resolution: 'keep-mine' },
+  })], { payload: P020 });
+  check('labels: the keep-mine run completes', r.status === 0, why(r));
+  const changes = read(at(p, 'CHANGES_0.1.0-to-0.2.0.md')) || '';
+  check('labels: keep-mine is `held (your version kept)`',
+    changes.includes('`rerender-managed-region` CLAUDE.md#aiwf-core - held (your version kept)'),
+    changes.split('\n').filter((l) => l.includes('rerender-managed-region')).join(' | '));
+  check('labels: the operator content is what is on disk', (read(at(p, 'CLAUDE.md')) || '').includes('(mine)'));
 }
 
 // ---------------------------------------------------------------------------
@@ -708,9 +855,11 @@ section('9 - crash at every write boundary, resumed by a FRESH process');
       check(`op ${opIndex} @ ${boundary}: the journal describes exactly that operation`,
         journal.migration === '0002_fixture' && journal.opIndex === opIndex, JSON.stringify(journal).slice(0, 120));
 
-      // The resume gets a resolution file with the CRASHED operation's address REMOVED: the
-      // operations after it still need their answers, but asking THIS one again would stop the run
-      // with exit 1 naming exactly the address that is missing.
+      // The resume gets a resolution file with the CRASHED operation's address REMOVED: asking THIS
+      // one again would stop the run with exit 1 naming exactly the address that is missing. For
+      // opIndex 1 and 2 the removal is a no-op, because those two artifacts are unedited here and
+      // are re-rendered without any dialog at all - which makes their resume a stronger statement,
+      // not a weaker one: there is no record for them anywhere.
       const rest = { ...FULL_RESOLUTIONS };
       delete rest[ADDRESS_OF[opIndex]];
       const resumed = update(p, ['--apply', '--resolution-file', resolutionFile(`resume-crash-${seq}-${opIndex}-${boundary}`, rest)], { payload: P020 });
@@ -727,10 +876,50 @@ section('9 - crash at every write boundary, resumed by a FRESH process');
   }
 }
 {
+  // The SILENT branch, crashed at its own write boundary. No resolution file exists anywhere in this
+  // case - not in the crashing run, not in the resume - so a run that had to ask about anything
+  // would stop with exit 1. And the report a resumed run writes must be the report a single-process
+  // run would have written: it is assembled from the pending operations and the FINAL bookkeeping,
+  // never from what this particular process happened to apply.
+  const p = project('crash-silent');
+  install(p);
+  const payload = makePayload('crash-silent-payload', {
+    version: '0.2.0',
+    migrations: [{
+      id: '0002_silent',
+      version: '0.2.0',
+      ops: [{ op: 'rerender-managed-region', file: WRITER_REL, region: null, template: 'templates/agents/writer.md.tmpl' }, FIXTURE_NOTE],
+    }],
+    tweak: changeTemplates,
+  });
+  const crashed = update(p, ['--apply'], { payload, env: { PNP_UPDATE_CRASH_AT: '0002_silent/0/after-target-apply' } });
+  check('silent branch: the child died with exit 86 at the target write', crashed.status === 86, why(crashed));
+  const journal = bookkeeping(p).migrationJournal || {};
+  check('silent branch: the journal is prepared on exactly that operation',
+    journal.migration === '0002_silent' && journal.opIndex === 0 && journal.state === 'prepared', JSON.stringify(journal).slice(0, 140));
+  const resumed = update(p, ['--apply'], { payload });
+  check('silent branch: a fresh process resumes to the end with no resolution file at all', resumed.status === 0, why(resumed));
+  check('silent branch: nothing was asked - the dialog address never appears in the output',
+    !resumed.out.includes(`0002_silent/0/${WRITER_REL}`) && !resumed.out.includes('CONFLICT'), why(resumed));
+  const entry = bookkeeping(p).managedRegions[WRITER_REL] || {};
+  check('silent branch: the end bookkeeping is a plain take-new',
+    entry.override === false && entry.local === entry.upstream, JSON.stringify(entry).slice(0, 120));
+  check('silent branch: the payload render is what is on disk',
+    (read(at(p, WRITER_REL)) || '').includes('A line the next payload version added.'));
+  const changes = read(at(p, 'CHANGES_0.1.0-to-0.2.0.md')) || '';
+  check('silent branch: the report written after a RESUME carries the same payload-current label a one-process run writes',
+    changes.includes(`\`rerender-managed-region\` ${WRITER_REL} - payload-current`),
+    changes.split('\n').filter((l) => l.includes('rerender-managed-region')).join(' | '));
+  check('silent branch: and the report says in one sentence why nothing was asked',
+    changes.includes('An unheld artifact you had not edited, whose payload render changed, was applied without a dialog; edited ones were asked about; held ones were recorded, not applied.'));
+}
+{
   // A manual merge, crashed after the journal was prepared: the resume must replay the STAGED merged
   // content - it cannot ask again, because the resume gets no resolution file at all.
   const p = project('crash-merge');
   install(p);
+  // Edited first, for the same reason as the merge case above: a merge resolves a real disagreement.
+  fs.appendFileSync(at(p, WRITER_REL), '\nMy own line in the agent file.\n', 'utf8');
   const payload = makePayload('crash-merge-payload', {
     version: '0.2.0',
     migrations: [{ id: '0002_merge', version: '0.2.0', ops: [{ op: 'rerender-managed-region', file: WRITER_REL, region: null, template: 'templates/agents/writer.md.tmpl' }] }],
@@ -779,10 +968,36 @@ section('10 - a dry run writes nothing, and preflight refuses an incoherent proj
   check('--dry-run lists every planned operation', (clean.out.match(/0002_fixture\[\d\]/g) || []).length === ALL_OPS.length, why(clean));
   check('--dry-run wrote NOTHING (byte for byte)', diffSnapshots(before, snapshot(p)).length === 0, diffSnapshots(before, snapshot(p)).join(', '));
 
+  // The first DECISION of this fixture is operation 0 - the config key that asks a question
+  // (`askOperator: true`). It is not "the first rerender": the two rerender operations here need no
+  // decision at all, and a dry run walks straight past them.
   const stopped = update(p, ['--dry-run'], { payload: P020 });
-  check('--dry-run without resolutions stops at the first decision (exit 1)', stopped.status === 1, why(stopped));
+  check('--dry-run without resolutions stops at the first decision - the config key that asks (exit 1)', stopped.status === 1, why(stopped));
+  check('and it names that address, not a rerender', stopped.out.includes('0002_fixture/0/enforcement.exampleToggle'), why(stopped));
   check('--dry-run never prompts, and says so', stopped.out.includes('never prompts'), why(stopped));
   check('--dry-run still wrote nothing', diffSnapshots(before, snapshot(p)).length === 0, diffSnapshots(before, snapshot(p)).join(', '));
+}
+{
+  // A migration with nothing to ask about: no answer op, no edited artifact. A dry run over it needs
+  // no resolution file, exits 0, and previews the line it would apply - saying WHY it will not ask.
+  const p = project('dryrun-clean');
+  install(p);
+  const payload = makePayload('dryrun-clean-payload', {
+    version: '0.2.0',
+    migrations: [{
+      id: '0002_clean',
+      version: '0.2.0',
+      ops: [{ op: 'rerender-managed-region', file: WRITER_REL, region: null, template: 'templates/agents/writer.md.tmpl' }],
+    }],
+    tweak: changeTemplates,
+  });
+  const before = snapshot(p);
+  const r = update(p, ['--dry-run'], { payload });
+  check('a dry run over an unedited artifact needs no resolution file and exits 0', r.status === 0, why(r));
+  check('and it previews the apply, saying why it will not ask',
+    r.out.includes(`${WRITER_REL}: the payload version applied (you had not edited it)`), why(r));
+  check('a clean dry run still wrote nothing (byte for byte)',
+    diffSnapshots(before, snapshot(p)).length === 0, diffSnapshots(before, snapshot(p)).join(', '));
 }
 {
   const p = project('preflight');
@@ -899,6 +1114,9 @@ section('11 - the recovery state machine has no dead ends, and no decision is ap
   // about, so a resume cannot stamp a hash for a file that changed in the meantime.
   const p = project('none-mode-identity');
   install(p);
+  // Edited, so keep-mine is a real choice: an unedited artifact is applied without a dialog and
+  // there would be no "applies NOTHING" operation left to journal.
+  fs.appendFileSync(at(p, WRITER_REL), '\nMine, and I intend to keep it.\n', 'utf8');
   const payload = makePayload('keepmine-crash', {
     version: '0.2.0',
     migrations: [{ id: '0002_hold', version: '0.2.0', ops: [{ op: 'rerender-managed-region', file: WRITER_REL, region: null, template: 'templates/agents/writer.md.tmpl' }] }],
@@ -929,6 +1147,10 @@ section('11 - the recovery state machine has no dead ends, and no decision is ap
   const p = project('toctou');
   install(p);
   const target = at(p, 'CLAUDE.md');
+  // The region is edited FIRST, so this operation really is a conflict and really opens a dialog.
+  // Without the edit there would be no dialog at all to sit open (an untouched artifact is applied
+  // without asking), and the gap this case is about could not exist.
+  patch(target, 'You are the **Orchestrator / COO**', 'You are the **Orchestrator / COO** (mine)');
   let thrown = null;
   try {
     runUpdate({
@@ -937,7 +1159,7 @@ section('11 - the recovery state machine has no dead ends, and no decision is ap
       resolve: (address, kind) => {
         if (kind === 'answer') return { kind: 'answer', value: false };
         // The operator edits the artifact while the dialog is open, then answers.
-        fs.writeFileSync(target, (read(target) || '').replace('You are the **Orchestrator / COO**', 'You are the **Orchestrator / COO** (edited mid-dialog)'), 'utf8');
+        fs.writeFileSync(target, (read(target) || '').replace('You are the **Orchestrator / COO** (mine)', 'You are the **Orchestrator / COO** (edited mid-dialog)'), 'utf8');
         return { kind: 'conflict', resolution: 'take-new' };
       },
     });
@@ -1056,7 +1278,14 @@ section('11 - the recovery state machine has no dead ends, and no decision is ap
 }
 {
   // BLOCKER 6: a migration that touches the same artifact twice. The preview must plan the second
-  // operation against what the first one would have written - one resolution, not two.
+  // operation against what the first one would have written - and on an artifact the operator never
+  // edited that now means ZERO resolutions: the first operation applies silently, the second finds
+  // the artifact already current.
+  //
+  // The resolution file is deliberately NOT empty. It carries a `keep-mine` record for the first
+  // operation - a record that, if the engine consulted it, would produce a visibly different result
+  // (the old content kept, `override: true`). The assertions below are written against the silent
+  // take-new outcome, so a regression that starts asking again cannot pass this case by accident.
   const p = project('same-artifact-twice');
   install(p);
   const twice = { op: 'rerender-managed-region', file: WRITER_REL, region: null, template: 'templates/agents/writer.md.tmpl' };
@@ -1065,16 +1294,32 @@ section('11 - the recovery state machine has no dead ends, and no decision is ap
     migrations: [{ id: '0002_twice', version: '0.2.0', ops: [twice, twice] }],
     tweak: changeTemplates,
   });
-  const table = resolutionFile('twice', { [`0002_twice/0/${WRITER_REL}`]: { kind: 'conflict', resolution: 'take-new' } });
+  const table = resolutionFile('twice', { [`0002_twice/0/${WRITER_REL}`]: { kind: 'conflict', resolution: 'keep-mine' } });
   const before = snapshot(p);
   const dry = update(p, ['--dry-run', '--resolution-file', table], { payload });
-  check('dry-run of two operations on one artifact needs ONE resolution', dry.status === 0, why(dry));
-  check('and it previews the second as already current (not as a second conflict)',
-    dry.out.includes('already current'), why(dry));
+  check('dry-run of two operations on one artifact needs NO resolution at all', dry.status === 0, why(dry));
+  check('the first is previewed as a silent apply, not as a conflict',
+    dry.out.includes(`${WRITER_REL}: the payload version applied (you had not edited it)`), why(dry));
+  check('and the second is previewed as already current', dry.out.includes('already current'), why(dry));
   check('the dry run still wrote nothing', diffSnapshots(before, snapshot(p)).length === 0, diffSnapshots(before, snapshot(p)).join(', '));
   const applied = update(p, ['--apply', '--resolution-file', table], { payload });
-  check('and the apply needs exactly the same one resolution', applied.status === 0, why(applied));
+  check('and the apply needs none either', applied.status === 0, why(applied));
   check('the artifact carries the payload render', (read(at(p, WRITER_REL)) || '').includes('A line the next payload version added.'));
+  const entry = bookkeeping(p).managedRegions[WRITER_REL] || {};
+  check('the surplus keep-mine record was never consulted: override is false and local == upstream',
+    entry.override === false && entry.local === entry.upstream, JSON.stringify(entry).slice(0, 120));
+  // The same proof once more, in-process and by counting: the engine entrypoint is handed a resolver
+  // that records every call. "The dialog address never appeared in the output" is evidence; a
+  // resolver that was never called is the fact itself.
+  const p2 = project('same-artifact-twice-counted');
+  install(p2);
+  let asked = 0;
+  runUpdate({
+    pluginRoot: payload,
+    projectRoot: p2,
+    resolve: (address, kind) => { asked += 1; return kind === 'answer' ? { kind: 'answer', value: false } : { kind: 'conflict', resolution: 'keep-mine' }; },
+  });
+  check('in-process: the resolver was called ZERO times for two rerenders of an untouched artifact', asked === 0, `called ${asked} time(s)`);
 }
 {
   // BLOCKER 7: stage debris from a run that died between its final write and its cleanup must not

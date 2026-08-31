@@ -47,6 +47,10 @@
  *   Without a resolution file, an interactive run ASKS (the same records, typed by the operator) and
  *   a non-interactive one stops. A dry-run never prompts - a preview that asks questions is not a
  *   preview; pass --resolution-file to preview the resolved plan.
+ *   A resolution is needed only where something of the operator's is at stake: a config key with
+ *   `askOperator`, or an artifact the operator edited, deleted, or holds and edited. A payload change
+ *   to an artifact nobody touched needs no decision, so a dry-run over it simply previews the line it
+ *   would apply ("... the payload version applied (you had not edited it)") and keeps going.
  *
  * This command NEVER commits. The diff it produces goes through the normal review + commit gate.
  */

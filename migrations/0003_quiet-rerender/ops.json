@@ -1,0 +1,12 @@
+{
+  "migration": "0003_quiet-rerender",
+  "targetPluginVersion": "0.1.2",
+  "operations": [
+    {
+      "op": "rerender-managed-region",
+      "file": "CLAUDE.md",
+      "region": "aiwf-core",
+      "template": "templates/CLAUDE.md.tmpl#aiwf-core"
+    }
+  ]
+}

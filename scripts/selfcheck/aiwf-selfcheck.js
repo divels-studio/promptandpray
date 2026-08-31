@@ -2210,14 +2210,14 @@ function setupFlagFindings(skillText, cliSources) {
 // there is. Findings take the plugin root as an argument, so the controls can run the same function
 // over a sabotaged copy - the marketplace section's pattern, for the same reason.
 //
-// The Read/Grep/Glob rule is asserted as ONE canonical sentence in all six skills rather than as a
-// per-skill paraphrase: six wordings drift into six meanings, and a check that accepts any of them
-// proves nothing about the sixth.
+// The Read/Grep/Glob rule is asserted as ONE canonical sentence in all seven skills rather than as a
+// per-skill paraphrase: seven wordings drift into seven meanings, and a check that accepts any of
+// them proves nothing about the seventh.
 const DOCTRINE_READING_SENTENCE =
   '**Reading is not a shell job.** Read or inspect files with the Read/Grep/Glob tools - never '
   + '`cat`/`grep`/`ls`/`head`/`node -e` through the shell for reading; the shell is for execution '
   + '(tests, git, build).';
-const DOCTRINE_READING_SKILLS = ['mission', 'work', 'setup', 'review', 'qa', 'loop'];
+const DOCTRINE_READING_SKILLS = ['mission', 'work', 'setup', 'review', 'qa', 'loop', 'update'];
 const DOCTRINE_NEWBORN_SENTENCE =
   'A NEWLY BORN ticket - one that is not in the PLAN\'s recorded execution order - is written into '
   + 'the PLAN, announced in ONE sentence, and STOPS the same way.';
@@ -2232,6 +2232,23 @@ const BLANKET_GIT_C_RULE = 'Bash(git -C:*)';
 // is undispatchable exactly where it matters. Asserting only the heading proved none of that.
 const DOCTRINE_REVIEW_CLASS_OVERRIDE = 'regardless of `roles.reviewer.engine`';
 const DOCTRINE_REVIEW_CLASS_FALLBACK = 'subagent_type: "general-purpose"';
+// The fourth claim of Step 0c, added after readiness blockers were repeatedly found by the
+// configured engine: the class override is for IMPLEMENTATION diffs. A plan-readiness pass keeps
+// the configured host - the cheap Claude pre-pass is allowed, but it carries no verdict, so a
+// wording that lets `Class: docs` move readiness onto it would quietly delete the second opinion
+// exactly where a missed blocker costs a whole ticket.
+const DOCTRINE_REVIEW_READINESS_SENTENCE =
+  'A plan-readiness pass is NOT an implementation diff and never takes this override: it always runs '
+  + 'on the configured engine Step 0b resolved.';
+// The /pnp:update conflict rule. Until 0.1.2 it took TWO predicates, joined by "or": a payload change
+// to an artifact the operator had never touched raised a dialog, and the operator answered take-new
+// to a question about content that was not theirs. The rule is now one predicate (the operator edited
+// it, or it is gone), and a skill that drifts back to the old wording describes an engine that no
+// longer exists. The control below rewords it back, which is the only way to prove this is a check.
+const DOCTRINE_UPDATE_CONFLICT_SENTENCE =
+  'a conflict is raised **only when you edited** the artifact (`actual != local`) or it is GONE from '
+  + 'the project; a payload change to an artifact you never touched is NOT a conflict - it is applied '
+  + 'without a dialog and listed in the CHANGES report.';
 // Line breaks are formatting, not meaning: the payload wraps at 100 columns and a re-wrap must not
 // read as a missing rule. Whitespace is collapsed on BOTH sides before comparing.
 const collapseWs = (s) => String(s).replace(/\s+/g, ' ').trim();
@@ -2273,10 +2290,19 @@ function payloadDoctrineFindings(pluginRoot) {
   if (!reviewFlat.includes(collapseWs(DOCTRINE_REVIEW_CLASS_FALLBACK))) {
     classMissing.push(`no codex-install fallback dispatch (${DOCTRINE_REVIEW_CLASS_FALLBACK})`);
   }
+  if (!reviewFlat.includes(collapseWs(DOCTRINE_REVIEW_READINESS_SENTENCE))) {
+    classMissing.push('no plan-readiness carve-out (readiness always runs on the configured engine)');
+  }
   add('doctrine-review-class',
-    '/pnp:review takes the ticket class as an explicit brief input (Class: docs | code), lets `docs` OVERRIDE the configured engine, and names a dispatchable Claude host for a codex-configured install',
+    '/pnp:review takes the ticket class as an explicit brief input (Class: docs | code), lets `docs` OVERRIDE the configured engine for IMPLEMENTATION diffs, keeps plan-readiness on the configured engine, and names a dispatchable Claude host for a codex-configured install',
     classMissing.length === 0,
-    classMissing.length ? classMissing.join('; ') : 'Class line, Step 0c, the engine override and the codex-install fallback are all present');
+    classMissing.length ? classMissing.join('; ') : 'Class line, Step 0c, the engine override, the plan-readiness carve-out and the codex-install fallback are all present');
+
+  const update = collapseWs(skillText('update') || '');
+  add('doctrine-update-conflict-rule',
+    '/pnp:update states the one-predicate conflict rule (a dialog only where YOU edited or the artifact is gone; a payload change to an untouched artifact is applied and reported)',
+    update.includes(collapseWs(DOCTRINE_UPDATE_CONFLICT_SENTENCE)),
+    update.includes(collapseWs(DOCTRINE_UPDATE_CONFLICT_SENTENCE)) ? 'the rule is stated verbatim' : 'the sentence is missing or reworded');
 
   const ruleset = readJson(path.join(pluginRoot, 'templates', 'settings.ask-ruleset.json'));
   const ask = (ruleset && ruleset.permissions && Array.isArray(ruleset.permissions.ask)) ? ruleset.permissions.ask : null;
@@ -2326,10 +2352,12 @@ const doctrinePhrase = (root, skill, phrase, replacement) => doctrineSkill(root,
   return t.replace(phraseRe(phrase), replacement);
 });
 const DOCTRINE_CONTROLS = [
-  { id: 'doctrine-reading-not-shell', label: 'the reading rule dropped from one of the six skills',
+  { id: 'doctrine-reading-not-shell', label: 'the reading rule dropped from one of the seven skills',
     apply: (r) => doctrineSkill(r, 'qa', (t) => t.split('**Reading is not a shell job.**').join('**Reading is fine in a shell.**')) },
-  { id: 'doctrine-reading-not-shell', label: 'the reading rule REWORDED in one skill (six wordings are not one rule)',
+  { id: 'doctrine-reading-not-shell', label: 'the reading rule REWORDED in one skill (seven wordings are not one rule)',
     apply: (r) => doctrineSkill(r, 'loop', (t) => t.split('`cat`/`grep`/`ls`/`head`/`node -e`').join('shell commands')) },
+  { id: 'doctrine-reading-not-shell', label: 'the reading rule missing from the newest skill to carry it (/pnp:update)',
+    apply: (r) => doctrineSkill(r, 'update', (t) => t.split('**Reading is not a shell job.**').join('**Reading is fine in a shell.**')) },
   { id: 'doctrine-newborn-ticket', label: 'the newborn-ticket rule dropped from /pnp:work',
     apply: (r) => doctrineSkill(r, 'work', (t) => t.split('A NEWLY BORN ticket').join('A ticket')) },
   { id: 'doctrine-review-factcheck', label: 'Step 2b (the fact-check gate) removed from /pnp:review',
@@ -2342,6 +2370,10 @@ const DOCTRINE_CONTROLS = [
     apply: (r) => doctrinePhrase(r, 'review', DOCTRINE_REVIEW_CLASS_OVERRIDE, 'in line with `roles.reviewer.engine`') },
   { id: 'doctrine-review-class', label: 'the codex-install fallback dispatch gone - the docs-class route points at an agent file that install never renders',
     apply: (r) => doctrinePhrase(r, 'review', DOCTRINE_REVIEW_CLASS_FALLBACK, 'subagent_type: "reviewer"') },
+  { id: 'doctrine-review-class', label: 'the plan-readiness carve-out gone - the class override reaches readiness and the paid second opinion disappears',
+    apply: (r) => doctrinePhrase(r, 'review', 'it always runs on the configured engine Step 0b resolved', 'it takes the same class override as an implementation diff') },
+  { id: 'doctrine-update-conflict-rule', label: '/pnp:update reworded back to the two-predicate rule - a dialog for an artifact the operator never touched',
+    apply: (r) => doctrinePhrase(r, 'update', 'a conflict is raised **only when you edited** the artifact', 'a conflict is raised when you edited the artifact OR the payload changed it') },
   { id: 'doctrine-no-blanket-git-c', label: 'the blanket git -C rule put back into the factory ruleset',
     apply: (r) => doctrineRuleset(r, (j) => { j.permissions.ask.push(BLANKET_GIT_C_RULE); }) },
   { id: 'doctrine-git-c-project-forms', label: 'a rendered git -C <projectRoot> form dropped with it',
@@ -3449,6 +3481,15 @@ function copyPayloadTree(from, to) {
 // One control per assertion above. Each names the check `id` it must break, exactly like the
 // project-layer controls: a control that stops targeting a live check fails loudly rather than
 // quietly proving nothing.
+// The example bump's directory is named by `bump.json`, and that name legitimately MOVES: the fixture
+// is renumbered whenever the payload ships another migration (the ascend-by-1 rule), including inside
+// the fabricated payload copies the acceptance suites build. A control that hardcodes the number
+// silently stops sabotaging anything the day it changes - `mutateJson` would read a file that is not
+// there - so the id is read from `bump.json`, exactly as the findings above read it.
+const exampleBumpOps = (r) => {
+  const bump = readJson(path.join(r, 'examples', 'example-project', 'bump', 'bump.json')) || {};
+  return ['examples', 'example-project', 'bump', String(bump.migration), 'ops.json'];
+};
 const EXAMPLE_CONTROLS = [
   { id: 'example-readme', label: 'the example README deleted',
     apply: (r) => fs.rmSync(exAt(r, 'README.md')) },
@@ -3459,9 +3500,9 @@ const EXAMPLE_CONTROLS = [
   { id: 'example-bump-json', label: 'an extra field smuggled into bump.json',
     apply: (r) => mutateJson(r, ['examples', 'example-project', 'bump', 'bump.json'], (b) => { b.extra = 'nope'; }) },
   { id: 'example-bump-migration', label: 'the migration ops.json claims another migration id',
-    apply: (r) => mutateJson(r, ['examples', 'example-project', 'bump', '0003_example-bump', 'ops.json'], (o) => { o.migration = '0009_other'; }) },
+    apply: (r) => mutateJson(r, exampleBumpOps(r), (o) => { o.migration = '0009_other'; }) },
   { id: 'example-bump-ops-types', label: 'the note operation dropped, so one op type is undemonstrated',
-    apply: (r) => mutateJson(r, ['examples', 'example-project', 'bump', '0003_example-bump', 'ops.json'],
+    apply: (r) => mutateJson(r, exampleBumpOps(r),
       (o) => { o.operations = o.operations.filter((x) => x.op !== 'note'); }) },
   { id: 'example-bump-id', label: 'the bump renumbered so it follows a manifest entry that does not exist',
     apply: (r) => mutateJson(r, ['examples', 'example-project', 'bump', 'bump.json'], (b) => { b.migration = '0009_example-bump'; }) },
@@ -3472,7 +3513,7 @@ const EXAMPLE_CONTROLS = [
   { id: 'example-bump-schema-key', label: 'schema-key.json declares a default, which would make the migration a no-op on a fresh install',
     apply: (r) => mutateJson(r, ['examples', 'example-project', 'bump', 'schema-key.json'], (s) => { s.schema.default = true; }) },
   { id: 'example-bump-key-agrees', label: 'the migration adds a different key from the one the schema admits',
-    apply: (r) => mutateJson(r, ['examples', 'example-project', 'bump', '0003_example-bump', 'ops.json'],
+    apply: (r) => mutateJson(r, exampleBumpOps(r),
       (o) => { o.operations.find((x) => x.op === 'add-config-key').path = 'enforcement.somethingElse'; }) },
   { id: 'example-answers-valid', label: 'the answers file pinned to an OS channel that does not exist',
     apply: (r) => mutateJson(r, ['examples', 'example-project', 'answers.json'], (a) => { a.os = 'solaris'; }) },
@@ -3892,13 +3933,16 @@ function main() {
   console.log('carry the proof, so the controls prove the mechanism and the digests are stated data.');
   console.log('PAYLOAD DOCTRINE: the rules that exist only as TEXT are asserted as text, because text has no');
   console.log('compiler and every one of them was written after a real violation - the identical');
-  console.log('"reading is not a shell job" instruction in all six session skills (one canonical sentence, not');
-  console.log('six paraphrases), the newborn-ticket rule (write it into the PLAN, announce it in ONE sentence,');
+  console.log('"reading is not a shell job" instruction in all seven session skills (one canonical sentence, not');
+  console.log('seven paraphrases), the newborn-ticket rule (write it into the PLAN, announce it in ONE sentence,');
   console.log('STOP) in /pnp:mission and /pnp:work, Step 2b of /pnp:review with its reusable fact-check prompt,');
-  console.log('the "Class: docs | code" brief input with its Step 0c host branch - asserted as all three of its');
-  console.log('claims: the brief line, the sentence that `docs` overrides roles.reviewer.engine, and the ad-hoc');
-  console.log('read-only Claude dispatch that makes that override reachable on a codex-configured install (where');
-  console.log('no reviewer agent file is rendered) - and the factory ruleset\'s');
+  console.log('the "Class: docs | code" brief input with its Step 0c host branch - asserted as all four of its');
+  console.log('claims: the brief line, the sentence that `docs` overrides roles.reviewer.engine for an');
+  console.log('IMPLEMENTATION diff, the carve-out that keeps plan-readiness on the configured engine, and the');
+  console.log('ad-hoc read-only Claude dispatch that makes that override reachable on a codex-configured install');
+  console.log('(where no reviewer agent file is rendered) - the one-predicate conflict rule of /pnp:update (a');
+  console.log('dialog only where the operator edited the artifact or it is gone; a payload change to an untouched');
+  console.log('artifact is applied without one) - and the factory ruleset\'s');
   console.log('freedom from the blanket git -C rule while the three rendered <projectRoot> push/merge/rebase');
   console.log('forms stay. Each has its own control on a sabotaged copy of those files, including one that only');
   console.log('REWORDS a rule rather than deleting it. What is NOT proven, and cannot be from here: that a');

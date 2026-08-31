@@ -1,6 +1,6 @@
 ---
 name: update
-description: Bring this project up to the installed plugin version - version diff, dry-run preview, ordered migration with a write-ahead journal, conflict dialogs (take-new / keep-mine / merge), a CHANGES report, and a self-check. Never overwrites your own content and never commits.
+description: Bring this project up to the installed plugin version - version diff, dry-run preview, ordered migration with a write-ahead journal, a conflict dialog only where you edited something (take-new / keep-mine / merge), a CHANGES report, and a self-check. Never overwrites your own content and never commits.
 allowed-tools: Read, Grep, Glob, Bash
 ---
 
@@ -21,6 +21,9 @@ region, the permission rules - **without ever overwriting the operator's own con
 3. **Version interlock.** This skill is one of the two documented **exceptions** (with
    `/pnp:selfcheck`): it runs precisely when the installed version is behind the payload. That is
    the whole point of it.
+4. **Reading is not a shell job.** Read or inspect files with the Read/Grep/Glob tools - never
+   `cat`/`grep`/`ls`/`head`/`node -e` through the shell for reading; the shell is for execution
+   (tests, git, build).
 
 Notation: `{{config.some.key}}` in this document means *substitute the value you read in step 2*.
 
@@ -40,11 +43,14 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/update/aiwf-update.mjs" --dry-run --project-
 ```
 
 It plans every operation against the real state and writes **nothing** - not one byte, not even a
-stage. A dry run never prompts: where an operation needs a decision it stops there and names the
-address, because that decision IS what a preview exists to surface. Show the operator:
+stage. A dry run never prompts, so it stops exactly where a decision is genuinely needed - where YOU
+edited (or deleted) an artifact, or where a new config key asks you a question - and names the
+address, because that decision IS what a preview exists to surface. An artifact you never touched
+needs no decision, so the preview simply lists the line it would apply and keeps going. Show the
+operator:
 
 - the version diff and the operations per migration;
-- every artifact that will be re-rendered, and every one that will raise a conflict.
+- every artifact that will be re-rendered without asking, and every one that will raise a conflict.
 
 ## Step 3 - The operator's word, then apply
 
@@ -57,11 +63,15 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/update/aiwf-update.mjs" --apply --project-ro
 - operations run in order and **stop at the first unresolved conflict**; everything applied before
   it stays applied, and the write-ahead journal in `_aiwf.migrationJournal` makes the next run
   resume from exactly that point;
-- a conflict is raised when **either** predicate holds: you edited the artifact (`actual != local`)
-  **or** the payload changed it (`newRender != upstream`). The choice is
+- a conflict is raised **only when you edited** the artifact (`actual != local`) or it is GONE from
+  the project; a payload change to an artifact you never touched is NOT a conflict - it is applied
+  without a dialog and listed in the CHANGES report. When you ARE asked, the choice is
   **take-new** (apply the payload version) / **keep-mine** (keep yours; the payload version is only
   recorded, and the artifact is held from then on) / **merge** (you merge by hand and hand back the
   merged file);
+- an artifact you hold through an override is never re-applied: the new render is recorded as
+  upstream and the artifact is reported. You are asked about a held artifact only if you edited it
+  again since;
 - interactively the run asks. Scripted (CI, or a replayable run) pass
   `--resolution-file <json>` mapping `"<migration>/<opIndex>/<key>"` to a record:
   `{ "kind": "conflict", "resolution": "take-new" | "keep-mine" | "merge", "mergedFile": "<path>" }`
@@ -103,9 +113,12 @@ wrote, and report `self-check: PASS` with the child's own summary line. `--check
 remember after a write.
 
 Report in `{{config.operator.language}}`, short: the version diff, what was applied, every conflict
-and how it was resolved, and the artifacts now held by the operator. Point at the generated
-`CHANGES_<old>-to-<new>.md` at the project root - it lists the doctrine sections worth re-reading
-and the artifacts whose payload version changed while you kept your own.
+you were actually asked about and how it was resolved, and the artifacts now held by the operator.
+Read the per-artifact outcomes off the generated `CHANGES_<old>-to-<new>.md` at the project root
+rather than restating them: each `rerender-managed-region` line there carries the artifact's final
+state - `payload-current` (the payload version is what is on disk) or `held (your version kept)` -
+and the report also lists the doctrine sections worth re-reading and the artifacts whose payload
+version changed while you kept your own.
 
 **This command never commits.** The diff goes through the normal review + commit gate, like any
 other change.

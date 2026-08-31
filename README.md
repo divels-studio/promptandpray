@@ -17,7 +17,7 @@ Born in a real production project, then extracted and genericized.
 
 ## Status
 
-**v0.1.1. Pre-release, private, and not published to any marketplace.**
+**v0.1.2. Pre-release, private, and not published to any marketplace.**
 
 What is here:
 
@@ -46,9 +46,13 @@ What is here:
   clean and silently, different ones are one operator decision each (keep-mine / take-new), an
   unanswered decision stops the run with nothing written, and nothing is ever deleted.
 - **The update engine and the migration runner**: an ordered migration manifest, a two-hash conflict
-  machine (take-new / keep-mine / merge), a write-ahead journal with deterministic crash recovery,
-  and a generated CHANGES report. A new plugin version reaches an installed project without
-  stepping on that project's own voice.
+  machine (take-new / keep-mine / merge) that asks only where there is content of yours to lose, a
+  write-ahead journal with deterministic crash recovery, and a generated CHANGES report naming each
+  managed artifact's final state. A new plugin version reaches an installed project without stepping
+  on that project's own voice - and this path has been walked on a **consumer** installation, not
+  only on fixtures: a project other than this one took 0.1.0 -> 0.1.1 through `/plugin update` +
+  `/pnp:update`, carrying its own history across the bump. Its two take-new dialogs for artifacts
+  nobody had edited are what 0.1.2 removes.
 - **The self-check**, which executes both hooks and the resolver at their real entrypoints rather
   than reading their source, and then insists its own checks can fail: the project-layer, example
   fixture and provenance sections each sabotage a copy one way per assertion and require the target
@@ -66,13 +70,14 @@ What is **not** here yet:
   mirror the PowerShell ones flag for flag, `/pnp:setup` accepts all three OS channels, and the CI
   matrix runs the gates on ubuntu and macos runners. What is missing is field use: the POSIX legs
   first execute on the operator's first push, and no POSIX machine has hosted a real loop yet.
-- **A version update taken by a CONSUMER installation.** The install and update paths - including
-  the adopt mode that installs over an existing AIWF surface - are proven by the acceptance suites
-  and by an end-to-end cycle over committed data, and this repository's own self-install has taken
-  one real bump (0.1.0 -> 0.1.1, migration `0002_operator-word-and-hygiene`). What is missing is a
-  project OTHER than this one carrying its own history through a version bump: that is where "a new
-  version reaches a project without stepping on its own voice" stops being an assertion about
-  fixtures and about the plugin's own tree.
+- **A published plugin anyone else can install.** The update path is proven on a consumer
+  installation, which was the condition for publishing - but the marketplace here is still local, the
+  audience is still one operator, and nothing has been released to a public marketplace.
+- **A second consumer, and a bump that carries managed changes on a consumer.** The consumer update
+  so far is one project taking one bump: `0002_operator-word-and-hygiene` is the only migration with
+  real operations that has landed on a project other than this one. `0003_quiet-rerender` carries a
+  managed-region re-render too, but no consumer has taken 0.1.2 yet - so this remains a first rather
+  than a routine.
 
 ## Three names
 

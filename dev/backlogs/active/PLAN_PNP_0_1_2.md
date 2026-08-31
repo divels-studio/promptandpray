@@ -185,8 +185,39 @@ scripts README.md` → без изход, exit 1 (grep без съвпадени
 pre-pass преди pass 1 без вердикт); имплементация — fact-check + един Codex пас (code-class,
 операторска дума за квота) + max 2 корекционни рунда.
 
-**Гейтове:** думата за P9 е дадена (2026-08-31); Codex пас — дума; commit клик; tag `v0.1.2` и
-push — отделни думи; Furnissimo apply — отделна сесия.
+**Гейтове:** думата за P9 е дадена (2026-08-31) и покрива всички пасове от контракта (решение
+Б, долу); commit клик; tag `v0.1.2` и push — отделни думи; Furnissimo apply — отделна сесия.
+
+**Решение Б (операторско, 2026-08-31) — квота гейтът за платени пасове, уточнен.** Стоящата
+дума за тикет покрива всички пасове, които контрактът предвижда: implementation паса, двата
+readiness паса, втория платен пас при код в корекцията. Изрична дума само за пасове НАД
+контракта: readiness pass 3 (`WORKFLOW.md:289-292`) и корекционен рунд над cap-а (`:219-222`).
+Причина: `WORKFLOW.md:133-134` и managed регионът (`templates/CLAUDE.md.tmpl:29-30`) изброяват
+„expensive-quota passes" като гейт без механика — четено буквално, COO питаше за всеки пас,
+което противоречи на `:168` („after the word, the loop runs to the end") и `:271`. Влиза в P9
+като т.11: (а) `docs/WORKFLOW.md:133-136` — гейтът се формулира точно („passes beyond the
+review contract: a third readiness pass, a correction round beyond the cap"); (б)
+`templates/CLAUDE.md.tmpl:29-30` същото; (в) миграция `0003_quiet-rerender` получава
+`rerender-managed-region CLAUDE.md#aiwf-core` (вече не е празна; NOTES обновен; test-update
+`BASE`/fixtures, ако pin-ват „0003 has no operations") → self-install apply-ът минава през
+тихия клон с **нула диалози** — реалното доказателство на P9 върху собствения install; (г)
+`README.md` §Status фразата „`0003` ships no operations" пада. Furnissimo планът НЕ се пипа
+от тази сесия (операторска дума).
+
+## Кандидати (не са тикети; тикет се ражда само с операторска дума)
+
+- **Механичното изпълнение е агентска работа** (от Furnissimo сесията, 2026-08-31).
+  `docs/WORKFLOW.md` §"COO owns broad scans" покрива само търсене (grep/inventory, docs
+  cross-check, всичко извън repo-то) — не покрива ИЗПЪЛНЕНИЕ на механична процедура: helper
+  скрипт, bulk find/replace, verify цикъл, дебъг на helper. Наблюдение: COO написа и два пъти
+  дебъгва hash-remap скрипт inline при пренаписването на git историята; операторът прекъсна
+  („защо не пускаш агенти за механичните операции"). Предложение: трети tripwire в същия
+  параграф — „run this procedure and report" = `general-purpose` + `model: sonnet` (haiku за
+  броене) с точни входове (пътища, map, очаквани числа, verify команди) и output contract; COO
+  решава, брифва, чете резултата и комитва; втора поправка на същия helper в сесията е една в
+  повече. Огледално в root CLAUDE.md managed region (§"Discovery precedes dispatch") →
+  managed артефакт → миграция + bump при следващия release тикет. Политиката за субагенти
+  остава: изричен `model` винаги, haiku/sonnet за scan-ове, loop ролите само през Agent tool.
 
 ## Completion records
 
