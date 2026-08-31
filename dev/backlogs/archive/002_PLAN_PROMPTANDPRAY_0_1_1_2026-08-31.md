@@ -140,7 +140,7 @@ push (отделна дума). Нищо не се изпълнява преди
 
 ## Completion records
 
-### P8 — плъгиновата половина DONE, commit `c1c46a8` (2026-08-31); Furnissimo apply ОСТАВА
+### P8 — плъгиновата половина DONE, commit `2ef203d` (2026-08-31); Furnissimo apply ОСТАВА
 - Свършено (Колега, 2 диспача — имплементация + корекционен рунд; Gate 2 off-plan мина ТИХО на
   двата с `Ticket: P8` — доказателството, чакащо от DEV-002, е записано): т.1-10, 13-15 от
   обхвата + миграция `0002_operator-word-and-hygiene` → 0.1.1 + собственият ни install мигриран
@@ -172,7 +172,7 @@ push (отделна дума). Нищо не се изпълнява преди
   извън `docs/` — записът на този completion record бе отказан до изчистването на route-state
   (легитимно: диспачът беше приключил). Известен v0.1 фиксиран път; става тикет само ако
   блокира реална работа.
-- Release (2026-08-31, операторски думи): tag `v0.1.1` → `c1c46a8`; push `main` + тагове
+- Release (2026-08-31, операторски думи): tag `v0.1.1` → `2ef203d`; push `main` + тагове
   `v0.1.0`/`v0.1.1` към `github.com/divels-studio/promptandpray` (private).
 - **Furnissimo apply (т.11) DONE, Furnissimo commit `35600cb6`** (2026-08-31, операторска сесия
   там): `/plugin marketplace update` → `/plugin update pnp@promptandpray` (cache `pnp/0.1.1`) →
