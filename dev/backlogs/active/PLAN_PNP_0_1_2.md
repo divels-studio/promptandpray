@@ -1,0 +1,193 @@
+# PromptAndPray 0.1.2 — update без фалшиви конфликти
+
+> Роден по операторска дума 2026-08-31 („давай P9") след първия реален консуматорски update
+> (P8, Furnissimo `35600cb6`): операторът мина през два take-new диалога за артефакти, които
+> никога не е пипал — „защо е толкова сложно, всички ли трябва да минават през този ад".
+> Един тикет, **P9**, R2 code-class. Readiness review на конфигурирания engine (Codex, два
+> паса; Claude ad-hoc pre-pass преди първия — без вердикт), после диспач.
+
+## Context (проверено, Explore 2026-08-31)
+
+- `scripts/update/migrate.mjs` `planRerender` (:535-592): предикати `held = override===true`
+  (:552), `localEdit = actual===null || sha256(actual)!==previous.local` (:553),
+  `upstreamChange = renderHash!==previous.upstream` (:554). Два no-dialog клона: `held &&
+  !localEdit` (:562-572, записва upstream, не прилага) и `!held && !localEdit &&
+  !upstreamChange` (:574-581, „already current"). **Всичко друго → `ctx.resolve(address,
+  'conflict', …)` (:583-590)** — включително чистия случай `!held && !localEdit &&
+  upstreamChange`, който е нормалният път на всяка миграция. `applyResolution` (:594-645)
+  строи plan entry за take-new/keep-mine/merge; take-new = `{content:newRender, bookkeeping
+  {upstream:renderHash, local:acceptedHash, override:false}, summary "<key>: the payload version
+  applied"}` (:632-643).
+- Dry-run: `stopAdapter` (:247-252) хвърля при всяка нужда от резолюция → dry-run без
+  `--resolution-file` спира с exit 1 на първия rerender op (`aiwf-update.mjs:112-114, 187-198`).
+- CHANGES отчетът (`assembleChanges` :1019-1071) изрежда само вида на операцията и целта
+  (:1063-1066); резолюцията не се вижда; „Held by you" секцията (:1026-1055) се извежда post-hoc
+  от `override && upstream!==local`.
+- `skills/update/SKILL.md`: dry-run описанието :42-47 („stops there and names the address");
+  предикатите :60-64 („either predicate holds"); доклад :105-108. Selfcheck-ът НЕ pin-ва
+  conflict текста (само generic phrase проверки :2242-2467).
+- `test-update.mjs`: `FULL_RESOLUTIONS` :242-246 (take-new за двата rerender-а на fixture-а —
+  точно фалшивият конфликт); conflict матрица :349-427 (8 случая: edited-only / upstream-only /
+  both / gone × file/region — **upstream-only очаква STOP exit 1**); merge :428-448; `--resolve`
+  :526-564; dry-run stop :772-786; resume :693-751; moved target :845-921.
+- Example cycle (`run-example-cycle.mjs`): `0003_example-bump` има ЕДИН rerender op
+  (`CLAUDE.md#aiwf-core`), регионът се редактира на ръка преди update-а (:521-532) → keep-mine
+  (:547), после `--resolve` take-new (:579-591). Нито един случай с непипан артефакт; merge не се
+  упражнява там — `CHANGELOG.md:139-142` („all three conflict decisions" в example cycle) е
+  невярно; merge е само в test-update.
+- Schema `_aiwf.managedRegions.<key>` = точно `{upstream, local, override}` (:54-73) — не се
+  пипа.
+
+## Решения (COO)
+
+- **Конфликт = само `localEdit`.** Чист артефакт (`!held && !localEdit && upstreamChange`) се
+  прилага тихо като take-new; диалогът остава за: редактиран (`actual!==local`), изчезнал
+  (`actual===null`), и held+редактиран. `held && !localEdit` остава „записва upstream, не
+  прилага" (override никога не се re-apply-ва — непроменено).
+- Тихият клон върви през **същия** `applyResolution` път като take-new (journal, stage, resume
+  идентични) — синтетичен record `{resolution:'take-new', auto:true}`; summary-то казва защо:
+  `"<key>: the payload version applied (you had not edited it)"`.
+- **Видимост вместо диалог — само от bookkeeping-а.** `assembleChanges` (:1014-1018) се строи
+  от pending операциите и ФИНАЛНИЯ bookkeeping, никога от run accumulator — това го прави
+  идентичен при един процес и при три след два краша (`ctx.applied` не вижда операции от
+  предишен процес; `recover` :917-944 не push-ва). Схемата не се пипа → изходите в отчета са
+  само тези, които bookkeeping-ът различава — категории на КРАЙНОТО състояние, точно две: за
+  всеки `rerender-managed-region` ред в „Applied": `payload-current` при `override:false`
+  (auto take-new, операторски take-new И „already current" завършват еднакво —
+  `upstream===local`, и НЕ се различават; повторни операции върху един ключ показват само
+  последното състояние) или `held (your version kept)` при `override:true` (keep-mine и merge —
+  един етикет). Фактът „приложено БЕЗ диалог, защото не си го пипал" се вижда на екрана в run
+  summary-то (`"<key>: the payload version applied (you had not edited it)"`) — то е
+  per-operation и живее само в run-а; отчетът носи едно точно header изречение: „An unheld
+  artifact you had not edited, whose payload render changed, was applied without a dialog;
+  edited ones were asked about; held ones were recorded, not applied." Границите (auto vs.
+  operator take-new; applied vs. already-current) са казани в NOTES на 0003.
+- Dry-run: за чист артефакт печата планираното прилагане; спира само на реален localEdit (или
+  на `add-config-key` въпрос — първата операция, която иска КАКВАТО И ДА Е резолюция, не
+  „първият rerender").
+- Без миграция с операции: нищо managed не се променя. Bump 0.1.2 → манифест изисква запис:
+  `0003_quiet-rerender` с `operations: []` (моделът на `0001_initial`; `validate-payload.mjs:305`
+  го допуска изрично). Example bump се преномерира `0004_example-bump` — правилото ascend-by-1
+  (`validate-payload.mjs:224-226`) го изисква; **версията му остава 0.3.0** (`example-bump-version`
+  `aiwf-selfcheck.js:3160` иска само строго > предшественика — 0.3.0 > 0.1.2; без излишни
+  редакции в `examples/README.md:9`, `examples/example-project/README.md`, NOTES).
+- `--resolve <key>` остава безусловен (:1271-1276) — това е изричното „отвори отново".
+- Ред на изпълнение: след §8 (plugin.json 0.1.2) selfcheck `--project-fixture .` е ЧЕРВЕН до §9
+  (`version-stamp`, `aiwf-selfcheck.js:2121-2123` иска installed == payload) — очаквано, не се
+  „поправя" между двете. `CHANGES_0.1.1-to-0.1.2.md` от §9 (всеки apply пише отчет —
+  `migrate.mjs:1184`, и при нула операции) се **комитва до** `CHANGES_0.1.0-to-0.1.1.md` —
+  двата остават, история на self-install-а; нищо не се трие, нищо не се игнорира.
+
+## P9 [R2 code-class, plugin repo] — тихо прилагане на непипани managed артефакти
+
+**Обхват:**
+
+1. `migrate.mjs` `planRerender`: новият клон преди `ctx.resolve` (виж Решения); `predicates`
+   текстът за диалога остава само за localEdit/gone случаите. `applyResolution` приема
+   `record.auto` и различава summary-то. Никаква промяна в journaling/stage/resume.
+2. CHANGES: `assembleChanges` остава чист от run state; всеки `rerender-managed-region` ред в
+   „Applied" носи етикета, изведен от финалния bookkeeping (`payload-current` /
+   `held (your version kept)` — виж Решения); header изречението (точния текст от Решения);
+   „Held by you" секцията остава. Прозата на двигателя, която твърди старото правило, се
+   поправя в същия тикет: `scripts/update/README.md:14-16`, module header-ът
+   `scripts/update/migrate.mjs:12-19` („EITHER predicate"), `applyResolution` коментарът
+   `migrate.mjs:594` („No branch here overwrites anything silently" — става: „overwrites only
+   an artifact the operator has not edited, and says so in the summary"), и test-suite
+   контрактът `test-update.mjs:19` („all eight cases stop" → шест спират, двата upstream-only
+   се прилагат тихо).
+3. `aiwf-update.mjs`: dry-run печата новия summary; интерактивният resolver и exit кодовете
+   непроменени (0 = приложено/чист dry-run; 1 = спрян на РЕАЛЕН конфликт).
+4. `skills/update/SKILL.md`: :42-47 (dry-run спира само където ТИ си редактирал), :60-64
+   (конфликт = ти си редактирал или файлът липсва; payload-ът, който променя непипан артефакт,
+   го прилага и го изрежда в CHANGES), :105-108 (докладът чете изходите от CHANGES). Frontmatter
+   description :3 съответно.
+5. Selfcheck: assertion, че `skills/update/SKILL.md` носи новото правило (стабилна фраза) +
+   flipping контрол (reword към „either predicate" → FAIL), по механизма на PAYLOAD DOCTRINE
+   секцията от P8 — `copyDoctrineFiles` (:2297-2304) копира само `DOCTRINE_READING_SKILLS`
+   (:2220, шест skill-а без `update`) → списъкът се разширява с `update`, което го включва и в
+   canonical „Reading is not a shell job" assertion-а (:2244-2250): затова
+   `skills/update/SKILL.md` Step 0 получава СЪЩОТО изречение като шестте (седми skill —
+   правилно е да го носи), и коментарите/coverage прозата „six skills" → „seven"; coverage
+   summary за новия assertion.
+6. `test-update.mjs`: матрицата :349-427 — upstream-only (file И region) очакват exit 0, без
+   резолюция, съдържание = payload, `override:false`, journal чист; edited-only/both/gone
+   остават STOP; `FULL_RESOLUTIONS` :242-246 губи двата rerender записа (доказва, че диалог
+   няма; секция 9 `delete rest[ADDRESS_OF[opIndex]]` :714-715 става no-op — безвредно);
+   dry-run секцията :772-786: „stops at the first decision" остава вярна заради
+   `add-config-key` answer-а на op 0 (:243) — коментарът се уточнява; нов случай: dry-run над
+   fixture БЕЗ answer op и без edit минава exit 0 и печата „(you had not edited it)"; нов
+   случай: излишен запис в resolution файла за чист артефакт не е грешка (адаптерът чете само
+   при нужда). Resume :693-751 — един случай крашва в тихия клон (`after-target-apply`) и
+   resume-ът го довършва без въпрос (`recover` :936-944 → `flipWithoutStage`), и CHANGES
+   отчетът след resume-а носи `payload-current` за този артефакт — идентичен с
+   един-процесния run (assertion върху текста на отчета, не само върху heading-а както :302).
+   Още две остарели твърдения в същия файл: коментарът :181 („half of the conflict predicate"
+   за payload промяна → „a payload change alone is no longer a conflict") и случаят с повторен
+   rerender върху един ключ :1058-1076 — очаква една резолюция; сега: НУЛА резолюции, първата
+   операция се прилага тихо, втората е „already current"; assertion-ите се пренаписват така,
+   че да ФЕЙЛВАТ при подаден излишен resolution запис, който бива използван (т.е. да докажат,
+   че адаптерът не е бил питан — брой на извикванията на resolver-а = 0).
+   **Изрични safety assertions (production path):** (a) held И редактиран (`override:true` +
+   `actual!==local`) → STOP с диалог, файлът непокътнат; (b) held и непипан → „recorded as
+   upstream, not applied", файлът непокътнат; (c) редактиран, не held → STOP; (d) CHANGES
+   етикетите: `payload-current` за auto take-new, за операторски take-new И за „already
+   current" (еднакви — това е границата), `held (your version kept)` за keep-mine И за merge;
+   (e) header изречението присъства дословно.
+7. Example cycle: `0004_example-bump` (git mv от 0003, версията остава 0.3.0, NOTES обновен)
+   получава ВТОРИ rerender op — `.claude/agents/writer.md`, **добавен НАКРАЯ** (op индексите 0/1
+   са hardcoded в `run-example-cycle.mjs:539, 546-547`); PAYLOAD_2 (:490-509) трябва да промени
+   и `templates/agents/writer.md.tmpl` (моделът: `changeTemplates`, `test-update.mjs:181`) —
+   иначе `upstreamChange` е false и се упражнява старият „already current" клон, не новият.
+   Цикълът доказва: нула диалог за writer.md, CHANGES ред `payload-current`,
+   keep-mine пътят за редактирания регион остава. Selfcheck: трите hardcoded пътя към
+   `0003_example-bump/ops.json` в negative controls (`aiwf-selfcheck.js:3462, 3464, 3475`) →
+   0004 (иначе `mutateJson` :3739 чете липсващ файл → TypeError). `examples/README.md` +
+   `examples/example-project/README.md` за новия op.
+8. Release: `migrations/index.json` + `migrations/0003_quiet-rerender/{ops.json (operations:[]),
+   NOTES.md}`; `plugin.json` 0.1.2; `CHANGELOG.md` блок 0.1.2 (`### Changed`/`### Fixed`;
+   Fixed включва невярното твърдение на :139-142 — example cycle упражнява keep-mine и take-new
+   (merge е в update suite) и НЯМА crash injection („resume after an interrupted migration" е
+   само в test-update секция 9) — коригирано в 0.1.0 блока като „(corrected in 0.1.2)");
+   `README.md` §Status — update пътят е доказан на консуматор (Furnissimo 0.1.0→0.1.1).
+9. Self-install: `aiwf-update --check` → pending 0003 → `--apply` (нула операции, нула диалози —
+   само stamp 0.1.2) → selfcheck `--project-fixture .` exit 0. Това е и първото доказателство,
+   че бумп без managed промяна минава без нито един клик.
+10. **Readiness ревюто винаги на конфигурирания engine** (операторска директива 2026-08-31:
+    „всички readiness ревюта са минавали през Codex и точно той е намирал блокери"). Class
+    override-ът от P8 (docs-class → Claude host) се стеснява до *имплементационни* диффове;
+    plan-readiness режимът на `/pnp:review` ползва Step 0b engine-а без class override.
+    `skills/review/SKILL.md` Step 0c + §Plan-readiness mode; `docs/WORKFLOW.md` §Plan readiness
+    review + §Routes; `docs/LOOP.md`; selfcheck `doctrine-review-class` предикатът получава
+    фразата за readiness (+ контрол: махната → FAIL). Claude host може да се ползва като евтин
+    pre-pass преди платения — без вердикт, като fact-check гейта.
+
+**Извън обхват:** schema; `--resolve`; setup/adopt диалозите; Furnissimo apply (следваща
+операторска сесия, отделна дума; там 0.1.1→0.1.2 трябва да е нула диалога); tag/push (отделни
+думи); публикуване.
+
+**Acceptance (falsifiable):** пълният VERIFY сет exit 0 (validate-payload с 3 миграции;
+test-setup; test-update с променената матрица; двата example цикъла; selfcheck с новия контрол;
+spikes; plugin validate); `node scripts/update/test-update.mjs` съдържа assertion, че
+upstream-only rerender завършва без резолюция; sweep-ът `git grep -n -i -P
+"either\W{0,6}predicate|either the project edited|half of the conflict predicate" -- skills docs
+scripts README.md` → без изход, exit 1 (grep без съвпадение = 1; това Е зеленото) — пуснат
+2026-08-31 срещу текущото дърво мачва точно 4 реда: `skills/update/SKILL.md:60`
+(`**either** predicate`), `scripts/update/README.md:14`, `migrate.mjs:15`, `test-update.mjs:181`
+— четирите места, които тикетът пренаписва (т.е. sweep-ът може да фейлва); skill правилото
+се ДОКАЗВА от selfcheck flipping контрола (т.5), grep-ът е само sweep за остатъци; фразата
+„the payload changed it" в `migrate.mjs:586` (текст на диалога при localEdit+upstreamChange) и
+:579 остава — вярна е; self-install на 0.1.2 без диалог; Cyrillic grep по payload — без изход
+(exit 1 = зелено).
+
+**Risk threshold:** блокер = тихо прилагане върху РЕДАКТИРАН или held артефакт (загуба на
+операторско съдържание); journal/resume регресия; skill правило без flipping контрол; регресия
+в suites. **Stop condition:** readiness — 2 паса на конфигурирания engine (Codex; Claude
+pre-pass преди pass 1 без вердикт); имплементация — fact-check + един Codex пас (code-class,
+операторска дума за квота) + max 2 корекционни рунда.
+
+**Гейтове:** думата за P9 е дадена (2026-08-31); Codex пас — дума; commit клик; tag `v0.1.2` и
+push — отделни думи; Furnissimo apply — отделна сесия.
+
+## Completion records
+
+_(празно)_
