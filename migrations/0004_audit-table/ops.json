@@ -1,0 +1,43 @@
+{
+  "migration": "0004_audit-table",
+  "targetPluginVersion": "0.2.0",
+  "operations": [
+    {
+      "op": "add-config-key",
+      "path": "review.plan",
+      "default": { "passes": 2 },
+      "askOperator": false
+    },
+    {
+      "op": "add-config-key",
+      "path": "review.code",
+      "default": { "passes": 1 },
+      "askOperator": false
+    },
+    {
+      "op": "add-config-key",
+      "path": "review.docs",
+      "default": { "passes": 1 },
+      "askOperator": false
+    },
+    {
+      "op": "rerender-managed-region",
+      "file": ".claude/aiwf-native/roles.json",
+      "region": null,
+      "template": "templates/roles.json.tmpl"
+    },
+    {
+      "op": "rerender-managed-region",
+      "file": ".claude/agents/reviewer.md",
+      "region": null,
+      "template": "templates/agents/reviewer.md.tmpl",
+      "ifRecorded": true
+    },
+    {
+      "op": "note",
+      "id": "overrides-loop-shape",
+      "text": "Your overrides document's Loop shape section still says plan readiness has two passes; the contract is now `review.plan.passes` (`/pnp:roles`) - edit that line yourself, the document is yours",
+      "docRefs": ["docs/WORKFLOW.md"]
+    }
+  ]
+}

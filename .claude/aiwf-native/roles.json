@@ -1,5 +1,10 @@
 {
   "reviewer": { "engine": "codex", "model": "gpt-5.6-sol", "effort": "high" },
   "qa": { "engine": "codex", "model": "gpt-5.6-sol", "effort": "high" },
-  "qal": { "enabled": false, "engine": "codex", "model": "gpt-5.6-sol", "effort": "high" }
+  "qal": { "enabled": false, "engine": "codex", "model": "gpt-5.6-sol", "effort": "high" },
+  "review": {
+    "plan": { "passes": 2, "engine": "codex", "model": "gpt-5.6-sol", "effort": "high" },
+    "code": { "passes": 1, "engine": "codex", "model": "gpt-5.6-sol", "effort": "high" },
+    "docs": { "passes": 1, "engine": "codex", "model": "gpt-5.6-sol", "effort": "high" }
+  }
 }

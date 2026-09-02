@@ -19,6 +19,18 @@
   Each role resolves to an (engine, model, effort) triple. For `qal` the snapshot additionally
   carries the boolean `enabled` (see -AsJson below).
 
+  THE AUDIT TABLE (-Class) - a REVIEWER-ONLY extension, and everything else is byte-identical
+  Without -Class this script prints exactly what it always printed. With -Class plan|code|docs it
+  resolves the EFFECTIVE row of that review class from `review.<class>` in roles.json - the row the
+  renderer already resolved (own host, or the Reviewer's inherited whole) - and adds `passes`, the
+  number of paid passes that class gets on the ticket's standing word. -Class is valid ONLY with
+  -Role reviewer (any other role -> exit 2) and only for a known class (-> exit 2): a class silently
+  ignored on the wrong role would route a pass to a host nobody chose.
+  A roles.json that carries no `review.<class>` record was rendered before the table existed -> exit
+  2 naming `/pnp:update`, never a guessed row. A MISSING file keeps the factory fallback
+  (claude/opus/high) and adds the factory `passes` (plan 2, code 1, docs 1), exit 0: the fallback is
+  a broken installation running read-only-on-Claude, not a choice.
+
   FAIL SEMANTICS - exactly TWO paths:
     (a) the config file is MISSING -> return the hardcoded factory fallback `claude` / `opus` /
         effort `high` (exit 0), so the loop still runs read-only-on-Claude when the config is
@@ -51,11 +63,18 @@
 .PARAMETER Role
   The review role to resolve: `reviewer`, `qa`, or `qal`. Required.
 
+.PARAMETER Class
+  Optional, and only with -Role reviewer: the review class `plan`, `code` or `docs`. Resolves the
+  audit table's effective row for that class instead of the Reviewer role's own triple.
+
 .PARAMETER AsJson
   Emit compact JSON `{"role":..,"engine":..,"model":..,"effort":..}`. For `qal` the object also
   carries `"enabled":<bool>` - the operator gate from `roles.qal.enabled` (absent or non-boolean
-  -> false, fail-closed). The plain-text form stays `<engine> <model> <effort>` for every role;
-  `enabled` is part of the MACHINE contract (-AsJson), which is what the wrappers and skills read.
+  -> false, fail-closed). With -Class the object is
+  `{"role":"reviewer","class":..,"engine":..,"model":..,"effort":..,"passes":<int>}`. The plain-text
+  form is `<engine> <model> <effort>` for every role, and `<engine> <model> <effort> <passes>` -
+  four tokens - with -Class; `enabled` is part of the MACHINE contract (-AsJson), which is what the
+  wrappers and skills read.
 
 .PARAMETER RolesPath
   Path to the PROJECT's `.claude/aiwf-native/roles.json`. REQUIRED - the plugin has no project
@@ -65,20 +84,31 @@
 
 .EXAMPLE
   pwsh -NoProfile -File scripts/native/ps/aiwf-roles.ps1 -Role reviewer -RolesPath 'C:\repo\.claude\aiwf-native\roles.json' -AsJson
+
+.EXAMPLE
+  pwsh -NoProfile -File scripts/native/ps/aiwf-roles.ps1 -Role reviewer -Class docs -RolesPath 'C:\repo\.claude\aiwf-native\roles.json' -AsJson
+
+.EXAMPLE
+  pwsh -NoProfile -File scripts/native/ps/aiwf-roles.ps1 -Role reviewer -Class plan -RolesPath 'C:\repo\.claude\aiwf-native\roles.json'
 #>
 [CmdletBinding()]
 param(
   [Parameter(Mandatory)][string] $Role,
+  [string] $Class,
   [switch] $AsJson,
   [Parameter(Mandatory)][string] $RolesPath
 )
 
 Set-StrictMode -Version Latest
 
-$KnownRoles   = @('reviewer', 'qa', 'qal')
-$KnownEngines = @('claude', 'codex')
+$KnownRoles    = @('reviewer', 'qa', 'qal')
+$KnownEngines  = @('claude', 'codex')
+$KnownClasses  = @('plan', 'code', 'docs')
 # Factory fallback used ONLY when the config file is absent (never on a present-but-invalid file).
-$Fallback     = @{ engine = 'claude'; model = 'opus'; effort = 'high' }
+$Fallback      = @{ engine = 'claude'; model = 'opus'; effort = 'high' }
+# The factory pass counts that travel with that fallback - the schema's own defaults.
+$FactoryPasses = @{ plan = 2; code = 1; docs = 1 }
+$StaleTable    = 'roles.json predates the audit table - run /pnp:update'
 
 function Invoke-Fail([string] $Message) {
   [Console]::Error.WriteLine("aiwf-roles: $Message")
@@ -89,12 +119,32 @@ if ($KnownRoles -notcontains $Role) {
   Invoke-Fail "role '$Role' is not a valid role (expected one of: $($KnownRoles -join '|'))."
 }
 
+# -Class is judged on whether it was PASSED, not on whether it has content: `-Class ''` must fail
+# rather than degrade into the classless form, which is a different contract with a different output.
+$HasClass = $PSBoundParameters.ContainsKey('Class')
+if ($HasClass) {
+  if ($Role -ne 'reviewer') {
+    Invoke-Fail "-Class is a reviewer-only flag (the audit table's rows are review classes), but -Role is '$Role'."
+  }
+  if ($KnownClasses -notcontains $Class) {
+    Invoke-Fail "class '$Class' is not a review class (expected one of: $($KnownClasses -join '|'))."
+  }
+}
+
 $path = $RolesPath
 
 if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
-  # (a) missing file -> silent factory fallback (claude/opus/high; qal disabled).
-  $out = [pscustomobject]@{ role = $Role; engine = $Fallback.engine; model = $Fallback.model; effort = $Fallback.effort }
-  if ($Role -eq 'qal') { $out | Add-Member -NotePropertyName enabled -NotePropertyValue $false }
+  # (a) missing file -> silent factory fallback (claude/opus/high; qal disabled). With -Class the
+  # factory pass count travels with it, so the fallback is a complete row rather than a partial one.
+  if ($HasClass) {
+    $out = [pscustomobject]@{
+      role = $Role; class = $Class; engine = $Fallback.engine; model = $Fallback.model;
+      effort = $Fallback.effort; passes = [int] $FactoryPasses[$Class]
+    }
+  } else {
+    $out = [pscustomobject]@{ role = $Role; engine = $Fallback.engine; model = $Fallback.model; effort = $Fallback.effort }
+    if ($Role -eq 'qal') { $out | Add-Member -NotePropertyName enabled -NotePropertyValue $false }
+  }
 } else {
   # (b) present file: read EXACTLY ONCE, then resolve. ANY invalid-record condition (malformed JSON,
   # missing role, unknown/empty engine, empty model/effort) collapses into the single exit-2 path below.
@@ -106,6 +156,11 @@ if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
   $model   = $null
   $effort  = $null
   $enabled = $null
+  $passes  = $null
+  # $null = "the file carries no such record" (a roles.json rendered before the audit table), which
+  # is a DIFFERENT message from "the record is invalid" - one says run /pnp:update, the other says
+  # fix the file.
+  $classEntry = $null
   try {
     $cfg   = $raw | ConvertFrom-Json -ErrorAction Stop
     # STRICT SHAPE (see the header): an object root only - an array root would be member-enumerated
@@ -126,8 +181,35 @@ if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
       foreach ($p in $cfg.PSObject.Properties) {
         if ($p.Name -ceq $Role) { $entry = $p.Value; break }
       }
+      # The audit table lives beside the roles, under the same STRICT shape rules: `review` and the
+      # class key are both matched case-sensitively, and both must be real objects.
+      if ($HasClass) {
+        $reviewNode = $null
+        foreach ($p in $cfg.PSObject.Properties) {
+          if ($p.Name -ceq 'review') { $reviewNode = $p.Value; break }
+        }
+        if (($null -ne $reviewNode) -and ($reviewNode -is [System.Management.Automation.PSCustomObject])) {
+          foreach ($p in $reviewNode.PSObject.Properties) {
+            if ($p.Name -ceq $Class) { $classEntry = $p.Value; break }
+          }
+        }
+      }
     }
-    if ($null -ne $entry) {
+    if ($HasClass) {
+      # In class mode the ROW is the whole answer: the renderer already resolved "own host or the
+      # Reviewer's, inherited whole" into these four values, so nothing is composed here.
+      if (($null -ne $classEntry) -and ($classEntry -is [System.Management.Automation.PSCustomObject])) {
+        foreach ($p in $classEntry.PSObject.Properties) {
+          switch -CaseSensitive ($p.Name) {
+            'engine' { $engine = $p.Value }
+            'model'  { $model  = $p.Value }
+            'effort' { $effort = $p.Value }
+            'passes' { $passes = $p.Value }
+          }
+        }
+      }
+    }
+    elseif ($null -ne $entry) {
       # `switch -CaseSensitive` IS the case-sensitive key lookup: PowerShell's `$entry.engine` is
       # case-insensitive and would resolve an "Engine" key the bash channel never sees.
       # `enabled` is read LEAN and FAIL-CLOSED: it never opens a third failure path. Only a real
@@ -144,11 +226,21 @@ if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
       if ($Role -eq 'qal') { $enabled = ($enabledValue -is [bool]) -and $enabledValue }
     }
   } catch {
-    $engine  = $null
-    $model   = $null
-    $effort  = $null
-    $enabled = $null
+    $engine     = $null
+    $model      = $null
+    $effort     = $null
+    $enabled    = $null
+    $passes     = $null
+    $classEntry = $null
   }
+
+  # A roles.json with no record for this class was rendered before the audit table existed. That is
+  # not an invalid file and not a row to guess at - it is an installation one /pnp:update behind.
+  if ($HasClass -and (($null -eq $classEntry) -or -not ($classEntry -is [System.Management.Automation.PSCustomObject]))) {
+    Invoke-Fail "$StaleTable (no review.$Class record in '$path')."
+  }
+  $ClassInvalid = "review class '$Class' does not resolve to a valid (engine, model, effort) triple in '$path' " +
+    "(engine one of $($KnownEngines -join '|'); model and effort non-empty strings; passes an integer). Fix roles.json."
 
   # engine, model AND effort must each be actual, non-empty strings - a non-string type (number/bool/
   # object/array), null, or a whitespace value collapses into the single exit-2 path. `effort` is
@@ -158,16 +250,29 @@ if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
       ($KnownEngines -notcontains $engine) -or
       -not ($model -is [string]) -or [string]::IsNullOrWhiteSpace($model) -or
       -not ($effort -is [string]) -or [string]::IsNullOrWhiteSpace($effort)) {
+    if ($HasClass) { Invoke-Fail $ClassInvalid }
     Invoke-Fail ("role '$Role' does not resolve to a valid (engine, model, effort) triple in '$path' " +
       "(engine one of $($KnownEngines -join '|'); model and effort non-empty strings). Fix roles.json.")
   }
 
-  $out = [pscustomobject]@{ role = $Role; engine = [string] $engine; model = [string] $model; effort = [string] $effort }
-  if ($Role -eq 'qal') { $out | Add-Member -NotePropertyName enabled -NotePropertyValue ([bool] $enabled) }
+  if ($HasClass) {
+    # `passes` is a COUNT and is validated as one: a string "2" would print as a number in the plain
+    # form and read as a string in the JSON one, which is two different contracts from one file.
+    if (-not ($passes -is [int]) -and -not ($passes -is [long])) { Invoke-Fail $ClassInvalid }
+    $out = [pscustomobject]@{
+      role = $Role; class = $Class; engine = [string] $engine; model = [string] $model;
+      effort = [string] $effort; passes = [int] $passes
+    }
+  } else {
+    $out = [pscustomobject]@{ role = $Role; engine = [string] $engine; model = [string] $model; effort = [string] $effort }
+    if ($Role -eq 'qal') { $out | Add-Member -NotePropertyName enabled -NotePropertyValue ([bool] $enabled) }
+  }
 }
 
 if ($AsJson) {
   Write-Output ($out | ConvertTo-Json -Compress)
+} elseif ($HasClass) {
+  Write-Output ("{0} {1} {2} {3}" -f $out.engine, $out.model, $out.effort, $out.passes)
 } else {
   Write-Output ("{0} {1} {2}" -f $out.engine, $out.model, $out.effort)
 }

@@ -1288,6 +1288,68 @@ section('21 - a changed project root retires the owned rules rendered for the ol
     diffSnapshots(before, snapshot(newRoot)).join(', '));
 }
 
+section('22 - the audit table: a fresh install gets it without being asked, and /pnp:roles rolls it over');
+{
+  // THE FRESH-INSTALL PROOF. The interview gained no new question in 0.2.0 and the answers file
+  // below carries no `review.plan|code|docs` at all - the three rows arrive from the schema's own
+  // `default` through collectDefaults. If that ever stopped being true, every new installation would
+  // start with a config the renderer cannot render.
+  const p22 = project('audit-table');
+  const answers = baseAnswers();
+  check('the answers file carries NO review rows (the interview asks nothing about them)',
+    answers.review.plan === undefined && answers.review.code === undefined && answers.review.docs === undefined);
+  const r = install(p22, answers, ['--no-seeds']);
+  check('install exits 0', r.status === 0, why(r));
+  const cfg = readJson(at(p22, CONFIG_REL)) || {};
+  check('the config carries the factory table 2 / 1 / 1, from the schema defaults',
+    JSON.stringify((cfg.review || {}).plan) === '{"passes":2}'
+    && JSON.stringify((cfg.review || {}).code) === '{"passes":1}'
+    && JSON.stringify((cfg.review || {}).docs) === '{"passes":1}', JSON.stringify(cfg.review));
+  const roles = readJson(at(p22, ROLES_REL)) || {};
+  // Every row is INHERITED here, so the rendered row is the Reviewer's host whole - which is the
+  // whole point: nothing about who audits what changed when the table arrived.
+  const rv = cfg.roles.reviewer;
+  check('roles.json renders the EFFECTIVE row of each class (inherited = the Reviewer, whole)',
+    ['plan', 'code', 'docs'].every((cls) => {
+      const row = (roles.review || {})[cls];
+      return row && row.engine === rv.engine && row.model === rv.model && row.effort === rv.effort
+        && row.passes === cfg.review[cls].passes;
+    }), JSON.stringify(roles.review));
+
+  // The round trip, through the real /pnp:roles entrypoint an operator uses.
+  const roleCmd = (args) => {
+    const rr = spawnSync(process.execPath, [
+      path.join(PLUGIN_ROOT, 'scripts', 'setup', 'aiwf-roles.mjs'), ...args,
+      '--project-root', p22, '--plugin-root', PLUGIN_ROOT, '--no-selfcheck',
+    ], { encoding: 'utf8' });
+    return { status: rr.status, out: (rr.stdout || '') + (rr.stderr || '') };
+  };
+  // Moving the Reviewer to codex makes its Claude agent file stale, and deleting a file is a
+  // destructive step: the run must refuse first and say which file it wants to remove.
+  const a = roleCmd(['--set', 'reviewer.engine=codex', '--set', 'reviewer.model=codex-atom-2', '--set', 'reviewer.effort=high']);
+  check('claude -> codex without --confirm-remove-stale refuses (exit 1) and leaves the agent file alone',
+    a.status === 1 && exists(at(p22, '.claude/agents/reviewer.md')), `exit ${a.status}: ${a.out.trim().split('\n').pop()}`);
+  check('and it wrote nothing at all - the config still says claude',
+    readJson(at(p22, CONFIG_REL)).roles.reviewer.engine === 'claude',
+    JSON.stringify(readJson(at(p22, CONFIG_REL)).roles.reviewer));
+  const b = roleCmd(['--set', 'reviewer.engine=codex', '--set', 'reviewer.model=codex-atom-2', '--set', 'reviewer.effort=high', '--confirm-remove-stale']);
+  check('with the flag it goes through: exit 0, the agent file is gone, roles.json follows',
+    b.status === 0 && !exists(at(p22, '.claude/agents/reviewer.md'))
+    && (readJson(at(p22, ROLES_REL)) || {}).reviewer.engine === 'codex', b.out.trim().slice(-200));
+  check('and the inherited rows followed the Reviewer to codex without being touched themselves',
+    ['plan', 'code', 'docs'].every((cls) => (readJson(at(p22, ROLES_REL)).review || {})[cls].engine === 'codex')
+    && JSON.stringify(readJson(at(p22, CONFIG_REL)).review.docs) === '{"passes":1}',
+    JSON.stringify(readJson(at(p22, ROLES_REL)).review));
+  const c = roleCmd(['--set', 'reviewer.engine=claude']);
+  check('and back to claude: the model defaults to the top tier and the agent file is re-created',
+    c.status === 0 && readJson(at(p22, CONFIG_REL)).roles.reviewer.model === 'fable'
+    && exists(at(p22, '.claude/agents/reviewer.md'))
+    && /^model: fable$/m.test(read(at(p22, '.claude/agents/reviewer.md')) || ''), c.out.trim().slice(-200));
+  const selfcheck = spawnSync(process.execPath, [SELFCHECK, '--plugin-root', PLUGIN_ROOT, '--project-fixture', p22], { encoding: 'utf8' });
+  check('the self-check is green on the project after the whole round trip',
+    selfcheck.status === 0, (selfcheck.stdout || '').split('\n').filter((l) => l.includes('[FAIL]')).slice(0, 3).join(' | ').slice(0, 240));
+}
+
 // ---------------------------------------------------------------------------
 try { fs.rmSync(tmpRoot, { recursive: true, force: true, maxRetries: 3 }); } catch { /* best-effort */ }
 console.log(`\nchecks: ${checks}, failures: ${failures}`);

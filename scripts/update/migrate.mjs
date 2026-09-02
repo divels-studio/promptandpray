@@ -542,6 +542,19 @@ function planRerender(ctx, op, addressOf) {
   const previous = ctx.config._aiwf.managedRegions[key];
 
   if (!isPlainObject(previous)) {
+    // `ifRecorded: true` says this artifact exists on SOME installations only - `.claude/agents/
+    // reviewer.md` is rendered for a claude-hosted host and does not exist at all on a
+    // codex-configured project. Skipping it is not a relaxation of the invariant below: there is
+    // still no adoption, no write and no bookkeeping entry - the operation simply has no subject
+    // here, and it says so. Without the field the throw stands, which is what makes the field a
+    // deliberate statement by the migration author rather than a default.
+    if (op.ifRecorded === true) {
+      return {
+        op, mode: 'none', target: null, key, preHash: null, postHash: null,
+        content: null, resolution: null, bookkeeping: null,
+        summary: `${key}: not on this installation (no record) - skipped`,
+      };
+    }
     throw new UpdateError(
       `invariant violated: "${key}" is not recorded in _aiwf.managedRegions, so this update has no idea what the project ` +
       'last accepted there. An update never adopts a file it did not write - that is /pnp:setup\'s '
@@ -883,6 +896,15 @@ function flipWithoutStage(ctx, migration, opIndex, op, journal) {
   if (op.op === 'rerender-managed-region') {
     const key = op.region ? `${op.file}#${op.region}` : op.file;
     const previous = ctx.config._aiwf.managedRegions[key] || {};
+    // AN `ifRecorded` OPERATION WITH NO RECORD WAS SKIPPED, AND IT STAYS SKIPPED - decided HERE,
+    // before anything on disk is read, and NOT on whether a file happens to exist at that path.
+    // Reading first was a silent adoption: on an installation that renders no artifact there, a
+    // FOREIGN file someone else put at that path would be hashed into a fresh `local`/`upstream`
+    // pair with `override: false`, i.e. the update would take ownership of a file it never wrote -
+    // the one thing this engine promises it never does - and the next payload change would then
+    // overwrite it without a dialog. "No record" is the whole answer: no read, no adoption, no
+    // bookkeeping, whatever is or is not on disk.
+    if (op.ifRecorded === true && !isPlainObject(ctx.config._aiwf.managedRegions[key])) return null;
     // The artifact is hashed from the OPERATION rather than from journal.target: the operation is
     // the authority on which file and which region this record is about, and this path is reached
     // exactly when the journal's own account of it (the stage) is missing.
@@ -1094,7 +1116,8 @@ export function assembleChanges({ from, to, pending, migrations, managedRegions 
         // (the operator's own content stands - keep-mine and merge alike).
         const key = op.region ? `${op.file}#${op.region}` : op.file;
         const record = managedRegions[key];
-        const label = !isPlainObject(record) ? null
+        const label = !isPlainObject(record)
+          ? (op.ifRecorded === true ? 'not on this installation - skipped' : null)
           : record.override === true ? 'held (your version kept)' : 'payload-current';
         lines.push(`- \`rerender-managed-region\` ${key}${label ? ` - ${label}` : ''}`);
       }

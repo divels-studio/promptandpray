@@ -35,7 +35,7 @@ operation types and their exact field sets:
 | op | fields |
 |---|---|
 | `add-config-key` | `path` (dot-path in aiwf.config.json), `default`, `askOperator`, `question` (required exactly when `askOperator` is true) |
-| `rerender-managed-region` | `file` (project-relative), `region` (marker id, or `null` for a whole-file managed artifact), `template` (payload ref, optionally `#region`) |
+| `rerender-managed-region` | `file` (project-relative), `region` (marker id, or `null` for a whole-file managed artifact), `template` (payload ref, optionally `#region`), `ifRecorded` (optional boolean) |
 | `reconcile-ask-ruleset` | `ruleset` (payload ref to the new desired set) |
 | `note` | `id`, `text`, `docRefs` (list) |
 
@@ -43,6 +43,15 @@ Unknown op types and unknown fields are rejected. `file` paths are project-relat
 form and no `..`; `template`/`ruleset` references are payload-relative under `templates/` and must
 exist. Everything above is enforced by `scripts/update/validate-payload.mjs`, which BOTH the runner
 and setup call before their first write.
+
+**`ifRecorded: true`** is for an artifact that exists on SOME installations only - the clear case
+being `.claude/agents/reviewer.md`, which is rendered for a claude-hosted host and does not exist at
+all on a codex-configured project. Without the field, re-rendering an artifact that carries no
+bookkeeping entry THROWS, and that is the invariant, not a bug: an update never adopts a file it did
+not write. With the field, such an artifact is reported as
+`<key>: not on this installation (no record) - skipped` and the migration continues - no adoption,
+no write, no new bookkeeping entry. Use it only where the artifact's absence is a legitimate
+configuration, never to paper over a missing record you did not expect.
 
 Operations apply in array order and stop on the first unresolved conflict; the write-ahead journal
 in `_aiwf.migrationJournal` makes the run resumable from exactly where it stopped.

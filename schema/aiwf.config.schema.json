@@ -352,6 +352,7 @@
 
     "review": {
       "type": "object",
+      "$comment": "THE AUDIT TABLE. `plan`, `code` and `docs` are the three review classes; each row says how many paid passes that class gets and, optionally, which host runs them. A row with no host INHERITS the Reviewer role (roles.reviewer) whole - engine, model and effort together - so no field-by-field inheritance can ever compose an impossible pair like claude/<a codex model id>. THE THREE ROWS ARE NOT IN `required`, DELIBERATELY: a migration adds them ONE add-config-key at a time and scripts/update/migrate.mjs validates the whole config after EACH operation, so a `required` triple would make the intermediate state (plan added, code and docs not yet) invalid and abort the very migration that installs the table. Their `default` is what a fresh install reads - collectDefaults walks `properties`/`default` and never looks at `required` - and \"every installation carries all three rows, each in one of the three legal shapes\" is asserted by the self-check's `review-row-shape`, with its negative controls.",
       "additionalProperties": false,
       "required": ["productBoundaryChecks"],
       "properties": {
@@ -360,6 +361,62 @@
           "default": [],
           "description": "Free-text lines rendered into the reviewer agent (and the Writer's operating rules). This is where a project's product-boundary and tenancy clauses live - never in the payload. Empty is a valid answer.",
           "items": { "type": "string", "minLength": 1 }
+        },
+        "plan": {
+          "type": "object",
+          "description": "Plan readiness. `passes` is how many readiness passes run on the ticket's standing word; one MORE is always available with the operator's explicit word, so passes+1 is the hard maximum. 0 means no readiness pass at all (the fact-check gate still runs - it is not configurable).",
+          "additionalProperties": false,
+          "required": ["passes"],
+          "properties": {
+            "passes": {
+              "type": "integer",
+              "enum": [0, 1, 2, 3],
+              "default": 2,
+              "description": "Factory default 2. Read by collectDefaults, so a fresh install receives the whole table without the interview asking a single new question."
+            },
+            "engine": { "type": "string", "enum": ["claude", "codex"], "description": "Optional. Present = this row has its own host and does NOT inherit the Reviewer's. Absent = inherited, and then `model`/`effort` must be absent too (there is nothing to pair them with)." },
+            "model": { "type": "string", "minLength": 1, "description": "Required whenever `engine` is present. engine=claude: a TIER ALIAS only (the conditional below), because a claude-hosted row is dispatched through the Agent tool's `model` override. engine=codex: any non-empty engine atom." },
+            "effort": { "type": "string", "enum": ["low", "medium", "high"], "description": "A CLOSED set here, deliberately unlike roles.*.effort, which is a free string. The difference is not an inconsistency: roles.*.effort is passed straight to whichever engine hosts that role, and pinning an enum there would reject vocabulary the external engine owns, whereas a review ROW is a shorthand the operator types at /pnp:roles and its approved form is exactly low|medium|high - a typo there would otherwise be discovered as a paid pass rejected by the engine at call time. Consequence, and it is a loud one rather than a silent coercion: `/pnp:roles --set <row>.engine=codex` copies the Reviewer's effort into the row, so a Reviewer whose own effort is outside this set makes that copy fail schema validation and the run refuses with exit 1. Only meaningful on a CODEX row, where the wrapper passes it as `-c model_reasoning_effort=<value>`. A claude row shares the ONE rendered reviewer agent file, whose frontmatter effort is roles.reviewer.effort - the Agent tool has no per-invocation effort - so `/pnp:roles --set <row>.effort=...` refuses on a claude row (exit 1). That refusal is not expressible here without `not`, which this project's schema interpreter does not implement; the self-check assertion `review-row-shape` is the second half of the gate." }
+          },
+          "allOf": [
+            { "$comment": "a host is engine+model together - an engine with no model would resolve to nothing.", "if": { "required": ["engine"] }, "then": { "required": ["model"] } },
+            { "$comment": "a codex row carries its own effort: the wrapper hands it to the external engine as an argv atom.", "if": { "required": ["engine"], "properties": { "engine": { "const": "codex" } } }, "then": { "required": ["model", "effort"] } },
+            { "$comment": "the tier-alias conditional, identical to roles.reviewer's.", "if": { "required": ["engine"], "properties": { "engine": { "const": "claude" } } }, "then": { "properties": { "model": { "enum": ["fable", "opus", "sonnet", "haiku"] } } } }
+          ]
+        },
+        "code": {
+          "type": "object",
+          "description": "R2/R3 implementation diffs. 1 = one Reviewer pass, 2 = a second full pass after the first returns `pass`, 0 = no auditor (the COO reviews first-hand and the fact-check gate still runs). Correction rounds stay capped by loop.correctionRoundsCap.",
+          "additionalProperties": false,
+          "required": ["passes"],
+          "properties": {
+            "passes": { "type": "integer", "enum": [0, 1, 2], "default": 1, "description": "Factory default 1." },
+            "engine": { "type": "string", "enum": ["claude", "codex"], "description": "Optional - see review.plan.engine." },
+            "model": { "type": "string", "minLength": 1, "description": "Required whenever `engine` is present - see review.plan.model." },
+            "effort": { "type": "string", "enum": ["low", "medium", "high"], "description": "Codex rows only in practice, and a CLOSED set - see review.plan.effort for why this differs from roles.*.effort." }
+          },
+          "allOf": [
+            { "if": { "required": ["engine"] }, "then": { "required": ["model"] } },
+            { "if": { "required": ["engine"], "properties": { "engine": { "const": "codex" } } }, "then": { "required": ["model", "effort"] } },
+            { "if": { "required": ["engine"], "properties": { "engine": { "const": "claude" } } }, "then": { "properties": { "model": { "enum": ["fable", "opus", "sonnet", "haiku"] } } } }
+          ]
+        },
+        "docs": {
+          "type": "object",
+          "description": "Documentation-class R2 diffs. Same 0/1/2 vocabulary as `code`. The factory default sends docs to the SAME auditor as code - \"a docs ticket goes to a Claude host\" is no longer a rule, it is a value you can see with /pnp:roles and change.",
+          "additionalProperties": false,
+          "required": ["passes"],
+          "properties": {
+            "passes": { "type": "integer", "enum": [0, 1, 2], "default": 1, "description": "Factory default 1." },
+            "engine": { "type": "string", "enum": ["claude", "codex"], "description": "Optional - see review.plan.engine." },
+            "model": { "type": "string", "minLength": 1, "description": "Required whenever `engine` is present - see review.plan.model." },
+            "effort": { "type": "string", "enum": ["low", "medium", "high"], "description": "Codex rows only in practice, and a CLOSED set - see review.plan.effort for why this differs from roles.*.effort." }
+          },
+          "allOf": [
+            { "if": { "required": ["engine"] }, "then": { "required": ["model"] } },
+            { "if": { "required": ["engine"], "properties": { "engine": { "const": "codex" } } }, "then": { "required": ["model", "effort"] } },
+            { "if": { "required": ["engine"], "properties": { "engine": { "const": "claude" } } }, "then": { "properties": { "model": { "enum": ["fable", "opus", "sonnet", "haiku"] } } } }
+          ]
         }
       }
     }

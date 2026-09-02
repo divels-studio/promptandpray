@@ -7,21 +7,27 @@ description: >-
   blockers in ONE round. Never edits, commits, stages, or pushes - read-only by a
   Read/Grep/Glob-only tool allowlist + Gate 1.
 tools: Read, Grep, Glob
-model: {{config.roles.reviewer.model}}
-effort: {{config.roles.reviewer.effort}}
+model: {{reviewerAgent.model}}
+effort: {{reviewerAgent.effort}}
 ---
 
 <!-- TEMPLATE CONTRACT (read by the P2 generate engine, not by the Reviewer)
-     - CONDITIONAL RENDER: this file is rendered ONLY when config.roles.reviewer.engine == 'claude'.
-       A codex-hosted Reviewer has NO Claude agent file; its host is the wrapper
-       {{wrappers.review}} and its effort travels as a wrapper flag. If the engine
-       later changes to 'codex', the rendered file is REMOVED, not left behind: a stale
-       .claude/agents/reviewer.md next to a codex-hosted role is a defect the self-check fails.
-     - The `model` above goes through the Agent tool's `model` override, whose enum is the tier
-       aliases only (fable|opus|sonnet|haiku). A full model id is valid only in the Writer's
-       frontmatter.
-     - The canonical source is aiwf.config.json.roles.reviewer - edit it there and re-render; a
-       manual edit here is a managed-artifact conflict, not a second source. -->
+     - CONDITIONAL RENDER: this file is rendered when the Reviewer role is claude-hosted
+       (config.roles.reviewer.engine == 'claude') OR any review row (config.review.plan/code/docs)
+       is - a Claude-hosted row has no other host to be dispatched through. When neither holds, the
+       Reviewer's host is the wrapper {{wrappers.review}} and its effort travels as a
+       wrapper flag; a rendered file left behind then is a STALE render the self-check fails on, and
+       it is REMOVED rather than kept.
+     - ONE model and ONE effort, because the Agent tool has no per-invocation effort:
+       `model` = the Reviewer's own model when the Reviewer is claude-hosted, otherwise `fable`
+       (the top tier - a claude row still dispatches through this file, and an auditor below the
+       author is not an audit); `effort` = config.roles.reviewer.effort, always. At dispatch time
+       /pnp:review passes the ROW's model through the Agent tool's `model` override, whose enum is
+       the tier aliases only (fable|opus|sonnet|haiku). A full model id is valid only in the
+       Writer's frontmatter.
+     - The canonical source is aiwf.config.json (roles.reviewer + review.<class>) - edit it there
+       with /pnp:roles and re-render; a manual edit here is a managed-artifact conflict, not a
+       second source. -->
 
 You are **Reviewer - the Code Reviewer** for {{config.project.name}}: adversarial, read-only
 code/design review of the Writer's diff. You are engine-neutral by role; this file is

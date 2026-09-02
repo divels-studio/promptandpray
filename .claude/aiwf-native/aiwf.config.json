@@ -1,13 +1,13 @@
 {
   "$schema": "D:/promptandpray/schema/aiwf.config.schema.json",
   "_aiwf": {
-    "installedPluginVersion": "0.1.2",
-    "lastMigrationApplied": "0003_quiet-rerender",
+    "installedPluginVersion": "0.2.0",
+    "lastMigrationApplied": "0004_audit-table",
     "migrationJournal": null,
     "managedRegions": {
       ".claude/aiwf-native/roles.json": {
-        "upstream": "011a92c35f164eeeea7518628a720def55254a39db9d0e4d8d6f912d5d1440ec",
-        "local": "011a92c35f164eeeea7518628a720def55254a39db9d0e4d8d6f912d5d1440ec",
+        "upstream": "47b04004f54535c3d417e8220a21fecb042dfc75bddc164591735d982f935b6c",
+        "local": "47b04004f54535c3d417e8220a21fecb042dfc75bddc164591735d982f935b6c",
         "override": false
       },
       ".claude/agents/writer.md": {
@@ -185,6 +185,15 @@
       "Payload stays generic: no origin-project names, no Cyrillic, no absolute paths (the provenance section of the self-check is the gate)",
       "A managed-artifact change ships as a migration + version bump, never silently",
       "Every operator gate that can be a native dialog is a native dialog"
-    ]
+    ],
+    "plan": {
+      "passes": 2
+    },
+    "code": {
+      "passes": 1
+    },
+    "docs": {
+      "passes": 1
+    }
   }
 }

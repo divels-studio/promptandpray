@@ -48,6 +48,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { UpdateError, resolveArtifact, runUpdate } from './migrate.mjs';
+import { sha256 } from '../setup/generate.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PLUGIN_ROOT = path.resolve(HERE, '..', '..');
@@ -1401,6 +1402,178 @@ section('12 - the self-check is the update\'s own last step, and a red one is ne
     `${bk.installedPluginVersion} / ${bk.lastMigrationApplied}`);
   check('and the CHANGES report is on disk too', exists(at(p, 'CHANGES_0.1.0-to-0.2.0.md')));
   check('the operator\'s hand edit was never overwritten', (read(at(p, ROLES_REL)) || '').includes('"effort": "low"'));
+}
+
+// ---------------------------------------------------------------------------
+section('13 - the audit table migration: three silent config keys, a quiet re-render, and an artifact that is not on this installation');
+{
+  // The REAL operations of the shipped 0004, replayed as a fixture migration so this suite keeps
+  // its own manifest numbering. Reading them from the payload rather than restating them is the
+  // point: a migration whose ops drift from what this asserts would pass a copy of itself.
+  const realOps = readJson(path.join(PLUGIN_ROOT, 'migrations', '0004_audit-table', 'ops.json'));
+  check('the shipped 0004 is readable and carries six operations',
+    !!realOps && Array.isArray(realOps.operations) && realOps.operations.length === 6,
+    realOps ? `${(realOps.operations || []).length} ops` : 'unreadable');
+
+  const payload = makePayload('audit', { version: '0.2.0', migrations: [{ id: '0002_audit', version: '0.2.0', ops: realOps.operations }] });
+
+  /** A project as 0.1.2 left it: no review rows in the config, no review block in roles.json. */
+  function preTable(projectDir) {
+    const cfgFile = at(projectDir, CONFIG_REL);
+    const cfg = readJson(cfgFile);
+    delete cfg.review.plan; delete cfg.review.code; delete cfg.review.docs;
+    const roles = readJson(at(projectDir, ROLES_REL));
+    delete roles.review;
+    const rolesText = JSON.stringify(roles, null, 2) + '\n';
+    fs.writeFileSync(at(projectDir, ROLES_REL), rolesText, 'utf8');
+    const hash = sha256(rolesText);
+    cfg._aiwf.managedRegions['.claude/aiwf-native/roles.json'] = { upstream: hash, local: hash, override: false };
+    writeJson(cfgFile, cfg);
+  }
+
+  // --- a codex-hosted installation: reviewer.md does not exist here at all ---
+  {
+    const p = project('audit-codex');
+    check('install exits 0', install(p, {
+      answers: baseAnswers({
+        roles: {
+          writer: { model: 'claude-opus-5[1m]', effort: 'high' },
+          reviewer: { engine: 'codex', model: 'codex-atom-2', effort: 'high' },
+          qa: { engine: 'codex', model: 'codex-atom-2', effort: 'medium' },
+          qal: { enabled: false, engine: 'codex', model: 'unset', effort: 'high' },
+        },
+      }),
+    }).status === 0);
+    check('precondition: there is no reviewer agent file on a codex-configured project',
+      !exists(at(p, '.claude/agents/reviewer.md')));
+    preTable(p);
+
+    const dry = update(p, ['--dry-run'], { payload });
+    check('--dry-run exits 0 and needs no resolution file (nothing here asks a question)', dry.status === 0, why(dry));
+    check('it previews the three config keys', ['review.plan', 'review.code', 'review.docs']
+      .every((k) => dry.out.includes(`config key ${k} =`)), dry.out.trim().split('\n').slice(-8).join(' | ').slice(0, 300));
+    check('it previews the QUIET re-render of roles.json (the operator never edited it)',
+      dry.out.includes('.claude/aiwf-native/roles.json: the payload version applied (you had not edited it)'),
+      dry.out.trim().split('\n').slice(-6).join(' | ').slice(0, 300));
+    check('it previews the reviewer agent as NOT ON THIS INSTALLATION rather than aborting',
+      dry.out.includes('.claude/agents/reviewer.md: not on this installation (no record) - skipped'),
+      dry.out.trim().split('\n').slice(-6).join(' | ').slice(0, 300));
+    check('and it previews the note about the overrides document',
+      dry.out.includes('note overrides-loop-shape'), dry.out.trim().split('\n').slice(-4).join(' | ').slice(0, 200));
+
+    const a = update(p, ['--apply'], { payload });
+    check('--apply exits 0 with NO dialog and no resolution file at all', a.status === 0, why(a));
+    const cfg = readJson(at(p, CONFIG_REL));
+    check('the three rows are in the config with the factory 2 / 1 / 1',
+      JSON.stringify(cfg.review.plan) === '{"passes":2}' && JSON.stringify(cfg.review.code) === '{"passes":1}'
+      && JSON.stringify(cfg.review.docs) === '{"passes":1}', JSON.stringify(cfg.review));
+    const roles = readJson(at(p, ROLES_REL));
+    check('roles.json now carries the effective rows (inherited = the codex Reviewer, whole)',
+      ['plan', 'code', 'docs'].every((cls) => (roles.review || {})[cls]
+        && roles.review[cls].engine === 'codex' && roles.review[cls].model === 'codex-atom-2'),
+      JSON.stringify(roles.review));
+    check('no reviewer agent file was invented for an installation that has none',
+      !exists(at(p, '.claude/agents/reviewer.md'))
+      && !Object.prototype.hasOwnProperty.call(bookkeeping(p).managedRegions, '.claude/agents/reviewer.md'));
+    const changes = read(at(p, 'CHANGES_0.1.0-to-0.2.0.md')) || '';
+    check('the CHANGES report says the skipped artifact is not on this installation',
+      changes.includes('.claude/agents/reviewer.md - not on this installation - skipped'),
+      changes.split('\n').filter((l) => l.includes('reviewer.md')).join(' | ').slice(0, 200));
+    check('and it carries the note about the overrides document', changes.includes('overrides-loop-shape'));
+  }
+
+  // --- a claude-hosted installation: the same migration re-renders the agent -
+  {
+    const p = project('audit-claude');
+    check('install exits 0 (claude-hosted Reviewer)', install(p).status === 0);
+    check('precondition: the reviewer agent file IS here', exists(at(p, '.claude/agents/reviewer.md')));
+    preTable(p);
+    const a = update(p, ['--apply'], { payload });
+    check('--apply exits 0 with no dialog here either', a.status === 0, why(a));
+    check('and the reviewer agent was re-rendered rather than skipped',
+      a.out.includes('.claude/agents/reviewer.md: the payload version applied (you had not edited it)')
+      || a.out.includes('.claude/agents/reviewer.md is already current'), why(a));
+    check('the agent file is still there and still stamped', exists(at(p, '.claude/agents/reviewer.md'))
+      && !!bookkeeping(p).managedRegions['.claude/agents/reviewer.md']);
+  }
+
+  // --- the ifRecorded pair, the smallest possible statement of the rule ------
+  {
+    const opFor = (extra) => [{
+      op: 'rerender-managed-region', file: '.claude/agents/reviewer.md', region: null,
+      template: 'templates/agents/reviewer.md.tmpl', ...extra,
+    }];
+    const answers = baseAnswers({
+      roles: {
+        writer: { model: 'claude-opus-5[1m]', effort: 'high' },
+        reviewer: { engine: 'codex', model: 'codex-atom-2', effort: 'high' },
+        qa: { engine: 'codex', model: 'codex-atom-2', effort: 'medium' },
+        qal: { enabled: false, engine: 'codex', model: 'unset', effort: 'high' },
+      },
+    });
+    const withField = makePayload('ifrec-yes', { version: '0.2.0', migrations: [{ id: '0002_ifrec', version: '0.2.0', ops: opFor({ ifRecorded: true }) }] });
+    const withoutField = makePayload('ifrec-no', { version: '0.2.0', migrations: [{ id: '0002_ifrec', version: '0.2.0', ops: opFor({}) }] });
+
+    const p1 = project('ifrec-yes');
+    install(p1, { answers });
+    const a1 = update(p1, ['--apply'], { payload: withField });
+    check('ifRecorded:true over an unrecorded artifact -> skipped, exit 0',
+      a1.status === 0 && a1.out.includes('not on this installation (no record) - skipped'), why(a1));
+
+    const p2 = project('ifrec-no');
+    install(p2, { answers });
+    const a2 = update(p2, ['--apply'], { payload: withoutField });
+    check('the SAME operation without the field -> the invariant still throws, exit 1',
+      a2.status === 1 && a2.out.includes('is not recorded in _aiwf.managedRegions'), why(a2));
+    check('and that refusal wrote nothing: the project is still at the baseline version',
+      bookkeeping(p2).installedPluginVersion === BASELINE.targetPluginVersion,
+      String(bookkeeping(p2).installedPluginVersion));
+
+    // RECOVERY, and the trap in it: the operation was SKIPPED, so it journalled a null target and
+    // staged nothing of substance. If its stage is then lost AND somebody's file turns up at the
+    // optional path, the resume must NOT hash that file into a fresh local/upstream pair - that
+    // would be this engine adopting a file it never wrote, and the next payload change would then
+    // overwrite it without a dialog. "No record" is the whole answer, whatever is on disk.
+    const p3 = project('ifrec-foreign');
+    install(p3, { answers });
+    const crashed = update(p3, ['--apply'], { payload: withField, env: { PNP_UPDATE_CRASH_AT: '0002_ifrec/0/after-journal-prepared' } });
+    check('crash injection: killed with the skipped operation journalled as prepared -> exit 86',
+      crashed.status === 86 && bookkeeping(p3).migrationJournal
+      && bookkeeping(p3).migrationJournal.state === 'prepared' && bookkeeping(p3).migrationJournal.target === null,
+      `exit ${crashed.status}: journal=${JSON.stringify(bookkeeping(p3).migrationJournal)}`);
+    // The stage is destroyed and a FOREIGN file is planted at the optional path.
+    fs.rmSync(at(p3, STAGE_REL), { recursive: true, force: true });
+    const FOREIGN = '---\nname: reviewer\n---\nSomebody else put this here. It is not ours.\n';
+    fs.mkdirSync(path.dirname(at(p3, '.claude/agents/reviewer.md')), { recursive: true });
+    fs.writeFileSync(at(p3, '.claude/agents/reviewer.md'), FOREIGN, 'utf8');
+    const resumed = update(p3, ['--apply'], { payload: withField });
+    check('the resume completes with the stage gone AND a foreign file at the optional path, exit 0',
+      resumed.status === 0 && bookkeeping(p3).installedPluginVersion === '0.2.0'
+      && bookkeeping(p3).migrationJournal === null, why(resumed));
+    check('the foreign file was NOT touched (byte for byte)',
+      read(at(p3, '.claude/agents/reviewer.md')) === FOREIGN,
+      JSON.stringify(String(read(at(p3, '.claude/agents/reviewer.md'))).slice(0, 60)));
+    check('and NO bookkeeping entry was created for it - the update never adopts a file it did not write',
+      !Object.prototype.hasOwnProperty.call(bookkeeping(p3).managedRegions, '.claude/agents/reviewer.md'),
+      JSON.stringify(Object.keys(bookkeeping(p3).managedRegions)));
+  }
+
+  // --- --resolve after a row changes ----------------------------------------
+  {
+    const p = project('audit-resolve');
+    install(p, { answers: baseAnswers() });
+    // A hand edit inside roles.json is a conflict, and --resolve is the door: take-new brings the
+    // artifact back to what the config (audit table included) really says.
+    fs.writeFileSync(at(p, ROLES_REL), (read(at(p, ROLES_REL)) || '').replace('"passes": 1', '"passes": 7'), 'utf8');
+    const resolutions = resolutionFile('audit-row', { '.claude/aiwf-native/roles.json': { kind: 'conflict', resolution: 'take-new' } });
+    const r = update(p, ['--resolve', '.claude/aiwf-native/roles.json', '--resolution-file', resolutions]);
+    check('--resolve take-new re-renders roles.json from the config, exit 0', r.status === 0, why(r));
+    const roles = readJson(at(p, ROLES_REL));
+    check('and the rows are back to what the config says',
+      roles.review.code.passes === 1 && roles.review.docs.passes === 1, JSON.stringify(roles.review));
+    check('with the bookkeeping clean again',
+      bookkeeping(p).managedRegions['.claude/aiwf-native/roles.json'].override === false);
+  }
 }
 
 // ---------------------------------------------------------------------------

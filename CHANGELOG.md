@@ -4,6 +4,55 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.2.0] - 2026-09-02
+
+Who audits what stops being doctrine text and becomes a table in your config: three review classes
+(`plan`, `code`, `docs`), each with its own pass count and, if you want one, its own host. One
+command shows the whole picture and changes any of it without a re-interview.
+
+### Added
+
+- **The audit table (AUD-001)** - `review.plan`, `review.code` and `review.docs` in
+  `aiwf.config.json`, factory `2 / 1 / 1` passes. A row carries only `passes` and INHERITS the
+  Reviewer role whole (engine, model and effort together), or names its own host in one of exactly
+  two shapes: `{ passes, engine: "claude", model }` or
+  `{ passes, engine: "codex", model, effort }`. There is no field-by-field inheritance, so no
+  configuration can compose a Claude tier with a Codex model id. The effective rows are rendered
+  into `.claude/aiwf-native/roles.json`.
+- **`/pnp:roles` (AUD-001)** - `scripts/setup/aiwf-roles.mjs`: `--show` prints the table (every
+  role, every class, the fact-check gate and R1); `--set <target>.<field>=<value>` and
+  `--reset <plan|code|docs>` change it and re-render `roles.json` and the agent files. Two phases:
+  everything is decided and validated before a single byte is written, so a refusal leaves the
+  project exactly as it was. It is plan-before-write, not a transaction - an interrupted run is
+  finished by re-running the same command. Exit 0 written, 1 refused, 2 could not start.
+  `/pnp:mission`, `/pnp:work` and `/pnp:setup` print the table in their reports.
+- **The role resolver takes an optional review class (AUD-001)** - `-Class plan|code|docs`
+  (`--class` on the bash channel), reviewer-only, in both channels: JSON gains `class` and
+  `passes`, the plain form prints four tokens. Without the flag the output is byte-identical to
+  0.1.2. The Codex review wrappers take the same flag and use the row's model and effort.
+- **`ifRecorded` on `rerender-managed-region` (AUD-001)** - a migration can now re-render an
+  artifact that exists on SOME installations only (`.claude/agents/reviewer.md` is rendered for a
+  claude-hosted host and does not exist at all on a codex-configured project). Without a record it
+  is reported as `not on this installation (no record) - skipped` instead of aborting the run. No
+  adoption, no write, no new bookkeeping entry.
+
+### Changed
+
+- **A Claude auditor is never below the author (AUD-001)** - one rendered `reviewer` agent file per
+  installation, whose `model` is the Reviewer's own when the Reviewer is claude-hosted and `fable`
+  otherwise, and whose `effort` is always `roles.reviewer.effort` (the Agent tool has no
+  per-invocation effort, so a Claude row carries none of its own). The file is now rendered when
+  the Reviewer role OR any review row is claude-hosted. `/pnp:roles --show` marks a Claude auditor
+  below the top tier; QA is deliberately not marked - it compares artifacts against acceptance
+  criteria rather than auditing decisions.
+
+### Removed
+
+- **The ad-hoc `opus` reviewer for docs-class diffs (AUD-001)** - "a docs-class ticket goes to a
+  Claude host regardless of the configured engine" is no longer a rule with a hardcoded model. It
+  is `review.docs`, which starts out inheriting the same auditor as `review.code` and is one
+  `/pnp:roles --set` away from anything else.
+
 ## [0.1.2] - 2026-08-31
 
 The first consumer update (0.1.0 -> 0.1.1 on a real installation) produced two take-new dialogs for

@@ -49,7 +49,11 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
    internally, in English; do not dump it on the operator.
 5. **Report and STOP.** Report to the operator in `{{config.operator.language}}`, short: one line of
    state (branch / tree / anything in flight), the next ticket per the recorded execution order and
-   what it needs (gates, model, blockers). Then WAIT for the operator's word - dispatch never starts
+   what it needs (gates, model, blockers), and the **audit table** printed verbatim by
+   `node "${CLAUDE_PLUGIN_ROOT}/scripts/setup/aiwf-roles.mjs" --show --project-root "<root>"
+   --plugin-root "${CLAUDE_PLUGIN_ROOT}"` - who will audit this ticket, on which engine and with how
+   many passes, is part of the state, and `/pnp:roles` is how it changes. Then WAIT for the
+   operator's word - dispatch never starts
    on reconstruction alone. Data the operator supplies is INPUT for the ticket, never the order to
    execute it.
    **A NEWLY BORN ticket - one that is not in the PLAN's recorded execution order - is written into

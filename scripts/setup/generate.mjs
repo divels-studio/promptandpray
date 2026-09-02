@@ -290,7 +290,88 @@ export function templateContext(config, resolvedRoot) {
   // the string "null" written into a doctrine file.
   const rel = isPlainObject(config.paths) ? config.paths.overridesDoc : undefined;
   if (typeof rel === 'string') context.overridesDocPath = nativePath(config.os, `${resolvedRoot}/${rel}`);
+  // The AUDIT TABLE, resolved to EFFECTIVE rows. The template engine has variables and blocks and
+  // deliberately no conditionals, so "inherit the Reviewer or use your own host" is decided here and
+  // roles.json reads four flat values per class. Same reason the OS channel is computed rather than
+  // branched on in a template.
+  const rows = reviewRows(config);
+  if (rows) context.review = rows;
+  const agent = reviewerAgentFrontmatter(config);
+  if (agent) context.reviewerAgent = agent;
   return context;
+}
+
+// The three review classes, in the order /pnp:roles prints them. ONE definition: the schema, the
+// resolver contract, the renderer and the table all mean the same three words.
+export const REVIEW_CLASSES = ['plan', 'code', 'docs'];
+
+/**
+ * The EFFECTIVE row for one review class: `{ passes, engine, model, effort }`.
+ *
+ * A row that names no `engine` inherits the Reviewer role WHOLE - engine, model and effort together.
+ * There is no field-by-field inheritance on purpose: merging a row's `engine` with the Reviewer's
+ * `model` is exactly how a configuration composes `claude` with a Codex model id, which resolves to
+ * nothing and fails at dispatch time.
+ *
+ * A CLAUDE row carries no effort of its own (the schema admits one, the `/pnp:roles --set` gate and
+ * the `review-row-shape` assertion refuse it): every Claude-hosted review pass runs through the ONE
+ * rendered `reviewer` agent file, and the Agent tool has no per-invocation effort - so the effort
+ * that really applies is the frontmatter's, i.e. `roles.reviewer.effort`. Reporting the row's own
+ * value there would print a number nothing reads.
+ */
+export function effectiveReviewRow(config, className) {
+  const reviewer = isPlainObject(config.roles) ? config.roles.reviewer : null;
+  const row = isPlainObject(config.review) ? config.review[className] : null;
+  if (!isPlainObject(row) || !isPlainObject(reviewer)) return null;
+  if (typeof row.engine !== 'string') {
+    return { passes: row.passes, engine: reviewer.engine, model: reviewer.model, effort: reviewer.effort };
+  }
+  return {
+    passes: row.passes,
+    engine: row.engine,
+    model: row.model,
+    effort: row.engine === 'codex' ? row.effort : reviewer.effort,
+  };
+}
+
+/** All three effective rows, or null when this config predates the table (nothing to render). */
+export function reviewRows(config) {
+  const out = {};
+  for (const cls of REVIEW_CLASSES) {
+    const row = effectiveReviewRow(config, cls);
+    if (!row) return null;
+    out[cls] = row;
+  }
+  return out;
+}
+
+/**
+ * ONE Claude agent file per role, so `reviewer.md` carries ONE model and ONE effort:
+ *   model  = the Reviewer's own model when the Reviewer is claude-hosted, otherwise `fable` - the
+ *            top tier, because a claude-hosted ROW still dispatches through this file and an auditor
+ *            below the author is not an audit. `/pnp:review` passes the ROW's model as the Agent
+ *            tool's `model` override at dispatch time.
+ *   effort = roles.reviewer.effort, always. There is no per-invocation effort to override it with.
+ */
+export function reviewerAgentFrontmatter(config) {
+  const reviewer = isPlainObject(config.roles) ? config.roles.reviewer : null;
+  if (!isPlainObject(reviewer)) return null;
+  return {
+    model: reviewer.engine === 'claude' ? reviewer.model : 'fable',
+    effort: reviewer.effort,
+  };
+}
+
+/**
+ * Is `.claude/agents/reviewer.md` part of THIS configuration? True when the Reviewer role is
+ * claude-hosted, and also when any review row is - a Claude-hosted row has no other host to be
+ * dispatched through.
+ */
+export function reviewerAgentRendered(config) {
+  const reviewer = isPlainObject(config.roles) ? config.roles.reviewer : null;
+  if (isPlainObject(reviewer) && reviewer.engine === 'claude') return true;
+  const review = isPlainObject(config.review) ? config.review : {};
+  return REVIEW_CLASSES.some((cls) => isPlainObject(review[cls]) && review[cls].engine === 'claude');
 }
 
 // One separator for the whole path, chosen by the CHANNEL the installation is for - not by the
@@ -806,9 +887,12 @@ export function planInstall({
     renderTemplate(readTemplate(pluginRoot, 'agents', 'writer.md.tmpl'), context));
 
   const stale = [];
+  // reviewer.md is rendered for the Reviewer role OR for any claude-hosted review row (the row has
+  // no other host to be dispatched through); qa.md follows its own role alone.
+  const claudeHosted = { reviewer: reviewerAgentRendered(merged), qa: merged.roles.qa.engine === 'claude' };
   for (const role of ['reviewer', 'qa']) {
     const rel = path.join(AGENTS_DIR, `${role}.md`);
-    if (merged.roles[role].engine === 'claude') {
+    if (claudeHosted[role]) {
       addArtifact(toPosix(rel), rel, renderTemplate(readTemplate(pluginRoot, 'agents', `${role}.md.tmpl`), context));
       continue;
     }

@@ -1,5 +1,10 @@
 {
   "reviewer": { "engine": "{{config.roles.reviewer.engine}}", "model": "{{config.roles.reviewer.model}}", "effort": "{{config.roles.reviewer.effort}}" },
   "qa": { "engine": "{{config.roles.qa.engine}}", "model": "{{config.roles.qa.model}}", "effort": "{{config.roles.qa.effort}}" },
-  "qal": { "enabled": {{config.roles.qal.enabled}}, "engine": "{{config.roles.qal.engine}}", "model": "{{config.roles.qal.model}}", "effort": "{{config.roles.qal.effort}}" }
+  "qal": { "enabled": {{config.roles.qal.enabled}}, "engine": "{{config.roles.qal.engine}}", "model": "{{config.roles.qal.model}}", "effort": "{{config.roles.qal.effort}}" },
+  "review": {
+    "plan": { "passes": {{review.plan.passes}}, "engine": "{{review.plan.engine}}", "model": "{{review.plan.model}}", "effort": "{{review.plan.effort}}" },
+    "code": { "passes": {{review.code.passes}}, "engine": "{{review.code.engine}}", "model": "{{review.code.model}}", "effort": "{{review.code.effort}}" },
+    "docs": { "passes": {{review.docs.passes}}, "engine": "{{review.docs.engine}}", "model": "{{review.docs.model}}", "effort": "{{review.docs.effort}}" }
+  }
 }

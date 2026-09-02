@@ -15,8 +15,15 @@ explicit project root because the payload has no project of its own:
   rules are STRICT and identical in both channels - object root only (never an array, not even a
   single-element one) and case-SENSITIVE keys - so that no file resolves through a host-language
   accident in one channel and fails in the other.
+  An optional `-Class plan|code|docs` (`--class`) resolves the **audit table's** row for that review
+  class instead: reviewer-only (any other role is exit 2), unknown class is exit 2, and the snapshot
+  gains `class` and `passes` (the plain form prints four tokens, `<engine> <model> <effort>
+  <passes>`). A `roles.json` with no `review.<class>` record predates the table and is exit 2 naming
+  `/pnp:update`, never a guessed row; a MISSING file keeps the factory fallback and adds the factory
+  pass counts (2 / 1 / 1). Without the flag the output is byte-identical to what it always was.
 - `codex-review.*`, `codex-qa.*` - read-only Codex hosts; `-C` is the caller's project root, the
-  sandbox and approval flags are literals, the brief arrives on stdin.
+  sandbox and approval flags are literals, the brief arrives on stdin. `codex-review.*` also takes
+  the optional `-Class` / `--class`, hands it to the resolver and uses that row's model and effort.
 - `codex-qal.*` - the unsandboxed, operator-gated live-browser host; `-C` is always a unique
   throwaway scratch dir, never the repo. The project root is used only to find `roles.json`.
 

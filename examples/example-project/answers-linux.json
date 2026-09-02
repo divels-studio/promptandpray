@@ -13,7 +13,7 @@
   },
   "roles": {
     "writer": { "model": "claude-opus-5[1m]", "effort": "high" },
-    "reviewer": { "engine": "claude", "model": "opus", "effort": "high" },
+    "reviewer": { "engine": "claude", "model": "fable", "effort": "high" },
     "qa": { "engine": "claude", "model": "sonnet", "effort": "medium" },
     "qal": { "enabled": false, "engine": "codex", "model": "unset", "effort": "high" }
   },

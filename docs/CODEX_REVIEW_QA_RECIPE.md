@@ -114,6 +114,21 @@ Get-Content .\review-brief.txt -Raw | scripts\native\ps\codex-review.ps1 -Projec
 cat ./review-brief.txt | bash scripts/native/sh/codex-review.sh --project-root <root>
 ```
 
+**The review class.** `codex-review.*` takes an optional `-Class plan|code|docs` (`--class` on the
+bash channel) and passes it to the resolver, so the `-m` model and the `model_reasoning_effort`
+atom come from that row of the audit table (`review.<class>` in `roles.json`) instead of the
+Reviewer role's own triple. Without the flag the wrapper behaves exactly as it always did. A row
+that resolves to the `claude` engine makes the wrapper exit 2, the same way a claude-hosted
+Reviewer does - that pass belongs to the Claude Agent branch.
+
+```powershell
+Get-Content .\review-brief.txt -Raw | scripts\native\ps\codex-review.ps1 -ProjectRoot <root> -Class docs
+```
+
+```bash
+cat ./review-brief.txt | bash scripts/native/sh/codex-review.sh --project-root <root> --class docs
+```
+
 ## Two QA surfaces (why the split)
 
 The QA browser investigation (`docs/QA_BROWSER_INVESTIGATION.md`) proved a **Codex-launched browser

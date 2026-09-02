@@ -119,10 +119,16 @@ export const OP_SPECS = {
     types: { path: 'string', askOperator: 'boolean' },
   },
   'rerender-managed-region': {
+    // `ifRecorded: true` marks an artifact that exists on SOME installations only - the clearest
+    // case being `.claude/agents/reviewer.md`, which is rendered for a claude-hosted host and does
+    // not exist at all on a codex-configured project. Without the field a re-render of an
+    // unrecorded artifact THROWS (that is the invariant: an update never adopts a file it did not
+    // write), which would break the apply of every installation that legitimately does not have it.
+    // With it, such an artifact is reported as skipped and the migration continues.
     required: ['op', 'file', 'region', 'template'],
-    optional: [],
+    optional: ['ifRecorded'],
     conditional: () => [],
-    types: { file: 'string', template: 'string' },
+    types: { file: 'string', template: 'string', ifRecorded: 'boolean' },
   },
   'reconcile-ask-ruleset': {
     required: ['op', 'ruleset'],

@@ -20,11 +20,18 @@
 # (the /pnp:review skill, Step 0) resolves the project root and passes it in. It is the cwd Codex is
 # given (-C), and the project's roles.json is read from <projectRoot>/.claude/aiwf-native/roles.json.
 #
+# --class <plan|code|docs> is OPTIONAL: with it, the model and effort come from that row of the
+# audit table (review.<class> in roles.json) instead of the Reviewer role's own triple, which is
+# what /pnp:review passes on every invocation. Without it the wrapper behaves exactly as it did.
+#
 # EXAMPLE:
 #   cat .aiwf/review-brief.txt | bash scripts/native/sh/codex-review.sh --project-root /path/to/repo
+#   cat .aiwf/review-brief.txt | bash scripts/native/sh/codex-review.sh --project-root /repo --class docs
 set -euo pipefail
 
 PROJECT_ROOT=''
+CLASS=''
+HAS_CLASS=0
 
 fail() {
   printf 'codex-review: %s\n' "$1" >&2
@@ -36,6 +43,9 @@ while [ $# -gt 0 ]; do
     --project-root)
       [ $# -ge 2 ] || fail '--project-root needs a value.'
       PROJECT_ROOT="$2"; shift 2 ;;
+    --class)
+      [ $# -ge 2 ] || fail '--class needs a value (plan|code|docs).'
+      CLASS="$2"; HAS_CLASS=1; shift 2 ;;
     *)
       fail "unknown argument '$1' - the brief is delivered on STDIN, never on argv." ;;
   esac
@@ -43,17 +53,32 @@ done
 
 [ -n "$PROJECT_ROOT" ] || fail 'no --project-root <path>. The plugin payload has no project of its own: pass the resolved project root.'
 
-# Engine-neutral role resolution. This Codex wrapper only runs when the `reviewer` role is assigned
-# to the `codex` engine in the project's .claude/aiwf-native/roles.json. The MODEL comes from the
-# resolver (one argv atom); if the role is reassigned to Claude, the resolved engine != codex and
-# this wrapper exits 2 so /pnp:review routes to the Claude Agent branch instead. The read-only
-# guarantee is untouched: --sandbox / -C / -c approval_policy=never remain LITERALS.
+# Engine-neutral role resolution. This Codex wrapper only runs when the `reviewer` role - or, with
+# --class, the row of that review class - is assigned to the `codex` engine in the project's
+# .claude/aiwf-native/roles.json. The MODEL comes from the resolver (one argv atom); if the host is
+# Claude instead, the resolved engine != codex and this wrapper exits 2 so /pnp:review routes to the
+# Claude Agent branch. The read-only guarantee is untouched: --sandbox / -C /
+# -c approval_policy=never remain LITERALS.
+#
+# The two invocations are spelled out rather than assembled into an argv array on purpose: a
+# resolver call built from a variable is a call whose flags no longer read as flags, and the flags
+# of THIS call decide which engine gets paid.
+#
+# THE BRANCH IS ON WHETHER --class WAS PASSED (HAS_CLASS), NEVER ON ITS VALUE. `--class ''` must
+# FAIL, exactly as the resolver's own contract says - branching on the value instead let an
+# explicitly empty class fall through to the classless call and quietly review a docs-class diff on
+# the Reviewer's own host, which is the wrong engine, the wrong model and someone else's budget.
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROLES_PATH="$PROJECT_ROOT/.claude/aiwf-native/roles.json"
 
 snapshot=''
-snapshot="$(bash "$HERE/aiwf-roles.sh" --role reviewer --roles-path "$ROLES_PATH" --as-json)" \
-  || fail "aiwf role resolve failed for 'reviewer' (see resolver stderr above)."
+if [ "$HAS_CLASS" -eq 1 ]; then
+  snapshot="$(bash "$HERE/aiwf-roles.sh" --role reviewer --class "$CLASS" --roles-path "$ROLES_PATH" --as-json)" \
+    || fail "aiwf role resolve failed for review class '$CLASS' (see resolver stderr above)."
+else
+  snapshot="$(bash "$HERE/aiwf-roles.sh" --role reviewer --roles-path "$ROLES_PATH" --as-json)" \
+    || fail "aiwf role resolve failed for 'reviewer' (see resolver stderr above)."
+fi
 
 # The snapshot is JSON, so it is read by a real parser (same reasoning as the resolver: node is a
 # prerequisite of this plugin, jq is not, and a grep/sed reading would coerce shapes silently).
@@ -77,7 +102,9 @@ if ! {
 fi
 
 if [ "$ROLE_ENGINE" != 'codex' ]; then
-  fail "role 'reviewer' resolves to engine '$ROLE_ENGINE', not 'codex'; this Codex wrapper does not run - route through the Claude Agent branch of /pnp:review."
+  what="role 'reviewer'"
+  [ "$HAS_CLASS" -eq 0 ] || what="review class '$CLASS'"
+  fail "$what resolves to engine '$ROLE_ENGINE', not 'codex'; this Codex wrapper does not run - route through the Claude Agent branch of /pnp:review."
 fi
 
 # Locked flags - the proven read-only + user-config-loaded posture. Do not add

@@ -173,8 +173,9 @@ function findPwsh() {
 const PWSH = findPwsh();
 
 const RESOLVER = path.join(PLUGIN_ROOT, 'scripts', 'native', 'ps', 'aiwf-roles.ps1');
-function resolveRole(role, rolesPath) {
+function resolveRole(role, rolesPath, klass) {
   const args = ['-NoProfile', '-File', RESOLVER, '-Role', role, '-AsJson'];
+  if (klass !== undefined && klass !== null) args.push('-Class', klass);
   if (rolesPath !== undefined && rolesPath !== null) args.push('-RolesPath', rolesPath);
   const r = spawnSync(PWSH, args, { encoding: 'utf8' });
   let json = null;
@@ -205,8 +206,9 @@ function findBash() {
 const BASH = findBash();
 
 const SH_RESOLVER = path.join(PLUGIN_ROOT, 'scripts', 'native', 'sh', 'aiwf-roles.sh');
-function resolveRoleSh(role, rolesPath) {
+function resolveRoleSh(role, rolesPath, klass) {
   const args = [SH_RESOLVER, '--role', role, '--as-json'];
+  if (klass !== undefined && klass !== null) args.push('--class', klass);
   if (rolesPath !== undefined && rolesPath !== null) args.push('--roles-path', rolesPath);
   const r = spawnSync(BASH, args, { encoding: 'utf8' });
   let json = null;
@@ -224,6 +226,10 @@ function resolveRoleSh(role, rolesPath) {
 // the ownership model is genuinely executed rather than skipped.
 const FIXTURE_OWNED = ['Bash(git commit:*)', 'Bash(git push:*)', 'Bash(rm:*)'];
 const FIXTURE_SUPPRESSED = ['Bash(git stash:*)'];
+// The three review classes of the audit table. Restated here rather than imported from the ESM
+// generator on purpose (this engine is CommonJS, and the project-layer checks compare artifacts
+// against each other): a shared source would make those comparisons tautological.
+const REVIEW_CLASSES = ['plan', 'code', 'docs'];
 
 function writeFixture(root, pluginVersion) {
   const mk = (rel) => fs.mkdirSync(path.join(root, rel), { recursive: true });
@@ -261,14 +267,29 @@ function writeFixture(root, pluginVersion) {
       e2e: { enabled: true, cwd: 'app', runner: 'npx playwright test', specDir: 'e2e', outputDir: 'test-results/aiwf-qa' },
     },
     paths: { scratchDir: '.aiwf', plansDir: 'docs/backlogs', overridesDoc: 'docs/ai/PROJECT_OVERRIDES.md' },
-    review: { productBoundaryChecks: [] },
+    // The audit table in its FACTORY shape: all three rows inherited, so the effective row is the
+    // Reviewer's own host and `roles-match-review-*` compares something real. A row with its own
+    // host is exercised by the /pnp:roles section, which builds one.
+    review: {
+      productBoundaryChecks: [],
+      plan: { passes: 2 },
+      code: { passes: 1 },
+      docs: { passes: 1 },
+    },
   };
-  // roles.json is a RENDERED artifact of config.roles - written here with the same values so the
-  // consistency check has something true to verify (and something the negative controls can break).
+  // roles.json is a RENDERED artifact of config.roles + config.review - written here with the same
+  // values so the consistency check has something true to verify (and something the negative
+  // controls can break). The three review rows are EFFECTIVE: inherited rows carry the Reviewer's
+  // engine/model/effort, which is what the resolver hands a wrapper.
   put('.claude/aiwf-native/roles.json', JSON.stringify({
     reviewer: { engine: 'claude', model: 'opus', effort: 'high' },
     qa: { engine: 'codex', model: 'codex-atom-2', effort: 'medium' },
     qal: { enabled: true, engine: 'codex', model: 'codex-atom-1', effort: 'high' },
+    review: {
+      plan: { passes: 2, engine: 'claude', model: 'opus', effort: 'high' },
+      code: { passes: 1, engine: 'claude', model: 'opus', effort: 'high' },
+      docs: { passes: 1, engine: 'claude', model: 'opus', effort: 'high' },
+    },
   }, null, 2) + '\n');
 
   const agent = (name, model, effort) =>
@@ -1137,7 +1158,7 @@ function sectionMarketplace(tmpRoot) {
 // ---------------------------------------------------------------------------
 // SECTION 5 - Codex wrapper flag locks (static source checks)
 // ---------------------------------------------------------------------------
-function sectionWrappers() {
+function sectionWrappers(tmpRoot) {
   section('WRAPPERS - locked flags, stdin-only delivery, no hardcoded model or project root');
   const PS = path.join(PLUGIN_ROOT, 'scripts', 'native', 'ps');
   const src = (f) => readText(path.join(PS, f));
@@ -1203,6 +1224,59 @@ function sectionWrappers() {
     check(`${name} does NOT hardcode a model literal in -m`, !QUOTED_MODEL.test(args));
     check(`${name} exits 2 when the resolved engine is not codex`, /\$role\.engine\s+-ne\s+'codex'/.test(s));
     check(`${name} pins the '-c',"model_reasoning_effort=$($role.effort)" pair`, EFFORT_PAIR.test(args));
+  }
+
+  // The review wrapper is CLASS-AWARE: /pnp:review passes the ticket's class on every invocation,
+  // and the wrapper must hand it to the resolver so the -m model and the effort atom come from that
+  // ROW. Asserted on the source because the flags of that resolver call decide which engine gets
+  // paid: a -Class parameter that is declared and then never forwarded would silently review a
+  // docs-class diff on the code row's host.
+  if (reviewSrc != null) {
+    check('codex-review.ps1 declares the optional -Class parameter', /\[string\]\s*\$Class/.test(reviewSrc));
+    check('codex-review.ps1 FORWARDS -Class to the resolver (declared is not forwarded)',
+      /-Role\s+reviewer\s+-Class\s+\$Class\s+-RolesPath\s+\$rolesPath/.test(reviewSrc));
+    check('codex-review.ps1 still has a classless resolver call (the flag is optional, not required)',
+      /-Role\s+reviewer\s+-RolesPath\s+\$rolesPath\s+-AsJson/.test(reviewSrc));
+    check('codex-review.ps1 branches on whether -Class was SUPPLIED, never on its value',
+      /\$HasClass\s*=\s*\$PSBoundParameters\.ContainsKey\('Class'\)/.test(reviewSrc)
+      && /if\s*\(\$HasClass\)\s*\{/.test(reviewSrc)
+      && !/IsNullOrWhiteSpace\(\$Class\)/.test(reviewSrc));
+  }
+
+  // THE CLASS BRANCH, EXECUTED on this channel too. There is no recording `codex` stub for the
+  // PowerShell wrapper (that harness exists only on the bash side), so the branch is proven by its
+  // REFUSAL MESSAGE instead - which is stronger than it sounds: the fixture resolves every host to
+  // `claude`, so the wrapper always exits 2 before reaching codex, and the three branches name three
+  // different things. A classless call cannot produce "review class 'docs'", and a wrapper that
+  // degraded `-Class ''` into the classless path cannot produce "not a review class".
+  if (PWSH && tmpRoot) {
+    const dir = fs.mkdtempSync(path.join(tmpRoot, 'ps-exec-'));
+    fs.mkdirSync(path.join(dir, '.claude', 'aiwf-native'), { recursive: true });
+    const claude = { engine: 'claude', model: 'fable', effort: 'high' };
+    fs.writeFileSync(path.join(dir, '.claude', 'aiwf-native', 'roles.json'), JSON.stringify({
+      reviewer: claude, qa: claude, qal: Object.assign({ enabled: false }, claude),
+      review: {
+        plan: { passes: 2, ...claude }, code: { passes: 1, ...claude }, docs: { passes: 1, ...claude },
+      },
+    }));
+    const wrapper = path.join(PLUGIN_ROOT, 'scripts', 'native', 'ps', 'codex-review.ps1');
+    const run = (extra) => {
+      const r = spawnSync(PWSH, ['-NoProfile', '-File', wrapper, '-ProjectRoot', dir, '-Prompt', 'probe', ...extra], { encoding: 'utf8' });
+      return { status: r.status, err: ((r.stderr || '') + (r.stdout || '')).replace(/\r/g, '') };
+    };
+    const plain = run([]);
+    check('codex-review.ps1 EXECUTED without -Class: it resolves the ROLE (exit 2, message names the role)',
+      plain.status === 2 && /role 'reviewer' resolves to engine 'claude'/.test(plain.err),
+      `exit ${plain.status}: ${firstLine(plain.err)}`);
+    const classed = run(['-Class', 'docs']);
+    check('codex-review.ps1 EXECUTED with -Class docs: it resolves the ROW (exit 2, message names the class)',
+      classed.status === 2 && /review class 'docs' resolves to engine 'claude'/.test(classed.err),
+      `exit ${classed.status}: ${firstLine(classed.err)}`);
+    const empty = run(['-Class', '']);
+    check('codex-review.ps1 EXECUTED with -Class "": refused by the resolver (exit 2), never the classless host',
+      empty.status === 2 && /is not a review class/.test(empty.err)
+      && !/role 'reviewer' resolves/.test(empty.err),
+      `exit ${empty.status}: ${firstLine(empty.err)}`);
   }
 
   if (check('codex-qal.ps1 exists', qalSrc != null)) {
@@ -1374,6 +1448,16 @@ function shWrapperFindings(root, { execProbes = true, tmpDir = null } = {}) {
       NUL_JOIN.test(s) && NUL_READ.test(s) && PROC_SUB.test(s) && !VARIABLE_TRANSPORT.test(s));
   }
 
+  // The review wrapper is CLASS-AWARE (the mirror of the PowerShell assertion): /pnp:review passes
+  // the ticket's class on every invocation, and a --class that is parsed but never FORWARDED would
+  // silently review a docs-class diff on the code row's host.
+  if (reviewSrc != null) {
+    add('sh-review-class', 'codex-review.sh parses --class and FORWARDS it to the resolver, and keeps a classless call for when it is absent',
+      /--class\)/.test(reviewSrc)
+      && /--role reviewer --class "\$CLASS" --roles-path "\$ROLES_PATH"/.test(reviewSrc)
+      && /--role reviewer --roles-path "\$ROLES_PATH"/.test(reviewSrc));
+  }
+
   if (add('sh-qal-exists', 'codex-qal.sh exists', qalSrc != null)) {
     const args = argBlock(qalSrc);
     add('sh-qal-exec', 'qal (sh) opens the argv with the \'exec\' atom', firstAtom(args) === 'exec', firstAtom(args));
@@ -1467,6 +1551,31 @@ function shWrapperFindings(root, { execProbes = true, tmpDir = null } = {}) {
         add(`sh-exec-${short}-exit`, `${wrapper} EXECUTED: codex's exit code is propagated unchanged`,
           probe.status === STUB_EXIT, `exit ${probe.status} (the stub exits ${STUB_EXIT})`);
       }
+      // THE CLASS BRANCH, EXECUTED. Everything above runs the classless path; source text cannot
+      // prove that --class reaches the resolver and that the ROW's host is what codex is handed, so
+      // both are asserted on the argv the stub really received. The fixture's row carries a
+      // different model and effort from the role on purpose.
+      {
+        const probe = runWrapperWithStub(root, 'codex-review.sh', tmpDir, ['--class', 'docs']);
+        const expected = [
+          'exec', '-C', probe.projectRoot, '-m', ROW_MODEL,
+          '--sandbox', 'read-only', '-c', 'approval_policy=never', '-c', `model_reasoning_effort=${ROW_EFFORT}`,
+        ];
+        add('sh-exec-review-class-argv',
+          'codex-review.sh --class docs EXECUTED: codex receives the ROW\'s model and effort, not the Reviewer role\'s',
+          JSON.stringify(probe.atoms) === JSON.stringify(expected),
+          probe.atoms === null ? `the wrapper did not reach codex (exit ${probe.status}): ${firstLine(probe.stderr)}`
+            : `-m ${JSON.stringify(String(probe.atoms[4]))} effort atom ${JSON.stringify(String(probe.atoms[10]))}`);
+      }
+      {
+        // An explicitly EMPTY class must refuse, never degrade into the classless contract - the
+        // proof being that codex was not invoked at all (no recording) and the exit is 2.
+        const probe = runWrapperWithStub(root, 'codex-review.sh', tmpDir, ['--class', '']);
+        add('sh-exec-review-class-empty',
+          'codex-review.sh --class "" EXECUTED: exit 2 and codex is never invoked (an empty class never falls back to the classless host)',
+          probe.status === 2 && probe.atoms === null,
+          `exit ${probe.status}; ${probe.atoms === null ? 'codex was not invoked' : `codex WAS invoked with ${probe.atoms.length} atoms`}`);
+      }
     }
   }
   return out;
@@ -1478,6 +1587,10 @@ function shWrapperFindings(root, { execProbes = true, tmpDir = null } = {}) {
 // its own argv atom, i.e. a flag.
 const HOSTILE_MODEL = 'atom 9\nrogue --sandbox danger-full-access';
 const HOSTILE_EFFORT = 'high\nlow';
+// The audit-table ROW's own host, deliberately different from the role's, so an executed --class
+// run proves WHICH record reached codex rather than merely that the flag was accepted.
+const ROW_MODEL = 'row-atom-3';
+const ROW_EFFORT = 'medium';
 const STUB_BRIEF = 'the brief for the transport probe\n';
 const STUB_EXIT = 7;
 const NUL_BYTE = String.fromCharCode(0);
@@ -1488,15 +1601,27 @@ const NUL_BYTE = String.fromCharCode(0);
  * newline), the stdin bytes, and the wrapper's own exit code. The stub exits with a distinctive
  * code so exit-propagation is proven by the same run.
  */
-function runWrapperWithStub(root, wrapper, tmpDir) {
+function runWrapperWithStub(root, wrapper, tmpDir, extraArgs = []) {
   const home = fs.mkdtempSync(path.join(tmpDir, 'sh-exec-'));
   const bin = path.join(home, 'bin');
   const projectRoot = path.join(home, 'project');
   fs.mkdirSync(bin, { recursive: true });
   fs.mkdirSync(path.join(projectRoot, '.claude', 'aiwf-native'), { recursive: true });
   const record = { engine: 'codex', model: HOSTILE_MODEL, effort: HOSTILE_EFFORT };
+  // The ROW deliberately carries a DIFFERENT model and effort from the role. That asymmetry is the
+  // whole proof: with --class the argv must show the row's values, so a wrapper that accepted the
+  // flag and then resolved the role anyway is caught by the atoms rather than by reading its source.
   fs.writeFileSync(path.join(projectRoot, '.claude', 'aiwf-native', 'roles.json'),
-    JSON.stringify({ reviewer: record, qa: record, qal: Object.assign({ enabled: true }, record) }));
+    JSON.stringify({
+      reviewer: record,
+      qa: record,
+      qal: Object.assign({ enabled: true }, record),
+      review: {
+        plan: { passes: 2, engine: 'codex', model: ROW_MODEL, effort: ROW_EFFORT },
+        code: { passes: 1, engine: 'codex', model: ROW_MODEL, effort: ROW_EFFORT },
+        docs: { passes: 1, engine: 'codex', model: ROW_MODEL, effort: ROW_EFFORT },
+      },
+    }));
 
   const argvOut = path.join(home, 'argv.bin');
   const stdinOut = path.join(home, 'stdin.bin');
@@ -1515,7 +1640,7 @@ function runWrapperWithStub(root, wrapper, tmpDir) {
     PNP_ARGV_OUT: argvOut,
     PNP_STDIN_OUT: stdinOut,
   });
-  const r = spawnSync(BASH, [path.join(root, 'scripts', 'native', 'sh', wrapper), '--project-root', projectRoot],
+  const r = spawnSync(BASH, [path.join(root, 'scripts', 'native', 'sh', wrapper), '--project-root', projectRoot, ...extraArgs],
     { input: STUB_BRIEF, encoding: 'utf8', env });
   const recorded = readText(argvOut);
   return {
@@ -1556,7 +1681,9 @@ function readOnlyWrapperControls(file, short) {
     { id: `sh-${short}-empty-prompt`, label: `${file}: the empty-prompt guard defanged`, apply: (r) => patchText(r, at, /tr -d '\[:space:\]'/, 'cat') },
     { id: `sh-${short}-cwd`, label: `${file}: an absolute path baked into -C`, apply: replaceArgLine(file, '-C "\\$PROJECT_ROOT"', '-C /home/someone/repo') },
     { id: `sh-${short}-project-root`, label: `${file}: --project-root no longer required`, apply: (r) => patchText(r, at, /\[ -n "\$PROJECT_ROOT" \] \|\| fail/, 'true || fail') },
-    { id: `sh-${short}-resolver`, label: `${file}: the resolver called with a hardcoded roles path`, apply: (r) => patchText(r, at, /--roles-path "\$ROLES_PATH"/, '--roles-path roles.json') },
+    // GLOBAL on purpose: codex-review.sh calls the resolver twice (with and without --class), and a
+    // control that sabotaged only the first call would leave the assertion green and prove nothing.
+    { id: `sh-${short}-resolver`, label: `${file}: the resolver called with a hardcoded roles path`, apply: (r) => patchText(r, at, /--roles-path "\$ROLES_PATH"/g, '--roles-path roles.json') },
     { id: `sh-${short}-model`, label: `${file}: a model literal in place of the resolved one`, apply: replaceArgLine(file, '-m "\\$ROLE_MODEL"', '-m gpt-5') },
     { id: `sh-${short}-no-model-literal`, label: `${file}: a model literal in -m (the generalized negative)`, apply: replaceArgLine(file, '-m "\\$ROLE_MODEL"', '-m gpt-5') },
     { id: `sh-${short}-engine-mismatch`, label: `${file}: the engine-mismatch guard removed`, apply: (r) => patchText(r, at, /\[ "\$ROLE_ENGINE" != 'codex' \]/, '[ -z "$ROLE_ENGINE" ]') },
@@ -1600,6 +1727,15 @@ const ROLES_SH = 'aiwf-roles.sh';
 const ROLES_AT = shRel(ROLES_SH);
 const SH_CONTROLS = [
   { id: 'sh-channel-files', label: 'one wrapper missing from the channel', apply: (r) => fs.rmSync(path.join(r, ...shRel('codex-qa.sh'))) },
+  { id: 'sh-review-class', label: 'codex-review.sh parses --class but never forwards it to the resolver',
+    apply: (r) => patchText(r, shRel('codex-review.sh'), /--role reviewer --class "\$CLASS" --roles-path "\$ROLES_PATH"/, '--role reviewer --roles-path "$ROLES_PATH"') },
+  // The executed halves of the class branch, each with the sabotage that actually reintroduces the
+  // defect the reviewer found: forwarding the flag but resolving the role anyway, and branching on
+  // the class VALUE instead of on whether it was supplied.
+  { id: 'sh-exec-review-class-argv', label: 'codex-review.sh forwards --class but resolves the ROLE, so codex gets the wrong model',
+    apply: (r) => patchText(r, shRel('codex-review.sh'), /--role reviewer --class "\$CLASS" --roles-path "\$ROLES_PATH"/, '--role reviewer --roles-path "$ROLES_PATH"') },
+  { id: 'sh-exec-review-class-empty', label: 'codex-review.sh branches on the class VALUE, so --class "" degrades into the classless host',
+    apply: (r) => patchText(r, shRel('codex-review.sh'), /if \[ "\$HAS_CLASS" -eq 1 \]; then/, 'if [ -n "$CLASS" ]; then') },
 ]
   // The byte-level facts, one control per file: a CR byte, a non-ASCII byte, a foreign shebang and
   // a relaxed strict mode. All four are invisible to a check phrased over text rather than bytes.
@@ -1657,7 +1793,8 @@ const SH_CONTROLS = [
 // economy (and the same reason) as the example section's guard probes.
 const SH_EXEC_IDS = new Set(['sh-exec-host',
   'sh-exec-review-argv', 'sh-exec-review-stdin', 'sh-exec-review-exit',
-  'sh-exec-qa-argv', 'sh-exec-qa-stdin', 'sh-exec-qa-exit']);
+  'sh-exec-qa-argv', 'sh-exec-qa-stdin', 'sh-exec-qa-exit',
+  'sh-exec-review-class-argv', 'sh-exec-review-class-empty']);
 
 function sectionShWrappers(tmpRoot) {
   section('WRAPPERS (bash channel) - locked flags, stdin-only delivery, LF + ASCII bytes, executed transport');
@@ -1710,7 +1847,22 @@ function sectionResolver(tmpRoot) {
     reviewer: { engine: 'codex', model: 'atom-9', effort: 'low' },
     qa: { engine: 'claude', model: 'opus', effort: 'high' },
     qal: { enabled: true, engine: 'codex', model: 'atom-9', effort: 'high' },
+    review: {
+      plan: { passes: 2, engine: 'codex', model: 'atom-9', effort: 'low' },
+      code: { passes: 1, engine: 'codex', model: 'atom-9', effort: 'low' },
+      docs: { passes: 0, engine: 'claude', model: 'fable', effort: 'low' },
+    },
   }));
+  // A roles.json rendered BEFORE the audit table existed: valid for every role, and carrying no
+  // review block at all. It must be told apart from a broken file - "run /pnp:update" and "fix your
+  // roles.json" are different instructions.
+  const NOTABLE = fx('no-table.json', JSON.stringify({
+    reviewer: { engine: 'codex', model: 'atom-9', effort: 'low' },
+    qa: { engine: 'claude', model: 'opus', effort: 'high' },
+    qal: { enabled: true, engine: 'codex', model: 'atom-9', effort: 'high' },
+  }));
+  const ROWSTRPASSES = fx('rowstrpasses.json', '{ "reviewer": { "engine": "codex", "model": "atom-9", "effort": "low" }, "review": { "docs": { "passes": "1", "engine": "codex", "model": "atom-9", "effort": "low" } } }');
+  const ROWCASE = fx('rowcase.json', '{ "reviewer": { "engine": "codex", "model": "atom-9", "effort": "low" }, "review": { "Docs": { "passes": 1, "engine": "codex", "model": "atom-9", "effort": "low" } } }');
   const QAL_NO_ENABLED = fx('qal-no-enabled.json', JSON.stringify({ qal: { engine: 'codex', model: 'atom-9', effort: 'high' } }));
   const QAL_STR_ENABLED = fx('qal-str-enabled.json', '{ "qal": { "enabled": "true", "engine": "codex", "model": "atom-9", "effort": "high" } }');
   const QAL_FALSE = fx('qal-false.json', JSON.stringify({ qal: { enabled: false, engine: 'codex', model: 'atom-9', effort: 'high' } }));
@@ -1807,6 +1959,68 @@ function sectionResolver(tmpRoot) {
   }
 
   // -------------------------------------------------------------------------
+  // The audit table: -Class, and the promise that WITHOUT it nothing moved
+  // -------------------------------------------------------------------------
+  // The last one first, because it is the load-bearing compatibility claim: every wrapper, skill
+  // and consumer installation that never passes -Class must receive the same bytes it always did.
+  // Asserted against the LITERAL strings, not against a re-derivation - a snapshot compared with a
+  // fresh computation of itself proves nothing.
+  {
+    const r = spawnSync(PWSH, ['-NoProfile', '-File', RESOLVER, '-Role', 'reviewer', '-RolesPath', VALID, '-AsJson'], { encoding: 'utf8' });
+    check('WITHOUT -Class the JSON snapshot is byte-identical to the pre-table contract',
+      r.status === 0 && (r.stdout || '').trim() === '{"role":"reviewer","engine":"codex","model":"atom-9","effort":"low"}',
+      JSON.stringify((r.stdout || '').trim()));
+    const p = spawnSync(PWSH, ['-NoProfile', '-File', RESOLVER, '-Role', 'reviewer', '-RolesPath', VALID], { encoding: 'utf8' });
+    check('WITHOUT -Class the plain form is still exactly three tokens',
+      p.status === 0 && (p.stdout || '').trim() === 'codex atom-9 low', JSON.stringify((p.stdout || '').trim()));
+  }
+  {
+    const r = resolveRole('reviewer', VALID, 'plan');
+    check('-Class plan -> the effective row plus class and passes, exit 0',
+      r.status === 0 && r.json && r.json.class === 'plan' && r.json.engine === 'codex'
+      && r.json.model === 'atom-9' && r.json.effort === 'low' && r.json.passes === 2,
+      r.json ? JSON.stringify(r.json) : `exit ${r.status}`);
+  }
+  {
+    // passes 0 is a real configuration ("no auditor"), not an absent value, so it must survive as
+    // the integer 0 rather than being read as missing.
+    const r = resolveRole('reviewer', VALID, 'docs');
+    check('-Class docs -> a claude row with passes 0 (a real value, never read as "absent")',
+      r.status === 0 && r.json && r.json.engine === 'claude' && r.json.model === 'fable' && r.json.passes === 0,
+      r.json ? JSON.stringify(r.json) : `exit ${r.status}`);
+  }
+  {
+    const r = spawnSync(PWSH, ['-NoProfile', '-File', RESOLVER, '-Role', 'reviewer', '-Class', 'code', '-RolesPath', VALID], { encoding: 'utf8' });
+    check('-Class plain form prints FOUR tokens "<engine> <model> <effort> <passes>"',
+      r.status === 0 && (r.stdout || '').trim() === 'codex atom-9 low 1', JSON.stringify((r.stdout || '').trim()));
+  }
+  check('-Class with a role other than reviewer -> exit 2 (the table has review classes, not roles)',
+    isExit2(resolveRole('qa', VALID, 'docs')));
+  check('-Class with an unknown class -> exit 2', isExit2(resolveRole('reviewer', VALID, 'plans')));
+  check('-Class with an EMPTY value -> exit 2 (never degrades into the classless contract)',
+    isExit2(resolveRole('reviewer', VALID, '')));
+  {
+    const r = resolveRole('reviewer', NOTABLE, 'docs');
+    check('a roles.json with no review block -> exit 2 naming /pnp:update (not a guessed row)',
+      r.status === 2 && /predates the audit table/.test(r.stderr || ''), (r.stderr || '').trim().slice(0, 120));
+  }
+  check('a row whose passes is the STRING "1" -> exit 2 (a count is not coerced)',
+    isExit2(resolveRole('reviewer', ROWSTRPASSES, 'docs')));
+  check('a class key differing only in CASE -> exit 2 ("Docs" is not "docs")',
+    isExit2(resolveRole('reviewer', ROWCASE, 'docs')));
+  {
+    // The factory fallback is a broken installation running read-only-on-Claude, not a choice - so
+    // it carries the factory pass counts rather than refusing.
+    const r = resolveRole('reviewer', NOFILE, 'plan');
+    check('missing config file + -Class -> the factory fallback WITH the factory pass count, exit 0',
+      r.status === 0 && r.json && r.json.engine === 'claude' && r.json.model === 'opus' && r.json.passes === 2,
+      r.json ? JSON.stringify(r.json) : `exit ${r.status}`);
+    const d = resolveRole('reviewer', NOFILE, 'docs');
+    check('...and the factory pass count is per class (docs -> 1)',
+      d.status === 0 && d.json && d.json.passes === 1, d.json ? JSON.stringify(d.json) : `exit ${d.status}`);
+  }
+
+  // -------------------------------------------------------------------------
   // The BASH channel, on the SAME fixtures, and held to the PowerShell one
   // -------------------------------------------------------------------------
   // Two channels of one contract are only worth having if they answer identically, so the sh
@@ -1882,6 +2096,418 @@ function sectionResolver(tmpRoot) {
     const r = resolveRoleSh('reviewer', null);
     check('sh: omitting --roles-path does NOT silently resolve (it is required)',
       r.status === 2 && r.json === null, `exit ${r.status}`);
+  }
+
+  // The audit table, held to the SAME parity rule: every --class fixture is replayed through both
+  // channels and the exit code AND the snapshot must agree. Two channels of one contract are only
+  // worth having if they answer identically - including when they refuse.
+  const CLASS_MATRIX = [
+    ['a codex row (plan)', 'reviewer', VALID, 'plan'],
+    ['a codex row (code)', 'reviewer', VALID, 'code'],
+    ['a claude row with passes 0 (docs)', 'reviewer', VALID, 'docs'],
+    ['--class on a role that is not reviewer', 'qa', VALID, 'docs'],
+    ['an unknown class', 'reviewer', VALID, 'plans'],
+    ['an EMPTY class value', 'reviewer', VALID, ''],
+    ['a roles.json with no review block', 'reviewer', NOTABLE, 'docs'],
+    ['a row whose passes is the string "1"', 'reviewer', ROWSTRPASSES, 'docs'],
+    ['a class key differing only in case', 'reviewer', ROWCASE, 'docs'],
+    ['missing config file + --class plan', 'reviewer', NOFILE, 'plan'],
+    ['missing config file + --class docs', 'reviewer', NOFILE, 'docs'],
+  ];
+  for (const [label, role, file, klass] of CLASS_MATRIX) {
+    const ps = resolveRole(role, file, klass);
+    const sh = resolveRoleSh(role, file, klass);
+    check(`sh resolver matches the ps resolver on: ${label}`,
+      ps.status === sh.status && shape(ps.json) === shape(sh.json),
+      `ps exit ${ps.status} ${shape(ps.json)} vs sh exit ${sh.status} ${shape(sh.json)}`);
+  }
+  {
+    const r = spawnSync(BASH, [SH_RESOLVER, '--role', 'reviewer', '--class', 'code', '--roles-path', VALID], { encoding: 'utf8' });
+    check('sh: the plain form with --class prints FOUR tokens "<engine> <model> <effort> <passes>"',
+      r.status === 0 && (r.stdout || '').trim() === 'codex atom-9 low 1', JSON.stringify((r.stdout || '').trim()));
+  }
+  {
+    // The compatibility claim, restated absolutely on this channel: without --class, the same bytes
+    // as before the table existed.
+    const j = spawnSync(BASH, [SH_RESOLVER, '--role', 'reviewer', '--roles-path', VALID, '--as-json'], { encoding: 'utf8' });
+    check('sh: WITHOUT --class the JSON snapshot is byte-identical to the pre-table contract',
+      j.status === 0 && (j.stdout || '').trim() === '{"role":"reviewer","engine":"codex","model":"atom-9","effort":"low"}',
+      JSON.stringify((j.stdout || '').trim()));
+  }
+  {
+    const r = resolveRoleSh('reviewer', NOTABLE, 'docs');
+    check('sh: a roles.json with no review block -> exit 2 naming /pnp:update',
+      r.status === 2 && /predates the audit table/.test(r.stderr || ''), (r.stderr || '').trim().slice(0, 120));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// SECTION 6b - /pnp:roles at its real entrypoint, on throwaway fixtures
+// ---------------------------------------------------------------------------
+// Every case here RUNS scripts/setup/aiwf-roles.mjs as a child process against a fixture built for
+// it, and asserts the exit code AND what is on disk afterwards. The refusals matter more than the
+// successes: the whole contract of this command is that a run it will not finish writes NOTHING, so
+// each refusal is paired with a "and the config is untouched" assertion. A refusal that quietly
+// half-applied would otherwise look identical to one that did not.
+const ROLES_CLI = path.join(PLUGIN_ROOT, 'scripts', 'setup', 'aiwf-roles.mjs');
+
+function runRoles(root, args, env) {
+  const r = spawnSync(process.execPath, [
+    ROLES_CLI, ...args, '--project-root', root, '--plugin-root', PLUGIN_ROOT, '--no-selfcheck',
+  ], { encoding: 'utf8', env: { ...process.env, ...(env || {}) } });
+  return { status: r.status, stdout: r.stdout || '', stderr: r.stderr || '' };
+}
+
+/** Recomputes the bookkeeping from the files that are really there. */
+function restampFixture(root) {
+  const p = path.join(root, '.claude', 'aiwf-native', 'aiwf.config.json');
+  const c = readJson(p);
+  const regions = {};
+  for (const key of Object.keys(c._aiwf.managedRegions)) {
+    const h = managedHash(root, key);
+    if (h !== null) regions[key] = { upstream: h, local: h, override: false };
+  }
+  c._aiwf.managedRegions = regions;
+  fs.writeFileSync(p, JSON.stringify(c, null, 2) + '\n');
+}
+
+function sectionRolesCommand(tmpRoot, pluginVersion) {
+  section('/pnp:roles - the audit table engine: two phases, refusals that write nothing, crash recovery');
+  let seq = 0;
+  // Each case gets its OWN fixture: a command that refuses must be shown to leave the project as it
+  // was, and a shared fixture would carry the previous case's writes into that judgement.
+  const fixture = (mutate) => {
+    const root = path.join(tmpRoot, `roles-fx-${seq += 1}`);
+    fs.mkdirSync(root, { recursive: true });
+    writeFixture(root, pluginVersion);
+    if (mutate) mutate(root);
+    restampFixture(root);
+    return root;
+  };
+  // The Reviewer moved to Codex: no reviewer agent file, no record of one. This is the installation
+  // a claude-hosted ROW has to work on - and the one where the created file's model is the top tier
+  // rather than the Reviewer's own.
+  const codexReviewer = (root) => {
+    mutateJson(root, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
+      c.roles.reviewer = { engine: 'codex', model: 'codex-atom-2', effort: 'high' };
+    });
+    mutateJson(root, ['.claude', 'aiwf-native', 'roles.json'], (j) => {
+      j.reviewer = { engine: 'codex', model: 'codex-atom-2', effort: 'high' };
+      for (const cls of REVIEW_CLASSES) j.review[cls] = { passes: j.review[cls].passes, engine: 'codex', model: 'codex-atom-2', effort: 'high' };
+    });
+    fs.rmSync(path.join(root, '.claude', 'agents', 'reviewer.md'));
+  };
+  const cfgOf = (root) => readJson(path.join(root, '.claude', 'aiwf-native', 'aiwf.config.json'));
+  const rowOf = (root, cls) => (cfgOf(root).review || {})[cls];
+  const agent = (root) => path.join(root, '.claude', 'agents', 'reviewer.md');
+  const front = (root, field) => {
+    const src = readText(agent(root));
+    const m = src === null ? null : new RegExp('^' + field + ':\\s*(\\S+)\\s*$', 'm').exec(src);
+    return m ? m[1] : null;
+  };
+
+  // --- --show ---------------------------------------------------------------
+  {
+    const root = fixture();
+    const r = runRoles(root, ['--show']);
+    const lines = r.stdout.split('\n').map((l) => l.trim());
+    check('--show prints the whole picture (every role, the three classes, the fact-check gate and R1), exit 0',
+      r.status === 0
+      && /^role\/class\s+host\s+model\s+effort\s+passes\s+notes$/.test(lines[0] || '')
+      && lines.some((l) => l.startsWith('writer ')) && lines.some((l) => l.startsWith('qal '))
+      && lines.some((l) => l.startsWith('plan ') && l.includes(' 2 '))
+      && lines.some((l) => l.startsWith('code (R2/R3)') && l.includes(`correction rounds cap ${cfgOf(root).loop.correctionRoundsCap}`))
+      && lines.some((l) => l.startsWith('docs (R2)'))
+      && lines.some((l) => l.startsWith('fact-check ') && l.includes('not configurable'))
+      && lines.some((l) => l.startsWith('R1 ') && l.includes('no auditor')),
+      r.status === 0 ? `${lines.filter(Boolean).length} lines` : `exit ${r.status}: ${r.stderr.trim().slice(0, 120)}`);
+  }
+  {
+    // The two markers that make the table readable, each on the configuration that produces it.
+    const root = fixture(); // the fixture Reviewer is claude/opus - below the top tier
+    const r = runRoles(root, ['--show']);
+    check('--show marks a Claude auditor below the top tier, and says a Claude row shares the reviewer agent\'s effort',
+      r.status === 0 && /reviewer\s+claude\s+opus \(below the top tier\)/.test(r.stdout)
+      && r.stdout.includes("(the Reviewer's - Claude rows share the agent file)"),
+      r.stdout.split('\n').filter((l) => l.startsWith('reviewer') || l.startsWith('plan')).join(' | '));
+  }
+  {
+    // QA is deliberately NOT marked: it compares artifacts against acceptance criteria, it does not
+    // audit decisions, so a mid-tier QA is an ordinary choice and not a finding.
+    const root = fixture((r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
+      c.roles.qa = { engine: 'claude', model: 'sonnet', effort: 'medium' };
+    }));
+    const r = runRoles(root, ['--show']);
+    const qaLine = r.stdout.split('\n').find((l) => l.startsWith('qa ')) || '';
+    check('--show does NOT mark a mid-tier claude QA (the top-tier rule is about auditing, not QA)',
+      r.status === 0 && qaLine.includes('sonnet') && !qaLine.includes('below the top tier'), qaLine.trim());
+  }
+
+  // --- refusals, each proven to have written nothing -------------------------
+  {
+    const root = fixture();
+    const before = readText(path.join(root, '.claude', 'aiwf-native', 'aiwf.config.json'));
+    const r = runRoles(root, ['--set', 'docs.passes=9']);
+    check('--set docs.passes=9 -> exit 1 (the schema enum refuses), and the config is untouched',
+      r.status === 1 && readText(path.join(root, '.claude', 'aiwf-native', 'aiwf.config.json')) === before,
+      `exit ${r.status}: ${r.stderr.trim().split('\n')[0]}`);
+  }
+  {
+    const root = fixture();
+    const r = runRoles(root, ['--set', 'docs.passes=x']);
+    check('--set docs.passes=x -> exit 2 (an unparseable value is usage, not a refusal)',
+      r.status === 2, `exit ${r.status}: ${r.stderr.trim().split('\n')[0]}`);
+  }
+  {
+    const root = fixture();
+    const r = runRoles(root, ['--set', 'qal.enabled=maybe']);
+    check('--set qal.enabled=maybe -> exit 2 (a boolean is exactly true or false)', r.status === 2,
+      `exit ${r.status}: ${r.stderr.trim().split('\n')[0]}`);
+  }
+  {
+    const root = fixture();
+    const r = runRoles(root, ['--set', 'writer.engine=codex']);
+    check('--set writer.engine=... -> exit 2 (the Writer is a Claude subagent and has no engine field)',
+      r.status === 2, `exit ${r.status}: ${r.stderr.trim().split('\n')[0]}`);
+  }
+  {
+    // A Claude row shares the ONE rendered reviewer agent, whose effort is roles.reviewer.effort -
+    // the Agent tool has no per-invocation effort - so a per-row effort would be a setting nothing
+    // reads. The fixture Reviewer is claude, so an inherited row is a Claude row.
+    const root = fixture();
+    const r = runRoles(root, ['--set', 'docs.effort=medium']);
+    check('--set docs.effort=... on a Claude row -> exit 1, naming why the value would be read by nobody',
+      r.status === 1 && /Claude rows share the agent file/.test(r.stderr),
+      `exit ${r.status}: ${r.stderr.trim().split('\n')[0]}`);
+  }
+  {
+    const root = fixture(codexReviewer);
+    const r = runRoles(root, ['--set', 'docs.engine=codex']);
+    check('--set docs.engine=codex with no model, Reviewer codex -> the Reviewer\'s host is copied whole, exit 0',
+      r.status === 0 && JSON.stringify(rowOf(root, 'docs')) === JSON.stringify({ passes: 1, engine: 'codex', model: 'codex-atom-2', effort: 'high' }),
+      `exit ${r.status}: ${JSON.stringify(rowOf(root, 'docs'))}`);
+    // A row's effort is a CLOSED set (low|medium|high), unlike roles.*.effort: a typo here would
+    // otherwise be discovered as a paid pass the external engine rejects at call time.
+    const before = readText(path.join(root, '.claude', 'aiwf-native', 'aiwf.config.json'));
+    const bad = runRoles(root, ['--set', 'docs.effort=wat']);
+    check('--set docs.effort=wat on a CODEX row -> exit 1 (the schema enum refuses), and nothing is written',
+      bad.status === 1 && /must be one of "low", "medium", "high"/.test(bad.stderr)
+      && readText(path.join(root, '.claude', 'aiwf-native', 'aiwf.config.json')) === before,
+      `exit ${bad.status}: ${bad.stderr.trim().split('\n').filter(Boolean).pop()}`);
+    const ok = runRoles(root, ['--set', 'docs.effort=medium']);
+    check('...while a value INSIDE the set goes through, exit 0',
+      ok.status === 0 && rowOf(root, 'docs').effort === 'medium', `exit ${ok.status}: ${JSON.stringify(rowOf(root, 'docs'))}`);
+  }
+  {
+    // ORDER INDEPENDENCE. A row's codex default reads roles.reviewer, so with first-seen ordering
+    // these two command lines - the same three assignments, typed the other way round - gave
+    // different answers: one refused, one succeeded. Both must now end identically.
+    const args = [
+      ['--set', 'docs.engine=codex', '--set', 'reviewer.engine=codex', '--set', 'reviewer.model=codex-atom-2'],
+      ['--set', 'reviewer.engine=codex', '--set', 'reviewer.model=codex-atom-2', '--set', 'docs.engine=codex'],
+    ];
+    const results = args.map((a) => {
+      const root = fixture();
+      const r = runRoles(root, [...a, '--confirm-remove-stale']);
+      return { status: r.status, stderr: r.stderr, review: JSON.stringify(cfgOf(root).review), reviewer: JSON.stringify(cfgOf(root).roles.reviewer) };
+    });
+    check('the SAME --set assignments in either argument order both succeed (row defaults read the Reviewer this run ends with)',
+      results[0].status === 0 && results[1].status === 0,
+      results.map((r, i) => `order ${i + 1}: exit ${r.status}${r.status === 0 ? '' : ' - ' + r.stderr.trim().split('\n').filter(Boolean).pop()}`).join(' | '));
+    check('...and they produce the IDENTICAL config (the table and the Reviewer alike)',
+      results[0].review === results[1].review && results[0].reviewer === results[1].reviewer,
+      `${results[0].review} vs ${results[1].review}`);
+  }
+  {
+    const root = fixture(); // Reviewer is claude here, so there is no codex host to copy
+    const before = readText(path.join(root, '.claude', 'aiwf-native', 'aiwf.config.json'));
+    const r = runRoles(root, ['--set', 'docs.engine=codex']);
+    check('--set docs.engine=codex with no model and no codex Reviewer -> exit 1 naming the model flag, nothing written',
+      r.status === 1 && /codex needs a model id/.test(r.stderr)
+      && readText(path.join(root, '.claude', 'aiwf-native', 'aiwf.config.json')) === before,
+      `exit ${r.status}: ${r.stderr.trim().split('\n')[0]}`);
+  }
+  {
+    // TWO assignments where only the SECOND is bad. Phase 1 decides everything before phase 2 writes
+    // anything, so neither is applied - this is the assertion that phase 1 is real.
+    const root = fixture();
+    const r = runRoles(root, ['--set', 'plan.passes=1', '--set', 'docs.passes=9']);
+    check('a phase-1 refusal on the SECOND --set applies NEITHER (two phases, not two writes)',
+      r.status === 1 && cfgOf(root).review.plan.passes === 2 && cfgOf(root).review.docs.passes === 1,
+      `exit ${r.status}: plan=${cfgOf(root).review.plan.passes} docs=${cfgOf(root).review.docs.passes}`);
+  }
+  {
+    const root = fixture((r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
+      c._aiwf.managedRegions['.claude/aiwf-native/roles.json'].override = true;
+    }));
+    // restampFixture would clear the override, so it is set again after it.
+    mutateJson(root, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
+      c._aiwf.managedRegions['.claude/aiwf-native/roles.json'].override = true;
+    });
+    const before = readText(path.join(root, '.claude', 'aiwf-native', 'roles.json'));
+    const r = runRoles(root, ['--set', 'plan.passes=1']);
+    check('an artifact HELD through an override -> exit 1 pointing at /pnp:update --resolve, and the file is untouched',
+      r.status === 1 && /held by you \(override\)/.test(r.stderr)
+      && readText(path.join(root, '.claude', 'aiwf-native', 'roles.json')) === before,
+      `exit ${r.status}: ${r.stderr.trim().split('\n')[0]}`);
+  }
+  {
+    // The edit lands AFTER the fixture is stamped - editing before it would simply record the edit
+    // as the accepted content, and there would be no drift to detect.
+    const root = fixture();
+    patchText(root, ['.claude', 'aiwf-native', 'roles.json'], /"effort": "high"/, '"effort": "low"');
+    const r = runRoles(root, ['--set', 'plan.passes=1']);
+    check('an artifact EDITED by hand that is not already the wanted render -> exit 1, resolve first',
+      r.status === 1 && /edited by hand/.test(r.stderr), `exit ${r.status}: ${r.stderr.trim().split('\n')[0]}`);
+  }
+  {
+    // HELD + STALE, which is the pair that matters: `override: true` means the operator went through
+    // a conflict dialog and kept this file, so its content MATCHES `local` by construction. A stale
+    // check that only compared hashes and looked for the flag would wave it straight through to
+    // deletion - and --confirm-remove-stale would then silently answer a question the operator had
+    // already answered the other way.
+    const root = fixture();
+    mutateJson(root, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
+      c._aiwf.managedRegions['.claude/agents/reviewer.md'].override = true;
+    });
+    const before = readText(path.join(root, '.claude', 'aiwf-native', 'aiwf.config.json'));
+    const r = runRoles(root, ['--set', 'reviewer.engine=codex', '--set', 'reviewer.model=codex-atom-2', '--confirm-remove-stale']);
+    check('a HELD agent file that became stale is NOT deleted, even WITH --confirm-remove-stale -> exit 1',
+      r.status === 1 && /HELD by you \(override\)/.test(r.stderr) && fs.existsSync(agent(root)),
+      `exit ${r.status}: ${r.stderr.trim().split('\n').filter(Boolean).pop()}`);
+    check('...and it points at /pnp:update --resolve, having written nothing at all',
+      /\/pnp:update --resolve \.claude\/agents\/reviewer\.md/.test(r.stderr)
+      && readText(path.join(root, '.claude', 'aiwf-native', 'aiwf.config.json')) === before,
+      r.stderr.trim().split('\n').filter(Boolean).pop());
+  }
+  {
+    // A file this engine never wrote, at an address it is about to write. Not a takeover.
+    const root = fixture(codexReviewer);
+    fs.writeFileSync(agent(root), '---\nname: reviewer\n---\nsomebody else wrote this\n');
+    const r = runRoles(root, ['--set', 'docs.engine=claude']);
+    check('a FOREIGN file at the agent path -> exit 1 (a file I did not write is in the way), nothing overwritten',
+      r.status === 1 && /a file I did not write is in the way/.test(r.stderr)
+      && readText(agent(root)).includes('somebody else wrote this'),
+      `exit ${r.status}: ${r.stderr.trim().split('\n')[0]}`);
+  }
+
+  // --- the round trip: codex Reviewer -> a claude docs row -> back -----------
+  {
+    const root = fixture(codexReviewer);
+    const created = runRoles(root, ['--set', 'docs.engine=claude']);
+    check('--set docs.engine=claude on a codex-Reviewer install CREATES the reviewer agent at the TOP TIER',
+      created.status === 0 && fs.existsSync(agent(root)) && front(root, 'model') === 'fable'
+      && JSON.stringify(rowOf(root, 'docs')) === JSON.stringify({ passes: 1, engine: 'claude', model: 'fable' }),
+      created.status === 0 ? `model: ${front(root, 'model')} effort: ${front(root, 'effort')} row: ${JSON.stringify(rowOf(root, 'docs'))}`
+        : `exit ${created.status}: ${created.stderr.trim().split('\n')[0]}`);
+    check('...and its effort is the Reviewer\'s, because the Agent tool has no per-invocation effort',
+      front(root, 'effort') === cfgOf(root).roles.reviewer.effort, `frontmatter=${front(root, 'effort')}`);
+    check('...and the rendered roles.json carries the new docs row',
+      JSON.stringify((readJson(path.join(root, '.claude', 'aiwf-native', 'roles.json')).review || {}).docs)
+        === JSON.stringify({ passes: 1, engine: 'claude', model: 'fable', effort: cfgOf(root).roles.reviewer.effort }),
+      JSON.stringify((readJson(path.join(root, '.claude', 'aiwf-native', 'roles.json')).review || {}).docs));
+    check('...and the project layer is clean afterwards (every assertion, not just the ones I changed)',
+      projectLayerFindings(root, PLUGIN_ROOT, { selfAuthored: true }).filter((f) => !f.note && !f.ok).length === 0,
+      projectLayerFindings(root, PLUGIN_ROOT, { selfAuthored: true }).filter((f) => !f.note && !f.ok).map((f) => f.id).join(', ') || 'clean');
+
+    // Now the row goes back, which makes the agent file STALE. Deleting it is destructive, so it
+    // needs the operator's flag - and without it the run refuses and the file is still there.
+    const refused = runRoles(root, ['--reset', 'docs']);
+    check('--reset docs without --confirm-remove-stale -> exit 1, and the now-stale agent file is STILL there',
+      refused.status === 1 && /STALE render/.test(refused.stderr) && fs.existsSync(agent(root)),
+      `exit ${refused.status}: ${refused.stderr.trim().split('\n')[0]}`);
+    check('...and the refusal wrote nothing: the docs row is still the Claude one',
+      JSON.stringify(rowOf(root, 'docs')) === JSON.stringify({ passes: 1, engine: 'claude', model: 'fable' }),
+      JSON.stringify(rowOf(root, 'docs')));
+
+    const done = runRoles(root, ['--reset', 'docs', '--confirm-remove-stale']);
+    check('--reset docs --confirm-remove-stale -> exit 0, the row collapses to {passes} and the stale file is gone',
+      done.status === 0 && JSON.stringify(rowOf(root, 'docs')) === JSON.stringify({ passes: 1 })
+      && !fs.existsSync(agent(root))
+      && !Object.prototype.hasOwnProperty.call(cfgOf(root)._aiwf.managedRegions, '.claude/agents/reviewer.md'),
+      done.status === 0 ? JSON.stringify(rowOf(root, 'docs')) : `exit ${done.status}: ${done.stderr.trim().split('\n')[0]}`);
+    check('...and the project layer is clean after the round trip',
+      projectLayerFindings(root, PLUGIN_ROOT, { selfAuthored: true }).filter((f) => !f.note && !f.ok).length === 0,
+      projectLayerFindings(root, PLUGIN_ROOT, { selfAuthored: true }).filter((f) => !f.note && !f.ok).map((f) => f.id).join(', ') || 'clean');
+  }
+
+  // --- crash injection: the honest guarantee, exercised ----------------------
+  // Phase 2 is plan-before-write, NOT a transaction. So the claim under test is not "it cannot be
+  // interrupted" - it is "an interruption is VISIBLE and re-running the same command finishes it".
+  // Both halves are asserted, because only the first one is what a journal would give.
+  {
+    const root = fixture(codexReviewer);
+    const crashed = runRoles(root, ['--set', 'docs.engine=claude'], { PNP_ROLES_CRASH_AT: '.claude/agents/reviewer.md' });
+    check('crash injection: killed right after the agent file is written -> exit 86, and the file IS there',
+      crashed.status === 86 && fs.existsSync(agent(root)), `exit ${crashed.status}`);
+    check('...and the config was NOT written, so the stamp is missing (agent files come first, the config last)',
+      !Object.prototype.hasOwnProperty.call(cfgOf(root)._aiwf.managedRegions, '.claude/agents/reviewer.md')
+      && rowOf(root, 'docs').engine === undefined,
+      JSON.stringify(rowOf(root, 'docs')));
+    const interrupted = projectLayerFindings(root, PLUGIN_ROOT, { selfAuthored: true }).filter((f) => !f.note && !f.ok);
+    check('...and that half-written state is VISIBLE to the project-layer checks (never a silent pass)',
+      interrupted.length > 0, interrupted.map((f) => f.id).join(', ') || 'nothing failed - the interruption is invisible');
+
+    const again = runRoles(root, ['--set', 'docs.engine=claude']);
+    check('re-running the SAME command finishes it: exit 0 through the already-applied branch (no question, no overwrite)',
+      again.status === 0 && front(root, 'model') === 'fable'
+      && cfgOf(root).review.docs.engine === 'claude',
+      again.status === 0 ? 'exit 0' : `exit ${again.status}: ${again.stderr.trim().split('\n')[0]}`);
+    const after = projectLayerFindings(root, PLUGIN_ROOT, { selfAuthored: true }).filter((f) => !f.note && !f.ok);
+    check('...and the project layer is clean again',
+      after.length === 0, after.map((f) => f.id).join(', ') || 'clean');
+  }
+  {
+    // The same boundary one write later: killed after roles.json, before the config.
+    const root = fixture(codexReviewer);
+    const crashed = runRoles(root, ['--set', 'plan.passes=3'], { PNP_ROLES_CRASH_AT: '.claude/aiwf-native/roles.json' });
+    check('crash injection at the roles.json boundary -> exit 86, roles.json ahead of its stamp',
+      crashed.status === 86 && readJson(path.join(root, '.claude', 'aiwf-native', 'roles.json')).review.plan.passes === 3
+      && cfgOf(root).review.plan.passes === 2, `exit ${crashed.status}`);
+    const again = runRoles(root, ['--set', 'plan.passes=3']);
+    check('...and the same command again ends at exit 0 with a clean project layer',
+      again.status === 0 && cfgOf(root).review.plan.passes === 3
+      && projectLayerFindings(root, PLUGIN_ROOT, { selfAuthored: true }).filter((f) => !f.note && !f.ok).length === 0,
+      again.status === 0 ? 'exit 0' : `exit ${again.status}: ${again.stderr.trim().split('\n')[0]}`);
+  }
+  {
+    // The REMOVE boundary. A stale agent file is deleted in the first stage, together with the agent
+    // writes and BEFORE roles.json - so a kill here leaves the file gone while roles.json still
+    // describes the old host. The recovery claim is the same one, and it is the one being tested:
+    // re-running the identical command finishes it.
+    const root = fixture();
+    const crashed = runRoles(
+      root,
+      ['--set', 'reviewer.engine=codex', '--set', 'reviewer.model=codex-atom-2', '--confirm-remove-stale'],
+      { PNP_ROLES_CRASH_AT: '.claude/agents/reviewer.md' },
+    );
+    check('crash injection right after a stale agent file is REMOVED -> exit 86, the file is gone',
+      crashed.status === 86 && !fs.existsSync(agent(root)), `exit ${crashed.status}`);
+    check('...and the removal came BEFORE roles.json, so roles.json still describes the old host',
+      readJson(path.join(root, '.claude', 'aiwf-native', 'roles.json')).reviewer.engine === 'claude'
+      && cfgOf(root).roles.reviewer.engine === 'claude',
+      JSON.stringify(readJson(path.join(root, '.claude', 'aiwf-native', 'roles.json')).reviewer));
+    const again = runRoles(root, ['--set', 'reviewer.engine=codex', '--set', 'reviewer.model=codex-atom-2', '--confirm-remove-stale']);
+    const after = projectLayerFindings(root, PLUGIN_ROOT, { selfAuthored: true }).filter((f) => !f.note && !f.ok);
+    check('...and the same command again ends at exit 0 with a clean project layer',
+      again.status === 0 && cfgOf(root).roles.reviewer.engine === 'codex' && after.length === 0,
+      again.status === 0 ? (after.map((f) => f.id).join(', ') || 'clean') : `exit ${again.status}: ${again.stderr.trim().split('\n')[0]}`);
+  }
+  {
+    // The LAST boundary: killed after the config write, i.e. after everything. There is nothing left
+    // to finish, so the re-run must be a clean no-op rather than a second attempt at anything.
+    const root = fixture(codexReviewer);
+    const crashed = runRoles(root, ['--set', 'code.passes=2'], { PNP_ROLES_CRASH_AT: '.claude/aiwf-native/aiwf.config.json' });
+    check('crash injection right after the CONFIG write -> exit 86 with every artifact and its stamp already written',
+      crashed.status === 86 && cfgOf(root).review.code.passes === 2
+      && readJson(path.join(root, '.claude', 'aiwf-native', 'roles.json')).review.code.passes === 2, `exit ${crashed.status}`);
+    const interrupted = projectLayerFindings(root, PLUGIN_ROOT, { selfAuthored: true }).filter((f) => !f.note && !f.ok);
+    check('...and that state is already CLEAN (the config is last precisely so this boundary is complete)',
+      interrupted.length === 0, interrupted.map((f) => f.id).join(', ') || 'clean');
+    const again = runRoles(root, ['--set', 'code.passes=2']);
+    check('...and the same command again is a no-op at exit 0',
+      again.status === 0 && /no changes/.test(again.stdout) && cfgOf(root).review.code.passes === 2,
+      again.status === 0 ? again.stdout.trim().split('\n').filter(Boolean).pop() : `exit ${again.status}: ${again.stderr.trim().split('\n')[0]}`);
   }
 }
 
@@ -2022,6 +2648,59 @@ function projectLayerFindings(projectRoot, pluginRoot, opts) {
           `the ${role} role is ${c.engine}-hosted, so its model is a free engine atom and the tier enum does not apply`);
       }
     }
+
+    // --- the audit table: roles.json carries the EFFECTIVE row of each review class -------------
+    // The rule is deliberately restated here rather than imported from the generator: this section
+    // compares two artifacts AGAINST EACH OTHER, and deriving both from one function would make the
+    // comparison tautological. An inherited row (`{passes}` only) resolves to the Reviewer's host
+    // WHOLE; a row with its own engine resolves to its own model, and to its own effort only when
+    // it is codex-hosted - a Claude row shares the one rendered reviewer agent, whose effort is
+    // roles.reviewer.effort.
+    const reviewerCfg = cfg.roles.reviewer || {};
+    const rendered = isPlainObject(roles.review) ? roles.review : null;
+    for (const cls of REVIEW_CLASSES) {
+      const row = (isPlainObject(cfg.review) && isPlainObject(cfg.review[cls])) ? cfg.review[cls] : null;
+      const got = (rendered && isPlainObject(rendered[cls])) ? rendered[cls] : null;
+      if (!row) {
+        add(`roles-match-review-${cls}`, `roles.json review.${cls} matches config review.${cls} + the Reviewer`,
+          false, `the config carries no review.${cls} row`);
+        continue;
+      }
+      const want = typeof row.engine === 'string'
+        ? { engine: row.engine, model: row.model, effort: row.engine === 'codex' ? row.effort : reviewerCfg.effort }
+        : { engine: reviewerCfg.engine, model: reviewerCfg.model, effort: reviewerCfg.effort };
+      const ok = got !== null && got.engine === want.engine && got.model === want.model
+        && got.effort === want.effort && got.passes === row.passes;
+      add(`roles-match-review-${cls}`,
+        `roles.json review.${cls} carries the EFFECTIVE row (${typeof row.engine === 'string' ? 'its own host' : "inherited from the Reviewer"}, rendered artifact, not a second source)`,
+        ok,
+        `want ${want.engine}/${want.model}/${want.effort} passes=${row.passes}; roles.json=${got ? `${got.engine}/${got.model}/${got.effort} passes=${got.passes}` : '(no review.' + cls + ' record)'}`);
+    }
+  }
+
+  // --- the three legal row shapes ---------------------------------------------------------------
+  // Two of the rules cannot be expressed in this project's schema subset (both would need `not`):
+  // an inherited row carries NO host field at all, and a Claude row carries NO effort of its own -
+  // the Agent tool has no per-invocation effort, so a per-row value would be a setting nothing
+  // reads. The third - every installation carries all three rows - is not in the schema's
+  // `required` either, because a migration adds the rows one add-config-key at a time and the
+  // update engine validates the whole config after each one. So the shape is asserted here.
+  {
+    const problems = [];
+    for (const cls of REVIEW_CLASSES) {
+      const row = isPlainObject(cfg.review) ? cfg.review[cls] : undefined;
+      if (!isPlainObject(row)) { problems.push(`review.${cls} is missing`); continue; }
+      const keys = Object.keys(row).sort().join(',');
+      const shape = keys === 'passes' ? 'inherited'
+        : (keys === 'engine,model,passes' && row.engine === 'claude') ? 'claude'
+          : (keys === 'effort,engine,model,passes' && row.engine === 'codex') ? 'codex' : null;
+      if (shape === null) problems.push(`review.${cls} is none of the three legal shapes (keys: ${keys}, engine: ${JSON.stringify(row.engine)})`);
+      else if (shape === 'claude' && !TIERS.includes(row.model)) problems.push(`review.${cls} is a claude row whose model "${row.model}" is not a tier alias`);
+      else if (!Number.isInteger(row.passes)) problems.push(`review.${cls} passes is not an integer`);
+    }
+    add('review-row-shape',
+      'every review row is one of the three legal shapes: {passes} inherited, {passes,engine:claude,model}, or {passes,engine:codex,model,effort}',
+      problems.length === 0, problems.length ? problems.join('; ') : `${REVIEW_CLASSES.length} rows`);
   }
 
   const agentPath = (file) => path.join(projectRoot, '.claude', 'agents', file);
@@ -2037,18 +2716,30 @@ function projectLayerFindings(projectRoot, pluginRoot, opts) {
   // actually runs. The Agent tool also has no per-invocation `effort`, so a claude-hosted role's
   // effort/model live in that frontmatter and MUST equal the configured values; a codex-hosted role
   // carries both as wrapper flags instead, so there is nothing to compare.
+  // The reviewer agent file belongs to this installation when the Reviewer ROLE is claude-hosted OR
+  // any review row is: a Claude-hosted row has no other host to be dispatched through. That ONE file
+  // then carries ONE model and ONE effort, because the Agent tool has no per-invocation effort - the
+  // model is the Reviewer's own when the Reviewer is claude-hosted and the top tier `fable`
+  // otherwise (an auditor below the author is not an audit), and the effort is always
+  // roles.reviewer.effort.
+  const claudeRow = REVIEW_CLASSES.some((cls) => isPlainObject(cfg.review) && isPlainObject(cfg.review[cls]) && cfg.review[cls].engine === 'claude');
+  const reviewerAgentWanted = ((cfg.roles && cfg.roles.reviewer) || {}).engine === 'claude' || claudeRow;
   for (const [role, file] of [['reviewer', 'reviewer.md'], ['qa', 'qa.md']]) {
     const c = (cfg.roles && cfg.roles[role]) || {};
     const exists = fs.existsSync(agentPath(file));
-    if (c.engine === 'claude') {
-      add(`agent-present-${role}`, `.claude/agents/${file} exists (the ${role} role is claude-hosted)`,
+    const wanted = role === 'reviewer' ? reviewerAgentWanted : c.engine === 'claude';
+    // What the frontmatter must SAY, which for the reviewer is not simply its role's own values.
+    const wantModel = role === 'reviewer' ? (c.engine === 'claude' ? c.model : 'fable') : c.model;
+    const wantEffort = role === 'reviewer' ? ((cfg.roles && cfg.roles.reviewer) || {}).effort : c.effort;
+    if (wanted) {
+      add(`agent-present-${role}`, `.claude/agents/${file} exists (${role === 'reviewer' && c.engine !== 'claude' ? 'a review row is claude-hosted' : `the ${role} role is claude-hosted`})`,
         exists, exists ? '' : 'missing - the claude host has no agent definition to dispatch');
       add(`agent-effort-${role}`, `${file} frontmatter effort equals the configured ${role} effort`,
-        c.effort != null && c.effort === frontmatter(file, 'effort'),
-        `config=${c.effort} frontmatter=${frontmatter(file, 'effort')}`);
-      add(`agent-model-${role}`, `${file} frontmatter model equals the configured ${role} model`,
-        c.model != null && c.model === frontmatter(file, 'model'),
-        `config=${c.model} frontmatter=${frontmatter(file, 'model')}`);
+        wantEffort != null && wantEffort === frontmatter(file, 'effort'),
+        `config=${wantEffort} frontmatter=${frontmatter(file, 'effort')}`);
+      add(`agent-model-${role}`, `${file} frontmatter model equals the model this configuration implies`,
+        wantModel != null && wantModel === frontmatter(file, 'model'),
+        `want=${wantModel} frontmatter=${frontmatter(file, 'model')}`);
     } else {
       add(`agent-present-${role}`,
         `.claude/agents/${file} is ABSENT (the ${role} role is ${c.engine}-hosted, so a rendered Claude agent would be a stale render)`,
@@ -2099,9 +2790,10 @@ function projectLayerFindings(projectRoot, pluginRoot, opts) {
     // The set itself must be right: an artifact with no entry is unmanaged (an update would refuse
     // to touch it), and an entry with no artifact is a stamp for something that is not there.
     const expected = new Set(['CLAUDE.md#aiwf-core', '.claude/aiwf-native/roles.json', '.claude/agents/writer.md']);
-    for (const role of ['reviewer', 'qa']) {
-      if (cfg.roles && cfg.roles[role] && cfg.roles[role].engine === 'claude') expected.add(`.claude/agents/${role}.md`);
-    }
+    // Same rule as agent-present-*: reviewer.md is part of this configuration when the Reviewer role
+    // OR any review row is claude-hosted; qa.md follows its own role alone.
+    if (reviewerAgentWanted) expected.add('.claude/agents/reviewer.md');
+    if (cfg.roles && cfg.roles.qa && cfg.roles.qa.engine === 'claude') expected.add('.claude/agents/qa.md');
     const actualKeys = new Set(Object.keys(regions));
     const missing = [...expected].filter((k) => !actualKeys.has(k));
     const extra = [...actualKeys].filter((k) => !expected.has(k));
@@ -2194,7 +2886,12 @@ function listFiles(dir, filter, acc) {
 function setupFlagFindings(skillText, cliSources) {
   const documented = new Set();
   for (const line of String(skillText).split('\n')) {
+    // A line about a DIFFERENT command carries that command's flags, and they are parsed by that
+    // command's CLI, not by setup's. Skipped by name: /pnp:update and the update engine, and
+    // /pnp:roles (scripts/setup/aiwf-roles.mjs), which the setup skill invokes at the end to print
+    // the audit table.
     if (line.includes('/pnp:update') || line.includes('scripts/update/')) continue;
+    if (line.includes('/pnp:roles') || line.includes('aiwf-roles.mjs')) continue;
     for (const m of line.match(/--[a-z][a-z0-9-]*/g) || []) documented.add(m);
   }
   const list = [...documented].sort();
@@ -2210,14 +2907,14 @@ function setupFlagFindings(skillText, cliSources) {
 // there is. Findings take the plugin root as an argument, so the controls can run the same function
 // over a sabotaged copy - the marketplace section's pattern, for the same reason.
 //
-// The Read/Grep/Glob rule is asserted as ONE canonical sentence in all seven skills rather than as a
-// per-skill paraphrase: seven wordings drift into seven meanings, and a check that accepts any of
-// them proves nothing about the seventh.
+// The Read/Grep/Glob rule is asserted as ONE canonical sentence in every session skill rather than
+// as a per-skill paraphrase: eight wordings drift into eight meanings, and a check that accepts any
+// of them proves nothing about the eighth.
 const DOCTRINE_READING_SENTENCE =
   '**Reading is not a shell job.** Read or inspect files with the Read/Grep/Glob tools - never '
   + '`cat`/`grep`/`ls`/`head`/`node -e` through the shell for reading; the shell is for execution '
   + '(tests, git, build).';
-const DOCTRINE_READING_SKILLS = ['mission', 'work', 'setup', 'review', 'qa', 'loop', 'update'];
+const DOCTRINE_READING_SKILLS = ['mission', 'work', 'setup', 'review', 'qa', 'loop', 'update', 'roles'];
 const DOCTRINE_NEWBORN_SENTENCE =
   'A NEWLY BORN ticket - one that is not in the PLAN\'s recorded execution order - is written into '
   + 'the PLAN, announced in ONE sentence, and STOPS the same way.';
@@ -2506,11 +3203,13 @@ function sectionPayloadIntegrity() {
     // The needle on constructed input: "nothing unparsed" is also what a scan that matched NOTHING
     // reports, so the extractor is shown to both find a real flag and report a fabricated one.
     const probe = setupFlagFindings(
-      'run it with --adopt and --not-a-real-flag\nand see `/pnp:update --resolve <key>` for later\n',
+      'run it with --adopt and --not-a-real-flag\nand see `/pnp:update --resolve <key>` for later\n'
+      + 'and `node scripts/setup/aiwf-roles.mjs --show` for the audit table\n',
       ["has('--adopt')"],
     );
-    check('and that check can fail: a fabricated flag is reported, an update-only one is not scanned',
-      probe.unparsed.length === 1 && probe.unparsed[0] === '--not-a-real-flag' && !probe.documented.includes('--resolve'),
+    check('and that check can fail: a fabricated flag is reported, an update-only or roles-only one is not scanned',
+      probe.unparsed.length === 1 && probe.unparsed[0] === '--not-a-real-flag'
+      && !probe.documented.includes('--resolve') && !probe.documented.includes('--show'),
       `${probe.documented.join(' ')} -> ${probe.unparsed.join(' ')}`);
   }
 
@@ -3720,6 +4419,39 @@ const NEGATIVE_CONTROLS = [
     apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'roles.json'], (j) => { j.qal.effort = 'low'; }) },
   { id: 'qal-enabled-mirrored', label: 'the qal enabled gate flipped only in roles.json',
     apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'roles.json'], (j) => { j.qal.enabled = false; }) },
+  { id: 'roles-match-review-docs', label: 'the rendered docs row drifted from the config (its engine flipped in roles.json only)',
+    apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'roles.json'], (j) => { j.review.docs.engine = 'codex'; }) },
+  { id: 'roles-match-review-plan', label: 'the rendered plan row carries a pass count the config does not',
+    apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'roles.json'], (j) => { j.review.plan.passes = 3; }) },
+  { id: 'roles-match-review-code', label: 'roles.json rendered before the audit table existed (no review block at all)',
+    apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'roles.json'], (j) => { delete j.review; }) },
+  // The two shape rules the schema cannot express (both would need `not`), plus the missing-row case
+  // that its `required` deliberately does not cover - see the assertion's own comment.
+  { id: 'review-row-shape', label: 'a Claude review row carrying its own effort (a value nothing reads)',
+    apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
+      c.review.docs = { passes: 1, engine: 'claude', model: 'opus', effort: 'high' };
+    }) },
+  { id: 'review-row-shape', label: 'an inherited row carrying a model but no engine (half a host)',
+    apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => { c.review.code.model = 'sonnet'; }) },
+  { id: 'review-row-shape', label: 'a review row missing from the config entirely',
+    apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => { delete c.review.plan; }) },
+  // The OR arm of the reviewer-agent rule, on its own: with the Reviewer codex-hosted and a review
+  // ROW claude-hosted, the agent file is still required. Under the pre-0.2.0 rule (role only) this
+  // sabotage would read as a clean install with no agent file, which is exactly why it is a control.
+  { id: 'agent-present-reviewer', label: 'a claude-hosted review ROW with no reviewer agent file (the Reviewer role is codex)',
+    apply: (r) => {
+      mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
+        c.roles.reviewer = { engine: 'codex', model: 'codex-atom-2', effort: 'high' };
+        c.review.docs = { passes: 1, engine: 'claude', model: 'opus' };
+      });
+      fs.rmSync(path.join(r, '.claude', 'agents', 'reviewer.md'));
+    } },
+  { id: 'managed-regions-cover', label: 'a claude-hosted review row whose reviewer agent has no bookkeeping entry',
+    apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
+      c.roles.reviewer = { engine: 'codex', model: 'codex-atom-2', effort: 'high' };
+      c.review.docs = { passes: 1, engine: 'claude', model: 'opus' };
+      delete c._aiwf.managedRegions['.claude/agents/reviewer.md'];
+    }) },
   { id: 'tier-alias-reviewer', label: 'a claude-hosted role pinned to a full model id',
     apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => { c.roles.reviewer.model = 'claude-opus-5[1m]'; }) },
   { id: 'agent-effort-reviewer', label: 'an agent frontmatter effort drifted from the config',
@@ -3876,9 +4608,10 @@ function main() {
     sectionMigrationPayload(tmpRoot);
     sectionHookWiring();
     sectionMarketplace(tmpRoot);
-    sectionWrappers();
+    sectionWrappers(tmpRoot);
     sectionShWrappers(tmpRoot);
     sectionResolver(tmpRoot);
+    sectionRolesCommand(tmpRoot, pluginVersion);
     sectionPayloadIntegrity();
     sectionPayloadDoctrine(tmpRoot);
     sectionProvenance(tmpRoot);
