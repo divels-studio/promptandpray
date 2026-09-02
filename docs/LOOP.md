@@ -15,17 +15,19 @@ document remain the source of truth.
 | **R2 - product (runtime/UI)** | Observable runtime/UI behavior | `COO -> Writer subagent -> /pnp:review -> /pnp:qa -> COO`. Same cap. |
 | **R3 - critical** | Migrations / access policy / auth / destructive / push | Plan-first: COO-approved mini-plan + plan-readiness review (Reviewer, read-only) **before** Writer starts, on `r3/<topic>`, then Writer -> `/pnp:review` -> `/pnp:qa` (if runtime) -> COO synthesis -> **operator** commit/merge gate. |
 
-**The review ENGINE follows the ticket's class in both R2 rows (and in R3).** The review brief
-carries `Class: docs | code` - default `code` when absent. A `docs`-class ticket (plans, the
-overrides document, README, skill/doc prose with no executable artifact) is reviewed by a read-only
-**Claude** subagent whatever `roles.reviewer.engine` says; a `code`-class ticket uses the configured
-engine (`docs/WORKFLOW.md` § Routes). On a **codex-configured** install that Claude host is an
-**ad-hoc** read-only Claude subagent (`general-purpose`, `model: opus`, reviewer preamble in the
-brief), not a rendered agent file - `.claude/agents/reviewer.md` exists only for a claude-hosted
-role. The class override covers **implementation diffs only**: a plan-readiness pass always runs on
-the configured engine (`docs/WORKFLOW.md` § Plan readiness review), with a Claude ad-hoc pre-pass
-allowed before it but carrying no verdict. Before any pass on a PAID engine, `/pnp:review` Step 2b
-runs the cheap fact-check gate over the prose of the diff.
+**The review ENGINE and the pass count come from the ticket's class, in both R2 rows and in R3.**
+The review brief carries `Class: plan | code | docs` - default `code` when absent - and
+`/pnp:review` resolves that row of the **audit table** (`review.<class>` in `aiwf.config.json`,
+rendered into `roles.json`) through the role resolver's reviewer-only `-Class` / `--class` flag:
+engine, model, effort and `passes` in one snapshot. The factory table inherits the Reviewer role on
+all three rows, with 2 passes for `plan` and 1 for `code` and `docs`, and `/pnp:roles` shows the
+whole table and changes it - so "documentation goes to a Claude host" is a value you can see rather
+than a rule this page carries (`docs/WORKFLOW.md` § Routes). A Claude-hosted row dispatches the
+project's rendered `reviewer` agent (`subagent_type: "reviewer"`, `model: <the row's model>`); that
+file is rendered whenever the Reviewer role OR any row is Claude-hosted, so there is no ad-hoc
+reviewer and no model pinned in a document. Before every reviewer pass above the scan tier - a Codex
+pass, or a Claude reviewer on `opus`/`fable` - `/pnp:review` Step 2b runs the cheap fact-check gate
+over the prose of the diff, or of the plan.
 
 `/pnp:loop` states this sequence as a convention. There is **no runtime state machine and no
 counters** - the loop is convention + the native click-based permission gates only.
@@ -46,15 +48,17 @@ counters** - the loop is convention + the native click-based permission gates on
   takes precedence over frontmatter and accepts only the tier aliases
   (`sonnet|opus|haiku|fable`), so passing one silently discards the pin. To change the Writer's
   model, change `roles.writer.model` in the config and re-render - that is the single source of
-  truth. The Reviewer/QA roles are the opposite case - `/pnp:review` and `/pnp:qa` always pass
-  `model: $role.model`, so their `roles.json` values must stay tier aliases.
+  truth. The Reviewer/QA roles are the opposite case - `/pnp:review` always passes the resolved
+  ROW's model and `/pnp:qa` passes `model: $role.model`, so the model values in `roles.json` and in
+  every Claude-hosted review row must stay tier aliases.
 - **Reviewer** - read-only, **engine-neutral** (Codex or Claude per
   `.claude/aiwf-native/roles.json`, resolved by the role resolver of this project's OS channel -
   `scripts/native/ps/aiwf-roles.ps1` on `windows`, `scripts/native/sh/aiwf-roles.sh` on
   `linux`/`macos`; `config.os` selects it, and the two channels mirror each other flag for flag).
-  `/pnp:review` resolves the host once and dispatches either the Codex wrapper
-  (`scripts/native/ps/codex-review.ps1` / `scripts/native/sh/codex-review.sh`) **or** the `reviewer`
-  Claude subagent (`Read/Grep/Glob` only). Adversarial code/design review; reports
+  `/pnp:review` resolves the ticket class's row once and dispatches either the Codex wrapper
+  (`scripts/native/ps/codex-review.ps1` / `scripts/native/sh/codex-review.sh`, which takes the same
+  `-Class` / `--class`) **or** the `reviewer` Claude subagent (`Read/Grep/Glob` only).
+  Adversarial code/design review; reports
   `pass` / `pass-with-notes` / `fail` (per
   `docs/REVIEW_CHECKLIST.md`; `PASS`/`NEEDS-FIX` is reserved for plan-readiness); never edits.
 - **QA** - read-only, **engine-neutral** (Codex or Claude per `roles.json`). `/pnp:qa` resolves the

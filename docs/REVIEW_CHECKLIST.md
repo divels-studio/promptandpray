@@ -15,13 +15,17 @@ ticket-brief contract live in `docs/WORKFLOW.md`; the native mapping is `docs/LO
 
 ## Plan readiness (before implementation)
 
-For durable R2 and all R3 plans, the Reviewer performs two full read-only passes before execution
-approval. Pass one finds all visible material gaps; after the COO revises, pass two re-reads the
-entire plan. If blockers remain, the COO may revise once more and run one final third pass - but
-only with the **operator's explicit permission, requested before the dispatch**: any pass beyond the
-standard two is a budget/limits-gated operator decision, whatever engine hosts the Reviewer. Three
-passes are the hard maximum; if the plan still does not pass, stop and return the unresolved
-blockers to the operator. The Planner/COO never approves its own plan.
+For durable R2 and all R3 plans, the Reviewer performs `review.plan.passes` full read-only passes
+before execution approval - the plan row of the audit table, factory 2, shown and changed by
+`/pnp:roles`. It is a CYCLE, not a fixed pair: each pass reads the complete plan and returns all
+visible material gaps at once, the COO revises between passes, and this repeats until
+`review.plan.passes` is exhausted. Every one of those passes runs on the ticket's standing word.
+ONLY a pass BEYOND that number needs the **operator's explicit permission, requested before the
+dispatch** - it is a budget/limits-gated operator decision, whatever engine hosts the Reviewer - so
+`review.plan.passes` + 1 is the hard maximum; if the plan still does not pass there, stop and return
+the unresolved blockers to the operator. The Planner/COO never approves its own plan, and the
+fact-check gate runs before every one of these passes above the scan tier - it is skipped only when
+the reviewer itself runs on a scan-tier model.
 
 Check only that the plan matches the repository, has clear scope, contains no hidden discovery or
 unresolved architecture, sequences executable work correctly, uses real acceptance/verification, and
@@ -39,8 +43,8 @@ Every R2/R3 brief hands the Reviewer and QA:
 
 Neither role is obligated to invent findings; absence of defects at the given threshold is a valid
 `pass`. Stop when the stop condition is met - do not keep digging. The implementation loop is capped
-at `loop.correctionRoundsCap` correction rounds; plan readiness follows its separate two-pass
-contract above.
+at `loop.correctionRoundsCap` correction rounds; plan readiness follows its separate
+`review.plan.passes` contract above.
 
 ---
 

@@ -35,6 +35,20 @@ command shows the whole picture and changes any of it without a re-interview.
   claude-hosted host and does not exist at all on a codex-configured project). Without a record it
   is reported as `not on this installation (no record) - skipped` instead of aborting the run. No
   adoption, no write, no new bookkeeping entry.
+- **A third countable tripwire (AUD-002)** - running a mechanical procedure (a helper script, a bulk
+  find/replace, a verify cycle over a fixed list, debugging a helper written a minute ago) is a
+  `general-purpose` subagent's job with exact inputs and an output contract, not the orchestrator's.
+  The countable moment is the SECOND inline fix of the same helper in one session. It is in
+  `docs/WORKFLOW.md` and in the managed `CLAUDE.md` region, so it travels to installed projects.
+- **The COO's own readiness pass, before any paid one (AUD-002)** - `docs/WORKFLOW.md` § Plan
+  readiness: a finished draft is re-read in a separate turn against the six readiness checks, every
+  `file:line` opened and every command executed on the recorded OS channel, before an auditor is
+  dispatched. A paid pass verifies decisions; precision is paid for on the author's own account.
+- **A fifth brief-authoring failure: a scope guard is anchored to HEAD at dispatch (AUD-002)** -
+  never to the previous ticket's commit, which silently includes everything committed in between
+  (typically the orchestrator's own completion-record commit) and manufactures a VERIFY failure the
+  Writer cannot and must not fix. Guards that intentionally span several tickets keep their named
+  base and say so.
 
 ### Changed
 
@@ -45,13 +59,29 @@ command shows the whole picture and changes any of it without a re-interview.
   the Reviewer role OR any review row is claude-hosted. `/pnp:roles --show` marks a Claude auditor
   below the top tier; QA is deliberately not marked - it compares artifacts against acceptance
   criteria rather than auditing decisions.
+- **The doctrine reads the table instead of stating rules (AUD-002)** - `docs/WORKFLOW.md`,
+  `docs/LOOP.md`, `docs/REVIEW_CHECKLIST.md`, `docs/OPERATOR_PROTOCOL.md`, `/pnp:review`,
+  `/pnp:work`, the `README`, the reviewer agent template, the overrides template and the managed
+  `CLAUDE.md` region no longer hardcode "two passes", "a third pass", a docs-class host or a model.
+  The review brief carries `Class: plan | code | docs`, `/pnp:review` resolves that row through the
+  resolver's `-Class`, plan readiness runs `review.plan.passes` with `review.plan.passes` + 1 as the
+  hard maximum, and a docs-class ticket on a Claude host is a configuration `/pnp:roles` shows.
+- **The fact-check gate guards the expensive pass, whichever engine hosts it (AUD-002)** - it runs
+  before every reviewer pass above the scan tier (a Codex pass, or a Claude reviewer on
+  `opus`/`fable`), over a diff **or over a plan**, and may be skipped only when the reviewer itself
+  runs on a scan-tier model. The old wording skipped it whenever the Claude branch resolved, which
+  was wrong the moment a Claude auditor became the expensive one.
 
 ### Removed
 
 - **The ad-hoc `opus` reviewer for docs-class diffs (AUD-001)** - "a docs-class ticket goes to a
   Claude host regardless of the configured engine" is no longer a rule with a hardcoded model. It
   is `review.docs`, which starts out inheriting the same auditor as `review.code` and is one
-  `/pnp:roles --set` away from anything else.
+  `/pnp:roles --set` away from anything else. A Claude-hosted row now dispatches the project's
+  rendered `reviewer` agent, which exists whenever the Reviewer role or any row is Claude-hosted.
+- **The plan pre-pass as a separate step (AUD-002)** - it was the fact-check gate under a second
+  name, run over a plan instead of a diff. There is now one rule: fact-check before every pass above
+  the scan tier, over a diff or a plan.
 
 ## [0.1.2] - 2026-08-31
 

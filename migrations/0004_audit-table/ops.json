@@ -34,6 +34,12 @@
       "ifRecorded": true
     },
     {
+      "op": "rerender-managed-region",
+      "file": "CLAUDE.md",
+      "region": "aiwf-core",
+      "template": "templates/CLAUDE.md.tmpl#aiwf-core"
+    },
+    {
       "op": "note",
       "id": "overrides-loop-shape",
       "text": "Your overrides document's Loop shape section still says plan readiness has two passes; the contract is now `review.plan.passes` (`/pnp:roles`) - edit that line yourself, the document is yours",

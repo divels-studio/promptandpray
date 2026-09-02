@@ -55,14 +55,16 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
 
 - The operator's four gates: the commit click / the push word (a commit is the native dialog alone;
   push/merge/rebase need an explicit word plus their dialog), review passes BEYOND the review
-  contract (a third readiness pass, a correction round past the cap - each its own explicit word,
-  while the passes the route prescribes run on the ticket's standing word), destructive or
-  system-changing operations, and product/UX choices (stop-and-wait when 2+ variants exist).
+  contract (a pass beyond `review.plan.passes`, a correction round past the cap - each its own
+  explicit word, while the passes the route prescribes run on the ticket's standing word),
+  destructive or system-changing operations, and product/UX choices (stop-and-wait when 2+
+  variants exist).
 - The Writer is the only repo writer for R2/R3; dispatch via the Agent tool with a `Ticket: <REF>`
   line; never pass `model` when dispatching the Writer (its pin lives in its frontmatter, and the
   override would silently replace it with a tier alias).
 - Reviewer (`/pnp:review`) after the diff; QA (`/pnp:qa`) only for observable runtime/UI behavior;
-  both engine-neutral per `roles.json`.
+  both engine-neutral per `roles.json`. The review brief carries `Class: plan | code | docs`, and
+  that row of the audit table - not a rule in a document - decides the host and the pass count.
 - Subagent model policy: an explicit `model` always; `haiku` for mechanical scans, `sonnet` for
   evidence-with-judgment (the default scan tier); the top tier is never delegated for scans.
 - While an R2/R3 ticket is open the main session writes only `docs/**`, `.aiwf/**` and root-level

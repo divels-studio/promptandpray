@@ -21,9 +21,10 @@ Born in a real production project, then extracted and genericized.
 
 What is here:
 
-- **Ten commands** as skills: `loop`, `brief`, `mission`, `work`, `review`, `qa`, `qal`, `setup`,
-  `update`, `selfcheck` - each opening with the same Step 0, because a skill inside a plugin has no
-  project of its own: resolve the project root, read the config, and stop against the version
+- **Eleven commands** as skills: `loop`, `brief`, `mission`, `work`, `review`, `qa`, `qal`, `roles`,
+  `setup`, `update`, `selfcheck` - each opening with the same Step 0, because a skill inside a
+  plugin has no project of its own: resolve the project root, read the config, and stop against the
+  version
   interlock if migrations are pending. `update` and `selfcheck` are the two documented exceptions -
   the command that applies the migrations and the diagnostic you need most when something is out of
   date cannot be the two that refuse to run.
@@ -152,6 +153,7 @@ node scripts/ci/run-example-cycle.mjs
 | `/pnp:review` | the Reviewer over the current diff, or a plan in plan-readiness mode. Read-only; returns pass / pass-with-notes / fail. |
 | `/pnp:qa` | QA as an artifact judge over what an end-to-end run produced. Only for tickets with observable runtime behavior. |
 | `/pnp:qal` | the live agentic-browser exception: unsandboxed, Codex-only, disabled by default, and never invoked on the orchestrator's own initiative. |
+| `/pnp:roles` | the audit table on one screen - who audits what, on which engine, with how many passes - and the one command that changes it, without a re-interview. |
 | `/pnp:setup` | installs or re-interviews the project layer. |
 | `/pnp:update` | applies the payload's migrations to this project, with conflict dialogs and a CHANGES report. Never commits. |
 | `/pnp:selfcheck` | runs the payload and project-layer assertions, with their negative controls. |
@@ -161,13 +163,20 @@ Reviewer and QA are engine-neutral: each is hosted on Codex or on Claude, chosen
 sandbox; on the Claude host it is a `Read/Grep/Glob` tool allowlist plus Gate 1, and this repository
 does not pretend those two are the same guarantee.
 
+Which host reviews a given ticket is the **audit table**, not a rule in a document: `review.plan`,
+`review.code` and `review.docs` in `aiwf.config.json`, one row per review class, each with its own
+pass count and optionally its own engine and model. The review brief's `Class:` line names the row;
+`review.plan.passes` is how many readiness passes a plan gets before one more needs the operator's
+word. `/pnp:roles` prints the whole table and changes any of it. What is deliberately NOT in the
+table: the fact-check gate, which runs before every pass above the scan tier, over a diff or a plan.
+
 ## FAQ
 
 **Why does the Reviewer run through your own wrapper instead of the official Codex plugin?**
 
 Because of the output contract, not the packaging. That plugin's review verbs force a fixed JSON
 schema whose verdict is `approve` or `needs-attention`; this loop runs on `pass` /
-`pass-with-notes` / `fail` for implementation review and on a two-pass `PASS` / `NEEDS-FIX` for plan
+`pass-with-notes` / `fail` for implementation review and on `PASS` / `NEEDS-FIX` for plan
 readiness, and neither of those maps onto a binary. Its review slash command also ignores a custom
 brief entirely - the adversarial variant takes a focus string, but still forces the schema - so the
 risk threshold and the stop condition, the two fields every R2/R3 brief is required to carry, would

@@ -77,13 +77,20 @@ WHAT to change is the symptom of a defective brief, not of diligence. A single W
 been observed spending on the order of a full session's context budget on discovery that a
 pre-brief scan pass would have delivered at scan-tier cost.
 
-**Two countable tripwires.** The rule above states categories, and categories do not stop
-mid-work inertia; these two moments do. (1) **Anything outside the repository is agent work per
+**Three countable tripwires.** The rule above states categories, and categories do not stop
+mid-work inertia; these three moments do. (1) **Anything outside the repository is agent work per
 se**: downloading or sweeping upstream source, tarballs, external documentation - zero own steps,
 dispatch immediately; reading the repository's own canon stays the COO's. (2) **An open question
-that has already cost two lookups (Read/Grep) without an answer -> stop and dispatch.** Both
-exist because the category was known and the stopping moment was not: a COO can read this section
-in its own preflight, classify correctly, and still slide across the boundary by inertia.
+that has already cost two lookups (Read/Grep) without an answer -> stop and dispatch.**
+(3) **Running a mechanical procedure is agent work, not COO work.** A helper script, a bulk
+find/replace, a verify cycle over a fixed list, debugging a helper the COO wrote a minute ago -
+"run this procedure and report" goes to a `general-purpose` subagent (`model: sonnet`; `haiku` when
+the job is counting) with exact inputs (paths, the mapping, the expected numbers, the verify
+commands) and an output contract. The COO decides, briefs, reads the result and commits; the SECOND
+inline fix of the same helper in one session is the countable moment - the first was the slide, the
+second is the pattern. All three exist because the category was known and the stopping moment was
+not: a COO can read this section in its own preflight, classify correctly, and still slide across
+the boundary by inertia.
 
 **Model policy for ad-hoc subagents:** always pass an explicit `model` to the Agent tool - never
 inherit the session model silently. `haiku` for purely mechanical scans (existence/counts, grep
@@ -122,9 +129,12 @@ A wrong path, a wrong line number, a wrong count, a command that does not exist,
 how an engine or a hook behaves - those are checkable against the tree by anything that can read
 it, and paying a review pass to find them buys at the most expensive tier what the cheapest one
 proves. They are caught by the **fact-check gate** (`/pnp:review` Step 2b): one cheap read-only
-scan agent over the prose of the diff, run BEFORE any paid pass, returning only the false or
-unverifiable claims with `file:line` and the correct value. The COO fixes those, and only then
-dispatches the review.
+scan agent over the prose of the diff - or of the plan - run BEFORE every reviewer pass above the
+scan tier, returning only the false or unverifiable claims with `file:line` and the correct value.
+The COO fixes those, and only then dispatches the review. The gate guards the EXPENSIVE pass,
+whichever engine hosts it: a Claude reviewer on `opus`/`fable` costs top-tier tokens exactly as a
+Codex pass costs external quota, and only a reviewer that itself runs on a scan-tier model
+(`haiku`/`sonnet`) has nothing more expensive than the gate to protect.
 
 ## The operator does not arbitrate engineering decisions
 
@@ -132,10 +142,11 @@ Scope structuring, brief content, technical sequencing, and what-lands-in-which-
 an approved plan) are the COO's calls - decided and REPORTED with a one-line rationale, not
 offered as questions. The operator's gates are exactly: the commit click / the push word (a
 commit is the native dialog alone; push/merge/rebase need an explicit word plus their dialog),
-review passes BEYOND the review contract (a third readiness pass, a correction round past the cap -
-each needs its own explicit word; the passes the route already prescribes - the implementation
-pass, the two readiness passes, the second paid pass after a correction round that touched code -
-run on the ticket's standing word), destructive or system-changing operations, and product/UX
+review passes BEYOND the review contract (a pass beyond `review.plan.passes`, a correction round
+past the cap - each needs its own explicit word; the passes the route already prescribes - the
+implementation pass, the readiness passes `review.plan.passes` names, the second pass above the
+scan tier after a correction round that touched code - run on the ticket's standing word),
+destructive or system-changing operations, and product/UX
 choices (what the user sees or loses as functionality). A question outside those gates blocks the
 operator without adding value - asking it is a workflow defect, not politeness.
 
@@ -218,21 +229,30 @@ defaults the plugin seeds there are: one reviewer rather than two; a correction-
 high-12 caps; R1 uses no orchestration loop; QA is conditional (only when a brief declares
 observable runtime/UI behavior, never in R1 or non-runtime R2).
 
+Configurable in `aiwf.config.json` and shown on one screen by `/pnp:roles`: the **audit table** -
+`review.plan`, `review.code` and `review.docs`, one row per review class. A row carries `passes`
+alone and INHERITS the Reviewer role whole (engine, model and effort together), or it names its own
+host. The factory table is `plan 2`, `code 1`, `docs 1`, all three inheriting the Reviewer. Who
+audits what, on which engine, with how many passes is therefore a value the operator reads and
+changes - not a sentence in this document. What the table does NOT contain is the fact-check gate:
+it runs before every pass above the scan tier, over a diff or a plan, and it is not configurable.
+
 Not configurable, and enforced here regardless of the project:
 
 - **Only the operator lifts the correction-round cap.** After the cap without a passable result,
   stop and summarize to the operator. A round beyond the cap requires an explicit word in chat
   *before* the re-dispatch, granted one extension at a time and recorded in the ticket's PLAN
   entry.
-- Plan readiness keeps its own two-pass contract (below), independent of the correction cap.
+- Plan readiness runs on its own contract - `review.plan.passes`, the audit table's plan row
+  (below) - independent of the correction cap.
 - The risk threshold and the stop condition are mandatory in every R2/R3 brief.
-- **A second PAID pass only when the correction round touched code.** A pass on a paid external
-  engine is an operator quota gate, and a correction round whose whole delta is PROSE does not buy
-  a second one: it is verified by the fact-check gate (one cheap scan agent over the changed text)
-  plus the COO's own first-hand verification of the delta, and both are recorded in the ticket's
-  completion record. The moment a correction round changes code, the second pass runs on the
-  configured engine as usual. The operator may always ask for a paid pass explicitly - this rule
-  removes a default, never an option.
+- **A second pass above the scan tier only when the correction round touched code.** Such a pass
+  costs the operator - external quota on a Codex host, top-tier tokens on a Claude one - and a
+  correction round whose whole delta is PROSE does not buy a second one: it is verified by the
+  fact-check gate (one cheap scan agent over the changed text) plus the COO's own first-hand
+  verification of the delta, and both are recorded in the ticket's completion record. The moment a
+  correction round changes code, the second pass runs on the row's host as usual. The operator may
+  always ask for another pass explicitly - this rule removes a default, never an option.
 
 ## Planning lock
 
@@ -258,7 +278,7 @@ must not:
 - stage, commit, switch/create branches, merge, push, or perform another Git mutation.
 
 The sole orchestration exception is a read-only plan-readiness review by the Reviewer - run
-through the **plan-readiness mode of `/pnp:review`** (the `PASS`/`NEEDS-FIX`, two-pass branch)
+through the **plan-readiness mode of `/pnp:review`** (the `PASS`/`NEEDS-FIX` readiness branch)
 under the rules below. It does not release the planning lock or authorize implementation.
 
 Selecting an option (for example `A`, `B`, or `C`) chooses direction and refines the plan; it is
@@ -279,23 +299,45 @@ asks the operator before readiness only when missing authority or an unresolved 
 materially change product intent, an architecture boundary, security/external risk or cost, or an
 irreversible outcome and cannot be resolved from the repo.
 
-**Readiness always runs on the configured engine.** The docs/code class override that can move an
-implementation review to a Claude host (see "Routes") does not reach this mode: a plan is where a
-missed blocker costs a whole ticket, so both passes go to the engine `roles.reviewer.engine` names. A
-Claude ad-hoc pre-pass before pass 1 is allowed and cheap - but it returns no verdict and does not
-count as one of the passes, exactly like the fact-check gate.
+**Readiness runs on the `review.plan` row.** Which engine and model audits a plan is the audit
+table's answer, not this document's: `/pnp:review` resolves `review.plan` through the role
+resolver's `-Class plan` and dispatches that host, and `/pnp:roles` shows it and changes it. The
+fact-check gate runs before every one of these passes above the scan tier, over the plan exactly as
+it runs over a diff, and is skipped only when the reviewer itself runs on a scan-tier model - it
+returns no verdict and it is never one of the passes.
 
-The same Reviewer performs a minimum of two full passes:
+**The COO's own pass comes first, and it is not one of the counted ones.** Once the draft is
+"finished", the COO re-reads it in a SEPARATE turn against the six readiness checks below, before
+any auditor is dispatched: every `file:line` opened, every command executable on the OS channel the
+plan records, not one "if the Writer finds ...", every promise of a guarantee checked against the
+code that gives it. The fact-check agent is dispatched with one extra instruction alongside its
+standing task - "every acceptance command exists and can fail". This is not ceremony: on the plan
+that introduced the audit table, the first readiness pass returned 10 blockers of which 8 were the
+author's own (shortcuts, a decision left open, code not read), and the pass after it returned 14, of
+which 11 had been visible in the first. A paid pass verifies decisions; precision is paid for on the
+COO's own account.
+
+The same Reviewer performs `review.plan.passes` full passes, and it is a CYCLE rather than a fixed
+pair: each pass adversarially reads the COMPLETE plan - not only the lines that changed - and
+returns all visible material gaps at once; the COO revises between passes; this repeats until
+`review.plan.passes` is exhausted. EVERY one of those configured passes runs on the ticket's
+standing word, whatever the number is. With the factory value of 2 the cycle is exactly:
 
 1. adversarially review the complete draft and return all visible material gaps at once;
 2. after the COO revises the plan, review the complete plan again - not only the changed lines.
 
-If blockers remain after pass two, the COO may revise once more and - only with the **operator's
-explicit permission**, requested before dispatch - run one final third pass. Any review pass
-beyond the standard two is a budget/limits-gated operator decision regardless of the engine
-hosting the Reviewer. Three passes are the hard maximum; if the plan still does not pass, stop
-and return the unresolved blockers to the operator. Each pass returns only `PASS` or `NEEDS-FIX`
-with concise, actionable blockers (this is the plan-readiness branch of `/pnp:review`, distinct
+That numbered pair is the factory-2 illustration, not the contract. At `review.plan.passes: 3` a
+further configured pass runs on the same standing word; at `1` only the first runs; at `0` the plan
+gets no auditor at all and the COO's own reading plus the fact-check gate is the whole contract - a
+configuration `/pnp:roles` prints as `no auditor`, never a shortcut taken silently.
+
+Only once the CONFIGURED passes are exhausted and blockers remain may the COO revise once more and -
+with the **operator's explicit permission**, requested before dispatch - run one final extra pass. A
+review pass beyond `review.plan.passes` is a budget/limits-gated operator decision regardless of the
+engine hosting the Reviewer, so `review.plan.passes` + 1 is the hard maximum; if the plan still does
+not pass there, stop and return the unresolved blockers to the operator. Each pass returns only
+`PASS` or `NEEDS-FIX` with concise, actionable blockers (this is the plan-readiness branch of
+`/pnp:review`, distinct
 from the implementation `pass`/`pass-with-notes`/`fail` verdict). No separate audit backlog,
 handoff file, narrative report, universal DoR, or universal DoD is created.
 
@@ -358,7 +400,7 @@ no config, an unreadable or malformed config, a missing key, a non-boolean value
 guard armed exactly as it is with no config layer at all. The toggle never touches Gate 1: no
 config value can buy a non-writer subagent the right to write.
 
-Four brief-authoring failures each cost a correction round:
+Five brief-authoring failures each cost a correction round:
 
 - **State the end state, not the edit.** "A reader cannot reach step X without having established
   the prerequisite" is checkable; "add the version constraint" is not - and it can land *after*
@@ -373,6 +415,14 @@ Four brief-authoring failures each cost a correction round:
   unverified, for the Writer to check. A claim dictated from memory of the design instead of read
   from the source comes back as a review blocker; a brief that instructs the Writer to read the
   source before writing any factual claim produces zero factual errors.
+- **A scope or diff guard is anchored to HEAD at dispatch, never to an older commit.** A
+  guard that asks "what did this ticket touch" must diff against the tree the Writer started
+  from (`git rev-parse HEAD` at the moment of dispatch, written into the brief as a literal
+  hash); anchoring it to "the previous ticket's commit" silently includes every commit made in
+  between - typically the COO's own completion-record commit - and manufactures a false VERIFY
+  failure the Writer cannot (and must not) fix. Guards that intentionally span several tickets
+  (e.g. "no `messages/**` change since `<base>`") stay on their named base, but say so
+  explicitly.
 
 **The brief carries its full precision in the first draft.** A readiness or implementation
 review VERIFIES decisions the COO has already made; it is never the mechanism that extracts
@@ -514,23 +564,25 @@ Reviewer at all.
 Correction rounds are capped (see "Loop shape and its overrides"). Local commit after the loop
 passes and a human approves (the commit `ask` dialog - see Commit & Push Authority).
 
-**The engine follows the ticket's CLASS, not only the configuration.** Every review brief carries
-`Class: docs | code` (default `code` when the line is absent), and `/pnp:review` reads it before
-it resolves the host:
+**The engine and the pass count come from the ticket's CLASS - and the class is a row you can
+see.** Every review brief carries `Class: plan | code | docs` (default `code` when the line is
+absent), and `/pnp:review` resolves that row of the **audit table** before it dispatches:
 
-- **`Class: docs`** - plans, the overrides document, README, skill/doc prose with **no executable
-  artifact** in the diff - is reviewed by a read-only **Claude** subagent, whatever
-  `roles.reviewer.engine` says. Prose is judged by reading the tree, which the Claude host does at
-  no external-quota cost. On a **codex-configured** install that host is an **ad-hoc** read-only
-  Claude subagent (`subagent_type: "general-purpose"`, `model: "opus"`, the brief prefixed with a
-  read-only reviewer preamble), not a rendered agent file: `.claude/agents/reviewer.md` is rendered
-  only for a claude-hosted role (`/pnp:review` Step 3).
-- **`Class: code`** - anything that runs, is imported, or is tested - uses the configured engine.
+- **`Class: code`** - anything that runs, is imported, or is tested - takes `review.code`.
+- **`Class: docs`** - the overrides document, README, skill/doc prose with **no executable
+  artifact** in the diff - takes `review.docs`.
+- **`Class: plan`** - a plan-readiness pass over a durable plan before implementation - takes
+  `review.plan` (see "Plan readiness review").
+
+The engine, the model, the effort and `passes` all come from `review.<class>`; the factory table
+sends all three rows to the Reviewer role, with one pass for `code` and `docs`. **A docs-class
+ticket on a Claude host is a configuration you can see with `/pnp:roles`, not a rule** - and a
+Claude-hosted row dispatches the project's rendered `reviewer` agent, which `/pnp:setup` and
+`/pnp:roles` render whenever the Reviewer role OR any row is Claude-hosted, so the row is always
+dispatchable.
 
 The class is the COO's call and follows the R1 rule above: the moment a docs-class ticket gains an
-executable artifact it is code class, in the review engine as in the route. The override covers
-**implementation diffs only**: a plan-readiness pass always runs on the configured engine (see "Plan
-readiness review"), whatever class the ticket it plans will carry.
+executable artifact it is code class, in the review row as in the route.
 
 ### R3 - critical (migrations / access policy / auth / destructive / push)
 
@@ -612,8 +664,9 @@ The loop is reproducible from Git plus the plugin payload - no external runtime 
   the role resolver of this project's OS channel - `scripts/native/ps/aiwf-roles.ps1` (entrypoint
   `-Role <r> -RolesPath <p> -AsJson`) on `windows`, `scripts/native/sh/aiwf-roles.sh` (entrypoint
   `--role <r> --roles-path <p> --as-json`) on `linux`/`macos`; on either, a missing config file
-  falls back to the factory `claude`/`opus`/`high` record. `/pnp:review` and
-  `/pnp:qa` dispatch either the read-only Codex wrappers of that channel
+  falls back to the factory `claude`/`opus`/`high` record. The reviewer-only `-Class` / `--class`
+  flag resolves the audit table's row for one review class instead, adding `passes`. `/pnp:review`
+  and `/pnp:qa` dispatch either the read-only Codex wrappers of that channel
   (`scripts/native/ps/codex-review.ps1` / `scripts/native/ps/codex-qa.ps1`, or
   `scripts/native/sh/codex-review.sh` / `scripts/native/sh/codex-qa.sh`; recipe:
   `docs/CODEX_REVIEW_QA_RECIPE.md`; needs the Codex CLI) **or** the `reviewer` / `qa` Claude

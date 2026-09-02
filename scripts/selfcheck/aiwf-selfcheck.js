@@ -2920,23 +2920,24 @@ const DOCTRINE_NEWBORN_SENTENCE =
   + 'the PLAN, announced in ONE sentence, and STOPS the same way.';
 const DOCTRINE_NEWBORN_SKILLS = ['mission', 'work'];
 const BLANKET_GIT_C_RULE = 'Bash(git -C:*)';
-// Step 0c is THREE claims, and each rots on its own: that the brief carries the class at all, that
-// `Class: docs` BEATS the configured engine, and that "the Claude host" it selects is dispatchable
-// on the installs the override was written for. The last one is not decoration: `.claude/agents/
-// reviewer.md` is rendered only when the role's engine is `claude` (scripts/setup/generate.mjs), so
-// on a codex-configured project there is no `reviewer` subagent and `roles.reviewer.model` is a
-// Codex model name the Agent tool would reject - without the ad-hoc fallback the docs-class route
-// is undispatchable exactly where it matters. Asserting only the heading proved none of that.
-const DOCTRINE_REVIEW_CLASS_OVERRIDE = 'regardless of `roles.reviewer.engine`';
-const DOCTRINE_REVIEW_CLASS_FALLBACK = 'subagent_type: "general-purpose"';
-// The fourth claim of Step 0c, added after readiness blockers were repeatedly found by the
-// configured engine: the class override is for IMPLEMENTATION diffs. A plan-readiness pass keeps
-// the configured host - the cheap Claude pre-pass is allowed, but it carries no verdict, so a
-// wording that lets `Class: docs` move readiness onto it would quietly delete the second opinion
-// exactly where a missed blocker costs a whole ticket.
+// Step 0b/0c is THREE claims, and each rots on its own: that the brief carries the class at all,
+// that the class is resolved as a ROW of the audit table through the resolver's `-Class` flag, and
+// that the Claude host it can select is a DISPATCHABLE agent. The last one is not decoration.
+// Until 0.2.0 the docs class was a rule with a hardcoded model - an ad-hoc `general-purpose`
+// subagent on a pinned tier - because `.claude/agents/reviewer.md` was rendered only for a
+// claude-hosted ROLE. It is now rendered whenever the role OR any review row is claude-hosted
+// (scripts/setup/generate.mjs), so the row has a real agent and the skill names no model at all.
+// A wording that drifts back to a hardcoded host or a hardcoded model re-invents the thing the
+// audit table replaced, which is why all three are pinned as text.
+const DOCTRINE_REVIEW_CLASS_ROW = 'The class names a ROW of the **audit table**';
+const DOCTRINE_REVIEW_CLASS_RESOLVER = '-Role reviewer -Class <class> -RolesPath';
+const DOCTRINE_REVIEW_CLASS_HOST =
+  'Invoke the **Agent tool** with `subagent_type: "reviewer"`, `model: <$row.model>`';
+// The fourth claim, and the one with money behind it: plan readiness is the `review.plan` row, and
+// its pass count is `review.plan.passes` rather than a number written into a document. A wording
+// that re-hardcodes the count silently removes the operator's control over how much a plan costs.
 const DOCTRINE_REVIEW_READINESS_SENTENCE =
-  'A plan-readiness pass is NOT an implementation diff and never takes this override: it always runs '
-  + 'on the configured engine Step 0b resolved.';
+  'the `review.plan` row - Step 0b resolved it with `-Class plan`';
 // The /pnp:update conflict rule. Until 0.1.2 it took TWO predicates, joined by "or": a payload change
 // to an artifact the operator had never touched raised a dialog, and the operator answered take-new
 // to a question about content that was not theirs. The rule is now one predicate (the operator edited
@@ -2949,6 +2950,199 @@ const DOCTRINE_UPDATE_CONFLICT_SENTENCE =
 // Line breaks are formatting, not meaning: the payload wraps at 100 columns and a re-wrap must not
 // read as a missing rule. Whitespace is collapsed on BOTH sides before comparing.
 const collapseWs = (s) => String(s).replace(/\s+/g, ' ').trim();
+
+// ---------------------------------------------------------------------------
+// THE AUDIT TABLE IN THE DOCTRINE - one assertion per surface, one control each
+// ---------------------------------------------------------------------------
+// "Who audits what" used to be spread over a dozen documents as prose: two passes, a third pass, a
+// docs-class Claude host, a pinned model. It is now `review.<class>` in the config, and every
+// surface that used to STATE the rule must POINT AT the table instead. Grouping them into one
+// finding was rejected: a single "the doctrine reads the table" check that goes red names no file,
+// and the file is the whole diagnosis. So each surface carries one stable sentence, asserted on its
+// own id, whitespace-collapsed (the payload wraps at 100 columns and a re-wrap is not a rot).
+const DOCTRINE_TABLE_SURFACES = [
+  { id: 'doctrine-table-review-class-row',
+    file: 'skills/review/SKILL.md',
+    phrase: DOCTRINE_REVIEW_CLASS_ROW,
+    what: '/pnp:review reads the ticket class as a ROW of the audit table' },
+  { id: 'doctrine-table-review-resolver',
+    file: 'skills/review/SKILL.md',
+    phrase: DOCTRINE_REVIEW_CLASS_RESOLVER,
+    what: '/pnp:review resolves that row through the resolver\'s -Class flag' },
+  { id: 'doctrine-table-review-factcheck-plan',
+    file: 'skills/review/SKILL.md',
+    phrase: 'fact-check before every pass above the scan tier, over a diff or over a plan',
+    what: '/pnp:review states the fact-check gate as ONE rule - diff or plan, above the scan tier' },
+  { id: 'doctrine-table-workflow-class',
+    file: 'docs/WORKFLOW.md',
+    phrase: 'The engine, the model, the effort and `passes` all come from `review.<class>`',
+    what: 'WORKFLOW routes a review by `review.<class>` instead of stating a host rule' },
+  { id: 'doctrine-table-workflow-selfpass',
+    file: 'docs/WORKFLOW.md',
+    phrase: 'The COO\'s own pass comes first, and it is not one of the counted ones.',
+    what: 'WORKFLOW requires the COO\'s own readiness pass before any auditor is dispatched' },
+  { id: 'doctrine-table-workflow-tripwires',
+    file: 'docs/WORKFLOW.md',
+    phrase: '**Three countable tripwires.**',
+    what: 'WORKFLOW carries the third tripwire (a mechanical procedure is agent work)' },
+  { id: 'doctrine-table-loop',
+    file: 'docs/LOOP.md',
+    phrase: 'The review ENGINE and the pass count come from the ticket\'s class',
+    what: 'the one-page native mapping names the table rather than a docs-class rule' },
+  { id: 'doctrine-table-checklist',
+    file: 'docs/REVIEW_CHECKLIST.md',
+    phrase: 'the Reviewer performs `review.plan.passes` full read-only passes',
+    what: 'the verdict rules take the readiness pass count from `review.plan.passes`' },
+  { id: 'doctrine-table-operator-protocol',
+    file: 'docs/OPERATOR_PROTOCOL.md',
+    phrase: '`/pnp:roles` prints the **audit table**',
+    what: 'the operator\'s entrance page points at the one command that shows the table' },
+  { id: 'doctrine-table-reviewer-agent',
+    file: 'templates/agents/reviewer.md.tmpl',
+    phrase: 'How many passes a plan gets is this project\'s `review.plan.passes`',
+    what: 'the rendered Claude reviewer reads its readiness contract from the table' },
+  { id: 'doctrine-table-overrides-template',
+    file: 'templates/PROJECT_OVERRIDES.md.tmpl',
+    phrase: 'Plan readiness runs `review.plan.passes` passes',
+    what: 'the seeded overrides document states the readiness contract as the table' },
+  { id: 'doctrine-table-claude-template',
+    file: 'templates/CLAUDE.md.tmpl',
+    phrase: 'is the audit table: `/pnp:roles`',
+    what: 'the managed CLAUDE.md region sends the orchestrator to the table' },
+  { id: 'doctrine-table-claude-template-tripwires',
+    file: 'templates/CLAUDE.md.tmpl',
+    phrase: 'Three countable tripwires, because categories do not stop mid-work',
+    what: 'the managed CLAUDE.md region carries the third tripwire too' },
+  { id: 'doctrine-table-work-skill',
+    file: 'skills/work/SKILL.md',
+    phrase: 'that row of the audit table - not a rule in a document - decides the host and the pass count',
+    what: '/pnp:work summarises the route with the table, not with a hardcoded host' },
+  { id: 'doctrine-table-readme',
+    file: 'README.md',
+    phrase: 'Which host reviews a given ticket is the **audit table**, not a rule in a document',
+    what: 'the README describes the product as it is' },
+];
+
+// THE FACT-CHECK QUALIFIER, asserted per site. The gate is stated in more than one document, and
+// an unqualified statement of it is not a paraphrase - it is a DIFFERENT rule. "Before every pass"
+// reads as unconditional; the rule is "before every pass ABOVE THE SCAN TIER", with exactly one
+// skip (a reviewer that itself runs on a scan-tier model, where there is nothing more expensive
+// than the gate to protect). The wording was wrong in the other direction once already - it used
+// to skip the gate whenever the CLAUDE branch resolved, which stopped being true the moment a
+// Claude auditor became the expensive host. So each site pins the QUALIFIED sentence, and each
+// control replaces it with the unqualified variant - the exact regression this is here to catch.
+const DOCTRINE_FACTCHECK_SITES = [
+  { id: 'doctrine-factcheck-qualified-review',
+    file: 'skills/review/SKILL.md',
+    phrase: 'the fact-check gate runs before every one of these passes above the scan tier (Step 2b - skipped only when the reviewer itself runs on a scan-tier model)',
+    unqualified: 'the fact-check gate runs before every one of these passes',
+    what: '/pnp:review plan-readiness mode qualifies the gate (above the scan tier, one skip)' },
+  { id: 'doctrine-factcheck-qualified-checklist',
+    file: 'docs/REVIEW_CHECKLIST.md',
+    phrase: 'fact-check gate runs before every one of these passes above the scan tier - it is skipped only when the reviewer itself runs on a scan-tier model',
+    unqualified: 'fact-check gate runs before every one of these passes',
+    what: 'the verdict rules qualify the gate the same way' },
+  { id: 'doctrine-factcheck-qualified-workflow',
+    file: 'docs/WORKFLOW.md',
+    phrase: 'fact-check gate runs before every one of these passes above the scan tier, over the plan exactly as it runs over a diff, and is skipped only when the reviewer itself runs on a scan-tier model',
+    unqualified: 'fact-check gate runs before every one of these passes, over the plan exactly as it runs over a diff',
+    what: 'WORKFLOW Plan readiness qualifies the gate over a plan as it does over a diff' },
+];
+
+// The same rule as it reaches the OPERATOR, in the migration notes - asserted as a NEGATIVE over
+// every migration's NOTES.md instead of as a sentence in one named file. A payload is legitimately
+// RECONSTRUCTED with a different set of migrations (the update suite and the example cycle both
+// build one that way), so "0004 must contain X" would go red on a payload that is not wrong, only
+// different. "No NOTES file may state the gate unqualified" is true of every payload, and it is
+// still exactly the regression the control below reproduces.
+const DOCTRINE_FACTCHECK_NOTES_QUALIFIED =
+  'it runs before every pass above the scan tier, over a diff or over a plan, and it is not configurable';
+const DOCTRINE_FACTCHECK_NOTES_UNQUALIFIED =
+  'it runs before every pass, over a diff or over a plan, and it is not configurable';
+
+function doctrineNotesFiles(root) {
+  const out = [];
+  const walk = (dir) => {
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return; }
+    for (const e of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walk(p); else if (e.name === 'NOTES.md') out.push(p);
+    }
+  };
+  walk(path.join(root, 'migrations'));
+  return out;
+}
+
+// The other half of the same guarantee. The assertions above prove the NEW sentences are present;
+// this proves the OLD ones are gone - a doctrine can carry both and contradict itself in silence.
+// Every pattern here is a phrase that stated as a rule something the audit table now decides, or
+// pinned a model, or named the fact-check gate's skip clause by the engine instead of by the cost.
+// Paths are deliberate: `scripts/` is excluded because a selfcheck fixture legitimately contains a
+// pinned model, `CHANGELOG.md` because history is not edited, `examples/` because the committed
+// example project is data, not doctrine.
+const DOCTRINE_RETIRED_PATTERNS = [
+  'model: "?opus"?',
+  'pre-pass',
+  'whatever `roles\\.reviewer\\.engine` says',
+  'Two countable tripwires',
+  'two full passes',
+  'two full read-only passes',
+  'two-pass',
+  'third pass',
+  'third readiness pass',
+  'two readiness passes',
+  'pass two',
+  'standard two',
+  'minimum of two',
+  'Three passes are the hard maximum',
+  'Four brief-authoring',
+  'no paid pass to protect',
+  'paid external engine \\(the codex branch\\)',
+];
+const DOCTRINE_SWEEP_DIRS = ['docs', 'skills', 'templates'];
+const DOCTRINE_SWEEP_FILES = ['README.md'];
+// Copied into a control copy but deliberately NOT swept: a migration's NOTES QUOTE the retired
+// wording as the history they exist to explain (0004 says the doctrine used to read "plan
+// readiness has two passes", "a third pass needs your word"), so sweeping them would fail on
+// text that is correct. The rule they must NOT break is asserted separately, as a negative scan
+// over every NOTES.md (doctrine-factcheck-qualified-notes).
+const DOCTRINE_COPY_DIRS = [...DOCTRINE_SWEEP_DIRS, 'migrations'];
+const doctrineRetiredRe = () => new RegExp(DOCTRINE_RETIRED_PATTERNS.join('|'));
+
+function doctrineSweepFiles(root) {
+  const out = [];
+  const walk = (dir) => {
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return; }
+    for (const e of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walk(p); else out.push(p);
+    }
+  };
+  for (const d of DOCTRINE_SWEEP_DIRS) walk(path.join(root, d));
+  for (const f of DOCTRINE_SWEEP_FILES) {
+    const p = path.join(root, f);
+    if (fs.existsSync(p)) out.push(p);
+  }
+  return out;
+}
+
+// The same sweep the ticket's acceptance runs as `git grep -nE`, executed here over the payload
+// tree so it also runs on a sabotaged COPY (git grep cannot - a control copy is not a work tree).
+function doctrineRetiredHits(root) {
+  const re = doctrineRetiredRe();
+  const hits = [];
+  for (const file of doctrineSweepFiles(root)) {
+    const text = readText(file);
+    if (text == null) continue;
+    const lines = text.split('\n');
+    for (let i = 0; i < lines.length; i += 1) {
+      if (re.test(lines[i])) hits.push(`${path.relative(root, file).split(path.sep).join('/')}:${i + 1}`);
+    }
+  }
+  return hits;
+}
 
 function payloadDoctrineFindings(pluginRoot) {
   const out = [];
@@ -2973,27 +3167,65 @@ function payloadDoctrineFindings(pluginRoot) {
 
   const review = skillText('review') || '';
   add('doctrine-review-factcheck',
-    '/pnp:review carries Step 2b - the fact-check gate that runs before a paid pass',
+    '/pnp:review carries Step 2b - the fact-check gate that runs before every pass above the scan tier',
     /##\s*Step 2b\b/.test(review) && /fact-check/i.test(review)
     && review.includes('Verify every factual claim in the prose of this diff'),
     /##\s*Step 2b\b/.test(review) ? 'Step 2b present' : 'no Step 2b heading');
   const reviewFlat = collapseWs(review);
   const classMissing = [];
-  if (!review.includes('Class: docs | code')) classMissing.push('no "Class: docs | code" line in the brief template');
+  if (!review.includes('Class: plan | code | docs')) classMissing.push('no "Class: plan | code | docs" line in the brief template');
   if (!/##\s*Step 0c\b/.test(review)) classMissing.push('no Step 0c heading');
-  if (!reviewFlat.includes(collapseWs(DOCTRINE_REVIEW_CLASS_OVERRIDE))) {
-    classMissing.push(`no engine-override sentence ("${DOCTRINE_REVIEW_CLASS_OVERRIDE}")`);
+  if (!reviewFlat.includes(collapseWs(DOCTRINE_REVIEW_CLASS_ROW))) {
+    classMissing.push(`the class is not resolved as a row of the audit table ("${DOCTRINE_REVIEW_CLASS_ROW}")`);
   }
-  if (!reviewFlat.includes(collapseWs(DOCTRINE_REVIEW_CLASS_FALLBACK))) {
-    classMissing.push(`no codex-install fallback dispatch (${DOCTRINE_REVIEW_CLASS_FALLBACK})`);
+  if (!reviewFlat.includes(collapseWs(DOCTRINE_REVIEW_CLASS_RESOLVER))) {
+    classMissing.push(`no resolver call carrying the class (${DOCTRINE_REVIEW_CLASS_RESOLVER})`);
+  }
+  if (!reviewFlat.includes(collapseWs(DOCTRINE_REVIEW_CLASS_HOST))) {
+    classMissing.push('the Claude host is not the rendered `reviewer` agent dispatched with the ROW\'s model');
   }
   if (!reviewFlat.includes(collapseWs(DOCTRINE_REVIEW_READINESS_SENTENCE))) {
-    classMissing.push('no plan-readiness carve-out (readiness always runs on the configured engine)');
+    classMissing.push('plan readiness is not the `review.plan` row resolved with -Class plan');
   }
   add('doctrine-review-class',
-    '/pnp:review takes the ticket class as an explicit brief input (Class: docs | code), lets `docs` OVERRIDE the configured engine for IMPLEMENTATION diffs, keeps plan-readiness on the configured engine, and names a dispatchable Claude host for a codex-configured install',
+    '/pnp:review takes the ticket class as an explicit brief input (Class: plan | code | docs), resolves it as a ROW of the audit table through the resolver\'s -Class, dispatches a Claude row to the rendered `reviewer` agent with the ROW\'s model (no ad-hoc subagent, no model pinned in the doctrine), and takes plan readiness from the `review.plan` row',
     classMissing.length === 0,
-    classMissing.length ? classMissing.join('; ') : 'Class line, Step 0c, the engine override, the plan-readiness carve-out and the codex-install fallback are all present');
+    classMissing.length ? classMissing.join('; ') : 'the Class line, Step 0c, the row lookup, the -Class resolver call, the rendered Claude host and the readiness row are all present');
+
+  for (const s of DOCTRINE_TABLE_SURFACES) {
+    const text = readText(path.join(pluginRoot, ...s.file.split('/')));
+    const present = text != null && collapseWs(text).includes(collapseWs(s.phrase));
+    add(s.id, `${s.file}: ${s.what}`, present,
+      text == null ? 'the file is missing' : (present ? `"${collapseWs(s.phrase)}"` : `the sentence is missing or reworded: "${collapseWs(s.phrase)}"`));
+  }
+
+  const notesFiles = doctrineNotesFiles(pluginRoot);
+  const bareNotes = notesFiles
+    .filter((f) => collapseWs(readText(f) || '').includes(collapseWs(DOCTRINE_FACTCHECK_NOTES_UNQUALIFIED)))
+    .map((f) => path.relative(pluginRoot, f).split(path.sep).join('/'));
+  add('doctrine-factcheck-qualified-notes',
+    'no migration NOTES states the fact-check gate without its "above the scan tier" qualifier',
+    bareNotes.length === 0,
+    bareNotes.length ? 'unqualified in: ' + bareNotes.join(', ')
+      : notesFiles.length + ' NOTES file(s) checked');
+
+  for (const s of DOCTRINE_FACTCHECK_SITES) {
+    const text = readText(path.join(pluginRoot, ...s.file.split('/')));
+    const flat = text == null ? '' : collapseWs(text);
+    const qualified = text != null && flat.includes(collapseWs(s.phrase));
+    // Being unqualified is not merely "the sentence changed": it is the OTHER rule. Reported as
+    // its own detail so a red line says which of the two the file now states.
+    const bare = text != null && !qualified && flat.includes(collapseWs(s.unqualified));
+    add(s.id, s.file + ': ' + s.what, qualified,
+      text == null ? 'the file is missing'
+        : (qualified ? 'qualified' : (bare ? 'states the UNQUALIFIED gate ("' + collapseWs(s.unqualified) + '")' : 'the sentence is missing or reworded')));
+  }
+
+  const retired = doctrineRetiredHits(pluginRoot);
+  add('doctrine-retired-phrases',
+    `no retired "who audits what" phrasing survives anywhere in docs/, skills/, templates/ or README.md (${DOCTRINE_RETIRED_PATTERNS.length} patterns)`,
+    retired.length === 0,
+    retired.length ? `still present at: ${retired.join(', ')}` : `${doctrineSweepFiles(pluginRoot).length} files swept, 0 hits`);
 
   const update = collapseWs(skillText('update') || '');
   add('doctrine-update-conflict-rule',
@@ -3016,20 +3248,32 @@ function payloadDoctrineFindings(pluginRoot) {
   return out;
 }
 
-// The files the doctrine findings read - the only ones a control copy needs.
+// The files the doctrine findings read - the only ones a control copy needs. Since the retired-
+// phrase sweep walks whole directories, the copy takes those directories whole: a control copy that
+// held only the files the per-surface assertions name would sweep a smaller tree than production
+// and report a clean result the production tree does not have.
 function copyDoctrineFiles(from, to) {
-  for (const name of DOCTRINE_READING_SKILLS) {
-    fs.mkdirSync(path.join(to, 'skills', name), { recursive: true });
-    fs.copyFileSync(path.join(from, 'skills', name, 'SKILL.md'), path.join(to, 'skills', name, 'SKILL.md'));
+  for (const dir of DOCTRINE_COPY_DIRS) {
+    const src = path.join(from, dir);
+    if (fs.existsSync(src)) copyTree(src, path.join(to, dir));
   }
-  fs.mkdirSync(path.join(to, 'templates'), { recursive: true });
-  fs.copyFileSync(path.join(from, 'templates', 'settings.ask-ruleset.json'), path.join(to, 'templates', 'settings.ask-ruleset.json'));
+  for (const file of DOCTRINE_SWEEP_FILES) {
+    const src = path.join(from, file);
+    if (!fs.existsSync(src)) continue;
+    fs.mkdirSync(path.dirname(path.join(to, file)), { recursive: true });
+    fs.copyFileSync(src, path.join(to, file));
+  }
 }
 
-const doctrineSkill = (root, name, fn) => {
-  const p = path.join(root, 'skills', name, 'SKILL.md');
-  fs.writeFileSync(p, fn(readText(p)));
+// Sabotage by RELATIVE PAYLOAD PATH, not by skill name: the doctrine now lives in docs/, templates/
+// and README.md as well, and a control that could only reach a skill could not prove those.
+const doctrineFile = (root, rel, fn) => {
+  const p = path.join(root, ...rel.split('/'));
+  const before = readText(p);
+  if (before == null) throw new Error(`the control copy has no ${rel}`);
+  fs.writeFileSync(p, fn(before));
 };
+const doctrineSkill = (root, name, fn) => doctrineFile(root, `skills/${name}/SKILL.md`, fn);
 const doctrineRuleset = (root, fn) => {
   const p = path.join(root, 'templates', 'settings.ask-ruleset.json');
   const j = JSON.parse(readText(p));
@@ -3044,8 +3288,8 @@ const doctrineRuleset = (root, fn) => {
 // phrase is not found at all.
 const phraseRe = (phrase) => new RegExp(
   phrase.trim().split(/\s+/).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s+'), 'g');
-const doctrinePhrase = (root, skill, phrase, replacement) => doctrineSkill(root, skill, (t) => {
-  if (!phraseRe(phrase).test(t)) throw new Error(`the phrase is not in skills/${skill}/SKILL.md: ${phrase}`);
+const doctrinePhrase = (root, rel, phrase, replacement) => doctrineFile(root, rel, (t) => {
+  if (!phraseRe(phrase).test(t)) throw new Error(`the phrase is not in ${rel}: ${phrase}`);
   return t.replace(phraseRe(phrase), replacement);
 });
 const DOCTRINE_CONTROLS = [
@@ -3062,19 +3306,60 @@ const DOCTRINE_CONTROLS = [
   { id: 'doctrine-review-factcheck', label: 'Step 2b kept as a heading but its reusable prompt text gone',
     apply: (r) => doctrineSkill(r, 'review', (t) => t.split('Verify every factual claim in the prose of this diff').join('Do a quick sanity pass')) },
   { id: 'doctrine-review-class', label: 'the Class input line removed from the review brief template',
-    apply: (r) => doctrineSkill(r, 'review', (t) => t.split('Class: docs | code').join('Class: whatever')) },
-  { id: 'doctrine-review-class', label: 'Step 0c kept, but `Class: docs` no longer OVERRIDES the configured engine',
-    apply: (r) => doctrinePhrase(r, 'review', DOCTRINE_REVIEW_CLASS_OVERRIDE, 'in line with `roles.reviewer.engine`') },
-  { id: 'doctrine-review-class', label: 'the codex-install fallback dispatch gone - the docs-class route points at an agent file that install never renders',
-    apply: (r) => doctrinePhrase(r, 'review', DOCTRINE_REVIEW_CLASS_FALLBACK, 'subagent_type: "reviewer"') },
-  { id: 'doctrine-review-class', label: 'the plan-readiness carve-out gone - the class override reaches readiness and the paid second opinion disappears',
-    apply: (r) => doctrinePhrase(r, 'review', 'it always runs on the configured engine Step 0b resolved', 'it takes the same class override as an implementation diff') },
+    apply: (r) => doctrineSkill(r, 'review', (t) => t.split('Class: plan | code | docs').join('Class: whatever')) },
+  { id: 'doctrine-review-class', label: 'Step 0c kept, but the class is a hardcoded rule again instead of a row of the audit table',
+    apply: (r) => doctrinePhrase(r, 'skills/review/SKILL.md', DOCTRINE_REVIEW_CLASS_ROW, 'The class decides the host by the rule below') },
+  { id: 'doctrine-review-class', label: 'the resolver call loses its class - every review resolves the Reviewer role and the table is decoration',
+    apply: (r) => doctrinePhrase(r, 'skills/review/SKILL.md', DOCTRINE_REVIEW_CLASS_RESOLVER, '-Role reviewer -RolesPath') },
+  { id: 'doctrine-review-class', label: 'the Claude host goes back to an ad-hoc subagent on a model pinned in the doctrine',
+    apply: (r) => doctrinePhrase(r, 'skills/review/SKILL.md', DOCTRINE_REVIEW_CLASS_HOST, 'Invoke the **Agent tool** with `subagent_type: "general-purpose"`, `model: "opus"`') },
+  { id: 'doctrine-review-class', label: 'plan readiness stops being the `review.plan` row - the pass count returns to a number in a document',
+    apply: (r) => doctrinePhrase(r, 'skills/review/SKILL.md', DOCTRINE_REVIEW_READINESS_SENTENCE, 'the engine the Reviewer role names, always') },
   { id: 'doctrine-update-conflict-rule', label: '/pnp:update reworded back to the two-predicate rule - a dialog for an artifact the operator never touched',
-    apply: (r) => doctrinePhrase(r, 'update', 'a conflict is raised **only when you edited** the artifact', 'a conflict is raised when you edited the artifact OR the payload changed it') },
+    apply: (r) => doctrinePhrase(r, 'skills/update/SKILL.md', 'a conflict is raised **only when you edited** the artifact', 'a conflict is raised when you edited the artifact OR the payload changed it') },
   { id: 'doctrine-no-blanket-git-c', label: 'the blanket git -C rule put back into the factory ruleset',
     apply: (r) => doctrineRuleset(r, (j) => { j.permissions.ask.push(BLANKET_GIT_C_RULE); }) },
   { id: 'doctrine-git-c-project-forms', label: 'a rendered git -C <projectRoot> form dropped with it',
     apply: (r) => doctrineRuleset(r, (j) => { j.permissions.ask = j.permissions.ask.filter((x) => x !== 'Bash(git -C <projectRoot> push:*)'); }) },
+  // One control per surface, generated from the same table the assertions come from: a surface
+  // added to the table without a control would be a check nobody proved can fail, and the runner
+  // reports exactly that as a [NOTE] at the end of the section.
+  ...DOCTRINE_TABLE_SURFACES.map((s) => ({
+    id: s.id,
+    label: `${s.file}: the audit-table sentence reworded away ("${collapseWs(s.phrase).slice(0, 60)}...")`,
+    apply: (r) => doctrinePhrase(r, s.file, s.phrase, 'the rule below decides it'),
+  })),
+  // One control per fact-check site, and it is the regression itself rather than a generic rewording:
+  // it replaces the qualified sentence with the UNQUALIFIED one, which is what a well-meaning edit
+  // actually produces.
+  ...DOCTRINE_FACTCHECK_SITES.map((s) => ({
+    id: s.id,
+    label: s.file + ': the fact-check gate stated WITHOUT "above the scan tier"',
+    apply: (r) => doctrinePhrase(r, s.file, s.phrase, s.unqualified),
+  })),
+  { id: 'doctrine-factcheck-qualified-notes',
+    label: 'a migration NOTES drops "above the scan tier" and tells the operator the gate is unconditional',
+    // The one control with a SKIP condition, and the reason is structural: this engine is also run
+    // against payloads assembled for a test, whose migrations are fixtures that say nothing about
+    // the fact-check gate. There the assertion passes because there is nothing to be wrong, and a
+    // control has nothing to sabotage - which is a NOTE, not a failed control. On the real payload
+    // the skip never fires, so the guarantee here is unchanged.
+    skipWhen: (r) => (doctrineNotesFiles(r)
+      .some((p) => collapseWs(readText(p) || '').includes(collapseWs(DOCTRINE_FACTCHECK_NOTES_QUALIFIED)))
+      ? null
+      : 'no migration in this payload states the fact-check gate, so there is nothing to strip a qualifier from'),
+    apply: (r) => {
+      const hit = doctrineNotesFiles(r)
+        .find((p) => collapseWs(readText(p) || '').includes(collapseWs(DOCTRINE_FACTCHECK_NOTES_QUALIFIED)));
+      if (!hit) throw new Error('no migration NOTES states the qualified gate - there is nothing to sabotage');
+      doctrinePhrase(r, path.relative(r, hit).split(path.sep).join('/'),
+        DOCTRINE_FACTCHECK_NOTES_QUALIFIED, DOCTRINE_FACTCHECK_NOTES_UNQUALIFIED);
+    } },
+  // The sweep's control is the mirror image of the assertions': it puts a RETIRED phrase back. The
+  // target is /pnp:loop, which carries none of the per-surface sentences, so this control proves
+  // the sweep alone - not one of the assertions above catching it first.
+  { id: 'doctrine-retired-phrases', label: 'a retired phrasing creeps back into the payload ("two-pass" in /pnp:loop)',
+    apply: (r) => doctrineFile(r, 'skills/loop/SKILL.md', (t) => `${t}\nPlan readiness keeps its own two-pass contract.\n`) },
 ];
 
 function sectionPayloadDoctrine(tmpRoot) {
@@ -3090,6 +3375,11 @@ function sectionPayloadDoctrine(tmpRoot) {
   let i = 0;
   const covered = new Set();
   for (const m of DOCTRINE_CONTROLS) {
+    // A control may declare that its target is absent from THIS payload. That is not a control
+    // that failed to apply - it is one with nothing to prove here, and saying so is honest where
+    // reporting a failure would be noise. Every control without a skipWhen runs unconditionally.
+    const skip = typeof m.skipWhen === 'function' ? m.skipWhen(base) : null;
+    if (skip) { covered.add(m.id); note(`payload-doctrine control not exercised: ${m.label}`, skip); continue; }
     const broken = path.join(tmpRoot, `doctrine-neg-${i += 1}`);
     copyDoctrineFiles(base, broken);
     try { m.apply(broken); } catch (e) { check(`control could be applied: ${m.label}`, false, String(e.message)); continue; }
@@ -4669,11 +4959,16 @@ function main() {
   console.log('"reading is not a shell job" instruction in all seven session skills (one canonical sentence, not');
   console.log('seven paraphrases), the newborn-ticket rule (write it into the PLAN, announce it in ONE sentence,');
   console.log('STOP) in /pnp:mission and /pnp:work, Step 2b of /pnp:review with its reusable fact-check prompt,');
-  console.log('the "Class: docs | code" brief input with its Step 0c host branch - asserted as all four of its');
-  console.log('claims: the brief line, the sentence that `docs` overrides roles.reviewer.engine for an');
-  console.log('IMPLEMENTATION diff, the carve-out that keeps plan-readiness on the configured engine, and the');
-  console.log('ad-hoc read-only Claude dispatch that makes that override reachable on a codex-configured install');
-  console.log('(where no reviewer agent file is rendered) - the one-predicate conflict rule of /pnp:update (a');
+  console.log('the "Class: plan | code | docs" brief input with its Step 0b/0c host branch - asserted as all five');
+  console.log('of its claims: the brief line, the class resolved as a ROW of the audit table, the resolver call');
+  console.log('that carries -Class, the Claude host being the RENDERED reviewer agent dispatched with the row\'s');
+  console.log('model (no ad-hoc subagent and no model pinned in the doctrine), and plan readiness taken from the');
+  console.log('review.plan row - one sentence per surface that stopped hardcoding who audits what (WORKFLOW,');
+  console.log('LOOP, REVIEW_CHECKLIST, OPERATOR_PROTOCOL, the reviewer/overrides/CLAUDE.md templates, /pnp:work,');
+  console.log('the README), each with its own control - the fact-check gate pinned at every site that states');
+  console.log('it, QUALIFIED ("above the scan tier", one skip), with a control per site that strips the');
+  console.log('qualifier back to the unconditional wording - plus the sweep that proves the RETIRED phrasings are gone');
+  console.log('from docs/, skills/, templates/ and README.md - the one-predicate conflict rule of /pnp:update (a');
   console.log('dialog only where the operator edited the artifact or it is gone; a payload change to an untouched');
   console.log('artifact is applied without one) - and the factory ruleset\'s');
   console.log('freedom from the blanket git -C rule while the three rendered <projectRoot> push/merge/rebase');

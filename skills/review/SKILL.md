@@ -7,11 +7,12 @@ allowed-tools: Read, Grep, Glob, Bash, Agent
 # /pnp:review - Code Reviewer (engine-neutral)
 
 Adversarial, **read-only** code/design review of the Writer's diff. The Reviewer role is
-**engine-neutral**: its host is data in the project's `.claude/aiwf-native/roles.json`, resolved by
-the plugin's role resolver - `scripts/native/ps/aiwf-roles.ps1` on os `windows`,
+**engine-neutral**: its host is data in the project's `.claude/aiwf-native/roles.json` - the
+**audit table**, one row per review class - resolved by the plugin's role resolver -
+`scripts/native/ps/aiwf-roles.ps1` on os `windows`,
 `scripts/native/sh/aiwf-roles.sh` on os `linux`/`macos` (`{{config.os}}`, read in Step 0, decides
 which; the two channels have the same CLI contract and the same exit codes). This skill resolves the
-host once and dispatches one of two branches:
+row for the ticket's class once and dispatches one of two branches:
 
 - **engine `codex`** -> the canonical wrapper for this OS channel,
   `${CLAUDE_PLUGIN_ROOT}/scripts/native/ps/codex-review.ps1` or
@@ -45,62 +46,73 @@ Arguments: the ticket ref and an optional scope hint.
 
 Notation: `{{config.some.key}}` in this document means *substitute the value you read in step 2*.
 
-## Step 0b - Resolve the reviewer host (run the resolver once)
+## Step 0b - Resolve the row for this ticket's review class (run the resolver once)
 
-Run the channel `{{config.os}}` selects. Both print the same snapshot object.
+Two reads, one command. **First** take the `Class:` line of the ticket brief the COO authored -
+`Class: plan | code | docs`, and **`code` when the line is absent** (Step 0c says what each class
+covers). **Then** run the channel `{{config.os}}` selects, passing that class: the resolver returns
+the audit table's effective row - engine, model, effort and `passes` - for that class alone. Both
+channels print the same snapshot object.
 
 **os `windows`:**
 
 ```powershell
-$role = pwsh -NoProfile -File "${CLAUDE_PLUGIN_ROOT}/scripts/native/ps/aiwf-roles.ps1" `
-  -Role reviewer -RolesPath "<root>/.claude/aiwf-native/roles.json" -AsJson | ConvertFrom-Json
-# $role.engine -> 'codex' or 'claude';  $role.model -> the model to use on that engine
+$row = pwsh -NoProfile -File "${CLAUDE_PLUGIN_ROOT}/scripts/native/ps/aiwf-roles.ps1" `
+  -Role reviewer -Class <class> -RolesPath "<root>/.claude/aiwf-native/roles.json" -AsJson `
+  | ConvertFrom-Json
+# $row.engine -> 'codex' or 'claude';  $row.model -> the model that engine runs;
+# $row.passes -> how many passes this class gets on the ticket's standing word
 ```
 
 **os `linux` / `macos`:**
 
 ```bash
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/native/sh/aiwf-roles.sh" \
-  --role reviewer --roles-path "<root>/.claude/aiwf-native/roles.json" --as-json
-# prints one JSON object: {"role":..,"engine":..,"model":..,"effort":..} - read the fields from it
+  --role reviewer --class <class> --roles-path "<root>/.claude/aiwf-native/roles.json" --as-json
+# prints one JSON object, whose fields you read:
+# {"role":"reviewer","class":..,"engine":..,"model":..,"effort":..,"passes":..}
 ```
 
 `-RolesPath` / `--roles-path` is mandatory: the plugin payload has no project of its own, so the
-path is built from the root resolved in Step 0. If the resolver exits non-zero (exit 2), it printed the reason to
-stderr - stop and report the misconfiguration to the COO; do not guess a host. `$role.engine`
-selects the branch below; `$role.model` is the model that branch runs.
+path is built from the root resolved in Step 0.
 
-## Step 0c - Engine by ticket class (the class can override the configured host)
+`-Class` / `--class` is a **reviewer-only** flag, and it is judged on being PASSED rather than on
+its value - an empty string is an error, not a quiet fall-back to the classless form, which is a
+different contract with a different output. The resolver prints one line to stderr and exits **2**
+when the class is not one of `plan|code|docs`, when it is combined with another role, and when the
+project's `roles.json` carries no `review.<class>` record - that last one naming `/pnp:update`,
+because a `roles.json` rendered before the audit table is an installation one update behind, not a
+row to guess at. On any non-zero exit, stop and report the misconfiguration to the COO; do not guess
+a host. The one exception is a MISSING `roles.json`: the resolver returns the factory fallback
+(`claude` / `opus` / `high`) with the factory pass count and exits 0 - a broken installation running
+read-only on Claude, never a paid engine nobody chose.
 
-Read the `Class:` line of the ticket brief the COO authored - `Class: docs | code`, and **`code`
-when the line is absent**. It decides the host together with Step 0b, and it applies to
-**implementation diffs only**:
+`$row.engine` selects the branch in Step 3; `$row.model` is the model that branch runs.
 
-- **`Class: docs`** - plans, the overrides document, README, skill/doc prose, any diff with **no
-  executable artifact** in it - takes the **Claude host** (Step 3, claude branch) regardless of
-  `roles.reviewer.engine`. Prose is judged by reading the tree, and a paid external pass buys
-  nothing here that the Claude host does not already give.
-- **`Class: code`** - anything that runs, is imported, or is tested - uses the engine Step 0b
-  resolved.
+## Step 0c - What the class selects (a configuration you can see, not a rule)
 
-**What "the Claude host" means on a codex-configured install:** `/pnp:setup` renders
-`.claude/agents/reviewer.md` only when `roles.reviewer.engine` is `claude` - that is by design and
-stays so - so when this override selects the Claude host while Step 0b resolved `codex` there is no
-rendered `reviewer` agent to dispatch (and `$role.model` is a Codex model name the Agent tool would
-reject); the host is then an **ad-hoc read-only Claude subagent** -
-`subagent_type: "general-purpose"`, `model: "opus"`, brief prefixed with the read-only reviewer
-preamble in Step 3's claude branch.
+The class names a ROW of the **audit table** - `review.plan`, `review.code`, `review.docs` in
+`aiwf.config.json`, rendered into `roles.json` - and the row carries the host and the pass count.
+Nothing in this skill hardcodes which engine audits what: `/pnp:roles` prints the whole table and
+changes it.
 
-A plan-readiness pass is NOT an implementation diff and never takes this override: it always runs on
-the configured engine Step 0b resolved. Readiness is where a missed blocker costs a whole ticket, and
-this project's readiness blockers have been found there; a Claude ad-hoc pass may be run first as a
-cheap pre-pass, WITHOUT a verdict, exactly like the fact-check gate, but it never replaces the pass
-on the configured engine.
+- **`Class: code`** - anything that runs, is imported, or is tested. Row `review.code`.
+- **`Class: docs`** - the overrides document, README, skill/doc prose, any implementation diff with
+  **no executable artifact** in it. Row `review.docs`. It starts out inheriting the same auditor as
+  `review.code`: "a docs-class diff goes to a Claude host" is a value the operator can read and
+  change, not a rule this document carries.
+- **`Class: plan`** - a plan-readiness pass over a durable R2/R3 plan before implementation. Row
+  `review.plan`, whose `passes` IS the readiness contract (see "Plan-readiness mode").
 
-Say in one line which branch you took and why (`class=docs -> claude host (engine codex
-overridden)`, or `plan-readiness -> configured engine (no class override)`), so the COO's record
-shows the engine was chosen, not defaulted. A docs-class ticket
-that gained an executable artifact is code class - the same rule that ends R1
+`$row.passes` is how many passes that class gets on the ticket's standing word. For `code` and
+`docs`: `1` = one Reviewer pass (the factory value); `2` = a second full pass after the first
+returns `pass`, dispatched by the COO on the same standing word; `0` = **no auditor** - the COO
+reviews first-hand and the fact-check gate still runs. `/pnp:roles --show` prints a zero row as
+`no auditor`, so it can never be a silent omission. For `plan`, see "Plan-readiness mode".
+
+Say in one line which row you took and where it came from (`class=docs -> review.docs: codex
+gpt-5.6-sol/high, 1 pass`), so the COO's record shows the host was resolved, not defaulted. A
+docs-class ticket that gained an executable artifact is code class - the same rule that ends R1
 (`docs/WORKFLOW.md` § Routes).
 
 ## Step 1 - Gather the review scope (read-only)
@@ -123,9 +135,10 @@ authored. **For a plan-readiness check, use the readiness brief shape below inst
 ```
 Review the diff for ticket <TICKET_REF> on branch <branch>.
 
-Class: docs | code
-  (the COO fills this in - `code` is the default when the line is absent; it selects the host in
-  Step 0c and it is what "an executable artifact ends docs class" is judged against)
+Class: plan | code | docs
+  (the COO fills this in - `code` is the default when the line is absent; it names the row of the
+  audit table that Step 0b resolves, and it is what "an executable artifact ends docs class" is
+  judged against)
 
 SCOPE / DIFF:
 <the exact diff or a precise description of the files+ranges to review>
@@ -140,7 +153,7 @@ STOP CONDITION: <when you have enough evidence and must stop - e.g. "stop once e
 file is reviewed against the acceptance criteria; do not propose redesigns">
 BUDGET TARGET: keep the brief dense and return ALL material blockers in ONE round - aim for a
 single round. (This is a throughput target only; it does NOT change the authority minimums -
-the correction-round cap and the two-pass plan-readiness contract are unchanged.)
+the correction-round cap and the `review.plan.passes` readiness contract are unchanged.)
 
 OUTPUT CONTRACT (single round - return ALL material blockers at once; a later round may not
 raise a blocker that was already visible):
@@ -158,11 +171,12 @@ raise a blocker that was already visible):
 Substitute the checklist path when you write the brief: the Reviewer runs outside this session and
 cannot expand `${CLAUDE_PLUGIN_ROOT}` itself, so paste the resolved absolute path.
 
-## Step 2b - Fact-check gate before a paid pass
+## Step 2b - Fact-check gate before every pass above the scan tier
 
-**Before dispatching to a paid external engine (the codex branch), the COO runs ONE cheap
-read-only scan agent over the PROSE of the diff.** A pass on a paid engine is an operator quota
-gate, and the Reviewer's job is to verify DECISIONS - not to discover that a path, a line number,
+**Before dispatching any reviewer pass whose model is above the scan tier - a codex pass, or a
+claude reviewer on `opus`/`fable` - the COO runs ONE cheap read-only scan agent over the PROSE of
+the diff.** Such a pass costs the operator either external quota or top-tier tokens, and the
+Reviewer's job is to verify DECISIONS - not to discover that a path, a line number,
 a count or a command in the text does not exist. Those are checkable by anything that can read the
 tree, and finding them at review price is the most expensive way to find them
 (`docs/WORKFLOW.md` § "COO-authored text is reviewed like the Writer's").
@@ -181,9 +195,15 @@ DIFF:
 <the same diff the review brief carries>
 ```
 
-Then: the COO fixes every returned claim, and **only then** dispatches the paid pass, over the
-corrected tree. The gate is skipped only when Step 0c resolved the claude branch (there is no paid
-pass to protect) - and even then it is cheap enough to be worth running on a prose-heavy diff.
+**Over a plan, this is the same gate with the plan document in place of the diff** - one rule, not
+two: fact-check before every pass above the scan tier, over a diff or over a plan. There is no
+second, plan-only variant of this step, and for a readiness pass the task carries one extra line -
+`every acceptance command exists and can fail`.
+
+Then: the COO fixes every returned claim, and **only then** dispatches the pass, over the
+corrected tree. The gate may be skipped only when the reviewer itself runs on a scan-tier model
+(`haiku`/`sonnet`) - there is nothing more expensive than the gate to protect - and even then it is
+cheap enough to be worth running on a prose-heavy diff.
 
 The fact-check agent is **not** a review: it returns no verdict, and it never replaces the
 Reviewer's pass.
@@ -193,19 +213,24 @@ Reviewer's pass.
 If the brief is a **plan-readiness** check - reviewing a durable R2/R3 **plan** *before*
 implementation, not a code diff - the contract is different:
 
-- **Host:** the engine Step 0b resolved, always - the Step 0c class override is for implementation
-  diffs and does not reach here. A Claude ad-hoc pre-pass before pass 1 is allowed, but it returns no
-  verdict and does not count as a pass.
+- **Host:** the `review.plan` row - Step 0b resolved it with `-Class plan`. It is a row like any
+  other: which engine and model audits plans is what `/pnp:roles` shows and changes. What is NOT
+  configurable is that the Planner/COO never approves its own plan, and that the fact-check gate
+  runs before every one of these passes above the scan tier (Step 2b - skipped only when the
+  reviewer itself runs on a scan-tier model).
 - **Step 1 scope** is the whole plan + repo prerequisites, not a diff.
 - **Brief:** name the plan file + branch, still carry the ticket **risk threshold** and **stop
   condition** (and the BUDGET TARGET line), and set the OUTPUT CONTRACT verdict to
   `PASS` / `NEEDS-FIX`.
-- **One invocation = ONE pass.** Pass 2 is a **separate** `/pnp:review` invocation *after the COO
-  revises the plan*. A pass 3 runs only if blockers remain **and** the operator gives explicit
-  permission, requested BEFORE the dispatch - any review pass beyond the standard two is a
-  budget/limits-gated operator decision, whatever engine hosts the Reviewer. Three passes are the
-  hard maximum (`docs/WORKFLOW.md`); if the plan still does not pass, stop and return the unresolved
-  blockers to the operator. This skill does not loop the passes itself.
+- **One invocation = ONE pass.** The next pass is a **separate** `/pnp:review` invocation *after the
+  COO revises the plan*. `$row.passes` is how many passes this project's plans get on the ticket's
+  standing word (factory 2). One MORE runs only if blockers remain **and** the operator gives
+  explicit permission, requested BEFORE the dispatch - a pass beyond `review.plan.passes` is a
+  budget/limits-gated operator decision, whatever engine hosts the Reviewer - so
+  `review.plan.passes` + 1 is the hard maximum (`docs/WORKFLOW.md`); if the plan still does not pass
+  there, stop and return the unresolved blockers to the operator. A `review.plan.passes` of `0`
+  means the plan gets no auditor at all - a configuration `/pnp:roles` prints as `no auditor`, never
+  a shortcut this skill takes on its own. This skill does not loop the passes itself.
 - Each pass reads the **whole plan** and returns all material blockers at once - check repo-match,
   scope, hidden discovery/architecture, dependency order, real acceptance/verification, and
   branch/worktree/Git prerequisites.
@@ -216,10 +241,12 @@ The implementation-review contract above is unchanged; this branch applies only 
 
 ## Step 3 - Dispatch on the resolved engine
 
-### Step 3 - codex branch (`$role.engine -eq 'codex'`) - invoke the wrapper (prompt via STDIN)
+### Step 3 - codex branch (`$row.engine -eq 'codex'`) - invoke the wrapper (prompt via STDIN)
 
 Deliver the brief to the wrapper on **stdin** - never as a positional/argv argument. The wrapper
-reads the model from the resolver itself, so no model is passed here.
+calls the resolver itself, so no model is passed here - but **pass the class**: with `-Class` /
+`--class` the wrapper reads the model and the effort of that ROW instead of the Reviewer role's own
+triple. `/pnp:review` passes the class on every invocation.
 
 **Write the brief to the fixed path `<root>/{{config.paths.scratchDir}}/review-brief.txt`** (Write
 tool), then invoke the wrapper of this project's OS channel (`{{config.os}}`) with exactly that
@@ -229,21 +256,23 @@ command, character for character:
 
 ```powershell
 Get-Content '<root>/{{config.paths.scratchDir}}/review-brief.txt' -Raw | `
-  & "${CLAUDE_PLUGIN_ROOT}/scripts/native/ps/codex-review.ps1" -ProjectRoot '<root>'
+  & "${CLAUDE_PLUGIN_ROOT}/scripts/native/ps/codex-review.ps1" -ProjectRoot '<root>' -Class <class>
 ```
 
 **os `linux` / `macos`:**
 
 ```bash
 cat '<root>/{{config.paths.scratchDir}}/review-brief.txt' \
-  | bash "${CLAUDE_PLUGIN_ROOT}/scripts/native/sh/codex-review.sh" --project-root '<root>'
+  | bash "${CLAUDE_PLUGIN_ROOT}/scripts/native/sh/codex-review.sh" --project-root '<root>' \
+    --class <class>
 ```
 
 The path is fixed **on purpose**. A permission rule can only match a constant command string, so an
 invocation whose text changes every time - an inline here-string carrying the brief, or a
 session-scoped scratchpad path - must prompt the operator on every single dispatch and can never be
 allowlisted. Holding the brief in a file at a constant path is what makes the command constant.
-`<root>` and the plugin root are constants *for this project*, so the whole command text is stable
+`<root>` and the plugin root are constants *for this project*, and `-Class` / `--class` takes one of
+exactly three literal tokens, so the command text is drawn from a small fixed set and is stable
 across sessions, tickets and correction rounds. Do not inline the brief into the command, and do
 not "improve" the path by making it unique per session or per ticket: either change silently
 reintroduces a dialog on every review.
@@ -273,47 +302,32 @@ foreign shell, start an interactive `pwsh` (or `bash`) session, or put the block
 and run it there; do not inline it through another shell's quoting. The two channels are mirrors,
 not alternatives: never invoke the `.sh` wrapper on a windows install or the `.ps1` on a POSIX one.
 
-### Step 3 - claude branch - dispatch a read-only Claude reviewer
+### Step 3 - claude branch (`$row.engine -eq 'claude'`) - dispatch the rendered reviewer
 
-This branch runs in **two** cases: Step 0b resolved `$role.engine -eq 'claude'`, **or** Step 0c
-selected the Claude host for a `docs`-class ticket on a codex-configured install. Either way, invoke
-the **Agent tool** with the completed Step-2 brief as the task and the **FULL diff pasted in** (the
-Claude reviewer cannot run git). *Which* agent and *which* model you pass depends on the engine
-Step 0b resolved, because the rendered `reviewer` agent file exists only on a claude-configured
-install:
+Invoke the **Agent tool** with `subagent_type: "reviewer"`, `model: <$row.model>`, the completed
+Step-2 brief as the task, and the **FULL diff pasted in** (the Claude reviewer cannot run git).
+There is **one** Claude host and it is the project's rendered `reviewer` agent - no ad-hoc subagent,
+and no model named in this document.
 
-**Resolved engine `claude`** - `subagent_type: "reviewer"`, `model: <$role.model>`. The rendered
-subagent is read-only (`Read, Grep, Glob` only; Gate 1 blocks any Edit/Write) and carries its effort
-in its own frontmatter. Nothing else changes.
+The agent file is rendered whenever the Reviewer role **OR any row of the audit table** is
+Claude-hosted (`templates/agents/reviewer.md.tmpl`), so a Claude-hosted row always has a real agent
+to dispatch, including on a project whose Reviewer role runs on Codex. The rendered subagent is
+read-only (`Read, Grep, Glob` only; Gate 1 blocks the Edit/Write family from every subagent whose
+`agent_type` is not `writer`; Gate 1's own honest limit is that a mutation performed through Bash is
+not caught) - weaker than the codex branch's OS cell, and stated as such.
 
-**Resolved engine `codex`, class `docs`** (the Step 0c override) - there is no rendered `reviewer`
-agent, and `$role.model` names a Codex model the Agent tool's model enum would reject. Dispatch
-`subagent_type: "general-purpose"` with `model: "opus"` - a review is judgment work, not a scan, so
-the scan-tier model policy (`haiku`/`sonnet`) does not apply to it - and prefix the Step-2 brief with
-exactly this role preamble, so the ad-hoc agent has the role the rendered one gets from its
-frontmatter:
-
-```
-You are a read-only, adversarial code/design REVIEWER. Use ONLY the Read, Grep and Glob tools:
-never edit, write, stage, commit, push, or run anything - report only, you do not fix what you
-find. Judge the diff below against the review checklist at <absolute path to the plugin's
-docs/REVIEW_CHECKLIST.md> and return the verdict in exactly the shape the OUTPUT CONTRACT
-specifies - first line `pass` / `pass-with-notes` / `fail` (or `PASS` / `NEEDS-FIX` for a
-plan-readiness pass), blockers first with file:line, then notes.
-```
-
-Read-only on this fallback is **Gate 1** - which denies the Edit/Write family to every subagent whose
-`agent_type` is not `writer` - plus the preamble above and git reversibility. It is one notch weaker
-than the rendered agent, which is additionally confined by a `Read, Grep, Glob` tool allowlist (Gate
-1's own honest limit is that a mutation performed through Bash is not caught), and both are far
-weaker than the codex branch's OS cell. That is why this fallback is scoped to `docs`-class diffs.
+If `subagent_type: "reviewer"` does not exist while a row resolved to `claude`, the project layer is
+behind its config - stop and say so; `/pnp:roles` (or `/pnp:setup`) renders it. Do not substitute
+another agent: a review dispatched to an agent nobody configured is not the audit the row names.
 
 **Effort (Claude branch):** the Agent tool has **no per-invocation `effort` parameter**, so the
 reviewer's reasoning effort comes from its **agent frontmatter** (`effort:` in the rendered
-`reviewer` agent), which is kept in sync with `roles.json`'s `reviewer.effort` - the selfcheck
-engine asserts they match, and drift fails it. Pass only the `model` above; do **not** try to pass
-`effort` to the Agent tool. The `general-purpose` fallback has no such frontmatter, so it runs at the
-session default effort - accepted, because that path carries prose only.
+`reviewer` agent), which is `roles.reviewer.effort` - the selfcheck engine asserts they match, and
+drift fails it. One file, one effort, shared by every Claude-hosted row: that is why a Claude row
+carries no `effort` of its own, why `/pnp:roles --show` prints it as
+`the Reviewer's - Claude rows share the agent file`, and why `--set <row>.effort=...` on a Claude
+row refuses with exit 1. Pass only the `model` above; do **not** try to pass `effort` to the Agent
+tool.
 
 ## Step 4 - Relay the verdict to the COO
 

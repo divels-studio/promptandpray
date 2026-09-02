@@ -60,6 +60,25 @@ One honest limitation: the permission rules are **prefix matches** on the comman
 accident-grade protection against a role acting out of turn, not an adversary-proof boundary. The
 one hard boundary in the system is the OS sandbox on the Codex review path.
 
+## What audits what - one command
+
+`/pnp:roles` prints the **audit table**: every role and every review class on one screen, with the
+engine, the model, the effort and the number of passes each one gets, plus the two lines that are
+not configurable at all - the fact-check gate (always, before every pass above the scan tier) and
+R1 (no auditor by design). `/pnp:mission`, `/pnp:work` and `/pnp:setup` print it in their reports,
+so you see who will audit the work before you decide what to ask for.
+
+The same command changes it, with no re-interview: `/pnp:roles --set docs.engine=claude` gives
+documentation diffs their own Claude host, `/pnp:roles --set plan.passes=3` buys plans one more
+readiness pass on your standing word, `/pnp:roles --reset docs` puts a class back on the Reviewer.
+It refuses rather than guesses - a result your schema rejects, an artifact you edited by hand or
+hold through an override, a stale agent file without `--confirm-remove-stale` - and a refusal
+leaves the project exactly as it was.
+
+Nothing here is a gate: changing the table is your configuration, not one of the four approvals
+above. What the table cannot do is remove a gate - a pass beyond `review.plan.passes` still needs
+your word, and the commit dialog still appears.
+
 ## Worktrees and memory
 
 A git worktree is a **different path**, and Claude Code keys a project - including its memory

@@ -47,7 +47,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { UpdateError, resolveArtifact, runUpdate } from './migrate.mjs';
+import { UpdateError, extractRegion, resolveArtifact, runUpdate } from './migrate.mjs';
 import { sha256 } from '../setup/generate.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -1405,20 +1405,39 @@ section('12 - the self-check is the update\'s own last step, and a red one is ne
 }
 
 // ---------------------------------------------------------------------------
-section('13 - the audit table migration: three silent config keys, a quiet re-render, and an artifact that is not on this installation');
+section('13 - the audit table migration: three silent config keys, two quiet re-renders, and an artifact that is not on this installation');
 {
   // The REAL operations of the shipped 0004, replayed as a fixture migration so this suite keeps
   // its own manifest numbering. Reading them from the payload rather than restating them is the
   // point: a migration whose ops drift from what this asserts would pass a copy of itself.
   const realOps = readJson(path.join(PLUGIN_ROOT, 'migrations', '0004_audit-table', 'ops.json'));
-  check('the shipped 0004 is readable and carries six operations',
-    !!realOps && Array.isArray(realOps.operations) && realOps.operations.length === 6,
+  check('the shipped 0004 is readable and carries seven operations',
+    !!realOps && Array.isArray(realOps.operations) && realOps.operations.length === 7,
     realOps ? `${(realOps.operations || []).length} ops` : 'unreadable');
+  // Op 5, the sixth, re-renders the managed CLAUDE.md region, which carries doctrine sentences the
+  // audit table replaced. It is asserted by SHAPE here, because the whole point of replaying the
+  // real ops below is that this suite must not restate them.
+  check('and op 5 (the sixth) is the managed CLAUDE.md region, not a whole-file rerender',
+    !!realOps && (realOps.operations || []).some((o) => o.op === 'rerender-managed-region'
+      && o.file === 'CLAUDE.md' && o.region === 'aiwf-core'
+      && o.template === 'templates/CLAUDE.md.tmpl#aiwf-core'),
+    JSON.stringify((realOps.operations || []).filter((o) => o.file === 'CLAUDE.md')));
 
   const payload = makePayload('audit', { version: '0.2.0', migrations: [{ id: '0002_audit', version: '0.2.0', ops: realOps.operations }] });
 
-  /** A project as 0.1.2 left it: no review rows in the config, no review block in roles.json. */
-  function preTable(projectDir) {
+  // The sentence op 5 exists to replace. The fixture installs from the CURRENT payload, so its
+  // CLAUDE.md region starts out identical to the new render and the operation would report
+  // "already current" - which proves nothing about the path a real consumer takes. Ageing the
+  // region back to its previous wording is what makes the replay honest: RECORDED and byte-equal
+  // to its own stamp (so the operator has NOT edited it), yet different from the payload render.
+  const REGION_NOW = 'Three countable tripwires';
+  const REGION_WAS = 'Two countable tripwires';
+
+  /**
+   * A project as 0.1.2 left it: no review rows in the config, no review block in roles.json, and
+   * - unless `ageRegion` is false - a managed CLAUDE.md region carrying the previous payload text.
+   */
+  function preTable(projectDir, { ageRegion = true } = {}) {
     const cfgFile = at(projectDir, CONFIG_REL);
     const cfg = readJson(cfgFile);
     delete cfg.review.plan; delete cfg.review.code; delete cfg.review.docs;
@@ -1428,6 +1447,22 @@ section('13 - the audit table migration: three silent config keys, a quiet re-re
     fs.writeFileSync(at(projectDir, ROLES_REL), rolesText, 'utf8');
     const hash = sha256(rolesText);
     cfg._aiwf.managedRegions['.claude/aiwf-native/roles.json'] = { upstream: hash, local: hash, override: false };
+    if (ageRegion) {
+      const claudeFile = at(projectDir, 'CLAUDE.md');
+      const now = read(claudeFile);
+      // Fail LOUDLY rather than degrade into the already-current case: if the template stops
+      // carrying this sentence, the fixture ages nothing and the assertions below would pass
+      // while proving the opposite of what they claim.
+      if (now === null || !now.includes(REGION_NOW)) {
+        throw new Error('preTable: the rendered CLAUDE.md carries no "' + REGION_NOW + '" to age back');
+      }
+      const aged = now.split(REGION_NOW).join(REGION_WAS);
+      fs.writeFileSync(claudeFile, aged, 'utf8');
+      // The stamp is sha256 of the EXTRACTED REGION (markers included) - the same projection the
+      // engine hashes, taken from the engine's own helper so the two cannot drift apart.
+      const regionHash = sha256(extractRegion(aged, 'aiwf-core'));
+      cfg._aiwf.managedRegions['CLAUDE.md#aiwf-core'] = { upstream: regionHash, local: regionHash, override: false };
+    }
     writeJson(cfgFile, cfg);
   }
 
@@ -1447,6 +1482,12 @@ section('13 - the audit table migration: three silent config keys, a quiet re-re
     check('precondition: there is no reviewer agent file on a codex-configured project',
       !exists(at(p, '.claude/agents/reviewer.md')));
     preTable(p);
+    const staleRegion = extractRegion(read(at(p, 'CLAUDE.md')), 'aiwf-core');
+    const staleStamp = (bookkeeping(p).managedRegions['CLAUDE.md#aiwf-core'] || {}).local;
+    check('precondition: the managed CLAUDE.md region is STALE but RECORDED - the operator never touched it, the PAYLOAD moved',
+      !!staleRegion && staleRegion.includes(REGION_WAS) && !staleRegion.includes(REGION_NOW)
+      && staleStamp === sha256(staleRegion),
+      'region ' + (staleRegion ? sha256(staleRegion).slice(0, 12) : 'missing') + ' / stamp ' + String(staleStamp).slice(0, 12));
 
     const dry = update(p, ['--dry-run'], { payload });
     check('--dry-run exits 0 and needs no resolution file (nothing here asks a question)', dry.status === 0, why(dry));
@@ -1460,9 +1501,27 @@ section('13 - the audit table migration: three silent config keys, a quiet re-re
       dry.out.trim().split('\n').slice(-6).join(' | ').slice(0, 300));
     check('and it previews the note about the overrides document',
       dry.out.includes('note overrides-loop-shape'), dry.out.trim().split('\n').slice(-4).join(' | ').slice(0, 200));
+    // The sixth op, on a project that never touched its own managed region while the payload moved
+    // under it: silent, like the roles.json one. A dialog here would be the update engine asking
+    // the operator about content the engine itself wrote.
+    check('it previews the CHANGED managed CLAUDE.md region as a quiet take-new, with no question',
+      dry.out.includes('CLAUDE.md#aiwf-core: the payload version applied (you had not edited it)')
+      && !/CONFLICT at/.test(dry.out),
+      dry.out.trim().split('\n').filter((l) => l.includes('CLAUDE.md')).join(' | ').slice(0, 300));
 
     const a = update(p, ['--apply'], { payload });
     check('--apply exits 0 with NO dialog and no resolution file at all', a.status === 0, why(a));
+    const newRegion = extractRegion(read(at(p, 'CLAUDE.md')), 'aiwf-core');
+    check('the region CONTENT is the payload version afterwards, not the aged one',
+      !!newRegion && newRegion.includes(REGION_NOW) && !newRegion.includes(REGION_WAS)
+      && newRegion !== staleRegion,
+      newRegion ? newRegion.length + ' bytes, changed=' + (newRegion !== staleRegion) : 'no region');
+    const bkRegion = bookkeeping(p).managedRegions['CLAUDE.md#aiwf-core'] || {};
+    check('and its bookkeeping hashes exactly what is on disk (upstream == local == sha(region))',
+      !!newRegion && bkRegion.upstream === sha256(newRegion) && bkRegion.local === sha256(newRegion)
+      && bkRegion.override === false,
+      String(bkRegion.upstream).slice(0, 12) + ' / ' + String(bkRegion.local).slice(0, 12)
+      + ' / disk ' + (newRegion ? sha256(newRegion).slice(0, 12) : '-'));
     const cfg = readJson(at(p, CONFIG_REL));
     check('the three rows are in the config with the factory 2 / 1 / 1',
       JSON.stringify(cfg.review.plan) === '{"passes":2}' && JSON.stringify(cfg.review.code) === '{"passes":1}'
@@ -1487,9 +1546,15 @@ section('13 - the audit table migration: three silent config keys, a quiet re-re
     const p = project('audit-claude');
     check('install exits 0 (claude-hosted Reviewer)', install(p).status === 0);
     check('precondition: the reviewer agent file IS here', exists(at(p, '.claude/agents/reviewer.md')));
-    preTable(p);
+    // The OTHER legitimate region case, kept on purpose: this fixture does NOT age its region, so
+    // op 5 meets a region that is already the payload version. That must pass without a dialog too.
+    preTable(p, { ageRegion: false });
+    const untouchedRegion = extractRegion(read(at(p, 'CLAUDE.md')), 'aiwf-core');
     const a = update(p, ['--apply'], { payload });
     check('--apply exits 0 with no dialog here either', a.status === 0, why(a));
+    check('an ALREADY-CURRENT region is left byte-identical, with no dialog',
+      extractRegion(read(at(p, 'CLAUDE.md')), 'aiwf-core') === untouchedRegion
+      && !/CONFLICT at/.test(a.out), why(a));
     check('and the reviewer agent was re-rendered rather than skipped',
       a.out.includes('.claude/agents/reviewer.md: the payload version applied (you had not edited it)')
       || a.out.includes('.claude/agents/reviewer.md is already current'), why(a));
