@@ -17,10 +17,16 @@ Born in a real production project, then extracted and genericized.
 
 ## Status
 
-**v0.1.2. Pre-release, private, and not published to any marketplace.**
+**v0.2.0. The first public release.**
 
 What is here:
 
+- **A public install path.** The repository is its own marketplace on GitHub:
+  `/plugin marketplace add divels-studio/promptandpray`, then
+  `/plugin install pnp@promptandpray` at project scope. A newer version arrives through
+  `/plugin marketplace update`, `/plugin update pnp@promptandpray`, `/reload-plugins` and
+  `/pnp:update` inside the project - and `/pnp:roles` prints, on one screen, who audits what in
+  the installation that took it.
 - **Eleven commands** as skills: `loop`, `brief`, `mission`, `work`, `review`, `qa`, `qal`, `roles`,
   `setup`, `update`, `selfcheck` - each opening with the same Step 0, because a skill inside a
   plugin has no project of its own: resolve the project root, read the config, and stop against the
@@ -71,14 +77,9 @@ What is **not** here yet:
   mirror the PowerShell ones flag for flag, `/pnp:setup` accepts all three OS channels, and the CI
   matrix runs the gates on ubuntu and macos runners. What is missing is field use: the POSIX legs
   first execute on the operator's first push, and no POSIX machine has hosted a real loop yet.
-- **A published plugin anyone else can install.** The update path is proven on a consumer
-  installation, which was the condition for publishing - but the marketplace here is still local, the
-  audience is still one operator, and nothing has been released to a public marketplace.
-- **A second consumer, and a bump that carries managed changes on a consumer.** The consumer update
-  so far is one project taking one bump: `0002_operator-word-and-hygiene` is the only migration with
-  real operations that has landed on a project other than this one. `0003_quiet-rerender` carries a
-  managed-region re-render too, but no consumer has taken 0.1.2 yet - so this remains a first rather
-  than a routine.
+- **One consumer installation so far.** It has taken every release from 0.1.0 to 0.1.2 through
+  `/plugin update` + `/pnp:update` - the first bump asked two take-new questions, 0.1.2 asked none -
+  and there is no second consumer yet.
 
 ## Three names
 
@@ -90,7 +91,30 @@ What is **not** here yet:
 
 ## Install
 
-The plugin is not published to any public marketplace. Two ways to load it from a local checkout:
+From the **GitHub marketplace**, at project scope from the project you want it in:
+
+```
+/plugin marketplace add divels-studio/promptandpray
+/plugin install pnp@promptandpray
+```
+
+That install is a snapshot; Claude Code picks up a newer payload only when `version` in
+`plugin.json` changes:
+
+```
+/plugin marketplace update
+/plugin update pnp@promptandpray
+/reload-plugins
+/pnp:update
+```
+
+`/reload-plugins` is not optional: a running session keeps the version it loaded at startup, so the
+new payload lands on disk while the session goes on using the old one - which is why the install and
+update summaries say "Run `/reload-plugins` to activate", and why `/plugin list` is the answer
+to "which version am I actually running". If the reload would invalidate the prompt cache it warns
+and skips - then `--force`, or simply a new session.
+
+Or from a local checkout of this repository - two ways:
 
 ```
 claude --plugin-dir <path-to-this-repo>
@@ -104,10 +128,9 @@ or install it from this repository as a **local marketplace** (the repo ships it
 /plugin install pnp@promptandpray
 ```
 
-That install is a snapshot; Claude Code picks up a newer payload only when `version` in
-`plugin.json` changes - then `/plugin marketplace update`, `/plugin update pnp@promptandpray`, and
-`/pnp:update` inside the project. Development of the plugin itself lives in `dev/` (not payload);
-`dev/README.md` says how a development session runs.
+The update path is the same one, with the checkout path in place of the GitHub coordinates.
+Development of the plugin itself lives in `dev/` (not payload); `dev/README.md` says how a
+development session runs.
 
 Then, from the project you want it in:
 

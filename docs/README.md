@@ -15,6 +15,8 @@ it lives in the generated project overrides document (`paths.overridesDoc`).
 - `SESSION_BRIEF_RECIPE.md` - the recipe `/pnp:brief` applies.
 
 Development of the plugin itself lives in `dev/` at the repo root - not payload, not shipped, and
-outside the provenance scan. A project installs the plugin from this repo as a local marketplace
-(`/plugin marketplace add <path-to-this-repo>`, `/plugin install pnp@promptandpray`; later
-`/plugin marketplace update` + `/plugin update pnp@promptandpray`, then `/pnp:update`).
+outside the provenance scan. A project installs the plugin from the GitHub marketplace
+(`/plugin marketplace add divels-studio/promptandpray`, `/plugin install pnp@promptandpray`;
+later `/plugin marketplace update` + `/plugin update pnp@promptandpray`, `/reload-plugins` -
+which a running session needs to leave the version it started on - then `/pnp:update`). A local
+checkout of the repository is the same path with `<path-to-this-repo>` as the marketplace.

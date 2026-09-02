@@ -3,7 +3,7 @@
   "owner": {
     "name": "Desislav Yosifov"
   },
-  "description": "PromptAndPray served from its own repository as a local marketplace (one plugin: pnp).",
+  "description": "PromptAndPray served from its own repository as a marketplace (one plugin: pnp).",
   "plugins": [
     {
       "name": "pnp",

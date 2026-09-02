@@ -49,6 +49,14 @@ command shows the whole picture and changes any of it without a re-interview.
   (typically the orchestrator's own completion-record commit) and manufactures a VERIFY failure the
   Writer cannot and must not fix. Guards that intentionally span several tickets keep their named
   base and say so.
+- **Public install path (PUB-001)** - the plugin installs from the GitHub marketplace this
+  repository serves: `/plugin marketplace add divels-studio/promptandpray` +
+  `/plugin install pnp@promptandpray`, and `/plugin marketplace update` +
+  `/plugin update pnp@promptandpray` + `/reload-plugins` + `/pnp:update` for a newer version.
+  `README.md`, `docs/README.md` and `dev/README.md` put that path first and keep the local checkout
+  as the alternative; `plugin.json` now names its `repository` and `homepage`. `/reload-plugins` is
+  spelled out at every one of those places because a running session keeps the version it loaded at
+  startup - the update lands on disk, and `/plugin list` is what says which version is live.
 
 ### Changed
 
@@ -296,6 +304,7 @@ that project (adopt mode, two Writer dispatches through the plugin-hosted loop, 
 - The `writer` template renders its template-contract comment and a mixed-slash overrides path
   into the project's `agents/writer.md` (cosmetic). (Fixed in 0.1.1.)
 
+[0.2.0]: https://github.com/divels-studio/promptandpray/releases/tag/v0.2.0
 [0.1.2]: https://github.com/divels-studio/promptandpray/releases/tag/v0.1.2
 [0.1.1]: https://github.com/divels-studio/promptandpray/releases/tag/v0.1.1
 [0.1.0]: https://github.com/divels-studio/promptandpray/releases/tag/v0.1.0

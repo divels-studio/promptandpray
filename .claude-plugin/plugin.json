@@ -5,6 +5,8 @@
   "author": {
     "name": "Desislav Yosifov"
   },
+  "homepage": "https://github.com/divels-studio/promptandpray",
+  "repository": "https://github.com/divels-studio/promptandpray",
   "license": "MIT",
   "keywords": [
     "workflow",

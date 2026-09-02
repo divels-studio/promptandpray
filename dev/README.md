@@ -51,14 +51,17 @@ separate operator words). A managed-artifact change never ships silently.
 
 ## How a project consumes the plugin
 
-A consumer project installs the plugin from this repo as a **local marketplace**
+A consumer project installs the plugin from the **GitHub marketplace** this repo serves
 (`.claude-plugin/marketplace.json`, `source: "./"`), at project scope:
 
 ```
-/plugin marketplace add <path-to-this-repo>
+/plugin marketplace add divels-studio/promptandpray
 /plugin install pnp@promptandpray
 /pnp:setup
 ```
+
+A local checkout is the same path with `/plugin marketplace add <path-to-this-repo>` - that is what
+a session testing an unreleased payload uses.
 
 The install is a snapshot copy. Claude Code picks up a new version **only when `version` in
 `plugin.json` changes**:
@@ -66,8 +69,13 @@ The install is a snapshot copy. Claude Code picks up a new version **only when `
 ```
 /plugin marketplace update
 /plugin update pnp@promptandpray
+/reload-plugins
 /pnp:update
 ```
+
+`/reload-plugins` is not optional: the running session keeps the version it loaded at startup, so
+without it the new payload sits on disk while `/plugin list` still reports the old one. If the
+reload warns that it would invalidate the prompt cache, `--force` or a new session.
 
 Project scope matters: a consumer's installed `pnp` must not be active inside this repo, where the
 hot copy is loaded through `--plugin-dir` - two copies of the same plugin is the one setup nothing

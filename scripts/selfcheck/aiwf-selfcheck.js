@@ -1076,7 +1076,7 @@ function sectionHookWiring() {
 }
 
 // ---------------------------------------------------------------------------
-// SECTION - the local marketplace manifest
+// SECTION - the marketplace manifest
 // ---------------------------------------------------------------------------
 // The repository is its own marketplace (`/plugin marketplace add <repo>`): one manifest, one plugin
 // entry, `source: "./"`. The entry deliberately carries NO version - plugin.json is the single
@@ -1130,7 +1130,7 @@ function copyMarketplaceFiles(from, to) {
 }
 
 function sectionMarketplace(tmpRoot) {
-  section('MARKETPLACE - the repo is its own local marketplace, and plugin.json is the only version source');
+  section('MARKETPLACE - the repo is its own marketplace (local checkout or GitHub), and plugin.json is the only version source');
   for (const f of marketplaceFindings(PLUGIN_ROOT)) check(f.name, f.ok, f.detail);
 
   section('MARKETPLACE CONTROLS - each of those assertions is proven able to FAIL');
@@ -4975,10 +4975,11 @@ function main() {
   console.log('forms stay. Each has its own control on a sabotaged copy of those files, including one that only');
   console.log('REWORDS a rule rather than deleting it. What is NOT proven, and cannot be from here: that a');
   console.log('session actually OBEYS any of them - only that the instruction is present and intact.');
-  console.log('MARKETPLACE: the repository is its own local marketplace - the manifest exists, parses, names');
-  console.log('itself and its owner, carries exactly one plugin entry whose name is plugin.json\'s, whose');
-  console.log('source is "./" and which carries NO version (plugin.json is the only version source); each');
-  console.log('of those has its own negative control on a sabotaged copy of the two manifests.');
+  console.log('MARKETPLACE: the repository is its own marketplace (local checkout or GitHub) - the');
+  console.log('manifest exists, parses, names itself and its owner, carries exactly one plugin entry');
+  console.log('whose name matches plugin.json, whose source is "./" and which carries NO version');
+  console.log('(plugin.json is the only version source); each of those has its own negative control on');
+  console.log('a sabotaged copy of the two manifests.');
   console.log('STATIC: the wrapper flag locks, asserted as exact ARGV PAIRS rather than bare words (so a');
   console.log('flag switched in the argv while the old word survives in a comment still fails), the hook');
   console.log('wiring, the wrapper sources of BOTH channels (ASCII-only everywhere, LF-only for the bash');
