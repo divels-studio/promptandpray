@@ -1365,15 +1365,23 @@ section('22 - the audit table: a fresh install gets it without being asked, and 
 // where none can be made it says so on one line rather than passing in silence.
 section('23 - an entrypoint reached through a symlinked payload still recognizes itself as main');
 {
-  const linked = path.join(tmpRoot, 'payload-via-link');
+  // Every link fixture in this section hangs off the RESOLVED temp path. On macOS the suite's own
+  // tmpRoot already sits behind that /var link, so a fixture placed there reaches its child through
+  // a link even when nothing was linked on purpose - the control below would then be asserting a
+  // premise the host cannot hold, and it failed exactly that way. Resolving once here leaves the
+  // explicit junction as the ONLY link in the picture, which is what this section is trying to
+  // isolate.
+  const realTmp = fs.realpathSync(tmpRoot);
+  const linked = path.join(realTmp, 'payload-via-link');
   let linkable = true;
   try { fs.symlinkSync(PLUGIN_ROOT, linked, 'junction'); } catch { linkable = false; }
   if (!linkable) {
     console.log('  [SKIP] this host would not create a directory link - the whole section needs one');
   } else {
     // THE CONTROL, first: the link really does defeat the naive guard on this host, so the
-    // assertions below are about the fix and not about a link that changes nothing here.
-    const naiveDir = path.join(tmpRoot, 'naive-entrypoint');
+    // assertions below are about the fix and not about a link that changes nothing here. Its
+    // fixture is realpath-based (see above) so that "direct" means direct on every host.
+    const naiveDir = path.join(realTmp, 'naive-entrypoint');
     fs.mkdirSync(naiveDir, { recursive: true });
     fs.writeFileSync(path.join(naiveDir, 'naive.mjs'), [
       "import path from 'node:path';",
@@ -1382,7 +1390,7 @@ section('23 - an entrypoint reached through a symlinked payload still recognizes
       "if (invoked === path.resolve(fileURLToPath(import.meta.url))) console.log('MAIN');",
       '',
     ].join('\n'));
-    const naiveLink = path.join(tmpRoot, 'naive-entrypoint-via-link');
+    const naiveLink = path.join(realTmp, 'naive-entrypoint-via-link');
     fs.symlinkSync(naiveDir, naiveLink, 'junction');
     const run = (dir, rel) => spawnSync(process.execPath, [path.join(dir, rel)], { encoding: 'utf8' });
     const naiveDirect = run(naiveDir, 'naive.mjs');
