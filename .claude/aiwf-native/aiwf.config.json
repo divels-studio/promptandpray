@@ -1,8 +1,8 @@
 {
   "$schema": "D:/promptandpray/schema/aiwf.config.schema.json",
   "_aiwf": {
-    "installedPluginVersion": "0.2.0",
-    "lastMigrationApplied": "0004_audit-table",
+    "installedPluginVersion": "0.2.1",
+    "lastMigrationApplied": "0005_posix-legs",
     "migrationJournal": null,
     "managedRegions": {
       ".claude/aiwf-native/roles.json": {

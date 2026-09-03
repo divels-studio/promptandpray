@@ -2,5 +2,6 @@
   { "id": "0001_initial", "targetPluginVersion": "0.1.0" },
   { "id": "0002_operator-word-and-hygiene", "targetPluginVersion": "0.1.1" },
   { "id": "0003_quiet-rerender", "targetPluginVersion": "0.1.2" },
-  { "id": "0004_audit-table", "targetPluginVersion": "0.2.0" }
+  { "id": "0004_audit-table", "targetPluginVersion": "0.2.0" },
+  { "id": "0005_posix-legs", "targetPluginVersion": "0.2.1" }
 ]

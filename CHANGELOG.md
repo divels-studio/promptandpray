@@ -4,6 +4,42 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.2.1] - 2026-09-03
+
+A code-only release with an uncomfortable cause: the CI matrix had a Linux and a macOS leg since it
+was written, both were red from their first run, and they were read for the first time after 0.2.0
+was pushed. Nothing here changes your project - no config key, no managed region, no agent file -
+and `0005_posix-legs` exists only because a version bump still needs a manifest entry.
+
+### Fixed
+
+- **Entrypoint identity behind a symlinked path (POSIX-001)** - every CLI entrypoint decided whether
+  it was started directly or imported by comparing the invoked path with its own module path, and
+  Node resolves an entry file to its real path before loading it. On a host whose temp directory sits
+  behind a symlink - the normal case on macOS - an entrypoint spawned from a payload copy under temp
+  concluded it was not the main module, did nothing, and exited 0. The suites read that 0 as success:
+  sabotage controls came back green because nothing had run. All six entrypoints now compare real
+  paths on both sides, and the self-check carries an entrypoint-identity assertion with a
+  constructed-input control. Reproduced on Windows through a directory junction before the fix.
+- **The Linux and macOS CI legs (POSIX-001)** - every defect that kept them red is fixed; the 0.2.1
+  push's CI run is the proof. Besides the entrypoint defect: the `codex-qal.sh` cleanup function
+  that only a `trap` ever calls is now exempted from BOTH shellcheck codes that report it (two
+  ShellCheck generations name the same false positive differently), `actions/checkout` and
+  `actions/setup-node` are pinned at `@v5`, and the workflow header no longer claims those legs have
+  never executed. macOS itself is proven by CI on the 0.2.1 push - this repository has no macOS host.
+- **A test expectation built with the host's separator (POSIX-001)** - the setup suite compared a
+  rendered path against a string assembled with the separator of the machine running the test, while
+  the product deliberately renders the separator of the CONFIGURED channel. The expectation is now
+  built from the channel too.
+- **The provenance scan ignores the harness's plugin-cache metadata (POSIX-002)** - when the plugin
+  is installed from a marketplace, the payload root is a directory inside Claude Code's plugin cache,
+  and the harness keeps `.in_use/<pid>` and `.orphaned_at` in it. The self-check's provenance scan
+  fails on files whose type it does not know, so a perfectly clean marketplace installation reported
+  four failures about the harness's own bookkeeping. Both names are skipped now - at the payload root
+  only, by exact name, and only those two: a `.in_use` directory deeper in the payload is still
+  scanned, an unclassified root file of any other name still fails, and two controls prove both
+  directions.
+
 ## [0.2.0] - 2026-09-02
 
 Who audits what stops being doctrine text and becomes a table in your config: three review classes
@@ -304,6 +340,7 @@ that project (adopt mode, two Writer dispatches through the plugin-hosted loop, 
 - The `writer` template renders its template-contract comment and a mixed-slash overrides path
   into the project's `agents/writer.md` (cosmetic). (Fixed in 0.1.1.)
 
+[0.2.1]: https://github.com/divels-studio/promptandpray/releases/tag/v0.2.1
 [0.2.0]: https://github.com/divels-studio/promptandpray/releases/tag/v0.2.0
 [0.1.2]: https://github.com/divels-studio/promptandpray/releases/tag/v0.1.2
 [0.1.1]: https://github.com/divels-studio/promptandpray/releases/tag/v0.1.1

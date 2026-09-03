@@ -3589,7 +3589,8 @@ function sectionPayloadIntegrity() {
 //      the absolute-path check fails loudly.
 //
 // The scanned set is every text file of the payload, defined by extension/known name below, with
-// .git and node_modules excluded as not-payload. A file whose type is not in that set is a
+// .git and node_modules excluded as not-payload, and the self-hosting zones plus the harness's own
+// plugin-cache markers excluded at the root only. A file whose type is not in that set is a
 // FAILURE, not a silent skip: a new file class gets classified deliberately or the gate says so.
 
 const PROV_ORIGIN_DIGESTS = [
@@ -3620,13 +3621,30 @@ const PROV_SKIP_ROOT_DIRS = new Set(['dev', '.claude', '.aiwf']);
 // operator zone), not payload. Skipped by name at the ROOT ONLY - a CLAUDE.md anywhere deeper is
 // payload and is scanned.
 const PROV_SKIP_ROOT_FILES = new Set(['CLAUDE.md']);
+// The HARNESS's own plugin-cache bookkeeping, and the only reason this scan has to know it exists:
+// when the plugin is installed from a marketplace, the payload root IS a directory inside Claude
+// Code's plugin cache, so the harness keeps its markers right next to docs/ and skills/ -
+// `.in_use/<pid>`, one small JSON file per live session, and `.orphaned_at`, a timestamp written on
+// a version that has been superseded. Neither ships with the plugin, and an unclassified file FAILS
+// here by design, so without this skip a perfectly clean marketplace installation reports findings
+// about the harness rather than about the payload (measured: four of them, from a `.in_use`
+// directory holding one pid-named file).
+//
+// EXACT NAMES, ROOT ONLY, and nothing pattern-shaped on purpose. This is the one skip in this
+// section whose content is not ours to reason about, so it is kept narrower than the zones above
+// rather than wider: a `.in_use` directory anywhere deeper in the payload is payload and is
+// scanned, an unclassified root file of any other name still fails, and a glob such as `.*` here
+// would hide a real finding while looking like housekeeping.
+const PROV_SKIP_ROOT_HARNESS_DIRS = new Set(['.in_use']);
+const PROV_SKIP_ROOT_HARNESS_FILES = new Set(['.orphaned_at']);
 // Every top-level area of the payload must contribute at least one scanned file, root files
 // included. This is the half of the coverage assertion that a raw count cannot express: a scan
 // that stopped descending after two directories still returns a large, plausible number.
 const PROV_AREAS = ['.claude-plugin', '.github', 'docs', 'examples', 'hooks', 'migrations', 'schema', 'scripts', 'skills', 'templates'];
-// The payload ships 96 text files today (this run prints the number it really scanned; that is
-// where this one comes from). The floor is deliberately well below that - ordinary
-// growth and pruning must not trip it, while an empty or gutted list is not read as agreement.
+// No absolute count is pinned here: the run PRINTS the number it really scanned, and a number
+// written into this comment is stale the next time a document is added. The floor is deliberately
+// far below the real count - ordinary growth and pruning must not trip it, while an empty or
+// gutted list is not read as agreement.
 const PROV_MIN_FILES = 60;
 
 // The absolute paths that legitimately survive, each pinned to the ONE file that justifies it: a
@@ -3691,11 +3709,11 @@ function provenanceWalk(root, { readdir = fs.readdirSync } = {}) {
       const p = path.join(dir, e.name);
       if (e.isDirectory()) {
         if (PROV_SKIP_DIRS.has(e.name)) continue;
-        if (dir === root && PROV_SKIP_ROOT_DIRS.has(e.name)) continue;
+        if (dir === root && (PROV_SKIP_ROOT_DIRS.has(e.name) || PROV_SKIP_ROOT_HARNESS_DIRS.has(e.name))) continue;
         rec(p);
         continue;
       }
-      if (dir === root && PROV_SKIP_ROOT_FILES.has(e.name)) continue;
+      if (dir === root && (PROV_SKIP_ROOT_FILES.has(e.name) || PROV_SKIP_ROOT_HARNESS_FILES.has(e.name))) continue;
       const rel = provRel(root, p);
       if (PROV_TEXT_EXT.has(path.extname(e.name).toLowerCase()) || PROV_TEXT_NAMES.has(e.name)) scanned.push(rel);
       else unclassified.push(rel);
@@ -3854,6 +3872,15 @@ const PROVENANCE_CONTROLS = [
     apply: (r) => { fs.mkdirSync(path.join(r, 'templates', '.claude'), { recursive: true }); fs.writeFileSync(path.join(r, 'templates', '.claude', 'x.md'), '\u0414\n', 'utf8'); } },
   { id: 'provenance-cyrillic', label: 'a Cyrillic character planted under scripts/.aiwf/ (the .aiwf skip is root-only)',
     apply: (r) => { fs.mkdirSync(path.join(r, 'scripts', '.aiwf'), { recursive: true }); fs.writeFileSync(path.join(r, 'scripts', '.aiwf', 'x.json'), '"\u0414"\n', 'utf8'); } },
+  // The three that hold the harness-metadata skip to its exact width: the same marker NAME below the
+  // root is payload, and a root file whose name merely resembles a marker is payload too. Without
+  // these, the skip could grow into a hiding place and nothing here would notice.
+  { id: 'provenance-origin', label: 'a denylisted origin name planted in a NESTED .in_use/ (the harness-marker skip is root-only)', opts: PROV_ARMED,
+    apply: (r) => { fs.mkdirSync(path.join(r, 'docs', '.in_use'), { recursive: true }); fs.writeFileSync(path.join(r, 'docs', '.in_use', 'x.md'), `${PROV_CANARY}\n`, 'utf8'); } },
+  { id: 'provenance-cyrillic', label: 'a Cyrillic character planted in a NESTED .in_use/ (the harness-marker skip is root-only)',
+    apply: (r) => { fs.mkdirSync(path.join(r, 'skills', '.in_use'), { recursive: true }); fs.writeFileSync(path.join(r, 'skills', '.in_use', 'x.md'), '\u0414\n', 'utf8'); } },
+  { id: 'provenance-scope', label: 'a root file whose name only RESEMBLES a harness marker (.orphaned_at.bak) is still an unclassified payload file',
+    apply: (r) => fs.writeFileSync(path.join(r, '.orphaned_at.bak'), '1788126859601\n', 'utf8') },
   { id: 'provenance-abs-path', label: 'a new drive-letter absolute path planted in a script',
     apply: (r) => appendText(r, 'scripts/setup/generate.mjs', `\n// see ${'C:' + '\\Users\\someone\\notes.txt'}\n`) },
   { id: 'provenance-abs-path', label: 'an ALLOWLISTED literal planted in a file it does not belong to',
@@ -3926,7 +3953,22 @@ function sectionProvenance(tmpRoot) {
   const selfHostClean = provenanceFindings(base, PROV_ARMED).filter((f) => !f.ok);
   check('dev/, .claude/, .aiwf/ and the root CLAUDE.md are not payload: every forbidden pattern planted there with the canary armed leaves the copy green',
     selfHostClean.length === 0, selfHostClean.length ? selfHostClean.map((f) => f.id).join(', ') : 'still green');
+  // The harness's plugin-cache markers, the same way and for the same reason - except that here the
+  // shape is copied from a real cache directory rather than invented: `.in_use/` holding one file
+  // named for the pid, with the JSON the harness writes in it, and `.orphaned_at` holding a
+  // timestamp. Every forbidden pattern is appended to both, with the canary armed: a skip that
+  // reads the marker's CONTENT would go red here, and the copy must stay green.
+  fs.mkdirSync(path.join(base, '.in_use'), { recursive: true });
+  fs.writeFileSync(path.join(base, '.in_use', '6600'), `{"pid":6600,"procStartFt":"134328169684300224"}\n${plant}`, 'utf8');
+  fs.writeFileSync(path.join(base, '.orphaned_at'), `1788126859601\n${plant}`, 'utf8');
+  const harnessClean = provenanceFindings(base, PROV_ARMED).filter((f) => !f.ok);
+  check('the harness\'s plugin-cache markers at the payload root (.in_use/<pid>, .orphaned_at) are not payload: planted with every forbidden pattern and the canary armed, the copy stays green',
+    harnessClean.length === 0, harnessClean.length ? harnessClean.map((f) => f.id).join(', ') : 'still green');
+
   const walked = provenanceWalk(base).scanned;
+  const leakedHarness = walked.filter((rel) => rel === '.orphaned_at' || rel.startsWith('.in_use/'));
+  check('neither marker is in the scanned list either (the skip is the walk\'s, not a lucky classification miss)',
+    leakedHarness.length === 0, leakedHarness.length ? `scanned: ${leakedHarness.join(', ')}` : `${walked.length} files scanned, neither of them`);
   const leaked = walked.filter((rel) => rel === 'CLAUDE.md' || /^(dev|\.claude|\.aiwf)\//.test(rel));
   check('none of those paths is in the scanned list (the skip is real, not a lucky pattern miss)',
     leaked.length === 0, leaked.length ? `scanned: ${leaked.join(', ')}` : `${walked.length} files scanned, none of them`);
@@ -4987,7 +5029,9 @@ function main() {
   console.log('node_modules excluded at any depth; the self-hosting zones dev/, .claude/, .aiwf/ and the');
   console.log('root CLAUDE.md excluded at the ROOT ONLY (a same-named directory or file below the root is');
   console.log('scanned, and controls plant forbidden content in both places to prove the boundary sits');
-  console.log('where it is claimed); with an unclassified file, an unreadable file and a directory that');
+  console.log('where it is claimed), and the harness\'s plugin-cache markers .in_use/ and .orphaned_at');
+  console.log('excluded the same way, by exact name at the root of a marketplace installation only;');
+  console.log('with an unclassified file, an unreadable file and a directory that');
   console.log('could not be enumerated each counted as a FAILURE rather than skipped (a dropped subtree');
   console.log('leaves every other number in the section plausible) - is');
   console.log('scanned for the origin project\'s names (held as digests, never as text), for email');

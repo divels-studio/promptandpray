@@ -1,5 +1,5 @@
 {
-  "migration": "0005_example-bump",
+  "migration": "0006_example-bump",
   "targetPluginVersion": "0.3.0",
   "operations": [
     {

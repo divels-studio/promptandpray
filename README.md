@@ -17,7 +17,7 @@ Born in a real production project, then extracted and genericized.
 
 ## Status
 
-**v0.2.0. The first public release.**
+**v0.2.1. Public since 0.2.0.**
 
 What is here:
 
@@ -76,7 +76,7 @@ What is **not** here yet:
 - **A Linux or macOS install anybody has actually run.** Both channels ship - the bash wrappers
   mirror the PowerShell ones flag for flag, `/pnp:setup` accepts all three OS channels, and the CI
   matrix runs the gates on ubuntu and macos runners. What is missing is field use: the POSIX legs
-  first execute on the operator's first push, and no POSIX machine has hosted a real loop yet.
+  are exercised only in CI, and no POSIX machine has hosted a real loop yet.
 - **One consumer installation so far.** It has taken every release from 0.1.0 to 0.1.2 through
   `/plugin update` + `/pnp:update` - the first bump asked two take-new questions, 0.1.2 asked none -
   and there is no second consumer yet.

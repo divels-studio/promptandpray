@@ -14,7 +14,7 @@ the repository; the cycle asserts that the repository is byte-identical afterwar
 | `answers.json` | a complete, non-interactive answers file for `/pnp:setup` (Windows channel, both review roles claude-hosted on tier aliases, QAL off). It is also a valid config body: the self-check validates it against `schema/aiwf.config.schema.json`. |
 | `answers-linux.json` | the same answers on the `linux` OS channel, and nothing else changed. It is what the ubuntu and macos CI legs run the cycle with: the channel decides which wrapper paths get RENDERED into the project, and rendering is pure file writing, so this file runs on any host - including Windows. |
 | `seed/` | the host project BEFORE the install: its own `CLAUDE.md` prose, its own `.claude/settings.json` with one foreign permission rule, and `src/hello.mjs` - the target of the configured VERIFY command. The install must append beside all three, never over them. |
-| `bump/` | the simulated next release (the shipped payload version -> `0.3.0`): the manifest entry (`bump.json`), the migration itself (`0005_example-bump/`, one operation of each of the four types plus a second `rerender-managed-region` over `.claude/agents/writer.md`, which the cycle never edits), and the schema property that migration introduces (`schema-key.json`). |
+| `bump/` | the simulated next release (the shipped payload version -> `0.3.0`): the manifest entry (`bump.json`), the migration itself (`0006_example-bump/`, one operation of each of the four types plus a second `rerender-managed-region` over `.claude/agents/writer.md`, which the cycle never edits), and the schema property that migration introduces (`schema-key.json`). |
 
 ## The cycle
 
@@ -42,7 +42,7 @@ node <payload>/scripts/setup/interview.mjs --answers-file <answers> --plugin-roo
 exit 0
 
 **2. Validate the bumped payload.** Copy `<payload>` to `<payload2>`, set its `plugin.json` version
-to `0.3.0`, append `bump/bump.json` to `migrations/index.json`, copy `bump/0005_example-bump/` into
+to `0.3.0`, append `bump/bump.json` to `migrations/index.json`, copy `bump/0006_example-bump/` into
 `migrations/`, splice `bump/schema-key.json` into the schema, and append a line to
 `templates/agents/writer.md.tmpl` so that artifact's render really changes. Then:
 
@@ -75,8 +75,8 @@ exit 1 - and the project is byte-identical afterwards
 
 ```json
 {
-  "0005_example-bump/0/enforcement.exampleToggle": { "kind": "answer", "value": false },
-  "0005_example-bump/1/CLAUDE.md#aiwf-core": { "kind": "conflict", "resolution": "keep-mine" }
+  "0006_example-bump/0/enforcement.exampleToggle": { "kind": "answer", "value": false },
+  "0006_example-bump/1/CLAUDE.md#aiwf-core": { "kind": "conflict", "resolution": "keep-mine" }
 }
 ```
 
