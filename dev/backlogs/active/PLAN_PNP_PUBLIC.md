@@ -333,6 +333,46 @@ VERIFY ≠ 0.
 **Review:** `Class: code` → Codex (`gpt-5.6-sol`/high), fact-check преди това. Cap 2.
 **Assignee:** Колега. Branch `main`.
 
+### AUD-001 — Completion record (2026-09-02)
+
+**Commit `93f4510a8035455152dcb04c9eba27c2adaee8f8`** върху котвата `a4f067e` (branch `main`, локален,
+непушнат): 35 файла, 2559+/109− (`git diff a4f067e..93f4510 --stat`). Изпълнено по обхвата §1–9:
+таблицата в схемата (redove с `required:["passes"]` + `default` 2/1/1, `allOf`/`if/then`, effort
+enum на codex ред), ефективни редове в `roles.json`, resolver `-Class`/`--class` (reviewer-only,
+байт-идентичен изход без флага), class-aware review wrapper-и, `scripts/setup/aiwf-roles.mjs` +
+`skills/roles/SKILL.md` (mission/work/setup печатат таблицата), `ifRecorded` на
+`rerender-managed-region`, миграция `0004_audit-table` (6 op-а), fixture → `0005_example-bump`,
+bump 0.2.0 + CHANGELOG блок, self-install apply (0 диалога) + `CHANGES_0.1.2-to-0.2.0.md`.
+
+**Отклонения (приети от Одитора):** (1) `review.required` НЕ получи трите реда — per-op
+валидацията на `migrate.mjs:524-527` прави тройката несъвместима със собствената 3×add-config-key
+миграция на плана; компенсирано със schema defaults (fresh-install proof в `test-setup.mjs` §22) и
+selfcheck `review-row-shape` с контроли; мотивът е в `$comment` на схемата. (2) TEMPLATE CONTRACT
+блокът на `reviewer.md.tmpl` е обновен още тук (иначе диффът носеше невярно твърдение); тялото
+остава за AUD-002.
+
+**Ревю:** fact-check ×2 (Explore/sonnet, prose на диффа и на корекционната делта) — 0 находки.
+Codex `gpt-5.6-sol`/high, `Class: code`: pass 1 `fail` с 6 блокера (P1 — трием held stale agent
+файл; effort отворено множество; `ifRecorded` recovery осиновява чужд файл; `-Class ''` деградира
+до безкласов диспач; ред-зависимост на multi-`--set`; phase-2 ред + crash покритие) → корекционен
+рунд 1 (в cap 2), всичките шест поправени с production-path тестове → pass 2
+**`pass-with-notes`**, 0 блокера на прага, без регресии. Non-blocking: диагнозата „predates the
+audit table" при malformed roles.json в class режим (fail-closed, само неточна); ps каналът
+доказва class branch-а с три взаимно изключващи се refusal съобщения (няма codex stub harness на
+ps — заварено).
+
+**Верификация (Колегата, точни кодове):** 8-те VERIFY от `aiwf.config.json` → exit 0
+(`test-setup.mjs` 311 checks / `test-update.mjs` 445 / example cycle 2×44 / selfcheck 807
+assertions на self-install-а, 810 на синтетичния fixture / spikes 99 / `claude plugin validate .`
+✔); Cyrillic grep по payload пътищата → празен, exit 1; всички acceptance команди на тикета →
+буквално изпълнени, вкл. байт-идентичния безкласов resolver изход и
+`aiwf-update --check` → „up to date … 0.2.0".
+
+**История на рунда (наратив):** сесията на Колегата умря два пъти извън кода — веднъж на 100%
+пълен `D:` (спря с нула записи, планът за поправките оцеля в контекста; операторът освободи
+място), веднъж на session limit по средата на VERIFY (дървото проверено байт-идентично,
+довърши след reset-а). Останал дълг: няма.
+
 ## AUD-002 [R2 code-class] — доктрината чете таблицата; tripwire (3); регионът в 0004
 
 **Обхват:**
@@ -464,6 +504,47 @@ VERIFY ≠ 0.
 **Risk threshold / Stop / Review / Assignee:** като AUD-001; fact-check над NOTES/CHANGELOG/WORKFLOW/
 skill прозата преди Codex. Commit: `AUD-002: doctrine reads the audit table; third tripwire`.
 
+### AUD-002 — Completion record (2026-09-02)
+
+**Commit `f3918ffe4ede733329c3af87164d74d51fef9185`** върху котвата `93f4510` (branch `main`,
+локален, непушнат): 18 файла, 813+/275− (`git show --stat f3918ff`) — 17 payload/self-install +
+обявената COO редакция на `dev/PROJECT_OVERRIDES.md` (Loop shape → `review.plan.passes`); PLAN
+файлът доказано извън commit-а. Изпълнено по обхвата §1–5: доктрината чете таблицата
+(WORKFLOW/LOOP/REVIEW_CHECKLIST/OPERATOR_PROTOCOL/README/шаблоните), `skills/review` резолвва
+реда през `-Class` (ad-hoc `general-purpose`/`opus` пътят падна), readiness = цикъл по
+`review.plan.passes` (hard max passes+1), fact-check = едно правило „before every pass above the
+scan tier, over a diff or a plan", tripwire (3) и петата brief-authoring грешка дословно, COO
+self-pass параграфът, 0004 → 7 op-а (регионът `CLAUDE.md#aiwf-core`, приложен на self-install-а
+през `--resolve` + resolution файл, 0 диалога), selfcheck: `doctrine-review-class` пренаписан +
+15 per-surface assertion-а с контроли + retired-phrase sweep + `DOCTRINE_FACTCHECK_SITES`.
+
+**Отклонения (приети):** нищо не стои стейджнато преди ревюто (стейджването само при commit);
+изречението за таблицата в `templates/CLAUDE.md.tmpl` е при диспач секцията, не на `:94-100`
+(pin-нато със собствен assertion); един диагностичен `; echo` върху Cyrillic grep-а (еднократен,
+обявен); `skipWhen` механизъм на notes контрола (открит с реален 451/4 FAIL, не с разсъждение);
+`skills/qa/SKILL.md` и recipe-то непипнати по причина (QA вече чете модела от roles.json;
+`before a paid pass is spent` е Codex-специфично там).
+
+**Ревю:** fact-check ×2 (проза на диффа; корекционна делта + кръстосана консистентност) — 1
+находка (етикети „seventh op" за шестия op в test-update; поправена в микро-рунд, suite 448/0
+преди паса). Codex `gpt-5.6-sol`/high, `Class: code`: pass 1 `fail` с 3 блокера (readiness
+текстът можеше да гейтне трети КОНФИГУРИРАН пас; квалификаторът „above the scan tier" липсваше
+на 4 прозаични места — COO арбитраж: прозата се квалифицира, pin-натият `--show` формат остава;
+региона тестът минаваше по „already current", не по реалния consumer път) → корекционен рунд 1
+(cap 2), трите поправени: цикъл формулировка, четирите сайта квалифицирани +
+`DOCTRINE_FACTCHECK_SITES`, aged-region fixture със съдържателен/хеш assertion → pass 2 **`pass`**,
+нула находки. (Първият опит за pass 2 беше убит външно без вердикт — ре-диспач с операторска
+дума.)
+
+**Верификация (Колегата, точни кодове):** VERIFY 8/8 exit 0 — `test-update.mjs` 451 checks /
+selfcheck 848 assertions на self-install-а / `test-setup.mjs` 311 / example cycle 2×44 / spikes
+99 / `validate-payload` „4 migration(s)" / `claude plugin validate .` ✔ / `aiwf-update --check`
+„up to date … 0.2.0"; §5 sweep → празен (exit 1); `git grep -L "review.plan.passes"` (7 файла) и
+`-L "Three countable tripwires"` (3 файла) → празни; op count `!= 7` → exit 0 с контрол;
+Cyrillic grep → празен. Останал дълг: няма. Бележка (не дълг): два коментара/етикета в
+`aiwf-selfcheck.js` от AUD-001 казват „seven skills" при 8 записа в `DOCTRINE_READING_SKILLS` —
+едноредова R1 корекция при удобен commit.
+
 ## PUB-001 [R2 code-class] — public install път
 
 `README.md:20` → „**v0.2.0. The first public release.**"; § Install `:90-109` — първи път
@@ -498,6 +579,40 @@ https://github.com/divels-studio/promptandpray/releases/tag/v0.2.0` над `:220
   → празно.
 - `claude plugin validate .` → exit 0; VERIFY 8/8. Commit: `0.2.0: first public release (PUB-001)`.
 
+### PUB-001 — Completion record (2026-09-03)
+
+**Commit `bf11755ef6543dac3f4f20f1709357223184d043`** върху котвата `f3918ff` (branch `main`,
+локален, непушнат): 7 файла, 71+/26− (`git show --stat bf11755`); PLAN файлът извън commit-а.
+Изпълнено по обхвата: README § Status „v0.2.0. The first public release." + fold на published
+bullet-а + дословният one-consumer текст + POSIX bullet-ът; § Install — GitHub marketplace първи
+(`/plugin marketplace add divels-studio/promptandpray`) със задължителния `/reload-plugins` ред,
+локалният checkout втори; `docs/README.md` и `dev/README.md` подравнени; `plugin.json` +
+`repository`/`homepage`; `marketplace.json` без „local"; трите прозаични selfcheck сайта →
+„its own marketplace (local checkout or GitHub)"; CHANGELOG § Added запис + `[0.2.0]` link ref.
+
+**Отклонения (приети):** § Install финалният абзац пренаписан (иначе update пътят стоеше два
+пъти, единият без `/reload-plugins`); selfcheck наративът пре-wrap-нат 4→5 реда; „end with" →
+„say" за reload съобщението (по-слабата, доказуема претенция); „what is here" fold-ът е един
+bullet.
+
+**Ревю:** fact-check (проза + кръстосана README консистентност + числата срещу архиви 002/003)
+— 0 находки. Codex `gpt-5.6-sol`/high, `Class: code`: вердикт `fail` с ЕДИН блокер — VERIFY
+суитите не тръгват в собствената read-only клетка на Одитора (`mkdtemp` EPERM); всичко останало
+чисто, една note-only бележка (section header коментар извън спецификацията). **COO арбитраж:**
+блокерът е артефакт на средата на ревюиращия, не на repo-то — доктрината „Verifying failure
+claims" покрива точно този случай; неговото „exact next action" (пълен VERIFY в записваема среда
+с точни кодове) изпълнено ДВУКРАТНО: рънът на Колегата и независим COO-диспачнат рън
+(general-purpose/sonnet) — двата 8/8 exit 0 + Cyrillic grep празен (setup 311 / update 451 /
+example 2×44 / selfcheck 848/848 / spikes 99 / validate-payload „4 migration(s)" / plugin
+validate ✔). Нулева делта по диффа след паса → втори платен пас не се дължи по правилото
+„second pass above the scan tier only when the correction round touched code". Route затворен по
+същество; кликът на commit-а остана операторският гейт.
+
+**Acceptance (Колегата, точни кодове):** петте `git grep` проверки по плана → точните
+празно/1-hit резултати (exit 1/0 съответно); `claude plugin validate .` → exit 0. Останал дълг:
+няма. Отбелязана експозиция (по дизайн на плана): public/tag претенциите в README/CHANGELOG
+стават верни с PUB-002 стъпки 1–3.
+
 ## PUB-002 [оператор, извън repo-то] — repo public, tag, push
 1. GitHub → Settings → Change visibility → Public (клик). Проверка (read-only, от тази сесия):
    `gh repo view divels-studio/promptandpray --json visibility --jq .visibility` → `PUBLIC`
@@ -506,6 +621,17 @@ https://github.com/divels-studio/promptandpray/releases/tag/v0.2.0` над `:220
 3. `git push origin main` + `git push origin v0.2.0` — дума + диалог. Проверка: `git ls-remote
    --tags origin v0.2.0` → `<hash>	refs/tags/v0.2.0`; `git rev-list --left-right --count
    origin/main...main` → `0	0`.
+
+### PUB-002 — Completion record (2026-09-03)
+
+Трите стъпки, всяка със собствена операторска дума: (1) visibility → **Public** (операторски клик
+в GitHub; първата проверка върна PRIVATE — несъхранена смяна, повторена; потвърдено с
+`gh api repos/divels-studio/promptandpray` → `"visibility":"public"`); (2) `git tag v0.2.0
+bf11755ef6543dac3f4f20f1709357223184d043` — дума, проверено с `git tag --points-at bf11755`;
+(3) `git push origin main` (b424e11..bf11755, 4 commit-а: AUD-001, AUD-002, планът, PUB-001) +
+`git push origin v0.2.0` — дума + диалози. Проверки по плана: `git ls-remote --tags origin
+v0.2.0` → `bf11755… refs/tags/v0.2.0`; `git rev-list --left-right --count origin/main...main` →
+`0	0`. Останал дълг: няма.
 
 ## PUB-003 [consumer proof, Furnissimo сесия] — GitHub marketplace update до 0.2.0
 Там, в този ред: preflight `git status --short` чист на работния клон; `/plugin marketplace remove
@@ -523,27 +649,237 @@ to date … 0.2.0"; `node scripts/setup/aiwf-roles.mjs --show` (през plugin 
 **Commit там — клик**; hash-ът се записва в completion record-а ТУК (заедно с брой диалози,
 selfcheck резултат, таблицата).
 
-## Closeout (в repo-то, след PUB-003)
-Completion records на AUD-001/002, PUB-001/002/003 + архив `git mv dev/backlogs/active/
-PLAN_PNP_PUBLIC.md dev/backlogs/archive/004_PLAN_PNP_PUBLIC_<дата>.md` → **един commit (клик)** →
-**push с дума + диалог** → чак тогава `git rev-list --left-right --count origin/main...main` →
-`0	0`. Тагът НЕ се мести (сочи PUB-001 hash; records са dev/, не payload).
+### PUB-003 — Completion record (2026-09-03)
+
+**Furnissimo, през GitHub marketplace, commit там `2de3ddc8`** (клик на оператора; relay от
+операторския канал). Пътят: `/plugin marketplace remove promptandpray` → `add
+divels-studio/promptandpray` → `/plugin install pnp@promptandpray` → `/reload-plugins` →
+`/plugin list` показа `pnp v0.2.0` → `/pnp:update`: 0.1.2 → 0.2.0, миграция `0004_audit-table`,
+7 операции, ЕДИН реален write (`CLAUDE.md#aiwf-core`, тих) — dry-run 0 конфликта → apply без
+диалог по конструкция (диалог се вдига само на конфликт). Note-ът изпълнен: „Loop shape" редът в
+техния `PROJECT_OVERRIDES.md` вече сочи `review.plan.passes` (операторска R1 редакция там).
+Дървото там чисто. **Първият пълен цикъл install → loop → update от публичния канал е доказан —
+продуктовата цел на 0.2.0.**
+
+Наблюдавани consumer особености (записани, не дефекти): заварен дрейф — техен commit `cdcfe817`
+ръчно вдигнал версията без миграционен запис; тяхната сесия върна печата на 0.1.2 и ъпдейтът
+мина канално (engine-ът издържа дрейфа). Selfcheck там 847/851 — 4-те FAIL са environmental
+(`.in_use` cache маркер; фиксът е в обхвата на POSIX-002). Инсталацията е user scope (планът
+предвиждаше project scope) — операторски избор там. `/pnp:roles` таблицата не беше предадена в
+relay-а — не се записва като измерена; `roles.json` потвърден актуален при dry-run-а. Останал
+дълг: няма.
+
+## POSIX-001 [R2 code-class] — зелени POSIX CI leg-ове (родени с операторска дума 2026-09-03)
+
+Контекст: кандидатът „POSIX CI leg-овете са червени от раждането си" (виж Кандидати — пълната
+диагноза там) стана тикет с думата „тикет сега, след него честен бъмп към 0.2.1".
+
+**Обхват (котвите са от harvest scan 2026-09-03):**
+1. `scripts/native/sh/codex-qal.sh:75-80` — SC2317 върху trap-only cleanup (`trap cleanup_scratch
+   EXIT` на `:80`; статичният анализ не вижда trap извикването): targeted
+   `# shellcheck disable=SC2317` с еднореден коментар-причина, нищо друго в файла; LF-only,
+   ASCII-only, flag-locks непроменени (selfcheck ги pin-ва byte-level).
+2. `.github/workflows/ci.yml`: `:7-9` остарелият коментар („never executed") пренаписан честно
+   (изпълнявали са се — 11 рънa, червени от матрицата, P6a `dc4f3ec`); shellcheck стъпката
+   `:74-75` остава bare по дизайн (строгостта е желана — директивата е решението);
+   `actions/checkout@v4`/`setup-node@v4` (`:21-25` и огледалата) → нов major само ако drop-in
+   (иначе бележка, не промяна).
+3. `test-setup.mjs:1230-1234` — ТЕСТОВИ бъг: очакваният стринг е суров `${dir}` (forward slashes
+   на POSIX host) + literal `\docs\ai\…`, а продуктът по ДИЗАЙН дава изцяло backslash път за
+   windows канал (`nativePath`, `generate.mjs:377-382`: каналът решава сепаратора, не хост
+   машината). Фикс в теста: очакваният префикс = `dir` със сепаратори по `config.os`.
+4. Клъстер a/b/c (`test-setup.mjs:663-674`): на macOS install с премахнат selfcheck скрипт излиза
+   0 вместо 1 (в теста няма platform branch; стринговете идват от `run-selfcheck.mjs:80-99`).
+   Диагноза ОТ ИЗТОЧНИКА (install() на теста, setup CLI, `finishWithSelfCheck` потокът) — намери
+   причината и поправи продукта ИЛИ теста според това кое е вярното, с causal обяснение в
+   handback-а.
+5. e) round-trip selfcheck (`test-setup.mjs:1348-1350`) с nested „sabotage detected
+   [example-answers-valid] … still PASS" (`aiwf-selfcheck.js:4204-4217`, контрол `:4507-4508`;
+   схемата има os enum и validate-config знае enum — механизмът на macOS не е виден в кода):
+   диагноза от източника, същото изискване.
+**Хонест лимит (записан, не заобиколен):** на тази машина няма POSIX среда (WSL само
+docker-desktop без rootfs; shellcheck липсва) — локално се доказва каквото е изразимо
+(Windows VERIFY 8/8, node --check, статични проверки, платформено-неутрални unit очаквания);
+POSIX доказателството е CI при push-а на 0.2.1 (POSIX-002). Ако CI остане червен там —
+корекционно кръгче с нова дума.
+**Извън обхват:** миграция/bump/CHANGELOG (POSIX-002); всичко друго по payload-а.
+**Acceptance:** VERIFY 8/8 exit 0 (Windows); Cyrillic grep празен;
+`git grep -c "shellcheck disable=SC2317" -- scripts/native/sh/codex-qal.sh` → 1;
+`git grep -n "never executed" -- .github/workflows/ci.yml` → празно (exit 1); тест 3) очакването
+конструирано през separator-по-config.os (покажи реда); за 4) и 5) — causal обяснение + локално
+изразим тест където е възможно.
+**Risk threshold:** блокира промяна на поведение на wrapper (byte-level flag locks), отслабване
+на асершън без причинна обосновка, всеки VERIFY ≠ 0.
+**Stop condition:** VERIFY + acceptance зелени → стоп.
+**Review:** `Class: code` → Codex, fact-check преди. Cap 2. **Assignee:** Колега. Branch `main`.
+
+### POSIX-001 — Completion record (2026-09-03)
+
+**Commit `00ede2dbaca7d953ddd3e265770450180f250a23`** върху котвата `bf11755` (branch `main`,
+локален, непушнат): 10 файла, 182+/27−; PLAN файлът извън commit-а. **Коренна находка,
+надграждаща диагнозата на тикета:** 9 от 10-те macOS падания са ЕДИН дефект — `isMain()` в
+шестте CLI entrypoint-а сравняваше суров `argv[1]` с realpath-натия entry (Node резолвва entry-то
+до реален път преди зареждане); macOS temp е зад symlink (`/var` → `/private/var`) → всеки
+entrypoint, spawn-нат от payload копие под temp, решаваше „не съм main", не правеше нищо и
+излизаше 0 (фалшиво зелено в sabotage контроли, фалшив exit 0 в install тестове). Възпроизведен
+на Windows през junction ПРЕДИ фикса; поправен с идентичен realpath guard в шестте файла.
+Десетото падане: тестово очакване със separator на хоста → построено през separator-а на канала
+(без import на nativePath — очакване от тествания helper не може да пада). Останало: shellcheck
+директива за ДВАТА кода (SC2317 стар shellcheck / SC2329 при 0.11.0 — двете поколения дават
+различен код за същия trap false positive; надгражда SC2317-only диагнозата в секцията на
+тикета, доказано с live рънове: CI лог + WSL 0.11.0 контрол `git show HEAD` → exit 1), честен
+ci.yml header + `@v5` pins (v6/v7 отказани мотивирано — credential persistence / fork-PR
+checkout, сверено с release notes), тест секция 23 (control-first junction доказателство),
+selfcheck ENTRYPOINT IDENTITY assertion + constructed-input контрол, и micro-addendum: „seven
+skills" етикетите станаха count-neutral (бележката от AUD-002 record-а — затворена тук).
+
+**Ревю:** fact-check — 2 „unverifiable", двете арбитрирани от COO с доказателства (SC2329 =
+собствените WSL рънове; v6/v7 = release notes през gh api). Codex `gpt-5.6-sol`/high,
+`Class: code`: pass 1 **`pass`, нула находки** (гардът non-widening, junction cleanup-ът
+безопасен, контролите работещи).
+
+**Верификация:** Windows VERIFY 8/8 exit 0 (test-setup **316**/0 — +5 от секция 23; selfcheck
+**850**/850; останалите непроменени); WSL Ubuntu CI-еквивалент (Node 22.23.2, ShellCheck 0.11.0,
+pwsh 7.6.5): shellcheck exit 0 на финалното дърво + exit 1 (SC2329) на HEAD версията като
+контрол, test-setup exit 0, selfcheck `--plugin-root .` exit 0; пълният ubuntu baseline на
+чистия `bf11755` преди фиксовете: всички останали стъпки зелени (test-update 451/0, spikes 99/0,
+example-cycle-linux 44/0, selfcheck 851/851). **Остатък, приет и записан: macOS се доказва само
+от CI при push-а на 0.2.1** (тук няма macOS хост). Останал дълг: няма.
+
+## POSIX-002 [R2 code-class] — честен bump 0.2.1
+
+СЛЕД POSIX-001 (същата операторска дума покрива диспача след затварянето му):
+`migrations/0005_posix-legs/` с един `note` op (какво е поправено и че POSIX доказателството е
+CI; validate-payload иска последен запис == версия — `validate-payload.mjs:251-259`) +
+`migrations/index.json` 5-и запис 0.2.1; `plugin.json` 0.2.1; CHANGELOG `## [0.2.1]` блок
+(§ Fixed, честно: „the POSIX CI legs were red since the matrix existed; first looked at after the
+0.2.0 release push") + link ref; fixture rename `0005_example-bump` → `0006_example-bump`
+(сайтове: директорията, `bump/bump.json:2`, `ops.json:2`, `NOTES.md:1,16,30` — `:30` пренаписан
+само с новото id, `examples/example-project/README.md:17,45,78,79`); self-install `--apply`
+(очаквано 1 note, 0 диалога) + `CHANGES_0.2.0-to-0.2.1.md`; VERIFY 8/8; commit клик
+(`0.2.1: green POSIX legs (POSIX-001/002)`).
+**Разширение (операторска директива zero-debt, 2026-09-03):** provenance сканът на selfcheck-а
+игнорира харнес cache метаданни (`.in_use` и подобни plugin-cache маркер файлове) по име/шаблон,
+с негативен контрол — източник: Furnissimo PUB-003, selfcheck там 847/851 с 4 environmental FAIL
+от `.in_use/6600` маркера, който Claude Code държи в plugin cache директорията при marketplace
+инсталация. Вози се в 0.2.1 вместо да стои кандидат; CHANGELOG § Fixed добавя ред за него.
+После: `git tag v0.2.1` — дума; push main + tag —
+дума + диалог; **CI зелен на трите leg-а = acceptance-ът на цялата POSIX работа**; червен CI →
+ново кръгче по дума. **Review:** `Class: code` → Codex, fact-check преди.
+
+### POSIX-002 — Completion record (2026-09-03)
+
+**Commit `7388e3d96be55d7af877e5c76b76cd6d8cc8acf6`** върху котвата `00ede2d` (branch `main`,
+локален, непушнат): 13 файла, 194+/23−. Изпълнено: миграция `0005_posix-legs` (един note op;
+code-only release с манифестен запис заради правилото last==version), `plugin.json` 0.2.1,
+CHANGELOG `[0.2.1]` блок + link ref, fixture → `0006_example-bump` (всички сайтове), README
+статус ред → „v0.2.1. Public since 0.2.0." + event-bound изречението направено вечно-вярно,
+self-install apply (стампове 0.2.1/`0005_posix-legs`, 1 note, 0 диалога), и **разширението
+zero-debt**: provenance сканът скипва харнес cache маркерите — ДВЕ точни имена root-only
+(`.in_use`/, `.orphaned_at`; формите измерени от реалния cache), с контроли в двете посоки.
+Selfcheck 850 → 855.
+
+**Ревю:** fact-check — 3 находки (свършен-факт „green" в CHANGELOG и note-а; остаряло абсолютно
+число в коментар), поправени в микро-рунд (числото — премахнато, не подменено). Codex
+`gpt-5.6-sol`/high, `Class: code`: pass 1 `fail` с ЕДИН блокер — apply-time snapshot-ът
+`CHANGES_0.2.0-to-0.2.1.md:10` носеше старото „are green"; синхронизиран дословно с ops.json
+(механично доказано byte-identical). Делтата на корекцията — само проза → по правилото на loop-а
+втори пас над scan tier не се дължи: затворено с fact-check над делтата (0 находки) + първолична
+COO проверка — двете записани тук. COO отклонение при commit: съобщението от плана („green POSIX
+legs") → `0.2.1: fix the POSIX CI legs` — без преждевременна претенция.
+
+**Верификация (точни кодове):** VERIFY 8/8 exit 0 (selfcheck 855/855 след apply; test-setup
+316/0; test-update 451/0; example cycles 2×44/0; spikes 99/0; validate-payload „5 migration(s)";
+plugin validate ✔); `aiwf-update --check` 1 преди apply → 0 „up to date … 0.2.1" след; двата
+acceptance grep-а (старото fixture id; Cyrillic) празни, exit 1.
+
+**Инцидент по време на тикета (записан; не дефект на тикета):** външна за loop-а команда
+(fact-check scan агент) поиска `git reset` — операторът отказа с No; съпътстваща команда все пак
+частично разглоби индекса (rename стейджингът) и обърна line endings на 4 файла
+(съдържателно byte-equal, доказано с `git diff --ignore-cr-at-eol`); възстановено адитивно при
+commit стейджинга, без нито една reset/restore/checkout команда. Поуката е в CANDIDATES.md
+(разширението „сляп диалог"); от 2026-09-03 всеки scan/review бриф носи изрична забрана за
+mutating git. Останал дълг: няма.
+
+**CI резултат (run 33748731374, push-ът на 0.2.1, дописано 2026-09-03):** **ubuntu ЗЕЛЕН — за
+пръв път от раждането на матрицата**; windows зелен; **macOS червен** с нов/различен клас
+(symlink коренът е потвърдено отстранен на Linux). По предвиденото в тикета „червен CI → ново
+кръгче по дума" — кръгчето е открито с операторската дума „продължи с работата по плана"
+(2026-09-03); диагнозата и тикетът следват като POSIX-003.
+
+## POSIX-003 [R2 code-class] — последното macOS падане: контролът на секция 23 (роден 2026-09-03, кръгчето е открито с думата „продължи с работата по плана")
+
+Диагноза (CI run 33748731374, единственият FAIL от 316): секция 23 на `test-setup.mjs` пада на
+собствения си КОНТРОЛ — „the naive guard DOES run as main directly" — защото на macOS
+`os.tmpdir()` сам е зад `/var → /private/var` symlink: и „директното" извикване е през линк,
+naive guard-ът не печата MAIN без изобщо тестът да е създал junction. Production проверките на
+секцията МИНАВАТ (фиксът на POSIX-001 работи); невярна е само предпоставката на контрола.
+Фикс: naive фикстурата (и нейният линк) се базират под `fs.realpathSync(tmpRoot)` — тогава
+директният случай е реален път на всяка платформа, а explicit link случаят пак демонстрира
+дефекта. Един файл, тестова промяна; никакъв production код. Без bump — фиксът се вози в
+следващия release (0.2.2 с GATE-001); дотогава 0.2.1 consumer, пуснал suite-а на macOS, би
+видял същия контролен FAIL (записано, прието). Acceptance: VERIFY 8/8 на Windows; WSL Linux
+test-setup exit 0; след commit + push (дума) — macOS leg зелен = мисийният acceptance затворен.
+**Review:** `Class: code` → Codex, fact-check преди. Cap 2. **Assignee:** Колега. Branch `main`.
+
+### POSIX-003 — Completion record (2026-09-03)
+
+**Commit `4f6de69`** върху `7388e3d` (branch `main`, локален, непушнат): 1 файл, 12+/4−, само
+секция 23 на `test-setup.mjs` — link фикстурите (`linked`, `naiveDir`, `naiveLink`) базирани на
+`fs.realpathSync(tmpRoot)`, коментарите отразяват точно това („Every link fixture"; `p23`/`badCfg`
+остават на `tmpRoot` по замисъл). Никакъв production код; check count 316 непроменен; без bump —
+вози се в следващия release.
+
+**Доказателства:** локалната macOS симулация (WSL, `TMPDIR` зад symlink — точната macOS форма):
+пре-фикс файлът възпроизвежда CI падането байт-идентично (316/1, същият FAIL ред), фикснатото
+дърво — 316/0 exit 0, с контрола MAIN и via-link случая все така падащ naive guard-а; Windows
+VERIFY 8/8 exit 0; пост-commit ре-верификация на комитнатите байтове (test-setup 316/0, selfcheck
+855/855). **Ревю:** fact-check над делтата — 0 находки (4 претенции сверени); Codex
+`gpt-5.6-sol`/high `pass-with-notes`, 0 блокера, 1 P3 бележка (коментар) — взета преди commit-а.
+**Остатък:** родният macOS CI leg — доказва се с push на тестов клон (следващата операторска
+дума); при зелено — mission acceptance-ът на POSIX работата е затворен, main се пушва след това.
+Останал дълг: няма.
+
+## GATE-001 [R2 code-class] — hook срещу заобиколени и слепи git диалози (роден 2026-09-03)
+
+Двете лица на един механизъм (операторска директива: решава се ТУК, не стои кандидат):
+нов PreToolUse hook по Bash tool-а, който разпознава ask-класа git глаголи
+(commit/push/merge/rebase/reset/checkout/restore/stash/rm/clean/revert/cherry-pick) в командата
+**където и да стоят** — вкл. `cd X && git commit` compound формата (инцидент UIS-009, Furnissimo)
+— и: (а) от subagent, чийто `agent_type` не е `writer` → **DENY** с обяснителен текст (сляп
+диалог от фонов агент изобщо не стига до оператора; инцидентът от 2026-09-03 тук); (б) от
+main session/Writer — пропуска към нормалния ask диалог (обявените гейтове остават). Fail
+direction: DENY при грешка в hook-а (както Gate 1/3). Managed-artifact промяна: hooks/hooks.json
++ hook файл + миграция + bump 0.2.2; тестове: hook spike + selfcheck assertions с flipping
+контроли (compound форма хваната; bare форма от writer пропусната; непознат agent_type → deny).
+Не емулира shell семантика докрай — accident-grade, като останалите гейтове, и се казва честно.
+**Чака собствена дума за диспач.**
+
+## RENAME-001 [R3] — пълен rename AIWF → pnp (роден 2026-09-03)
+
+Пълният rename (config/директории/скриптове/región/resolver пътища; „Three names" в README пада)
+— R3 по route-а: мини-план + readiness (`review.plan.passes`) ПРЕДИ Writer, `r3/<topic>` клон,
+миграция, която мести файлове във всяка инсталация, proof на consumer-а. Обхватът е описан в
+историята на кандидата (2026-08-31). **Чака собствена дума за диспач** (и е последният преди
+Closeout, освен ако операторът не реши друго).
+
+## Closeout (само при НУЛА кандидати и дългове — операторска директива 2026-09-03)
+
+Closeout има чак когато: всички тикети на плана (вкл. GATE-001, RENAME-001 и всичко родено
+междувременно) са затворени с records; CANDIDATES.md е празен надгробен камък; нито един запис
+„остатък"/„дълг" не стои неразрешен; CI зелен на трите leg-а; и планът може да се прати на
+колеги без нито един „глупав въпрос". Тогава: архив `git mv … 004_PLAN_PNP_PUBLIC_<дата>.md` →
+един commit (клик) → push (дума + диалог) → `origin/main...main` = `0	0`. Таговете НЕ се местят.
 
 ## Ред и гейтове
 AUD-001 → AUD-002 → PUB-001 → PUB-002 → PUB-003 → Closeout. Всеки тикет — дума за диспач;
 commit — клик; tag/push — дума + диалог (PUB-002 и Closeout). Readiness на плана: fact-check +
 Codex pass 1/2 (трети — дума).
 
-## Кандидати (не са тикети; тикет се ражда само с операторска дума)
+## Кандидати
 
-- **Пълен rename AIWF → pnp** (операторска дума „кандидат задължително", 2026-08-31, повод: „колко
-  драматично е `.aiwf/` → `.pnp/`"). Само scratch директорията е настройка (`paths.scratchDir`,
-  default `.aiwf`; фиксирана в Gate 3 — `.aiwf/route-state.json`, „fixed in v0.1" в WORKFLOW),
-  но остават `aiwf.config.json`, `.claude/aiwf-native/`, ключът `_aiwf`, скриптовете `aiwf-*`,
-  resolver пътищата в wrapper-ите и README § „Three names" („nothing renames it"). Половинчат
-  rename дава две имена за едно нещо; пълният е R3 — миграция, която мести файлове във всяка
-  инсталация + промяна на hook/resolver пътища + managed CLAUDE.md региона — отделна мисия
-  СЛЕД 0.2.0 (не сменяме лицето на продукта в момента на публикуване).
+Кандидатите живеят в `dev/backlogs/CANDIDATES.md` — планът се затваря без отворени точки.
+Кандидатът „POSIX CI leg-овете са червени" стана тикети POSIX-001/002 (диагнозата е в POSIX-001).
 
 ## Verification (края на мисията)
 - VERIFY 8/8 exit 0 на `main` @ closeout hash; Cyrillic `git grep` празно; `claude plugin validate .`.
