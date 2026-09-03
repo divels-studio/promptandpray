@@ -1228,10 +1228,15 @@ section('20 - the TEMPLATE CONTRACT block is stripped from every render');
   check('an ordinary HTML comment survives the render (the region markers are one)',
     claudeMd.includes('<!-- BEGIN aiwf-core -->') && claudeMd.includes('Managed by PromptAndPray'));
   // The rendered writer's overrides path is ONE native path, not a Windows root joined to a POSIX
-  // separator. os is `windows` in baseAnswers(), so the whole path is backslashed.
+  // separator. os is `windows` in baseAnswers(), so the WHOLE path is backslashed - the project root
+  // included, whatever the host machine's own separator is. The expectation is therefore built by
+  // re-joining the root's segments with the CHANNEL's separator: pasting `${dir}` in raw asserts the
+  // host's separator instead, which is the same string on Windows and a different one on POSIX.
+  const nativeFor = (osChannel, p) => p.split(/[\\/]/).join(osChannel === 'windows' ? '\\' : '/');
+  const expectedOverrides = nativeFor(baseAnswers().os, `${dir}/docs/ai/PROJECT_OVERRIDES.md`);
   const line = writer.split('\n').find((l) => l.includes('PROJECT_OVERRIDES.md')) || '';
   check('the overrides path in the rendered writer is native for config.os (no mixed slashes)',
-    line.includes(`${dir}\\docs\\ai\\PROJECT_OVERRIDES.md`), line.trim().slice(0, 160));
+    line.includes(expectedOverrides), `${line.trim().slice(0, 160)} | expected ${expectedOverrides}`);
   // ... and the other channel really renders the other separator.
   const posix = project('contract-strip-posix');
   const linuxAnswers = baseAnswers();
@@ -1348,6 +1353,70 @@ section('22 - the audit table: a fresh install gets it without being asked, and 
   const selfcheck = spawnSync(process.execPath, [SELFCHECK, '--plugin-root', PLUGIN_ROOT, '--project-fixture', p22], { encoding: 'utf8' });
   check('the self-check is green on the project after the whole round trip',
     selfcheck.status === 0, (selfcheck.stdout || '').split('\n').filter((l) => l.includes('[FAIL]')).slice(0, 3).join(' | ').slice(0, 240));
+}
+
+// ---------------------------------------------------------------------------
+// A payload the caller reaches through a SYMLINK. Not an exotic case: macOS mounts its own
+// os.tmpdir() behind one (/var -> /private/var), which is why every entrypoint this suite spawns
+// from a payload COPY silently did nothing and exited 0 on that channel until it was found. Node
+// hands a module its REAL path in `import.meta.url` while `process.argv[1]` keeps the link, so a
+// guard comparing the two literally decides it is not main and falls off the end of the file. A
+// Windows junction is the same shape, so the case runs on every host that can make such a link;
+// where none can be made it says so on one line rather than passing in silence.
+section('23 - an entrypoint reached through a symlinked payload still recognizes itself as main');
+{
+  const linked = path.join(tmpRoot, 'payload-via-link');
+  let linkable = true;
+  try { fs.symlinkSync(PLUGIN_ROOT, linked, 'junction'); } catch { linkable = false; }
+  if (!linkable) {
+    console.log('  [SKIP] this host would not create a directory link - the whole section needs one');
+  } else {
+    // THE CONTROL, first: the link really does defeat the naive guard on this host, so the
+    // assertions below are about the fix and not about a link that changes nothing here.
+    const naiveDir = path.join(tmpRoot, 'naive-entrypoint');
+    fs.mkdirSync(naiveDir, { recursive: true });
+    fs.writeFileSync(path.join(naiveDir, 'naive.mjs'), [
+      "import path from 'node:path';",
+      "import { fileURLToPath } from 'node:url';",
+      "const invoked = process.argv[1] ? path.resolve(process.argv[1]) : '';",
+      "if (invoked === path.resolve(fileURLToPath(import.meta.url))) console.log('MAIN');",
+      '',
+    ].join('\n'));
+    const naiveLink = path.join(tmpRoot, 'naive-entrypoint-via-link');
+    fs.symlinkSync(naiveDir, naiveLink, 'junction');
+    const run = (dir, rel) => spawnSync(process.execPath, [path.join(dir, rel)], { encoding: 'utf8' });
+    const naiveDirect = run(naiveDir, 'naive.mjs');
+    const naiveViaLink = run(naiveLink, 'naive.mjs');
+    check('the control: the naive guard (argv[1] compared literally) DOES run as main directly',
+      (naiveDirect.stdout || '').includes('MAIN'), `exit ${naiveDirect.status}: ${JSON.stringify((naiveDirect.stdout || '').trim())}`);
+    check('and through the link it silently does nothing and exits 0 - the defect this section is about',
+      naiveViaLink.status === 0 && !(naiveViaLink.stdout || '').includes('MAIN'),
+      `exit ${naiveViaLink.status}: ${JSON.stringify((naiveViaLink.stdout || '').trim())}`);
+    // The production path: the real installer, spawned from the linked payload.
+    const p23 = project('install-via-linked-payload');
+    const r = install(p23, baseAnswers(), ['--no-seeds'], { payload: linked });
+    check('the installer invoked through the linked payload really runs', r.status === 0, why(r, true).slice(0, 200));
+    check('and the project layer is on disk, not merely reported',
+      exists(at(p23, CONFIG_REL)) && exists(at(p23, ROLES_REL)) && exists(at(p23, 'CLAUDE.md')));
+    // The second entrypoint that a self-check spawns from a payload copy. A silent exit 0 here is
+    // worse than a wrong answer: every self-check control that validates a SABOTAGED answers file by
+    // running this CLI would report the sabotage as accepted, i.e. as a passing check.
+    const badCfg = path.join(tmpRoot, 'config-that-cannot-be-valid.json');
+    fs.writeFileSync(badCfg, JSON.stringify({ os: 'solaris' }, null, 2));
+    const validate = (root) => spawnSync(process.execPath, [
+      path.join(root, 'scripts', 'setup', 'validate-config.mjs'), badCfg,
+      '--schema', path.join(PLUGIN_ROOT, 'schema', 'aiwf.config.schema.json'),
+    ], { encoding: 'utf8' });
+    const direct = validate(PLUGIN_ROOT);
+    const viaLink = validate(linked);
+    check('the validator reaches the same verdict through the link as through the real path',
+      direct.status === 1 && viaLink.status === direct.status
+      && ((viaLink.stdout || '') + (viaLink.stderr || '')).trim() !== '',
+      `link exit ${viaLink.status} vs direct exit ${direct.status}`);
+    // The links are removed by name: the recursive cleanup below unlinks rather than descends, but a
+    // link that points at the payload is not something to leave to a general-purpose sweep.
+    for (const l of [linked, naiveLink]) { try { fs.unlinkSync(l); } catch { try { fs.rmdirSync(l); } catch { /* best-effort */ } } }
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -72,6 +72,10 @@ fail() {
 # Best-effort removal of the per-run scratch dir, wired to EXIT so that EVERY path - the empty-prompt
 # refusal, a preflight failure before the dir exists, and the normal run - leaves nothing behind.
 # It never changes the exit code: on failure it warns WITH the path (so the operator can remove it).
+# SC2317/SC2329: the body below runs only from the EXIT trap installed after it, and no shellcheck
+# generation follows that wiring - older ones call the commands unreachable, 0.11 calls the function
+# never invoked. Both codes are named because CI and a current local shellcheck differ.
+# shellcheck disable=SC2317,SC2329
 cleanup_scratch() {
   if [ -n "$SCRATCH" ] && [ -d "$SCRATCH" ]; then
     rm -rf "$SCRATCH" || printf 'codex-qal: QAL scratch cleanup failed (remove it manually): %s\n' "$SCRATCH" >&2

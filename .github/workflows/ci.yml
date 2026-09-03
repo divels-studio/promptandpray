@@ -4,9 +4,18 @@ name: ci
 # channel, one command per step, each step a real gate: a red step is a red build, and nothing here
 # is advisory.
 #
-# The two POSIX legs have never executed: this repository is unpushed, so ubuntu and macos first run
-# on the operator's first push. They are written as full gates rather than smoke tests precisely
-# because that first run is the moment the bash channel stops being only locally proven.
+# The two POSIX legs have executed since the matrix landed, and they were red from that first run:
+# nobody read them until after the 0.2.0 release push. Both causes were real - a trap handler
+# shellcheck reads as unreachable, and an entrypoint guard that a symlinked payload defeats (macOS
+# mounts its own temp directory behind one) - and both are fixed in the payload, not worked around
+# here. Whether the legs are green is decided by the next run, not by this comment. They stay full
+# gates rather than smoke tests precisely because that is what made them worth reading.
+#
+# Both actions are pinned at @v5 - the majors that run on Node 24, so the runner's Node 20
+# deprecation warning is gone. setup-node v5's one breaking change is automatic package-manager
+# caching when package.json declares a `packageManager`; this repository ships no package.json at
+# all, so it cannot engage. checkout v6/v7 are deliberately NOT taken: they change credential
+# persistence and fork-PR checkout, which is more than a version bump.
 on:
   push:
   pull_request:
@@ -18,9 +27,9 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
 
@@ -61,9 +70,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
 
@@ -103,9 +112,9 @@ jobs:
     runs-on: macos-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
 

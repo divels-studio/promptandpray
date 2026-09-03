@@ -3293,9 +3293,9 @@ const doctrinePhrase = (root, rel, phrase, replacement) => doctrineFile(root, re
   return t.replace(phraseRe(phrase), replacement);
 });
 const DOCTRINE_CONTROLS = [
-  { id: 'doctrine-reading-not-shell', label: 'the reading rule dropped from one of the seven skills',
+  { id: 'doctrine-reading-not-shell', label: 'the reading rule dropped from one of the session skills',
     apply: (r) => doctrineSkill(r, 'qa', (t) => t.split('**Reading is not a shell job.**').join('**Reading is fine in a shell.**')) },
-  { id: 'doctrine-reading-not-shell', label: 'the reading rule REWORDED in one skill (seven wordings are not one rule)',
+  { id: 'doctrine-reading-not-shell', label: 'the reading rule REWORDED in one skill (a paraphrase per skill is not one rule)',
     apply: (r) => doctrineSkill(r, 'loop', (t) => t.split('`cat`/`grep`/`ls`/`head`/`node -e`').join('shell commands')) },
   { id: 'doctrine-reading-not-shell', label: 'the reading rule missing from the newest skill to carry it (/pnp:update)',
     apply: (r) => doctrineSkill(r, 'update', (t) => t.split('**Reading is not a shell job.**').join('**Reading is fine in a shell.**')) },
@@ -3501,6 +3501,49 @@ function sectionPayloadIntegrity() {
       probe.unparsed.length === 1 && probe.unparsed[0] === '--not-a-real-flag'
       && !probe.documented.includes('--resolve') && !probe.documented.includes('--show'),
       `${probe.documented.join(' ')} -> ${probe.unparsed.join(' ')}`);
+  }
+
+  // ENTRYPOINT IDENTITY. Every CLI here ends in `if (isMain())`, and that question has one honest
+  // answer only when both sides are resolved through realpath: Node hands a module its REAL path in
+  // `import.meta.url` while `process.argv[1]` keeps whatever the caller typed, so a payload reached
+  // through a SYMLINK (macOS mounts its own os.tmpdir() behind one) makes a literal comparison
+  // decide "not main" - the CLI then writes nothing, prints nothing and exits 0. That false green is
+  // invisible on a channel whose temp directory is a real path, which is how it survived unread from
+  // the first CI matrix run until it was diagnosed. Static, because the runtime proof needs a host
+  // that can make a link (`test-setup.mjs` section 23) and this must hold on the ones that cannot.
+  {
+    const ENTRYPOINTS = [
+      'scripts/setup/interview.mjs', 'scripts/setup/generate.mjs', 'scripts/setup/validate-config.mjs',
+      'scripts/setup/aiwf-roles.mjs', 'scripts/update/aiwf-update.mjs', 'scripts/update/validate-payload.mjs',
+    ];
+    const guardBody = (src) => {
+      const m = /function isMain\(\)\s*\{([\s\S]*?)\n\}/.exec(String(src || ''));
+      return m ? m[1] : null;
+    };
+    const guardResolvesLinks = (src) => {
+      const body = guardBody(src);
+      return body !== null && /realpathSync/.test(body)
+        && /process\.argv\[1\]/.test(body) && /import\.meta\.url/.test(body);
+    };
+    const weak = [];
+    for (const rel of ENTRYPOINTS) {
+      const src = readText(path.join(PLUGIN_ROOT, ...rel.split('/')));
+      if (src === null) { weak.push(`${rel} (missing)`); continue; }
+      if (!guardResolvesLinks(src)) weak.push(rel);
+    }
+    check('every setup/update entrypoint decides "am I main?" through realpath, so a symlinked payload still runs',
+      weak.length === 0, weak.length ? weak.join('; ') : `${ENTRYPOINTS.length} entrypoints`);
+    // The needle on constructed input: "nothing weak" is also what a scan matching NOTHING reports,
+    // so the detector is shown to accept the resolved guard and to report the literal one.
+    const NAIVE_SAMPLE = 'function isMain() {\n'
+      + "  const invoked = process.argv[1] ? path.resolve(process.argv[1]) : '';\n"
+      + '  return invoked === path.resolve(fileURLToPath(import.meta.url));\n}';
+    const RESOLVED_SAMPLE = 'function isMain() {\n'
+      + '  const real = (p) => { try { return fs.realpathSync(p); } catch { return p; } };\n'
+      + "  const invoked = process.argv[1] ? real(path.resolve(process.argv[1])) : '';\n"
+      + "  return invoked !== '' && invoked === real(path.resolve(fileURLToPath(import.meta.url)));\n}";
+    check('and that scan can fail: the guard that compares argv[1] literally is reported, the resolved one is not',
+      !guardResolvesLinks(NAIVE_SAMPLE) && guardResolvesLinks(RESOLVED_SAMPLE) && guardBody('no guard here') === null);
   }
 
   // Command prefix: the payload speaks /pnp:, never the originating project's prefix.
@@ -4956,8 +4999,8 @@ function main() {
   console.log('carry the proof, so the controls prove the mechanism and the digests are stated data.');
   console.log('PAYLOAD DOCTRINE: the rules that exist only as TEXT are asserted as text, because text has no');
   console.log('compiler and every one of them was written after a real violation - the identical');
-  console.log('"reading is not a shell job" instruction in all seven session skills (one canonical sentence, not');
-  console.log('seven paraphrases), the newborn-ticket rule (write it into the PLAN, announce it in ONE sentence,');
+  console.log('"reading is not a shell job" instruction in every session skill (one canonical sentence, not');
+  console.log('a paraphrase each), the newborn-ticket rule (write it into the PLAN, announce it in ONE sentence,');
   console.log('STOP) in /pnp:mission and /pnp:work, Step 2b of /pnp:review with its reusable fact-check prompt,');
   console.log('the "Class: plan | code | docs" brief input with its Step 0b/0c host branch - asserted as all five');
   console.log('of its claims: the brief line, the class resolved as a ROW of the audit table, the resolver call');

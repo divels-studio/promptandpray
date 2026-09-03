@@ -264,9 +264,14 @@ export function formatErrors(errors) {
 }
 
 // ---- CLI -------------------------------------------------------------------
+// A payload can be reached through a SYMLINK (macOS mounts its own os.tmpdir() behind one). Node
+// resolves the entry to its REAL path before loading it, so `import.meta.url` is the real file while
+// `process.argv[1]` keeps the link - comparing the two literally makes an entrypoint invoked through
+// a link decide it is not main, do nothing and exit 0. Both sides go through realpath.
 function isMain() {
-  const invoked = process.argv[1] ? path.resolve(process.argv[1]) : '';
-  return invoked === path.resolve(fileURLToPath(import.meta.url));
+  const real = (p) => { try { return fs.realpathSync(p); } catch { return p; } };
+  const invoked = process.argv[1] ? real(path.resolve(process.argv[1])) : '';
+  return invoked !== '' && invoked === real(path.resolve(fileURLToPath(import.meta.url)));
 }
 
 if (isMain()) {
