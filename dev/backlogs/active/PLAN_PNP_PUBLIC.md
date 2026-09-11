@@ -842,18 +842,277 @@ VERIFY 8/8 exit 0; пост-commit ре-верификация на комитн
 
 ## GATE-001 [R2 code-class] — hook срещу заобиколени и слепи git диалози (роден 2026-09-03)
 
-Двете лица на един механизъм (операторска директива: решава се ТУК, не стои кандидат):
-нов PreToolUse hook по Bash tool-а, който разпознава ask-класа git глаголи
-(commit/push/merge/rebase/reset/checkout/restore/stash/rm/clean/revert/cherry-pick) в командата
-**където и да стоят** — вкл. `cd X && git commit` compound формата (инцидент UIS-009, Furnissimo)
-— и: (а) от subagent, чийто `agent_type` не е `writer` → **DENY** с обяснителен текст (сляп
-диалог от фонов агент изобщо не стига до оператора; инцидентът от 2026-09-03 тук); (б) от
-main session/Writer — пропуска към нормалния ask диалог (обявените гейтове остават). Fail
-direction: DENY при грешка в hook-а (както Gate 1/3). Managed-artifact промяна: hooks/hooks.json
-+ hook файл + миграция + bump 0.2.2; тестове: hook spike + selfcheck assertions с flipping
-контроли (compound форма хваната; bare форма от writer пропусната; непознат agent_type → deny).
-Не емулира shell семантика докрай — accident-grade, като останалите гейтове, и се казва честно.
-**Чака собствена дума за диспач.**
+Двете лица на един механизъм (операторска директива: решава се ТУК, не стои кандидат): нов
+PreToolUse hook по **Bash** tool-а — **Gate 4**, `scripts/engine/pretooluse-git-verb-guard.js`.
+Диспачнат с операторска дума 2026-09-09.
+
+**Context (discovery 2026-09-09, 4× Explore/sonnet; всяка котва проверена):**
+- `hooks/hooks.json:1-26` носи точно два PreToolUse записа: `Edit|Write|MultiEdit|NotebookEdit`
+  → `pretooluse-mutation-guard.js` (Gate 1 + Gate 3) и `Agent` → `pretooluse-dispatch-gate.js`
+  (Gate 2). Няма `Bash` matcher, и **нищо в repo-то днес не чете Bash команден стринг** (широк
+  scan: нула попадения).
+- `scripts/engine/aiwf-lib.js:84-86` експортва `readStdin :41-49`, `parseInput :52-55`,
+  `denyPreTool :58-63`, `askPreTool :66-71`, `allowPassthrough :72`, `runFailClosed :75-77`,
+  `runFailAsk :80-82`. Няма project-root резолюция, няма четене на конфиг — всеки hook си носи
+  собствен `projectDirOf()` (`pretooluse-mutation-guard.js:81-84`,
+  `pretooluse-dispatch-gate.js:68-71`).
+- Идентичността се чете по **own-property presence**, не по truthiness:
+  `pretooluse-mutation-guard.js:62` (`has()`), `:224-225`, `:228` (`agent_type === 'writer'` →
+  allow), `:231` (нито едно поле → истинска main session), `:233-241` (всяко друго присъствие,
+  вкл. explicit `null` и грешен case → deny).
+- Ask-класът git глаголи е в `templates/settings.ask-ruleset.json:13-27,58-66`: `commit reset
+  clean rm checkout switch restore revert pull fetch cherry-pick stash config remote -c`, плюс
+  `push merge rebase` в три форми (bare, `git.exe`, `git -C <projectRoot>`). Скицата от
+  2026-09-03 изброяваше 12 глагола — **ruleset-ът носи 15**.
+- Prefix match: `cd X && git commit …` не започва с `git`, значи днес **не вдига диалог изобщо**.
+  Хигиенното правило „bare git от root-а" (`CLAUDE.md:82-86`, `.claude/agents/writer.md:40-46`)
+  е процедурната лепенка върху същата дупка.
+
+**Решения (COO, 2026-09-09):**
+1. **Gate 4 е разпознавател, не shell парсър.** Търси `git`/`git.exe` (с незадължителни глобални
+   `-C <път>` / `-c <k=v>`) следван от ask-класов глагол, **където и да стои** в стринга. НЕ
+   разбира кавички, escape-и, subshell-и, alias-и, env-indirection. Гаранцията е идентичностната
+   проверка, не парсването — това се пише дословно в header-а на файла.
+2. **Списъкът на глаголите се сверява с ruleset-а програмно.** Hook-ът носи именована константа;
+   selfcheck assertion парсва `templates/settings.ask-ruleset.json` и иска всеки git глагол оттам
+   да е покрит, с flipping контрол (добавен глагол в копие на ruleset-а → FAIL). Двата списъка не
+   могат да се разминат мълчаливо.
+3. **Клоните по идентичност** — огледало на Gate 1 семантиката, същият `has()` подход:
+   `agent_type` присъства и не е `writer` (вкл. само `agent_id`, explicit `null`, грешен case) →
+   **DENY** с текст, който казва кой глагол е разпознат и защо фонов агент не получава диалог;
+   `agent_type === 'writer'` ИЛИ нито едно идентичностно поле → т.4.
+4. **Двете лица, без нов диалог по нормалния път** (операторски избор 2026-09-09).
+   **ПРЕРАБОТЕНО 2026-09-10 — първата формулировка почиваше на невярна предпоставка и е записана
+   тук, за да не се роди пак.** Първоначално казваше: за main session/Writer — passthrough, ако
+   командата ЗАПОЧВА с гейтната форма (`git <verb>`, `git.exe <verb>`, `git -C <path> <verb>`);
+   ask, ако глаголът е разпознат, но не в началото (compound). Две грешки в това:
+   - **Compound формите не са дупка.** Документацията на Claude Code описва matcher-а като
+     operator-aware: разлага командата по `&&`, `||`, `;`, `|`, `|&`, `&` и нови редове и мачва
+     правилата срещу ВСЯКА подкоманда независимо, а deny/ask важат при съвпадение на която и да е
+     подкоманда. Значи `cd X && git commit -m y` **вече вдига диалог днес**. Инцидентът UIS-009,
+     който роди „заобиколеното" лице на тикета, или предхожда това поведение, или е бил
+     диагностициран грешно. Проверено срещу документацията, не прието от ревюто наготово.
+   - **Изброяването на гейтнатите форми беше грешно.** Ruleset-ът е асиметричен
+     (`templates/settings.ask-ruleset.json:13-27,58-66`): bare `git <verb>` правилата покриват
+     всички ask-класови глаголи, а `git.exe <verb>` и `git -C <projectRoot> <verb>` съществуват
+     САМО за `push|merge|rebase`. Обявяването на `git.exe reset` и `git -C <path> reset` за
+     „вече гейтнати" беше тих байпас, вкаран от мен в брифа.
+
+   **Действащият модел:** посоката по подразбиране е обърната — passthrough само когато ВСЯКА
+   подкоманда, носеща разпознат ask-класов глагол, съвпада байт по байт с форма, която payload-ът
+   наистина шипва (`git <verb>`; `git.exe push|merge|rebase`). Всичко друго с разпознат глагол →
+   **ask**. Разлагането е quote-aware (разделител в кавички е текст), обелват се само
+   документираните обвивки (`timeout time nice nohup stdbuf command builtin noglob`, `xargs` само
+   без флагове, плюс водещи `NAME=value`), а `git -C <path>` не се моделира като гейтнат за нито
+   един глагол — hook-ът не чете project root и питането е безплатно, защото hook-ask и rule-ask
+   дават ЕДИН диалог, не два. Остатъкът `git -C <друго repo> push` отпадна заедно с това.
+   Празният случай е ask, не passthrough. Разпознаването свежда токена до най-дългия префикс от
+   `[A-Za-z-]` — whitelist на това, от което глагол може да е съставен, а не blacklist на
+   shell-а, защото blacklist-ът два пъти се оказа непълен (`;` първия път, обратен апостроф
+   втория).
+5. **Fail direction: DENY** (`runFailClosed`), както Gate 1/3 — с **изрично записан риск**: този
+   hook стои на matcher `Bash`, т.е. на ВСЯКА команда, докато Gate 1 стои на четири mutation
+   tool-а. Крах в hook-а спира целия shell на сесията. Затова header-ът го казва, а spike-овете
+   носят явни случаи „обикновена не-git команда → allow(passthrough)" и „malformed/празен stdin
+   → deny".
+6. **Помирение на противоречието в payload-а (в същия дифф).** `docs/LOOP.md:162-165` днес
+   твърди „A second-layer shell hook is deliberately NOT attempted", а `aiwf-lib.js:23-31` — че
+   такъв е бил пробван и махнат в N4-R. Gate 4 е по-тесен от махнатия: deny по идентичност +
+   разпознаване, не емулация на shell семантика за всички. Двата текста се пренаписват да
+   описват точно това. Записът за N4-R НЕ се трие.
+7. **Миграцията е note-only** (`0006_git-verb-gate`, по образеца на `0005_posix-legs`): Gate 4 е
+   payload код, доставя се с `/plugin update`, не пипа нищо в проекта — нула config ключове,
+   нула региона, нула ask правила. Bump 0.2.2.
+8. **Fixture rename, форсиран от манифеста:** реалната `0006_git-verb-gate` се сблъсква с
+   `0006_example-bump` (`run-example-cycle.mjs:500-504` append-ва fixture-а към реалния манифест;
+   `validate-payload.mjs:229-232` иска префикс == позиция) → fixture-ът става `0007_example-bump`.
+9. **POSIX-003 се вози тук** — фиксът на секция 23 е комитнат (`4f6de69`); 0.2.2 е неговият release.
+
+**Обхват** (всички `file:line` в Context и тук са закотвени към `22965bad062a9f6e013a6edb314027a9056ace4f`
+— котвата при диспача. Имплементацията премести редовете в `aiwf-selfcheck.js` и в самия hook;
+показалците са верни срещу котвата, не срещу HEAD):
+1. `scripts/engine/pretooluse-git-verb-guard.js` — нов hook по т.1-5; преизползва `aiwf-lib.js`
+   (`readStdin`/`parseInput`/`denyPreTool`/`askPreTool`/`allowPassthrough`/`runFailClosed`),
+   собствен `projectDirOf()` по образеца на другите два; header по образеца на
+   `pretooluse-mutation-guard.js:1-55` с честния лимит от т.1 и риска от т.5.
+2. `hooks/hooks.json` — трети PreToolUse запис, matcher `Bash`, команда
+   `node "${CLAUDE_PLUGIN_ROOT}/scripts/engine/pretooluse-git-verb-guard.js"`; `description` полето
+   се дописва за трите гейта.
+3. Броячите на hook-ове (всичките, от discovery): `README.md:10`, `dev/PROJECT_OVERRIDES.md:36-37`,
+   `docs/WORKFLOW.md:679-681` („two hook files, three responsibilities"), `docs/LOOP.md:135-136`
+   („the wired-hook count stays two"), `pretooluse-mutation-guard.js:3` („TWO responsibilities"),
+   `aiwf-lib.js:5` („TWO small hooks"). `docs/LOOP.md` и `docs/WORKFLOW.md` получават Gate 4 в
+   § Enforcement / § Commit gate; `docs/OPERATOR_PROTOCOL.md:59-61` — какво вижда операторът.
+4. Помирението по т.6: `docs/LOOP.md:162-165` и `aiwf-lib.js:23-31`.
+5. Spikes (`scripts/spike/run-spikes.mjs`): нова константа до `:39-40`, нов cases масив след
+   `:291`, нов цикъл по образеца на `:342-382` преди tally-то `:401-409`. Матрица (изчерпателно):
+   bare `git commit` от main → passthrough; `cd X && git commit` от main → ask; `git -C <path>
+   push` от main → passthrough; `cd X && git commit` от `agent_type: writer` → ask; bare
+   `git reset` от `agent_type: general-purpose` → deny; `cd X && git reset` от
+   `agent_type: Explore` → deny; само `agent_id`, без `agent_type` → deny; `agent_type: 'Writer'`
+   (грешен case) → deny; `git log`/`git status`/`git show` от всяка идентичност → passthrough;
+   `node --version` → passthrough; празен stdin → deny; `'[]'` и `'"text"'` → deny.
+6. Selfcheck (`scripts/selfcheck/aiwf-selfcheck.js`): нова `sectionGate4(tmpRoot)` след
+   `sectionGate2Mode` в списъка `:4976-4995`; константа до `GATE1`/`GATE2` `:348-349`;
+   `sectionHookWiring` `:1052-1076` — `scriptCount === 3` (`:1061`), `${CLAUDE_PLUGIN_ROOT}`
+   count `=== 3` (`:1063`), третият файл в `:1075`, matcher-ът `Bash` пин-нат като `:1073-1074`;
+   assertion-ът от т.2 (hook константа ⊇ ruleset глаголи) с flipping контрол; поне по един
+   flipping контрол за deny клона, за ask клона и за passthrough клона; COVERAGE наративът
+   `:5002-5084` получава изречение за Gate 4 по образеца на `:5003-5013`.
+7. Release: `migrations/0006_git-verb-gate/{ops.json,NOTES.md}` (един `note` op, `docRefs:
+   ["CHANGELOG.md"]`, по образеца на `0005_posix-legs`); `migrations/index.json` 6-и запис 0.2.2;
+   `.claude-plugin/plugin.json:3` → 0.2.2; CHANGELOG блок `## [0.2.2] - <дата>` (§ Added: Gate 4;
+   § Fixed: секция 23 контролът от POSIX-003) + link ref; fixture → `0007_example-bump` (сайтове:
+   `examples/example-project/README.md:17,45,78,79`, `bump/0006_example-bump/NOTES.md:1,16,31`,
+   `.../ops.json:2`, `bump/bump.json:2`).
+8. Self-install: `--check` → 1 (pending 0006), `--dry-run` → 0, `--apply` → 0 диалога, стампове
+   0.2.2 / `0006_git-verb-gate`, `CHANGES_0.2.1-to-0.2.2.md` в commit-а.
+
+**Извън обхват:** промяна на ask-ruleset-а (Gate 4 не добавя и не маха правило); адversary-proof
+покритие на shell семантиката; RENAME-001; всякакво пипане на четирите EOL-мръсни файла отвъд
+нужното за т.3/т.6.
+**Acceptance (буквално, Windows канал, cwd = repo root):**
+- `node scripts/spike/run-spikes.mjs` → exit 0, таблицата носи Gate 4 реда от §5, нула failures.
+- `node scripts/selfcheck/aiwf-selfcheck.js --plugin-root . --project-fixture .` → exit 0.
+- `git grep -nE "two hook files|wired-hook count stays two|two PreToolUse hooks|TWO small hooks|TWO responsibilities|deliberately NOT attempted" -- docs skills templates scripts README.md dev/PROJECT_OVERRIDES.md`
+  → празно, exit 1.
+- `git grep -n "0006_example-bump" -- . ":(exclude)dev" ":(exclude)CHANGELOG.md"` → празно, exit 1.
+- `node scripts/update/validate-payload.mjs --plugin-root .` → exit 0, изходът съдържа
+  `6 migration(s)`.
+- `node scripts/update/aiwf-update.mjs --check --project-root .` → exit 0, „up to date … 0.2.2".
+- Осемте VERIFY от `aiwf.config.json` → exit 0; Cyrillic grep по payload пътищата → празно.
+**Risk threshold:** блокира всяка промяна на fail-direction на съществуващ гейт; всеки клон, при
+който Gate 4 връща `allow` за не-writer subagent с разпознат ask-глагол; всеки нов диалог по bare
+формата; всеки VERIFY ≠ 0.
+**Stop condition:** VERIFY + acceptance зелени → Одиторът спира.
+**Review:** `Class: code` → Codex (`gpt-5.6-sol`/high), fact-check преди. Cap 2.
+**Assignee:** Колега. Branch `main`. Котва при диспач: `22965bad062a9f6e013a6edb314027a9056ace4f`.
+
+### GATE-001 — Completion record (2026-09-11)
+
+**Commit `887e29e3aafbf1625eec9f8190e0121c06bc6e5d`** върху котвата `22965ba` (branch `main`,
+локален, непушнат): 26 файла, 1488+/87− (`git show --stat 887e29e`; 26, а не 28, защото Git записа
+преместването на fixture-а като два rename-а). Едноредово съобщение, нула trailers — проверено с
+`git log -1 --format=%b` (празно) и `%(trailers)` (празно). PLAN файлът и четирите EOL-мръсни файла
+доказано извън commit-а.
+
+Изпълнено: Gate 4 (`scripts/engine/pretooluse-git-verb-guard.js`) + трети PreToolUse запис на
+matcher `Bash`; броячите „два hook файла" → „три файла, четири гейта" по всички сайтове от
+discovery; помирението на N4-R противоречието (записът не е трит); spikes и selfcheck секция;
+миграция `0006_git-verb-gate` (note-only), 6-и запис в манифеста, `plugin.json` 0.2.2, CHANGELOG
+блок с § Known limits, fixture → `0007_example-bump`, self-install apply (стампове
+0.2.2/`0006_git-verb-gate`, 0 диалога) + `CHANGES_0.2.1-to-0.2.2.md`. **POSIX-003 се вози тук** —
+фиксът на секция 23 (`4f6de69`) излиза с този release.
+
+**Отклонения (приети):** (1) Gate 4 НЕ получи `projectDirOf()` — не му трябва нищо освен
+payload-а си, а това е и записаното blast-radius свойство (matcher `Bash` = всяка команда), така
+че обхват §1 е противоречен нарочно. (2) Hook-ът изнася константата си и пет чисти функции и
+изпълнява гейта само под `require.main === module`, за да може selfcheck-ът да държи реалните
+стойности вместо да ги преписва. (3) `sectionGate4()` не взима `tmpRoot` (не му трябва фикстура).
+(4) `docRefs` носи два записа (`CHANGELOG.md`, `docs/LOOP.md`), не един. (5) Spike фикстурите
+ползват `/work/demo`, не drive-letter път — provenance сканът забранява второто, и го хвана на
+живо. (6) README § Status → 0.2.2. (7) `test-update.mjs` `DROPPED_ASK_RULE` премина от
+`Bash(git stash:*)` на `Bash(npm run seed:*)`: с двупосочния cross-check изхвърлянето на git
+правило от payload копие произвежда истинска находка вместо да тества `reconcile-ask-ruleset` op-а;
+фикстурата иска само някакво owned правило. Алтернативата беше отслабване на новия инвариант.
+
+**Ревю (пълна история, защото цената ѝ е поуката):** fact-check ×4 — намери невярно число („28
+cases" при 34), overclaim в README („the two cannot drift", докато assertion-ът пази една посока),
+твърде тясно описание на ask клона на 6 сайта, непроверим анекдот за друг проект на 8 сайта,
+неприписани твърдения за вътрешностите на harness-а на 6 сайта, и два пъти застояли коментари.
+Codex `gpt-5.6-sol`/high, `Class: code`: **пас 1 `fail`** (4 блокера: тих байпас в
+`startsWithGatedForm`; предпоставката за compound формите; проверката не може да хване байпаса;
+проза, обещаваща повече от кода) → корекционен рунд 1 → **пас 2 `fail`** (4 блокера, всичките един
+клас: моделът приема форми, които ruleset-ът не носи — таб след глагола, разделители в кавички,
+`command -v`, cross-check свит до множество глаголи) → корекционен рунд 2, в който Колегата намери
+**пето, само̀** — `recognisedVerb('git reset;')` връщаше null, тоест deny клонът се обезоръжаваше с
+точка и запетая → **пас 3 `fail`** (1 блокер: обратният апостроф извън списъка пунктуация, същият
+клас трети път) → **корекционен рунд 4 по изрична операторска дума** (cap-ът изчерпан), в който
+blacklist-ът на shell знаци беше обърнат в whitelist на това, от което глагол може да е съставен
+(`/^[A-Za-z-]*/`) — набор, който не може да пропусне знак, защото не описва shell-а.
+
+**Одиторът беше отказан веднъж, с доказателство и с моето съгласие:** спецификацията ми искаше
+`npx foo && git reset --hard` → ask; Колегата показа, че това са две независими подкоманди и
+harness-ът гейти git-овата, и го шипна като passthrough, а `npx git reset --hard` (npx, обвиващ
+git-а) пита.
+
+**Четвърти Одиторски пас не беше пуснат — операторско решение.** На негово място: fact-check над
+делтата (нула находки) и **независим VERIFY рън**, диспачнат отделно, вместо приемане на отчета на
+Колегата.
+
+**Верификация (независим рън, точни кодове):** validate-payload exit 0 „6 migration(s) … 0.2.2";
+test-setup 316/0; test-update 451/0; двата example цикъла 44/0; selfcheck **937/937**; spikes
+**245/0**; `claude plugin validate .` ✔. Трите grep-а празни (exit 1). `git status --short` преди и
+след рънa — идентичен. **Записано честно:** комитнатото дърво се различава от независимо
+провереното с точно два коментарни реда (застояло „no quoting awareness" в `aiwf-lib.js` и в
+`run-spikes.mjs`, намерени от Колегата в СТЕЙДЖНАТИ файлове преди commit-а и поправени), покрити с
+повторни рънове — `node --check` на двата файла, selfcheck 937/937, spikes 245/0.
+
+**Неточност в отчета (записана, не гонена):** Колегата отчете Cyrillic grep-а като exit 0; той е
+exit 1 при празен изход. Същността е еднаква.
+
+**Останал дълг: няма.** Два лимита са ЗАПИСАНИ, не поправени, и двата с изрична проза в payload-а:
+(а) и ask правилата, и Gate 4 са адресирани към `Bash` tool-а, значи втори shell tool заобикаля
+двата слоя и deny клонът пада по избор на инструмент — тикет PS-001, за 0.2.3, по операторско
+решение; (б) passthrough клонът стъпва на поведение на хоста, което това repo не може да тества.
+
+**Поука за COO-а, записана защото е измерима:** три от четирите блокера на пас 1 и повечето
+fact-check находки произхождат от МОЙ текст — грешно изброените гейтнати форми, формулировката
+„every form", анекдотът, който аз поръчах. Одиторът намери дефект в кода на Колегата веднъж.
+Брифът е тръгнал без пълната си прецизност и разликата е платена с рундове — точно това, което
+доктрината нарича „брифът носи пълната си прецизност в първата чернова".
+
+## POSIX-004 [R2 code-class] — self-check-ът приключва без отчет на macOS (роден 2026-09-09)
+
+Диагноза (CI run 34321807708, тестов клон `ci/macos-proof-posix-003` на `22965ba`): ubuntu зелен,
+windows зелен, **macOS червен на `update acceptance suite`** — стъпка, до която нито един предишен
+рън не е стигал, защото setup суитът спираше преди нея. `setup acceptance suite` мина **316/0**,
+включително контролът на секция 23 — POSIX-003 държи и това е доказано на роден macOS.
+
+Едно падане от 451: `scripts/update/test-update.mjs:1395-1396`, сценарий `sc-red` —
+`r.out.includes('roles.json') && r.out.includes('FAILURES:')`. Изходът на self-check-а спира
+веднага след ENTRYPOINT IDENTITY блока; нито tally-то, нито `FAILURES:` блокът се появяват.
+`main()` е `try/finally` **без `catch`**, значи хвърляне излиза без отчет. Дефектът е в ПРОДУКТА
+(self-check, който може да умре мълчаливо е дефект на всяка платформа — macOS само го задейства),
+не в теста; тестът си върши работата.
+
+**Коренът НЕ е доказан.** `test-update.mjs:66` реже диагностичния изход на 260 знака, така че
+реалната опашка — стек трейс или каквото е било — не е в лога.
+
+**Операторско решение 2026-09-10: един диагностичен цикъл, после решаваме.** Не опит за фикс, а
+опит за информация: махане на отрязването + `catch` в `main()`, push на тестов клон, едно четене.
+Ако назове двуредов фикс — взимаме го. Ако покаже нещо структурно или иска Mac машина — macOS се
+обявява за неподдържан ЧЕСТНО, което значи повече от ред в README: leg-ът става non-blocking или
+пада (постоянно червен leg е по-лошо от двете — точно този навик остави матрицата непрочетена 11
+ръна), плюс README § Status, доктрината и `os` enum-а в схемата. Записана цена на този избор: bash
+каналът е СПОДЕЛЕН между linux и macos, значи дефект, изгрял на macOS, често живее в общия код
+(realpath-ът на POSIX-001 беше точно такъв) — обявяването не маха дефектите, спира да ни казва за
+тях.
+
+Независимо от решението за поддръжката: `try/finally` без `catch` в `aiwf-selfcheck.js` се поправя
+— платформено-неутрален дефект, и точно той направи тази диагноза скъпа. **Чака собствена дума.**
+
+## PS-001 [R2 code-class] — вторият shell tool заобикаля двата слоя (роден 2026-09-10)
+
+Открито във Furnissimo сесия и потвърдено тук от собствения инструментариум: **всяко** правило в
+`templates/settings.ask-ruleset.json` е `Bash(...)`, а Windows сесия носи `PowerShell` tool до
+`Bash`. Значи целият ask списък — commit, push, merge, rebase, reset, clean, rm, checkout,
+restore, revert, pull, fetch, cherry-pick, stash, config, remote, плюс docker/npm/rm семейството —
+има нула покритие през втория инструмент. Дупката е в payload-а, не в конфигурацията на
+консуматора, и всеки Windows проект я има.
+
+Commit диалогът е симптомът; **push е сериозното** — доктрината го гейти с изрична дума И диалог, а
+диалогът през PowerShell не съществува. И удря Gate 4: закачен е на matcher `Bash`, а агент от клас
+`general-purpose` има `Tools: *`, тоест и PowerShell — значи инцидентът от 2026-09-03, който роди
+GATE-001, остава възможен след 0.2.2 по избор на инструмент, не по екзотична команда. Записано е
+като честен лимит на 7 места в 0.2.2.
+
+**Обхват (за 0.2.3, операторско решение 2026-09-10):** огледални `PowerShell(...)` правила за
+целия ask списък + matcher-ът на Gate 4 да покрие и втория tool (иска проверка как се казва полето
+с командата в неговия payload и че разделителите му са `;`/`&&`/`||`/`|`). Managed artifact:
+`reconcile-ask-ruleset` op, миграция, bump, променя `settings.json` на всеки консуматор.
+Операционна бележка от Furnissimo: редакцията на `settings.json` иска auto mode ИЗКЛЮЧЕН —
+класификаторът я блокира, платено с рунд на 2026-08-18. **Чака собствена дума.**
 
 ## RENAME-001 [R3] — пълен rename AIWF → pnp (роден 2026-09-03)
 
@@ -872,9 +1131,20 @@ Closeout има чак когато: всички тикети на плана (
 един commit (клик) → push (дума + диалог) → `origin/main...main` = `0	0`. Таговете НЕ се местят.
 
 ## Ред и гейтове
-AUD-001 → AUD-002 → PUB-001 → PUB-002 → PUB-003 → Closeout. Всеки тикет — дума за диспач;
-commit — клик; tag/push — дума + диалог (PUB-002 и Closeout). Readiness на плана: fact-check +
-Codex pass 1/2 (трети — дума).
+Изпълнен ред: AUD-001 → AUD-002 → PUB-001 → PUB-002 → PUB-003 → POSIX-001 → POSIX-002 →
+POSIX-003 → GATE-001 (всичките затворени с records). Остава: **POSIX-004**, **PS-001**,
+**RENAME-001**, после Closeout — всеки чака собствена дума за диспач.
+
+Гейтове: всеки тикет — дума за диспач; commit — клик; tag/push — дума + диалог; пас над
+`review.code.passes` или корекционен рунд над cap-а — отделна дума всеки (GATE-001 изяде такава за
+рунд 4, и операторът отказа четвърти Одиторски пас — на негово място минаха fact-check над делтата
+и независим VERIFY рън). Readiness на плана: fact-check + пасовете на `review.plan.passes`
+(над тях — дума).
+
+**Незатворено от мисията:** macOS leg-ът. POSIX-001/002/003 го докараха до „setup суит 316/0 на
+роден macOS", но `update acceptance suite` пада (POSIX-004). Затова `main` **не се пушва** — днес е
+3 commit-а пред `origin/main` (`4f6de69`, `22965ba`, `887e29e`) и push-ът чака трите leg-а зелени
+или операторско решение macOS да се обяви за неподдържан.
 
 ## Кандидати
 
