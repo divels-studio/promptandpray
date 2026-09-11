@@ -110,11 +110,15 @@ and `docs/LOOP.md` (the one-page native mapping).
   Gate 1 catches the Edit/Write family and the boundary is tool-availability + convention + git
   reversibility, with NO OS cell - the hard OS boundary applies only on the codex read-only path.
 - No new state files or counters - this loop is convention + the native click-based permission
-  gates plus two tiny stateless hooks (Gate 1, Gate 2). Gate 2 reads the project config and the
-  active PLANs; it writes nothing and remembers nothing between dispatches.
+  gates plus three tiny stateless hooks (Gate 1, Gate 2, Gate 4). Gate 2 reads the project config
+  and the active PLANs, Gate 4 reads only the payload it is handed; they write nothing and remember
+  nothing between calls.
 - The round cap is `{{config.loop.correctionRoundsCap}}`; the stop condition and risk threshold are
   mandatory in every R2/R3 brief.
 - Push/merge/rebase run from the session only after the operator's explicit word **and** a native
-  Yes/No dialog (`ask` prefix rules + branch isolation; no hook); commit and destructive ops
-  likewise surface a visual Yes/No dialog for a matching command (`ask` rules). Accident/role
-  protection, not adversary-proof.
+  Yes/No dialog (`ask` prefix rules + branch isolation); commit and destructive ops
+  likewise surface a visual Yes/No dialog for a matching command (`ask` rules). Gate 4 stands behind
+  those rules on the `Bash` tool: denied outright from a non-writer subagent, and a dialog on the git
+  forms the rules never spell out - `git.exe` outside push/merge/rebase, any `git -C <path> ...`, an
+  unstripped wrapper such as `sudo`. Rules and hook are both `Bash`-scoped, so a second shell tool in
+  the harness is outside both (`docs/LOOP.md`). Accident/role protection, not adversary-proof.

@@ -7,17 +7,18 @@ Routine work stays direct - the loop is a route you choose, not a ceremony every
 
 The part that is not advice: **every operator gate that CAN be a native dialog IS a native dialog.**
 Writer dispatch, commit, push and the destructive commands surface Claude Code's own Yes/No
-permission prompt, and two PreToolUse hooks stand behind them - one deciding who may write at all,
-one deciding which Writer dispatch becomes a click - so the protection does not depend on a model
-remembering the rules. What the hooks cannot reach - a mutation performed through a shell command,
-the roles' own judgment - stays doctrine, and this repository says so at each such place instead of
+permission prompt, and three PreToolUse hooks stand behind them - one deciding who may write at all,
+one deciding which Writer dispatch becomes a click, one deciding who may run a gated git verb and in
+which form - so the protection does not depend on a model remembering the rules. What the hooks
+cannot reach - a file mutation performed through a shell command, the roles' own judgment - stays
+doctrine, and this repository says so at each such place instead of
 claiming a guarantee it does not have.
 
 Born in a real production project, then extracted and genericized.
 
 ## Status
 
-**v0.2.1. Public since 0.2.0.**
+**v0.2.2. Public since 0.2.0.**
 
 What is here:
 
@@ -34,12 +35,20 @@ What is here:
   interlock if migrations are pending. `update` and `selfcheck` are the two documented exceptions -
   the command that applies the migrations and the diagnostic you need most when something is out of
   date cannot be the two that refuse to run.
-- **Two enforcement hooks** (`hooks/hooks.json`): the mutation guard - Gate 1, non-writer subagents
+- **Three enforcement hooks** (`hooks/hooks.json`): the mutation guard - Gate 1, non-writer subagents
   cannot use the Edit/Write family, plus Gate 3, the route-state write guard that keeps the main
-  session out of code while an R2/R3 ticket is open - and the dispatch gate, Gate 2, which puts the
+  session out of code while an R2/R3 ticket is open - the dispatch gate, Gate 2, which puts the
   operator in the way of a Writer dispatch: a click on every one of them, or (per
   `enforcement.dispatchGate`) only on a dispatch whose `Ticket: <REF>` line names no ticket in an
-  active PLAN.
+  active PLAN - and the git-verb guard, Gate 4, on the `Bash` tool: an ask-class git verb is denied
+  to any subagent but the Writer, because a background agent's dialog reaches nobody, and for the
+  session it raises a dialog on the git forms the `ask` rules never spell out - `git.exe` outside
+  push/merge/rebase, any `git -C <path> ...`, a wrapper Claude Code does not strip such as `sudo` -
+  while everything the harness already gates by itself (chained subcommands, `timeout`-style
+  wrappers, `NAME=value` prefixes) stays silent. The self-check holds its verb list against the
+  shipped ask-ruleset, so a rule added there cannot silently outrun the gate. Both that gate and the
+  rules are addressed to the `Bash` tool: a harness offering a second shell tool runs the same git
+  verbs where neither sees them, and `docs/LOOP.md` states that gap rather than papering over it.
 - **The role resolver and the Codex wrappers** (`scripts/native/ps/` on Windows,
   `scripts/native/sh/` on Linux/macOS - two channels that mirror each other): one review role
   resolved to
@@ -60,7 +69,7 @@ What is here:
   only on fixtures: a project other than this one took 0.1.0 -> 0.1.1 through `/plugin update` +
   `/pnp:update`, carrying its own history across the bump. Its two take-new dialogs for artifacts
   nobody had edited are what 0.1.2 removes.
-- **The self-check**, which executes both hooks and the resolver at their real entrypoints rather
+- **The self-check**, which executes all three hooks and the resolver at their real entrypoints rather
   than reading their source, and then insists its own checks can fail: the project-layer, example
   fixture and provenance sections each sabotage a copy one way per assertion and require the target
   check to flip. A check with no control is printed by name with the reason, never quietly as a pass.
@@ -219,7 +228,7 @@ Because the gates it depends on are Claude Code mechanisms. A PreToolUse hook ca
 outright or convert it into a native Yes/No dialog, and the permission rules put commit, push and
 the destructive commands behind the same dialog. Without those, this loop is advice - a document
 asking a model to behave. The skills, the agent definitions and the manifest are packaging around
-the two hooks; the hooks are the reason it is a plugin.
+the three hooks; the hooks are the reason it is a plugin.
 
 ## Licence
 

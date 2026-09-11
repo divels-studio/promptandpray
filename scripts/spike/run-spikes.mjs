@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /*
- * P0 spike (level a) — direct-invocation proof for the two PreToolUse gates.
+ * P0 spike (level a) — direct-invocation proof for the three PreToolUse gates.
  *
  * Runs realistic PreToolUse payloads through the hooks as the harness would: one child process per
  * payload, JSON on stdin, decision read back from stdout. Nothing is mocked - the shipped hook files
@@ -38,6 +38,7 @@ const PLUGIN_HOOKS = path.join(PLUGIN_ROOT, 'scripts', 'engine');
 
 const GATE1 = 'pretooluse-mutation-guard.js';
 const GATE2 = 'pretooluse-dispatch-gate.js';
+const GATE4 = 'pretooluse-git-verb-guard.js';
 
 // ---- reference implementation (optional) -----------------------------------
 function referenceDir() {
@@ -290,6 +291,130 @@ const gate2ModeCases = [
   { name: 'mode "OFF-PLAN" (wrong case) -> always, no coercion', projectDir: modeWrongCase, payload: writerBrief('Ticket: DEMO-1\n\nDo the thing.'), expect: 'ask' },
 ];
 
+// Gate 4: the Bash envelope. Same captured shape as above with the command varied; the gate reads
+// nothing but the payload (no project dir, no config), so these cases need no fixture directory.
+const bashEnvelope = (identity, command) => ({
+  session_id: '5c3b1f2e-0000-4000-8000-000000000000',
+  cwd: 'C:\\work\\demo',
+  permission_mode: 'default',
+  ...identity,
+  hook_event_name: 'PreToolUse',
+  tool_name: 'Bash',
+  tool_input: { command, description: 'run a command' },
+  tool_use_id: 'toolu_04spikeBashGitVerb',
+});
+const MAIN = {};                                     // true main session: NO identity fields at all
+const WRITER = { agent_id: 'w1', agent_type: 'writer' };
+// A repo-selector path for the `git -C <path>` forms. Deliberately not a drive-letter path: the
+// payload carries none (the provenance section of the self-check is the gate), and the FORM is what
+// these cases are about, not the platform.
+const ROOT = '/work/demo';
+
+// The whole decision table, one row per branch. Four groups, and the third is the load-bearing one:
+// a gate that denied `git log` from a subagent would be uninstallable, so "silent on everything it
+// does not judge" is asserted as explicitly as the denies.
+//
+// The main-session rows encode the DOCUMENTED harness behaviour, not a guess about it: Claude Code
+// splits a Bash command on the six shell operators and newlines and matches rules per SUBCOMMAND,
+// strips the timeout/time/nice/nohup/stdbuf/command/builtin/noglob/flagless-xargs wrappers, and
+// matches past leading NAME=value assignments. So the chained and wrapper-prefixed forms are
+// ALREADY gated by the harness and must stay silent here; what asks is what the shipped rules never
+// spell out.
+const gate4Cases = [
+  // --- main session / Writer: silent ONLY where a shipped rule matches the subcommand byte for byte
+  { name: 'main: bare `git commit` (the rule matches) -> silent', payload: bashEnvelope(MAIN, 'git commit -m x'), expect: 'allow(passthrough)' },
+  { name: 'main: bare `git push origin main` -> silent', payload: bashEnvelope(MAIN, 'git push origin main'), expect: 'allow(passthrough)' },
+  { name: 'main: `git.exe push origin main` (the ruleset spells this one out) -> silent', payload: bashEnvelope(MAIN, 'git.exe push origin main'), expect: 'allow(passthrough)' },
+  { name: 'main: `cd <root> && git commit` -> silent (the HARNESS matches the subcommand)', payload: bashEnvelope(MAIN, `cd ${ROOT} && git commit -m y`), expect: 'allow(passthrough)' },
+  { name: 'main: `timeout 30 git commit` -> silent (a stripped wrapper; the rule still matches)', payload: bashEnvelope(MAIN, 'timeout 30 git commit -m x'), expect: 'allow(passthrough)' },
+  { name: 'main: `nice -n 10 git push` -> silent (stripped wrapper with its own option)', payload: bashEnvelope(MAIN, 'nice -n 10 git push origin main'), expect: 'allow(passthrough)' },
+  { name: 'main: `xargs git push` -> silent (flagless xargs IS stripped by the harness)', payload: bashEnvelope(MAIN, 'xargs git push'), expect: 'allow(passthrough)' },
+  { name: 'main: `FOO=bar git push origin main` -> silent (rules match past env assignments)', payload: bashEnvelope(MAIN, 'FOO=bar git push origin main'), expect: 'allow(passthrough)' },
+  { name: 'main: `git -c k=v commit` -> silent (Bash(git -c:*) matches this byte for byte)', payload: bashEnvelope(MAIN, 'git -c user.name=x commit -m y'), expect: 'allow(passthrough)' },
+  { name: 'main: `npx foo && git reset --hard` -> silent (the git SUBCOMMAND is rule-matched)', payload: bashEnvelope(MAIN, 'npx foo && git reset --hard'), expect: 'allow(passthrough)' },
+  // The bypasses: forms the shipped ruleset never spells out, which reach nobody today.
+  { name: 'main: `git.exe reset --hard` -> ASK (.exe rules exist for push/merge/rebase only)', payload: bashEnvelope(MAIN, 'git.exe reset --hard'), expect: 'ask' },
+  { name: 'main: `git -C <root> reset --hard` -> ASK (no -C rule for a non-push verb)', payload: bashEnvelope(MAIN, `git -C ${ROOT} reset --hard`), expect: 'ask' },
+  { name: 'main: `git -C <root> push origin main` -> ASK (the rule names <projectRoot>, unverifiable)', payload: bashEnvelope(MAIN, `git -C ${ROOT} push origin main`), expect: 'ask' },
+  { name: 'main: `git.exe -C <root> push` -> ASK (no rule carries both spellings)', payload: bashEnvelope(MAIN, `git.exe -C ${ROOT} push`), expect: 'ask' },
+  { name: 'main: `git -C /p -C . push` (a second -C) -> ASK', payload: bashEnvelope(MAIN, 'git -C /p -C . push'), expect: 'ask' },
+  { name: 'main: `sudo git reset --hard` -> ASK (sudo is NOT a stripped wrapper)', payload: bashEnvelope(MAIN, 'sudo git reset --hard'), expect: 'ask' },
+  { name: 'main: `npx git reset --hard` -> ASK (npx is NOT stripped either)', payload: bashEnvelope(MAIN, 'npx git reset --hard'), expect: 'ask' },
+  { name: 'main: `xargs -I{} git push` -> ASK (a FLAGGED xargs is not stripped)', payload: bashEnvelope(MAIN, 'xargs -I{} git push'), expect: 'ask' },
+  { name: 'main: `git  commit` (two spaces) -> ASK (irregular whitespace matches no rule)', payload: bashEnvelope(MAIN, 'git  commit -m x'), expect: 'ask' },
+  { name: 'main: `git\\tcommit` (a tab) -> ASK', payload: bashEnvelope(MAIN, 'git\tcommit -m x'), expect: 'ask' },
+  // The same whitespace question AFTER the verb, which `(\s|$)` used to let through.
+  { name: 'main: `git commit\\t-m x` (tab after the verb) -> ASK', payload: bashEnvelope(MAIN, 'git commit\t-m x'), expect: 'ask' },
+  { name: 'main: `git.exe push\\torigin main` (tab after the verb) -> ASK', payload: bashEnvelope(MAIN, 'git.exe push\torigin main'), expect: 'ask' },
+  { name: 'main: `git commit  -m x` (two spaces after the verb) -> ASK', payload: bashEnvelope(MAIN, 'git commit  -m x'), expect: 'ask' },
+  // A separator inside quotes is not a separator: the real first token is `bash`, which no rule carries.
+  { name: 'main: `bash -c "true; git reset --hard"` -> ASK (a nested shell is not a git rule)', payload: bashEnvelope(MAIN, 'bash -c "true; git reset --hard"'), expect: 'ask' },
+  { name: "main: `sh -c 'git reset --hard'` -> ASK", payload: bashEnvelope(MAIN, "sh -c 'git reset --hard'"), expect: 'ask' },
+  { name: 'main: `git commit -m "x && y"` -> silent (a quoted separator does not split the command)', payload: bashEnvelope(MAIN, 'git commit -m "x && y"'), expect: 'allow(passthrough)' },
+  { name: 'main: `command -v git commit` -> ASK (a query; a flagged wrapper is not stripped)', payload: bashEnvelope(MAIN, 'command -v git commit'), expect: 'ask' },
+  { name: 'main: `builtin -x git push` -> ASK', payload: bashEnvelope(MAIN, 'builtin -x git push'), expect: 'ask' },
+  { name: 'main: `command git commit -m x` -> silent (flagless: a real stripped wrapper)', payload: bashEnvelope(MAIN, 'command git commit -m x'), expect: 'allow(passthrough)' },
+  { name: 'main: ` git commit` (a leading space) -> ASK (unconfirmed that the harness trims it)', payload: bashEnvelope(MAIN, ' git commit -m x'), expect: 'ask' },
+  { name: 'main: `git\\ncommit` (a newline splits it into two non-rules) -> ASK', payload: bashEnvelope(MAIN, 'git\ncommit -m x'), expect: 'ask' },
+  { name: 'main: `git -ck=v reset` (glued -c is not the rule prefix "git -c ") -> ASK', payload: bashEnvelope(MAIN, 'git -cuser.name=x reset --hard'), expect: 'ask' },
+  { name: 'main: `git push ... && sudo git reset --hard` -> ASK (one bad subcommand decides)', payload: bashEnvelope(MAIN, 'git push origin main && sudo git reset --hard'), expect: 'ask' },
+  { name: 'main: a verb inside a command substitution -> ASK (not mirrored, so not confirmed)', payload: bashEnvelope(MAIN, 'echo $(git reset --hard)'), expect: 'ask' },
+  { name: 'writer: bare `git commit` -> silent (the commit dialog is the operator\'s, unchanged)', payload: bashEnvelope(WRITER, 'git commit -m x'), expect: 'allow(passthrough)' },
+  { name: 'writer: `git.exe reset --hard` -> ASK (the Writer is not exempt from the form)', payload: bashEnvelope(WRITER, 'git.exe reset --hard'), expect: 'ask' },
+  // --- non-writer subagents: an ask-class verb is denied, whatever the form
+  { name: 'general-purpose: `git reset --hard` -> DENY', payload: bashEnvelope({ agent_id: 'a1', agent_type: 'general-purpose' }, 'git reset --hard'), expect: 'deny' },
+  { name: 'Explore: `cd X && git reset --hard` -> DENY', payload: bashEnvelope({ agent_id: 'a2', agent_type: 'Explore' }, 'cd X && git reset --hard'), expect: 'deny' },
+  { name: 'reviewer: `git switch other` -> DENY', payload: bashEnvelope({ agent_id: 'a3', agent_type: 'reviewer' }, 'git switch other'), expect: 'deny' },
+  { name: 'qa: `git fetch --all` -> DENY', payload: bashEnvelope({ agent_id: 'a4', agent_type: 'qa' }, 'git fetch --all'), expect: 'deny' },
+  { name: 'agent_id present, agent_type absent: `git commit` -> DENY', payload: bashEnvelope({ agent_id: 'a5' }, 'git commit -m x'), expect: 'deny' },
+  { name: 'agent_type null: `git commit` -> DENY', payload: bashEnvelope({ agent_id: 'a6', agent_type: null }, 'git commit -m x'), expect: 'deny' },
+  { name: 'agent_type "Writer" (wrong case): `git commit` -> DENY', payload: bashEnvelope({ agent_id: 'a7', agent_type: 'Writer' }, 'git commit -m x'), expect: 'deny' },
+  // The form never softens the deny: the .exe and -C rows above are an ASK for the main session and
+  // stay a DENY here, because identity decides this branch before the form is looked at.
+  { name: 'general-purpose: `git.exe reset --hard` -> DENY (form is irrelevant to identity)', payload: bashEnvelope({ agent_id: 'a13', agent_type: 'general-purpose' }, 'git.exe reset --hard'), expect: 'deny' },
+  { name: 'general-purpose: `git -C <root> reset --hard` -> DENY', payload: bashEnvelope({ agent_id: 'a14', agent_type: 'general-purpose' }, `git -C ${ROOT} reset --hard`), expect: 'deny' },
+  // A verb GLUED to the punctuation that ends its command. Reading the token raw made the recogniser
+  // blind to these, so the deny branch silently did not fire - the worst shape of the whole class.
+  { name: 'general-purpose: `git reset --hard;` (trailing separator) -> DENY', payload: bashEnvelope({ agent_id: 'a15', agent_type: 'general-purpose' }, 'git reset --hard;'), expect: 'deny' },
+  { name: 'general-purpose: `git commit;echo done` -> DENY', payload: bashEnvelope({ agent_id: 'a16', agent_type: 'general-purpose' }, 'git commit;echo done'), expect: 'deny' },
+  { name: 'general-purpose: `echo $(git push)` -> DENY', payload: bashEnvelope({ agent_id: 'a17', agent_type: 'general-purpose' }, 'echo $(git push)'), expect: 'deny' },
+  { name: 'general-purpose: `git reset>log` -> DENY', payload: bashEnvelope({ agent_id: 'a18', agent_type: 'general-purpose' }, 'git reset>log'), expect: 'deny' },
+  { name: 'general-purpose: `git log --oneline;` -> silent (the control: only ask-class verbs)', payload: bashEnvelope({ agent_id: 'a19', agent_type: 'general-purpose' }, 'git log --oneline;'), expect: 'allow(passthrough)' },
+  // BACKTICK COMMAND SUBSTITUTION. The shell runs it, and the permission rules reach into it, but a
+  // blacklist cut that lacked the backtick left the verb token as ``push` `` - unrecognised, so the
+  // gate returned before identity was ever looked at. The reduction is a whitelist now (a verb is
+  // letters and `-`, everything else ends the token), which is why these are DENIES.
+  { name: 'general-purpose: `echo `git push`` -> DENY (backtick substitution)', payload: bashEnvelope({ agent_id: 'a20', agent_type: 'general-purpose' }, 'echo `git push`'), expect: 'deny' },
+  { name: 'general-purpose: `echo `git stash`` -> DENY', payload: bashEnvelope({ agent_id: 'a21', agent_type: 'general-purpose' }, 'echo `git stash`'), expect: 'deny' },
+  { name: 'general-purpose: `echo "`git push`"` -> DENY (quoted substitution: two terminators at once)', payload: bashEnvelope({ agent_id: 'a22', agent_type: 'general-purpose' }, 'echo "`git push`"'), expect: 'deny' },
+  { name: 'general-purpose: `echo `date`` -> silent (the control: a substitution with no ask-class verb)', payload: bashEnvelope({ agent_id: 'a23', agent_type: 'general-purpose' }, 'echo `date`'), expect: 'allow(passthrough)' },
+  { name: 'main: `echo `git push`` -> ASK (no rule covers a substitution; the harness does reach in)', payload: bashEnvelope(MAIN, 'echo `git push`'), expect: 'ask' },
+  { name: 'writer: `echo `git push`` -> ASK (the Writer is not exempt)', payload: bashEnvelope(WRITER, 'echo `git push`'), expect: 'ask' },
+  // The other newly-cut characters that plausibly appear glued to a verb in a real command. `{`,
+  // `}`, `=`, `*`, `?`, `[`, `]`, `~`, `#`, `!` and `$` are cut too, but a real command does not
+  // glue them onto a git verb, so no row pretends otherwise - the enumeration itself is pinned by a
+  // pure-function assertion in the self-check.
+  { name: "general-purpose: `git 'reset' --hard` (quoted verb) -> DENY", payload: bashEnvelope({ agent_id: 'a24', agent_type: 'general-purpose' }, "git 'reset' --hard"), expect: 'deny' },
+  { name: 'general-purpose: `git "push" origin` (quoted verb) -> DENY', payload: bashEnvelope({ agent_id: 'a25', agent_type: 'general-purpose' }, 'git "push" origin'), expect: 'deny' },
+  { name: 'general-purpose: `git \\push` (ESCAPED verb) -> silent (stated residual: escapes are not interpreted)', payload: bashEnvelope({ agent_id: 'a26', agent_type: 'general-purpose' }, 'git \\push'), expect: 'allow(passthrough)' },
+  // --- everything this gate does not judge stays invisible, from EVERY identity
+  { name: 'subagent: `git log --oneline -5` -> silent (read-only verb)', payload: bashEnvelope({ agent_id: 'a8', agent_type: 'Explore' }, 'git log --oneline -5'), expect: 'allow(passthrough)' },
+  { name: 'subagent: `git status --short` -> silent', payload: bashEnvelope({ agent_id: 'a9', agent_type: 'Explore' }, 'git status --short'), expect: 'allow(passthrough)' },
+  { name: 'subagent: `git show HEAD` -> silent', payload: bashEnvelope({ agent_id: 'a10', agent_type: 'reviewer' }, 'git show HEAD'), expect: 'allow(passthrough)' },
+  { name: 'subagent: `git grep -n x -- docs` -> silent', payload: bashEnvelope({ agent_id: 'a11', agent_type: 'reviewer' }, 'git grep -n x -- docs'), expect: 'allow(passthrough)' },
+  { name: 'subagent: `node --version` (no git at all) -> silent', payload: bashEnvelope({ agent_id: 'a12', agent_type: 'general-purpose' }, 'node --version'), expect: 'allow(passthrough)' },
+  { name: 'main: `git log --oneline -5` -> silent', payload: bashEnvelope(MAIN, 'git log --oneline -5'), expect: 'allow(passthrough)' },
+  { name: 'main: `cd X && npm test` -> silent (the ask branch judges GIT verbs only)', payload: bashEnvelope(MAIN, 'cd X && npm test'), expect: 'allow(passthrough)' },
+  { name: 'main: `mygit commit` / `git-foo commit` are other programs -> silent', payload: bashEnvelope(MAIN, 'mygit commit && git-foo commit'), expect: 'allow(passthrough)' },
+  // --- the documented FALSE POSITIVE (header): recognition does not treat quoted text as data
+  { name: 'main: a gated verb inside a quoted string -> ASK (documented false positive, costs a click)', payload: bashEnvelope(MAIN, 'git grep -n "git commit" -- docs'), expect: 'ask' },
+  // --- the fail direction, on a hook that sits on EVERY Bash command
+  { name: 'non-object input (array) -> DENY (fail-closed)', payload: '[]', expect: 'deny' },
+  { name: 'non-object input (string) -> DENY (fail-closed)', payload: '"text"', expect: 'deny' },
+  { name: 'empty stdin -> DENY (fail-closed)', payload: '', expect: 'deny' },
+  { name: 'tool_input without a command string -> silent (nothing to recognise)', payload: bashEnvelope(MAIN, undefined), expect: 'allow(passthrough)' },
+];
+
 // ---- run -------------------------------------------------------------------
 const pad = (s, n) => (s.length >= n ? s : s + ' '.repeat(n - s.length));
 let failures = 0;
@@ -396,6 +521,37 @@ console.log('== Gate 2 - the ask payload itself ==');
   console.log(`assert permissionDecision === "ask"           : ${label(okDecision)}`);
   console.log(`assert reason names the Writer dispatch       : ${label(okReason)}`);
   console.log(`assert hook exits 0 (decision, not a crash)   : ${label(okExit)}`);
+}
+
+console.log('');
+console.log('== Gate 4 - ask-class git verbs on the Bash tool (plugin only: the reference has no such hook) ==');
+console.log('per case: [1] plugin decision matches the expectation  [2] plugin exited 0');
+console.log(`${pad('case', 62)} ${pad('expected', 18)} ${pad('plugin', 18)} ${pad('exit', 5)} verdict`);
+for (const c of gate4Cases) {
+  const got = runHook(path.join(PLUGIN_HOOKS, GATE4), c.payload, c.projectDir);
+  let ok = record(got.decision === c.expect);
+  ok = record(got.exit === 0) && ok;
+  const verdict = ok ? 'PASS' : 'FAIL';
+  const gotExit = got.exit === null ? 'null' : String(got.exit);
+  console.log(`${pad(c.name, 62)} ${pad(c.expect, 18)} ${pad(got.decision, 18)} ${pad(gotExit, 5)} ${verdict}`);
+  if (verdict === 'FAIL') console.log(`    plugin reason: ${got.reason || '(none)'}`);
+}
+
+// The two decisions in words: a deny must name the verb it recognised (otherwise the subagent
+// cannot report anything useful back), and the ask must say WHY a dialog appeared - that no rule
+// covers this FORM, which is the only reason this gate ever adds one.
+console.log('');
+console.log('== Gate 4 - the deny and ask payloads themselves ==');
+{
+  const denied = runHook(path.join(PLUGIN_HOOKS, GATE4),
+    bashEnvelope({ agent_id: 'a1', agent_type: 'general-purpose' }, 'git reset --hard'));
+  const asked = runHook(path.join(PLUGIN_HOOKS, GATE4), bashEnvelope(MAIN, 'git.exe reset --hard'));
+  console.log(`deny reason : ${denied.reason}`);
+  console.log(`ask reason  : ${asked.reason}`);
+  const okDeny = record(denied.decision === 'deny' && denied.reason.includes('"reset"') && denied.exit === 0);
+  const okAsk = record(asked.decision === 'ask' && asked.reason.includes('no permission rule covers') && asked.exit === 0);
+  console.log(`assert the deny names the recognised verb     : ${label(okDeny)}`);
+  console.log(`assert the ask says no rule covers the form   : ${label(okAsk)}`);
 }
 
 fs.rmSync(tmpRoot, { recursive: true, force: true });

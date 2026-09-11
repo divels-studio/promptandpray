@@ -1,6 +1,7 @@
 'use strict';
 /*
- * Gate 1 — PreToolUse(Edit|Write|MultiEdit|NotebookEdit). TWO responsibilities on one hook:
+ * Gate 1 — PreToolUse(Edit|Write|MultiEdit|NotebookEdit). TWO of the loop's four responsibilities
+ * live on this one hook file (Gate 2 is the dispatch gate, Gate 4 the git-verb guard on Bash):
  *
  * (1) AIWF-N3 (trimmed) — NON-WRITER SUBAGENTS CANNOT WRITE.
  * Identity comes ONLY from the harness-trusted `agent_id` / `agent_type` fields (never a
@@ -51,6 +52,8 @@
  *
  * HONEST LIMIT: this covers the Edit/Write TOOL CLASS only. A main-session mutation performed through
  * a Bash command (`echo … > file`, `Set-Content`, a script) is NOT caught here and remains doctrine.
+ * Gate 4 does sit on the Bash tool, but it judges ask-class GIT VERBS, not file mutations — a shell
+ * redirect into a file is as uncaught there as it is here.
  *
  * Accident/role protection, not adversary-proofing. Fail-closed: unparseable input -> deny.
  */

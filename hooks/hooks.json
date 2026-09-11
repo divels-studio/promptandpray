@@ -1,5 +1,5 @@
 {
-  "description": "PromptAndPray enforcement gates: Gate 1 (non-writer subagents cannot write) and Gate 2 (the Writer dispatch gate - a click on every dispatch, or only on one the active PLANs cannot account for, per enforcement.dispatchGate).",
+  "description": "PromptAndPray enforcement gates: Gate 1 (non-writer subagents cannot write), Gate 2 (the Writer dispatch gate - a click on every dispatch, or only on one the active PLANs cannot account for, per enforcement.dispatchGate) and Gate 4 (an ask-class git verb is denied to a non-writer subagent, whose dialog nobody would see, and raises one for the main session in the git forms the shipped ask rules never spell out - git.exe outside push/merge/rebase, any git -C <path> form, a wrapper the harness does not strip).",
   "hooks": {
     "PreToolUse": [
       {
@@ -17,6 +17,15 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/engine/pretooluse-dispatch-gate.js\""
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/engine/pretooluse-git-verb-guard.js\""
           }
         ]
       }

@@ -29,7 +29,11 @@ overrides") - not every ticket is a ceremony.
   session *can* write - R1 requires it - so the COO's not writing implementation code in the
   R2/R3 cycle is doctrine, not a hook. Gate 2, the dispatch gate, puts the operator in the way
   of a Writer dispatch - a native Yes/No dialog on every one of them, or only on one whose
-  `Ticket: <REF>` line names no ticket in an active PLAN, per `enforcement.dispatchGate`.)
+  `Ticket: <REF>` line names no ticket in an active PLAN, per `enforcement.dispatchGate`. Gate 4,
+  the git-verb guard on the `Bash` tool, denies an ask-class git verb to any subagent that is not
+  the Writer - a background agent's dialog reaches no operator - and asks for it in the git forms
+  the shipped rules never spell out: `git.exe` outside push/merge/rebase, any `git -C <path> ...`,
+  and a wrapper the harness does not strip, such as `sudo`.)
 - **Reviewer / Code Reviewer** - read-only adversarial code/design review; not browser QA.
   **Engine-neutral**: the host is data in the project's `.claude/aiwf-native/roles.json`
   (resolved by the plugin's role resolver - `scripts/native/ps/aiwf-roles.ps1` on os `windows`,
@@ -649,9 +653,31 @@ them:
   matching commands (`git reset/clean/rm/checkout/restore/revert/pull/fetch/cherry-pick`,
   database reset/seed scripts, migration tools, containers, recursive delete).
 
-These permission rules are harness-enforced and match by command **prefix**, so they cover the
-matching command forms in a normal permission mode; they are accident-grade, not
-adversary-proof - see `docs/LOOP.md` for the full honest model.
+These permission rules are harness-enforced and match by command **prefix** - and per Claude Code's
+permission documentation that matching is operator-aware: per subcommand (split on `&&`, `||`, `;`,
+`|`, `|&`, `&` and newlines), past a stripped wrapper such as `timeout` or `nice`, and past leading
+`NAME=value` assignments - so they cover the matching command
+forms in a normal permission mode; they are accident-grade, not adversary-proof - see `docs/LOOP.md`
+for the full honest model, including what this repository can and cannot test about that host
+behaviour. **Gate 4** stands behind them on the `Bash` tool: an ask-class git verb
+(the same list the ruleset gates) is **denied** to any subagent that is not the Writer, because a
+background agent's dialog reaches nobody, and for the main session or the Writer it raises the dialog
+on the git forms **the rules never spell out**: `git.exe` outside `push|merge|rebase`, any
+`git -C <path> <verb>` (the shipped rule names `<projectRoot>`, which a hook that reads no project
+directory cannot confirm), a wrapper the harness does not strip (`sudo`, `npx`, a flagged `xargs`, a
+`command -v` query), a nested shell (`bash -c "..."`), and irregular whitespace on either side of
+the verb. A subcommand a rule really does match passes through silently - the `ask`
+rule is already raising that dialog itself, and a hook `ask` beside it would not add a second one
+anyway.
+
+**Both layers are scoped to the `Bash` tool.** Every rule in the ruleset is a `Bash(...)` rule and
+Gate 4 is wired on the `Bash` matcher, so on a harness that exposes a **second shell tool** (a
+Windows session carries a `PowerShell` tool next to `Bash`) the same git verbs run through a tool
+neither layer sees, and no dialog appears at all.
+That is weaker than the residuals above rather than another instance of them: it needs no unusual
+command form, only the other tool, so Gate 4's deny of a background subagent is bypassable by tool
+choice. Nothing in this release changes that; it is written down so the guarantee is not read wider
+than it is.
 
 ## Reproducibility
 
@@ -677,10 +703,11 @@ The loop is reproducible from Git plus the plugin payload - no external runtime 
   **QAL** (`scripts/native/ps/codex-qal.ps1` / `scripts/native/sh/codex-qal.sh`, `/pnp:qal`,
   codex-only), not by QA.
 - **Enforcement:** Gate 1 (the PreToolUse mutation guard, which also carries Gate 3, the
-  route-state write guard) and Gate 2 (the PreToolUse dispatch gate), both wired through the
-  plugin's `hooks/hooks.json` - two hook files, three responsibilities - plus the declarative `ask`
+  route-state write guard), Gate 2 (the PreToolUse dispatch gate) and Gate 4 (the PreToolUse
+  git-verb guard on the `Bash` tool), wired through the plugin's `hooks/hooks.json` - three hook
+  files, four responsibilities - plus the declarative `ask`
   permission rules merged into the project's `.claude/settings.json` from
-  `templates/settings.ask-ruleset.json`.
+  `templates/settings.ask-ruleset.json`, whose git verbs Gate 4 is cross-checked against.
 - **One-page native mapping:** `docs/LOOP.md`. Regression: the selfcheck engine under
   `scripts/selfcheck/`.
 

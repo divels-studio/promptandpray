@@ -1,6 +1,6 @@
 ---
 name: selfcheck
-description: Run the PromptAndPray self-check - payload invariants (both enforcement hooks executed, resolver, wrapper flag locks) plus this project's own layer (ownership bookkeeping, rendered artifacts, version stamps), with negative controls.
+description: Run the PromptAndPray self-check - payload invariants (all three enforcement hooks executed, resolver, wrapper flag locks) plus this project's own layer (ownership bookkeeping, rendered artifacts, version stamps), with negative controls.
 allowed-tools: Read, Grep, Glob, Bash
 ---
 

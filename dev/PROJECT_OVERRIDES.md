@@ -34,7 +34,7 @@ PromptAndPray is **not**:
   wrappers are one host, held read-only by an OS sandbox. The official Codex plugin is a second
   opinion next to this loop, not a component of it (root `README.md` FAQ).
 - **a runtime / state machine.** No counters, no lock files, no external service: the loop is
-  convention plus the two PreToolUse hooks plus Claude Code's native permission dialogs. A feature
+  convention plus the three PreToolUse hooks plus Claude Code's native permission dialogs. A feature
   that needs a daemon is out of scope.
 - **advice.** Every operator gate that CAN be a native dialog IS one. A "rule" that only lives in a
   document, where a hook or an ask-rule could carry it, is a defect.
@@ -123,13 +123,16 @@ Boundaries a reviewer checks:
   silent overwrite, no delete without `--confirm-remove-stale`) - and never the operator-owned
   content. The payload's hooks READ the project's `aiwf.config.json`, `roles.json`, the active
   PLANs under `plansDir` (Gate 2 off-plan) and `.aiwf/route-state.json` (Gate 3) - nothing else of
-  the project. Nothing in the project layer ever writes the payload.
+  the project, and Gate 4 reads nothing at all beyond the payload the harness hands it. Nothing in
+  the project layer ever writes the payload.
 - **`schema/aiwf.config.schema.json` is the single authority for the config shape**; the interview,
   the generator and the self-check derive from it, never restate it.
 - **The hooks trust harness identity fields and fail in the safe direction**, and the safe
   direction differs per gate: Gate 1 (non-writer subagent write) DENIES, Gate 3 (main-session
   write to a code-class path while an R2/R3 route is open, or an unusable route-state) DENIES,
-  Gate 2 (Writer dispatch) ASKS - any unexpected error inside Gate 2 also resolves to ASK, never to
+  Gate 4 (an ask-class git verb from a non-writer subagent) DENIES - and fails closed, with the
+  risk of sitting on every Bash command stated in its own header - Gate 2 (Writer dispatch) ASKS -
+  any unexpected error inside Gate 2 also resolves to ASK, never to
   a silent pass. A change that flips a fail direction is R3.
 - **Zero runtime dependencies.** No `node_modules`, no build step; the wrappers are PowerShell 5.1
   ASCII-only / bash LF-only and mirror each other flag for flag.
@@ -209,7 +212,7 @@ repo already uses a specific cross-platform tool, and pass paths in its native f
 ```text
 D:\promptandpray    Repo root (resolved at render time, never the literal "auto")
 .claude-plugin/     plugin.json (the ONLY version source) + marketplace.json (this repo as a local marketplace)
-skills/ hooks/      the /pnp:* commands and the two PreToolUse enforcement hooks (payload)
+skills/ hooks/      the /pnp:* commands and the three PreToolUse enforcement hooks (payload)
 docs/               generic doctrine (payload) - never project-specific, never Cyrillic
 templates/          what /pnp:setup renders into a project (managed artifacts; a change = migration)
 scripts/            engine (hooks lib), setup, update, selfcheck, spike, ci, native/{ps,sh} wrappers

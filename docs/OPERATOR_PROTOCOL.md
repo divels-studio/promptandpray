@@ -46,17 +46,36 @@ The rules do not rely on the session "remembering" them - they are enforced mech
 - **Gate 3 (hook)** - while a ticket is dispatched, the main session cannot edit code: with an open
   R2/R3 route recorded in `.aiwf/route-state.json` it may write only docs, `.aiwf/` and root
   `*.md`. Code goes to the Writer, where the review gates are.
-- **Commit** - a visual Yes/No dialog at your end (an `ask` permission rule), on every attempt. The
-  click IS the approval: you type nothing, and there is no token or state file behind it.
+- **Gate 4 (hook)** - a git command whose verb is one of the gated ones (commit, push, reset,
+  checkout, ...) is **refused outright** when a background agent tries to run it: its dialog would
+  never reach your screen. From the session itself nothing changes for the commands you already
+  know - `git commit -m ...` raises the one dialog it always did, and so do the chained and
+  `timeout`-style forms, which Claude Code's permission documentation says it matches by subcommand
+  and past stripped wrappers on its own. What is new is a prompt
+  for the spellings your rules never covered: `git.exe <verb>` outside push/merge/rebase, any
+  `git -C <path> <verb>`, and a git command behind a wrapper the harness does not strip, such as
+  `sudo` or `npx`. So a new prompt here means "this command would have run unasked", not "one more
+  click for the same command" - and where a rule does match, the hook and the rule collapse into a
+  single dialog rather than two.
+  **Where a prompt can be missing entirely:** this gate and every permission rule are addressed to
+  the `Bash` tool. If your harness offers a second shell tool - a Windows session carries a
+  `PowerShell` tool alongside `Bash` - a git command run through THAT tool reaches neither, and you
+  see no dialog for it at all. It is the one gap here that needs no unusual command, only the other
+  tool, so an agent with a broad tool allowlist can pass this gate by choosing it.
+- **Commit** - a visual Yes/No dialog at your end (an `ask` permission rule), on every attempt
+  through the `Bash` tool. The click IS the approval: you type nothing, and there is no token or
+  state file behind it.
 - **Push / merge / rebase** - the same dialog, **plus** an explicit word from you in the chat. Two
   independent gates, because these are the irreversible ones.
 - **Destructive and system-changing commands** (resets, deletes, database and container operations)
-  - a dialog at your end, always.
+  - a dialog at your end, always - with the same tool scope as above.
 
 So an outsider with the plugin cannot break the process out of ignorance - the system stops them and
 says why. The commands supply the knowledge; the gates guarantee the behaviour.
 
-One honest limitation: the permission rules are **prefix matches** on the command text. They are
+Two honest limitations. The permission rules are **prefix matches** on the command text, and every
+one of them - like the hook behind them - is addressed to the **`Bash` tool**, so a second shell tool
+in your harness is outside all of it (see the Gate 4 entry above). They are
 accident-grade protection against a role acting out of turn, not an adversary-proof boundary. The
 one hard boundary in the system is the OS sandbox on the Codex review path.
 

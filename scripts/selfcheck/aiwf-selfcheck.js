@@ -5,7 +5,7 @@
  * WHAT THIS IS
  *   A standalone regression that asserts two different things and never confuses them:
  *
- *     A. PAYLOAD INVARIANTS - properties of the plugin itself. The two enforcement hooks are
+ *     A. PAYLOAD INVARIANTS - properties of the plugin itself. All three enforcement hooks are
  *        EXECUTED as the harness launches them (`node <hook>` with a JSON PreToolUse payload on
  *        stdin, decision read from stdout), BOTH role resolvers are EXECUTED at their real
  *        entrypoints (`pwsh -NoProfile -File aiwf-roles.ps1 -Role <r> -RolesPath <p> -AsJson` and
@@ -347,6 +347,7 @@ function isEmptyDir(p) {
 // ---------------------------------------------------------------------------
 const GATE1 = path.join(PLUGIN_ROOT, 'scripts', 'engine', 'pretooluse-mutation-guard.js');
 const GATE2 = path.join(PLUGIN_ROOT, 'scripts', 'engine', 'pretooluse-dispatch-gate.js');
+const GATE4 = path.join(PLUGIN_ROOT, 'scripts', 'engine', 'pretooluse-git-verb-guard.js');
 const SCHEMA_FILE = path.join(PLUGIN_ROOT, 'schema', 'aiwf.config.schema.json');
 const VALIDATOR = path.join(PLUGIN_ROOT, 'scripts', 'setup', 'validate-config.mjs');
 
@@ -666,6 +667,355 @@ function sectionGate2Mode(tmpRoot) {
       ask(r) && r.reason.includes('fail-to-ask') && r.decision !== 'deny', r.reason.slice(0, 60));
   }
   check('off-plan + a non-object payload -> ASK, not deny', ask(runHook(GATE2, '[]', offPlan)));
+}
+
+// ---------------------------------------------------------------------------
+// SECTION 2c - Gate 4: ask-class git verbs on the Bash tool
+// ---------------------------------------------------------------------------
+// Two decisions on one recogniser, and the section is built as PAIRS so neither can pass by being
+// unreachable: the same command from two identities (deny vs silent), a bypass form against the
+// nearest rule-matched one (ask vs silent), and the same identity on two verbs (deny vs silent).
+// One group is the one that would make the gate uninstallable if it were wrong - `git log` from a
+// subagent, an ordinary non-git command, a payload with no command at all - because this hook sits
+// on EVERY Bash call of the session; another asserts that everything the HARNESS already gates
+// (chained subcommands, stripped wrappers, env prefixes) stays silent, so this gate adds a dialog
+// only where none exists.
+//
+// The cross-check against the ruleset is FORM-exact and BIDIRECTIONAL, because a verb-level one is
+// not enough: collapsing rules into a set of verbs makes `Bash(git.exe push:*)` interchangeable with
+// `Bash(git push:*)`, so deleting the first leaves `push` still "covered" while the hook goes on
+// accepting `git.exe push ...` - an over-permissive predicate with a green suite. So each git rule is
+// parsed into the literal invocation PREFIX a command must start with, and both directions are
+// asserted: every rule form the hook models must be accepted, and every form the hook accepts must
+// be carried by a rule. The `git -C <projectRoot> ...` forms are the one deliberate exception, and
+// they are asserted as NOT accepted rather than quietly skipped.
+const GIT_RULE_FORM = /^Bash\((git(?:\.exe)?(?: -C <[^>]*>)? [^\s:]+):\*\)$/;
+function gitRuleForms(ruleset) {
+  const ask = (ruleset && ruleset.permissions && Array.isArray(ruleset.permissions.ask)) ? ruleset.permissions.ask : [];
+  const forms = new Set();
+  for (const rule of ask) {
+    const m = GIT_RULE_FORM.exec(String(rule));
+    if (m) forms.add(m[1]);
+  }
+  return forms;
+}
+const isDashCForm = (form) => / -C /.test(form);
+// `probe` stands in for "whatever the operator typed after the prefix"; the `:*` of a real rule is
+// exactly that. The hook's accept-space is finite - {git, git.exe} x its own verb list - so the
+// reverse direction can be enumerated rather than sampled.
+function formCoverage(ruleset, hook) {
+  const forms = gitRuleForms(ruleset);
+  const modelled = [...forms].filter((f) => !isDashCForm(f));
+  const dashC = [...forms].filter(isDashCForm);
+  const accepted = [];
+  const unbacked = [];
+  for (const exe of ['git', 'git.exe']) {
+    for (const verb of hook.GIT_ASK_VERBS) {
+      const form = `${exe} ${verb}`;
+      if (!hook.shippedRuleMatches(`${form} probe`)) continue;
+      accepted.push(form);
+      if (!forms.has(form)) unbacked.push(form);
+    }
+  }
+  return {
+    forms: [...forms],
+    modelled,
+    dashC,
+    accepted,
+    unbacked,                                                          // accepted, but no rule carries it
+    notAccepted: modelled.filter((f) => !hook.shippedRuleMatches(`${f} probe`)), // a rule form the hook refuses
+    dashCAccepted: dashC.filter((f) => hook.shippedRuleMatches(`${f} probe`)),   // must stay empty
+  };
+}
+
+function sectionGate4() {
+  section('GATE 4 - ask-class git verbs: denied to a non-writer subagent, asked for in the forms no shipped rule covers');
+  const envelope = (identity, command) => Object.assign({
+    session_id: '5c3b1f2e-0000-4000-8000-000000000000', permission_mode: 'default',
+    hook_event_name: 'PreToolUse', tool_name: 'Bash',
+    tool_input: { command, description: 'run a command' },
+    tool_use_id: 'toolu_04selfcheckBashGitVerb',
+  }, identity);
+  // No project directory is passed on purpose: this gate reads the payload and nothing else - no
+  // config, no plans, no route state - so a fixture would only hide a dependency if one appeared.
+  const B = (identity, command) => runHook(GATE4, envelope(identity, command));
+  const silent = (r) => r.decision === 'allow(passthrough)' && r.exit === 0;
+  const denied = (r) => r.decision === 'deny' && r.exit === 0;
+  const asked = (r) => r.decision === 'ask' && r.exit === 0;
+  const MAIN = {};                                       // true main session: no identity fields
+  const SUB = { agent_id: 'a1', agent_type: 'general-purpose' };
+  const WRITER = { agent_id: 'w1', agent_type: 'writer' };
+  const ROOT = '/work/demo'; // not a drive-letter path: the payload carries none (see PROVENANCE)
+
+  // --- the DENY branch, with its identity control ---------------------------------------------
+  {
+    const r = B(SUB, 'git reset --hard');
+    check('non-writer subagent + `git reset --hard` -> DENY naming the recognised verb',
+      denied(r) && r.reason.includes('"reset"'), r.reason.slice(0, 70));
+  }
+  check('the SAME command from the true main session -> silent (the control: identity is what decided)',
+    silent(B(MAIN, 'git reset --hard')));
+  check('the SAME command from the Writer -> silent (the Writer is not a background agent)',
+    silent(B(WRITER, 'git reset --hard')));
+  check('non-writer subagent + a COMPOUND ask-class command -> DENY (the form does not buy a pass)',
+    denied(B({ agent_id: 'a2', agent_type: 'Explore' }, 'cd X && git reset --hard')));
+  check('subagent identities are read by PRESENCE: agent_id alone -> DENY',
+    denied(B({ agent_id: 'a3' }, 'git commit -m x')));
+  check('agent_type explicitly null -> DENY (incomplete identity is not the main session)',
+    denied(B({ agent_id: 'a4', agent_type: null }, 'git commit -m x')));
+  check('agent_type "Writer" (wrong case) -> DENY (exact match only, as in Gate 1)',
+    denied(B({ agent_id: 'a5', agent_type: 'Writer' }, 'git commit -m x')));
+
+  // --- the ASK branch: the forms the shipped rules never spell out -----------------------------
+  // The harness is OPERATOR-AWARE and does far more than a naive prefix match by itself: it splits
+  // a command on the six shell operators plus newlines and matches rules per SUBCOMMAND, strips the
+  // timeout/time/nice/nohup/stdbuf/command/builtin/noglob/flagless-xargs wrappers, and matches past
+  // leading NAME=value assignments. So the chained and wrapper-prefixed forms are ALREADY gated and
+  // must stay silent here - what asks is only what the ruleset never spells out. Every row below is
+  // a PAIR: the bypass shape, and the nearest form that really is rule-matched.
+  {
+    const r = B(MAIN, 'git.exe reset --hard');
+    check('`git.exe reset --hard` -> ASK, saying no rule covers this form',
+      asked(r) && r.reason.includes('no permission rule covers'), r.reason.slice(0, 70));
+  }
+  check('`git.exe push origin main` -> silent (the control: the ruleset spells THIS one out)',
+    silent(B(MAIN, 'git.exe push origin main')));
+  check('`git -C <path> reset --hard` -> ASK (no -C rule for a non-push verb)',
+    asked(B(MAIN, `git -C ${ROOT} reset --hard`)));
+  check('`git -C <path> push origin main` -> ASK (the rule names <projectRoot>, which this hook cannot verify)',
+    asked(B(MAIN, `git -C ${ROOT} push origin main`)));
+  check('`git.exe -C <path> push` -> ASK (no shipped rule carries both spellings)',
+    asked(B(MAIN, `git.exe -C ${ROOT} push`)));
+  check('`git -C /p -C . push` (a second -C) -> ASK',
+    asked(B(MAIN, 'git -C /p -C . push')));
+  check('`sudo git reset --hard` -> ASK (sudo is NOT in the harness\'s stripped-wrapper set)',
+    asked(B(MAIN, 'sudo git reset --hard')));
+  check('`npx git reset --hard` -> ASK (npx is not stripped either)',
+    asked(B(MAIN, 'npx git reset --hard')));
+  check('`xargs -I{} git push` -> ASK (a FLAGGED xargs is not stripped)',
+    asked(B(MAIN, 'xargs -I{} git push')));
+  check('`xargs git push` -> silent (the control: a FLAGLESS xargs is stripped, so the rule matches)',
+    silent(B(MAIN, 'xargs git push')));
+  check('irregular whitespace BEFORE the verb -> ASK (two spaces, a tab, a leading space)',
+    asked(B(MAIN, 'git  commit -m x')) && asked(B(MAIN, 'git\tcommit -m x')) && asked(B(MAIN, ' git commit -m x')));
+  // The same whitespace question on the OTHER side of the verb. A `:*` rule is a literal prefix and
+  // this repository cannot check whether the harness reads `git commit` + TAB as that prefix, so the
+  // predicate abstains there too - `(\s|$)` would have accepted the tab and passed it through.
+  check('a TAB after the verb -> ASK (`git commit\\t-m x`, `git.exe push\\torigin main`)',
+    asked(B(MAIN, 'git commit\t-m x')) && asked(B(MAIN, 'git.exe push\torigin main')));
+  check('TWO SPACES after the verb -> ASK (`git commit  -m x`)', asked(B(MAIN, 'git commit  -m x')));
+  check('ONE space after the verb -> silent (the control for both rows above)',
+    silent(B(MAIN, 'git commit -m x')) && silent(B(MAIN, 'git.exe push origin main')));
+  // A separator INSIDE quotes is not a separator. Splitting on it manufactured the fragment
+  // `git reset --hard"` out of a command whose first token is `bash`, and then called it rule-matched.
+  check('a nested shell -> ASK (`bash -c "true; git reset --hard"`, `sh -c \'git reset --hard\'`)',
+    asked(B(MAIN, 'bash -c "true; git reset --hard"')) && asked(B(MAIN, "sh -c 'git reset --hard'")));
+  check('a quoted separator does not split the command -> silent (`git commit -m "x && y"`, the control)',
+    silent(B(MAIN, 'git commit -m "x && y"')));
+  check('`command -v git commit` -> ASK (a QUERY, not an invocation: the harness strips no flagged wrapper)',
+    asked(B(MAIN, 'command -v git commit')) && asked(B(MAIN, 'builtin -x git push')));
+  check('`command git commit -m x` -> silent (the control: flagless, so it really is a stripped wrapper)',
+    silent(B(MAIN, 'command git commit -m x')));
+  // Recognition, not the rule test: a verb glued to the punctuation that ends its command was
+  // INVISIBLE while the token was read raw, which disarmed the deny branch for `git reset;`.
+  check('a verb glued to shell punctuation is still recognised (`git reset;`, `$(git push)`, `git reset>log`)',
+    denied(B(SUB, 'git reset --hard;')) && denied(B(SUB, 'git commit;echo done'))
+    && denied(B(SUB, 'echo $(git push)')) && denied(B(SUB, 'git reset>log')));
+  check('and it is still silent where no verb is glued on (`git log;` from the same subagent, the control)',
+    silent(B(SUB, 'git log --oneline;')));
+  // BACKTICK SUBSTITUTION, the shape a blacklist cut missed: the shell runs it, the permission rules
+  // reach into it, and the verb token arrives as ``push` ``. Identity must still decide.
+  check('`echo `git push`` from a non-writer subagent -> DENY (backtick substitution)',
+    denied(B(SUB, 'echo `git push`')) && denied(B(SUB, 'echo `git stash`'))
+    && denied(B(SUB, 'echo "`git push`"')));
+  check('the same command from the main session and from the Writer -> ASK (no rule covers it)',
+    asked(B(MAIN, 'echo `git push`')) && asked(B(WRITER, 'echo `git push`')));
+  check('a backtick substitution with NO ask-class verb -> silent (the control: `echo `date``)',
+    silent(B(SUB, 'echo `date`')) && silent(B(MAIN, 'echo `date`')));
+  check('a QUOTED verb is recognised (`git \'reset\' --hard`, `git "push" origin`) -> DENY from a subagent',
+    denied(B(SUB, "git 'reset' --hard")) && denied(B(SUB, 'git "push" origin')));
+  check('an ESCAPED verb is not (stated residual: `git \\push` -> silent, escapes are not interpreted)',
+    silent(B(SUB, 'git \\push')));
+  check('`git\\ncommit -m x` -> ASK (a newline splits it into two fragments, neither a rule)',
+    asked(B(MAIN, 'git\ncommit -m x')));
+  check('`git -ck=v reset --hard` (glued -c) -> ASK (the rule prefix is "git -c ", with the space)',
+    asked(B(MAIN, 'git -cuser.name=x reset --hard')));
+  check('`git -c k=v commit -m y` -> silent (the control: Bash(git -c:*) matches this byte for byte)',
+    silent(B(MAIN, 'git -c user.name=x commit -m y')));
+  check('one bad subcommand decides the whole command -> ASK (`git push ... && sudo git reset --hard`)',
+    asked(B(MAIN, 'git push origin main && sudo git reset --hard')));
+  check('a verb inside a command substitution -> ASK (the harness reaches in; this decomposition does not)',
+    asked(B(MAIN, 'echo $(git reset --hard)')));
+  check('the Writer is not exempt from any of it (`git.exe reset --hard` from the Writer)',
+    asked(B(WRITER, 'git.exe reset --hard')));
+  check('a non-writer subagent is DENIED in those same forms (identity decides before the form)',
+    denied(B(SUB, 'git.exe reset --hard')) && denied(B(SUB, `git -C ${ROOT} reset --hard`))
+    && denied(B(SUB, 'sudo git reset --hard')));
+
+  // --- what the HARNESS already gates must stay silent -----------------------------------------
+  // Each of these was described as a hole earlier in this ticket and is not one: the documented
+  // operator-aware matching covers them. A gate that asked here would add a dialog for nothing.
+  check('bare `git commit -m x` -> silent (the rule matches it directly)',
+    silent(B(MAIN, 'git commit -m x')));
+  check('bare `git push origin main` -> silent', silent(B(MAIN, 'git push origin main')));
+  check('`cd <path> && git commit -m y` -> silent (the harness matches the git SUBCOMMAND)',
+    silent(B(MAIN, `cd ${ROOT} && git commit -m y`)));
+  check('`timeout 30 git commit -m x` -> silent (a stripped wrapper leaves a rule-matched command)',
+    silent(B(MAIN, 'timeout 30 git commit -m x')));
+  check('`nice -n 10 git push origin main` -> silent (stripped wrapper with its own option)',
+    silent(B(MAIN, 'nice -n 10 git push origin main')));
+  check('`FOO=bar git push origin main` -> silent (rules match past leading env assignments)',
+    silent(B(MAIN, 'FOO=bar git push origin main')));
+  check('`npx foo && git reset --hard` -> silent (the unstripped wrapper is in ANOTHER subcommand)',
+    silent(B(MAIN, 'npx foo && git reset --hard')));
+
+  // --- the PASSTHROUGH branch: this hook sits on every Bash call ------------------------------
+  check('subagent + `git log --oneline -5` -> silent (a read-only verb is not ask-class)',
+    silent(B(SUB, 'git log --oneline -5')));
+  check('subagent + `git commit -m x` -> DENY (the control: the passthrough above is about the VERB)',
+    denied(B(SUB, 'git commit -m x')));
+  check('subagent + `git status` / `git show` / `git grep` -> silent',
+    silent(B(SUB, 'git status --short')) && silent(B(SUB, 'git show HEAD')) && silent(B(SUB, 'git grep -n x -- docs')));
+  check('subagent + an ordinary non-git command -> silent', silent(B(SUB, 'node --version')));
+  check('a program whose NAME merely contains git -> silent (`mygit commit`, `git-foo commit`)',
+    silent(B(MAIN, 'mygit commit && git-foo commit')));
+  check('a payload with no command string -> silent, NOT deny (a gate on every shell call must not block what it cannot read)',
+    silent(runHook(GATE4, { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { description: 'x' } })));
+
+  // --- the fail direction ----------------------------------------------------------------------
+  {
+    const r = runHook(GATE4, '');
+    check('empty stdin -> DENY via the fail-closed wrapper', denied(r) && r.reason.includes('fail-closed'), r.reason.slice(0, 60));
+  }
+  check('a non-object payload -> DENY (identity cannot be read)', denied(runHook(GATE4, '[]')) && denied(runHook(GATE4, '"text"')));
+
+  // --- the verb list against the shipped ruleset, in the direction that can hide a hole --------
+  let hook = null;
+  try { hook = require(GATE4); } catch (e) { hook = null; }
+  if (!check('the gate exports its verb constant and recognisers (so this check reads the REAL list)',
+    hook != null && Array.isArray(hook.GIT_ASK_VERBS) && typeof hook.recognisedVerb === 'function'
+    && typeof hook.subcommandsOf === 'function' && typeof hook.stripWrappers === 'function'
+    && typeof hook.shippedRuleMatches === 'function'
+    && typeof hook.everyGitFormIsRuleMatched === 'function')) return;
+  const ruleset = readJson(path.join(PLUGIN_ROOT, 'templates', 'settings.ask-ruleset.json'));
+  if (!check('templates/settings.ask-ruleset.json parses', ruleset != null)) return;
+  const cover = formCoverage(ruleset, hook);
+  check('the ruleset really yields git rule FORMS (the parser is live, not silently matching nothing)',
+    cover.forms.length >= 18 && cover.forms.includes('git commit') && cover.forms.includes('git.exe push')
+    && cover.forms.includes('git -c') && cover.dashC.length === 3,
+    `${cover.forms.length} forms, ${cover.dashC.length} of them -C: ${cover.forms.join(' | ')}`);
+  check('every git rule form the hook models is ACCEPTED by shippedRuleMatches (no hole)',
+    cover.notAccepted.length === 0, cover.notAccepted.join(', '));
+  check('every form shippedRuleMatches ACCEPTS is carried by a shipped rule (no over-permission)',
+    cover.unbacked.length === 0, `${cover.accepted.length} accepted: ${cover.accepted.join(' | ')}`);
+  check('the `git -C <projectRoot>` rule forms are deliberately NOT accepted (the path is unverifiable here)',
+    cover.dashCAccepted.length === 0, cover.dashC.join(' | '));
+  {
+    // Both directions get a control that sabotages a COPY of the ruleset, because both are the
+    // failure mode this section exists for. The removal direction is the one a verb-level check
+    // could not see: `git.exe push` disappears from the rules while EXE_RULE_VERBS still accepts
+    // that form, which must be reported, not tolerated.
+    const added = JSON.parse(JSON.stringify(ruleset));
+    added.permissions.ask.push('Bash(git bisect:*)');
+    const removedExe = JSON.parse(JSON.stringify(ruleset));
+    removedExe.permissions.ask = removedExe.permissions.ask.filter((r) => r !== 'Bash(git.exe push:*)');
+    const removedBare = JSON.parse(JSON.stringify(ruleset));
+    removedBare.permissions.ask = removedBare.permissions.ask.filter((r) => r !== 'Bash(git stash:*)');
+    const a = formCoverage(added, hook);
+    const b = formCoverage(removedExe, hook);
+    const c = formCoverage(removedBare, hook);
+    check('the cross-check can FAIL: a rule form added to a copy is reported as not accepted',
+      a.notAccepted.length === 1 && a.notAccepted[0] === 'git bisect', a.notAccepted.join(', '));
+    check('and the other way: removing Bash(git.exe push:*) from a copy reports git.exe push as unbacked',
+      b.unbacked.length === 1 && b.unbacked[0] === 'git.exe push', b.unbacked.join(', '));
+    check('the same holds for a BARE rule: removing Bash(git stash:*) reports git stash as unbacked',
+      c.unbacked.length === 1 && c.unbacked[0] === 'git stash', c.unbacked.join(', '));
+  }
+
+  // --- the recogniser itself, on constructed input (the production functions, not a mirror) ----
+  check('recognisedVerb finds a verb anywhere in the command', hook.recognisedVerb('cd X && git commit -m x') === 'commit');
+  check('recognisedVerb ignores a read-only verb (the control)', hook.recognisedVerb('git log --oneline') === null);
+  check('recognisedVerb steps over the global -C <path> option', hook.recognisedVerb('git -C "/work/a b" push') === 'push');
+  // The decomposition mirrors the documented separators, and separator whitespace is not the
+  // operator's - but a command that BEGINS with a space keeps it, which is why that form asks.
+  check('subcommandsOf splits on the six documented operators and newlines',
+    hook.subcommandsOf('a && b || c ; d | e |& f & g\nh').length === 8);
+  check('subcommandsOf trims what a separator introduced, and only that',
+    JSON.stringify(hook.subcommandsOf('cd X && git commit')) === JSON.stringify(['cd X ', 'git commit'])
+    && hook.subcommandsOf(' git commit')[0] === ' git commit');
+  check('subcommandsOf is QUOTE-AWARE: a separator inside quotes is text, not a separator',
+    hook.subcommandsOf('bash -c "true; git reset --hard"').length === 1
+    && hook.subcommandsOf("sh -c 'a && b'").length === 1
+    && hook.subcommandsOf('git commit -m "x && y"').length === 1
+    && hook.subcommandsOf('true; git reset --hard').length === 2);
+  check('stripWrappers removes the documented wrappers and env assignments, and NOTHING else',
+    hook.stripWrappers('timeout 30 git commit -m x') === 'git commit -m x'
+    && hook.stripWrappers('FOO=bar git push') === 'git push'
+    && hook.stripWrappers('nice -n 10 git push') === 'git push'
+    && hook.stripWrappers('xargs git push') === 'git push'
+    && hook.stripWrappers('xargs -I{} git push') === 'xargs -I{} git push'
+    && hook.stripWrappers('sudo git reset --hard') === 'sudo git reset --hard'
+    && hook.stripWrappers('npx git reset --hard') === 'npx git reset --hard');
+  check('stripWrappers stops at a FLAGGED command/builtin (a query, not an invocation) and eats args only where they exist',
+    hook.stripWrappers('command -v git commit') === 'command -v git commit'
+    && hook.stripWrappers('builtin -x git push') === 'builtin -x git push'
+    && hook.stripWrappers('command git commit -m x') === 'git commit -m x'
+    && hook.stripWrappers('nohup -x git push') === '-x git push'
+    && hook.stripWrappers('stdbuf -oL git push') === 'git push');
+  check('shippedRuleMatches is byte-exact: the bare verbs, and git.exe for push/merge/rebase only',
+    hook.shippedRuleMatches('git commit -m x') === true
+    && hook.shippedRuleMatches('git commit') === true
+    && hook.shippedRuleMatches('git -c k=v commit') === true
+    && hook.shippedRuleMatches('git.exe merge topic') === true
+    && hook.shippedRuleMatches('git.exe reset --hard') === false
+    && hook.shippedRuleMatches('git -C /p push') === false
+    && hook.shippedRuleMatches('git  commit') === false
+    && hook.shippedRuleMatches(' git commit') === false
+    && hook.shippedRuleMatches('GIT commit') === false
+    && hook.shippedRuleMatches('git log') === false);
+  check('shippedRuleMatches requires exactly ONE space after the verb too (a tab or a second space abstains)',
+    hook.shippedRuleMatches('git commit\t-m x') === false
+    && hook.shippedRuleMatches('git commit  -m x') === false
+    && hook.shippedRuleMatches('git.exe push\torigin main') === false
+    && hook.shippedRuleMatches('git commit -m x') === true);
+  check('recognisedVerb sees a verb glued to shell punctuation (the raw token hid it)',
+    hook.recognisedVerb('git reset;') === 'reset'
+    && hook.recognisedVerb('echo $(git push)') === 'push'
+    && hook.recognisedVerb('git commit;echo x') === 'commit'
+    && hook.recognisedVerb('git reset>log') === 'reset'
+    && hook.recognisedVerb('git log;') === null);
+  {
+    // THE REDUCTION IS PINNED BY CODE, NOT BY ITS COMMENT. The verb token is cut at the first
+    // character a verb cannot contain - a whitelist, after a blacklist missed the backtick twice -
+    // so this asserts the whole enumerated list of shell metacharacters and word boundaries
+    // terminates it. A character missing from the cut is a silent bypass of the DENY branch, so
+    // this list is the audit: adding one here is free, removing one must be argued for.
+    const TERMINATORS = ['`', ';', '&', '|', '(', ')', '<', '>', '{', '}', '\n', '\r', '\t',
+      '"', "'", '$', '!', '#', '=', '*', '?', '[', ']', '~', ' ', '\\'];
+    const notTerminated = TERMINATORS.filter((ch) => hook.recognisedVerb(`git push${ch}x`) !== 'push');
+    check('every enumerated shell metacharacter ends the verb token (26 of them, none omitted)',
+      notTerminated.length === 0, notTerminated.map((c) => JSON.stringify(c)).join(' '));
+    // The other direction, which is what keeps the cut from swallowing the verbs themselves.
+    check('and the characters a verb is MADE of do not end it (letters and `-`: the control)',
+      hook.recognisedVerb('git pushx') === null && hook.recognisedVerb('git push-x') === null
+      && hook.recognisedVerb('git cherry-pick abc') === 'cherry-pick'
+      && hook.recognisedVerb('git -c k=v commit') === '-c');
+    check('the backtick case itself, at the recogniser (`echo `git push``, `echo "`git push`"`)',
+      hook.recognisedVerb('echo `git push`') === 'push'
+      && hook.recognisedVerb('echo "`git push`"') === 'push'
+      && hook.recognisedVerb('echo `date`') === null);
+    // The mirror boundary: what may sit AROUND the `git` token. An identifier character means a
+    // different program; anything else legitimately precedes a real invocation.
+    check('the git-token boundary holds in both directions (a path yes, another program no)',
+      hook.recognisedVerb('/usr/bin/git push') === 'push'
+      && hook.recognisedVerb('mygit push') === null
+      && hook.recognisedVerb('git-lfs push') === null
+      && hook.recognisedVerb('git2 push') === null
+      && hook.recognisedVerb('git.exe reset --hard') === 'reset');
+  }
+  check('everyGitFormIsRuleMatched is FALSE when the verb is in no mappable subcommand (the empty case)',
+    hook.everyGitFormIsRuleMatched('git\ncommit -m x') === false
+    && hook.recognisedVerb('git\ncommit -m x') === 'commit');
 }
 
 // ---------------------------------------------------------------------------
@@ -1049,21 +1399,34 @@ function sectionMigrationPayload(tmpRoot) {
 // ---------------------------------------------------------------------------
 // SECTION 4 - hook wiring (the plugin's own hooks.json)
 // ---------------------------------------------------------------------------
+// The two counted facts, as a pure function of a hooks.json object, so the numbers can be sabotaged
+// on a COPY and shown to move. A count asserted only against the real file is a number nobody has
+// ever seen be wrong.
+function hookWiringCounts(hooks) {
+  const raw = JSON.stringify((hooks && hooks.hooks) || {});
+  return {
+    scripts: (raw.match(/pretooluse-[a-z-]+\.js|userpromptsubmit-[a-z-]+\.js/g) || []).length,
+    pluginRoot: (raw.match(/\$\{CLAUDE_PLUGIN_ROOT\}/g) || []).length,
+  };
+}
+
 function sectionHookWiring() {
-  section('HOOK WIRING - exactly the two enforcement hooks, on the right matchers');
+  section('HOOK WIRING - exactly the three enforcement hooks, on the right matchers');
   const hooksFile = path.join(PLUGIN_ROOT, 'hooks', 'hooks.json');
   const hooks = readJson(hooksFile);
   if (!check('hooks/hooks.json parses as JSON', hooks != null)) return;
   const raw = JSON.stringify(hooks.hooks || {});
   check('Gate 1 (pretooluse-mutation-guard.js) wired', raw.includes('pretooluse-mutation-guard.js'));
   check('Gate 2 (pretooluse-dispatch-gate.js) wired', raw.includes('pretooluse-dispatch-gate.js'));
-  const scriptCount = (raw.match(/pretooluse-[a-z-]+\.js|userpromptsubmit-[a-z-]+\.js/g) || []).length;
-  check('exactly two enforcement hook scripts wired (nothing else crept in)', scriptCount === 2, `${scriptCount} wired`);
+  check('Gate 4 (pretooluse-git-verb-guard.js) wired', raw.includes('pretooluse-git-verb-guard.js'));
+  const counts = hookWiringCounts(hooks);
+  check('exactly three enforcement hook scripts wired (nothing else crept in)', counts.scripts === 3, `${counts.scripts} wired`);
   check('hook commands resolve through ${CLAUDE_PLUGIN_ROOT} (payload-relative, not project-relative)',
-    (raw.match(/\$\{CLAUDE_PLUGIN_ROOT\}/g) || []).length === 2);
+    counts.pluginRoot === 3, `${counts.pluginRoot} of 3`);
   const entries = (hooks.hooks && Array.isArray(hooks.hooks.PreToolUse)) ? hooks.hooks.PreToolUse : [];
   const g1 = entries.find((e) => JSON.stringify(e.hooks || []).includes('pretooluse-mutation-guard.js'));
   const g2 = entries.find((e) => JSON.stringify(e.hooks || []).includes('pretooluse-dispatch-gate.js'));
+  const g4 = entries.find((e) => JSON.stringify(e.hooks || []).includes('pretooluse-git-verb-guard.js'));
   check('Gate 1 matcher covers the whole Edit/Write tool class',
     !!g1 && ['Edit', 'Write', 'MultiEdit', 'NotebookEdit'].every((t) => String(g1.matcher).includes(t)),
     g1 ? `matcher=${JSON.stringify(g1.matcher)}` : 'entry not found');
@@ -1072,7 +1435,20 @@ function sectionHookWiring() {
   // whole gate without failing anything else.
   check('Gate 2 matcher is exactly "Agent" (the real subagent-dispatch tool name)',
     !!g2 && g2.matcher === 'Agent', g2 ? `matcher=${JSON.stringify(g2.matcher)}` : 'entry not found');
-  check('both wired hook files exist on disk', fs.existsSync(GATE1) && fs.existsSync(GATE2));
+  check('Gate 4 matcher is exactly "Bash" (the shell tool it judges)',
+    !!g4 && g4.matcher === 'Bash', g4 ? `matcher=${JSON.stringify(g4.matcher)}` : 'entry not found');
+  check('all three wired hook files exist on disk',
+    fs.existsSync(GATE1) && fs.existsSync(GATE2) && fs.existsSync(GATE4));
+  // The control for the two counts: the same function over a copy with the Gate 4 entry removed
+  // must report 2 and 2, so neither number is a constant that happens to match.
+  {
+    const stripped = JSON.parse(JSON.stringify(hooks));
+    stripped.hooks.PreToolUse = (stripped.hooks.PreToolUse || [])
+      .filter((e) => !JSON.stringify(e.hooks || []).includes('pretooluse-git-verb-guard.js'));
+    const c = hookWiringCounts(stripped);
+    check('the wiring counts really count (a copy with Gate 4 removed reports 2 scripts and 2 plugin-root references)',
+      c.scripts === 2 && c.pluginRoot === 2, `${c.scripts} scripts / ${c.pluginRoot} refs`);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -4977,6 +5353,7 @@ function main() {
     sectionGate1Identity(tmpRoot);
     sectionGate2(tmpRoot);
     sectionGate2Mode(tmpRoot);
+    sectionGate4();
     sectionGate3(tmpRoot);
     sectionGate3Toggle(tmpRoot);
     sectionConfigSchema(tmpRoot);
@@ -5000,13 +5377,24 @@ function main() {
 
   const failed = results.filter((r) => !r.ok);
   console.log('\n---- COVERAGE (honest) ----');
-  console.log('EXECUTED: both enforcement hooks, run as the harness runs them (identity matrix, the two');
+  console.log('EXECUTED: all three enforcement hooks, run as the harness runs them (identity matrix, the two');
   console.log('captured live payloads, the dispatch gate\'s ask/passthrough matrix in its factory mode AND its');
   console.log('enforcement.dispatchGate off-plan mode - where the only silent path is a Ticket: <REF> line whose');
   console.log('ref is really in an active PLAN, the configured paths.plansDir is proven to be read, and every');
   console.log('non-"off-plan" state of the key asks anyway - and the route-state');
   console.log('guard across R2/R3/unusable/cleared/absent state, and its enforcement.routeWriteGuard toggle,');
-  console.log('whose every failure mode leaves the guard ARMED) - the role resolver at its real entrypoint,');
+  console.log('whose every failure mode leaves the guard ARMED - and the git-verb gate on the Bash tool, whose');
+  console.log('three branches are asserted as PAIRS: the same command from a subagent and from the main session');
+  console.log('(deny vs silent), each form the shipped rules do NOT spell out - git.exe outside push/merge/rebase,');
+  console.log('every -C form, an unstripped wrapper such as sudo or npx or a flagged xargs, irregular whitespace,');
+  console.log('a newline-split command - against the nearest form that IS rule-matched (ask vs silent), the forms');
+  console.log('the harness itself already gates (a chained subcommand, a stripped wrapper, an env prefix) proven');
+  console.log('SILENT so no dialog is added where one exists, and the same identity on');
+  console.log('an ask-class and a read-only verb (deny vs silent), with every shipped git rule parsed into its');
+  console.log('literal invocation FORM and held against the hook\'s own accept-space in BOTH directions - each');
+  console.log('modelled form must be accepted, each accepted form must be carried by a rule, and the -C forms');
+  console.log('must be refused - with a control per direction on a sabotaged copy of the ruleset) - the role');
+  console.log('resolver at its real entrypoint,');
   console.log('including the claude factory fallback and the qal enabled gate - and the config validator at');
   console.log('its own CLI entrypoint, in both directions (a healthy config is accepted, the mistakes the');
   console.log('interview can produce are rejected), with its own controls for a broken schema and a');
@@ -5078,10 +5466,13 @@ function main() {
   console.log('claude-hosted), and version bookkeeping - proven able to fail by the negative controls,');
   console.log('which run against a fixture this script synthesises for that purpose alone. Checks with no');
   console.log('control are named individually above, each with its reason.');
-  console.log('NOT PROVEN, and not claimed: that the harness ENFORCES the declarative permission rules or');
-  console.log('RENDERS the Yes/No dialog for an "ask" decision. Neither is reachable from Node; both rest');
-  console.log('on the recorded live observations. Nor is the OS sandbox posture of the wrappers - that is');
-  console.log('enforced by the operating system and the external engine, and only its flags are checked here.');
+  console.log('NOT PROVEN, and not claimed: that the harness ENFORCES the declarative permission rules, that it');
+  console.log('RENDERS the Yes/No dialog for an "ask" decision, or that it matches those rules the way the gates');
+  console.log('assume (per subcommand, past the stripped wrappers). None of that is reachable from Node: it rests');
+  console.log('on Claude Code\'s own permission documentation plus the operator\'s live observations, which is why');
+  console.log('Gate 4\'s passthrough branch is written down as a host dependency. Nor is the OS sandbox posture of');
+  console.log('the wrappers - that is enforced by the operating system and the external engine, and only its');
+  console.log('flags are checked here.');
   if (notes.length) {
     console.log('\nNOT EXERCISED IN THIS RUN (deliberately not counted as passes):');
     for (const n of notes) console.log(`  - ${n.name}: ${n.why}`);

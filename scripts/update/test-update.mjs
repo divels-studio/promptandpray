@@ -174,7 +174,12 @@ const ALL_OPS = [
   FIXTURE_NOTE,
 ];
 const NEW_ASK_RULE = 'Bash(pnp-fixture-new:*)';
-const DROPPED_ASK_RULE = 'Bash(git stash:*)';
+// Any rule setup OWNS works here - this fixture is about the reconcile op, not about which rule
+// leaves - and it is deliberately NOT a git rule. The self-check runs over this very payload copy
+// (`--apply` invokes it) and holds the shipped git rules against Gate 4's accept-space form by form
+// in both directions, so dropping a git rule would leave a copy whose ruleset no longer backs a form
+// the hook still accepts: a real finding, and one this fixture has no business manufacturing.
+const DROPPED_ASK_RULE = 'Bash(npm run seed:*)';
 
 /** Adds the config key the fixture migration introduces, so the bumped payload's schema admits it. */
 function addExampleToggleToSchema(dir) {

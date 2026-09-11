@@ -2,7 +2,7 @@
 
 `aiwf-selfcheck.js` - the self-check engine. It separates two things and never confuses them:
 
-- **payload invariants** - the two enforcement hooks EXECUTED as the harness launches them, the
+- **payload invariants** - the three enforcement hooks EXECUTED as the harness launches them, the
   role resolver EXECUTED at its real entrypoint, the Codex wrappers checked statically for
   their locked flags, their stdin-only prompt delivery and their ASCII-only source, and the
   EXAMPLE FIXTURE (`examples/example-project/`, its cycle driver and the CI workflow, compared

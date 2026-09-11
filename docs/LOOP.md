@@ -132,8 +132,8 @@ costs clicks, never silence. The matcher for a subagent dispatch is the `Agent` 
 reports the same call as `Task` in its permission records - the two names sit on different layers,
 and `Agent` is the empirically correct matcher).
 
-**Gate 3** (the route-state write guard, which lives INSIDE the Gate 1 hook file, so the wired-hook
-count stays two) keeps the main session out of code-class files while an R2/R3 ticket is
+**Gate 3** (the route-state write guard, which lives INSIDE the Gate 1 hook file, so three wired
+hook files carry four gates) keeps the main session out of code-class files while an R2/R3 ticket is
 dispatched: with `<projectDir>/.aiwf/route-state.json` naming an R2/R3 route, a main-session
 Edit/Write is allowed only under `docs/**`, `.aiwf/**` and root-level `*.md`. No state file, or the
 cleared `{}`, means the guard is invisible and R1 work is untouched; the Writer is never gated by
@@ -141,6 +141,80 @@ it. It covers the Edit/Write tool class only - shell mutations remain doctrine. 
 it off with `enforcement.routeWriteGuard: false` in `aiwf.config.json`; every other state of that
 key - absent, non-boolean, or a config that cannot be read at all - leaves the guard ARMED, and the
 toggle never reaches Gate 1.
+
+**Gate 4** (the plugin's PreToolUse git-verb guard, on the `Bash` tool) covers the two things a
+declarative `ask` rule cannot do by itself: a background agent's dialog reaches nobody, and a rule
+only covers the form it spells out. It recognises `git` / `git.exe` (with an optional global
+`-C <path>` or `-c <k=v>`) followed by an ask-class verb anywhere in the command - and the verb list
+is not prose: the self-check parses `templates/settings.ask-ruleset.json` and requires every git verb
+the rules gate to be one the hook knows, so a rule added there cannot silently outrun the gate. Then:
+
+- from a **subagent that is not the Writer** -> **deny**, naming the verb. That command's dialog
+  would never reach the operator, so it would either stall or pass unseen.
+- from the **main session or the Writer**, when a rule the payload really ships matches the
+  subcommand **byte for byte** -> **silent passthrough**: that dialog is the operator's own and Gate
+  4 must not double-gate it. Two shapes qualify and nothing else: `git <verb> ...` for every
+  ask-class verb, and `git.exe push|merge|rebase ...`.
+- from the main session or the Writer, on **anything else it recognised** -> **ask**. In practice
+  that is: `git.exe <verb>` outside push/merge/rebase, **any** `git -C <path> <verb>` (the shipped
+  rule names `<projectRoot>` and this hook reads no project directory, so it cannot confirm the
+  path), a wrapper the harness does not strip (`sudo`, `npx`, `docker exec`, `direnv exec`, `watch`,
+  `setsid`, `flock`, `find -exec`, a flagged `xargs`, a `command -v` query), a nested shell
+  (`bash -c "... git reset --hard"`), and irregular whitespace on either side of the verb - a tab or
+  a second space, where a rule spells out exactly one.
+  None of those matches a rule today, so nothing raises a dialog for them at all.
+
+**What Claude Code already does by itself, and this gate must not pretend otherwise.** Its permission
+documentation describes an **operator-aware** matcher - the whole of this paragraph is that
+description: it splits a Bash command on `&&`, `||`, `;`, `|`, `|&`, `&` and newlines and matches
+rules against each **subcommand** independently (deny/ask rules also reach into subshells, command
+substitutions and control-flow bodies), it strips the wrappers `timeout`, `time`, `nice`, `nohup`,
+`stdbuf`, `command`, `builtin`, `noglob` and a flagless `xargs` (a flagged one is not stripped, and
+`command -v` is excluded - it asks about a command rather than running it), and it matches past
+leading
+`NAME=value` assignments. So `cd <path> && git commit -m x`, `timeout 30 git commit -m x` and
+`FOO=bar git push` already raise your dialog - they are not holes, Gate 4 stays silent on them, and
+no doctrine here should call them one.
+
+**Why the default is to ask.** The same documentation is explicit that a hook decision does not
+bypass the permission rules: an `ask` rule still prompts after a hook returned `allow`, and a hook
+`ask` next to a matching `ask` rule is **one** dialog, not two. Asking where a rule also matches
+therefore costs nothing, while a guess about which forms "look gated" turns every looseness into a
+silent bypass - so the gate confirms a real rule match or asks.
+
+**And the price of that: Gate 4's passthrough branch depends on documented host behaviour this
+repository cannot test.** Nothing here observes the harness - every assertion about the gate, in the
+spike matrix and in the self-check, runs the hook against an *assumed* harness. If the host ever
+stopped matching per subcommand, the forms Gate 4 deliberately passes through - `cd <path> && git
+commit -m x` above all - would silently stop being gated by anything, and no test in this repository
+would go red, because none of them is looking at the host. Gate 4's own behaviour (the deny, the
+byte-exact rule test, the ask) is covered; the decision to stay **silent** is where the design
+borrows a promise from the documentation.
+
+It fails **closed** like Gate 1, and its header states the risk that comes with that: it sits on
+matcher `Bash`, i.e. on every shell command, so it reads its payload and nothing else - no config,
+no files, no project directory. It is a **recogniser, not a shell parser**: it does not interpret
+escapes, aliases or env-indirection, so `git \push` and a verb assembled from a variable are not
+seen at all, while a gated verb inside a quoted string still costs a click. Its quote handling is
+two narrow things only - a separator inside quotes does not split a command, and a verb token's
+surrounding quotes come off before the lookup, so `git 'push'` **is** recognised. And its
+decomposition does not mirror
+the harness's reach into subshells and command substitutions - a `$(git reset --hard)` or
+`` `git push` `` is recognised
+but never confirmed as a rule match, which resolves to ask. The guarantee is the identity check and
+the byte-exact rule test; recognition is best-effort.
+
+**One limit is of a different and weaker kind, and is stated separately for that reason: this gate
+sees ONE shell tool.** It is wired on the `Bash` matcher. A harness that exposes a **second shell
+tool** - a Windows session carries a `PowerShell` tool next to `Bash` - runs the same git verbs
+through a tool this hook is never invoked for, and the permission layer does not cover it either:
+every rule in `templates/settings.ask-ruleset.json` is a `Bash(...)` rule, so the entire ask list
+(commit, push, merge, rebase, reset and the rest) has **no coverage** on a second shell tool - both
+halves of which you can check here, in that file and in the matcher in `hooks/hooks.json`. It bites
+hardest on the deny branch: a subagent whose tool allowlist includes the other shell reaches a gated
+git verb
+by **choosing that tool** - no alias, no assembled verb, no quoting - which is why it is not one of
+the recognition residuals above and must not be read as one.
 
 ## Commit gate (click-based, no tokens)
 
@@ -160,9 +234,14 @@ dialog:
   repo-selector forms. The operator does not drive git manually, so the agent must be able to run
   these itself; the gate is the dialog + the explicit-word doctrine + branch isolation.
   Accident-grade, not adversary-proof: the `ask` rules match by prefix, so an explicit push URL, an
-  alias/env-indirection, or an escaped verb is out of scope (accepted residual). A second-layer
-  shell hook is deliberately NOT attempted - emulating shell escape/continuation semantics is an
-  unwinnable maintenance treadmill.
+  alias/env-indirection, or an escaped verb is out of scope (accepted residual). **Gate 4** narrows
+  two edges of that residual - a non-writer subagent is denied outright, and the git forms the rules
+  never spell out (`git.exe` outside push/merge/rebase, any `git -C <path> ...`, an unstripped
+  wrapper such as `sudo`) raise a dialog nothing else would raise - and it is deliberately
+  narrower than a shell layer: it recognises verbs, it does not emulate shell semantics for
+  everyone. That emulation stays out of scope, because escape/continuation semantics are an
+  unwinnable maintenance treadmill (an interim hook that tried to be that layer was removed in
+  N4-R; the record is in `scripts/engine/aiwf-lib.js`).
 - **Destructive / system-changing commands** (`git reset/clean/rm/checkout/restore/revert/pull/
   cherry-pick`, database reset/seed scripts, migration tools, containers, recursive delete, ...) are
   **`ask`** rules: an AI role **may** run one, but only after the operator clicks **Yes** on the
@@ -170,14 +249,28 @@ dialog:
 
 ## Honest security model
 
-Gate 1, Gate 2 and the permission rules are **accident/role protection, not adversary-proofing**.
+Gate 1, Gate 2, Gate 4 and the permission rules are **accident/role protection, not
+adversary-proofing**.
 The hooks trust the harness identity fields; the ask rules are the native harness gate and match by
-command prefix; the push/merge/rebase boundary is declarative (`ask` dialog-gating + the operator's
-explicit-word doctrine + branch isolation, no hook) - so an explicit push URL, alias/env-indirection
+command prefix (per subcommand, past the stripped wrappers); for the main session and the Writer the
+push/merge/rebase boundary is declarative (`ask` dialog-gating + the operator's explicit-word
+doctrine + branch isolation) with Gate 4 adding the dialog on the git forms no rule spells out,
+while for every other subagent Gate 4 is a hook DENY - so an explicit push URL, alias/env-indirection
 or escaped push forms, obfuscated command forms, and a few non-prefix-expressible destructive forms
 (raw SQL in a DB client, production flags, platform-specific deletes) remain out of scope, and the
-commit/push/destructive dialog only fires in a permission mode that asks. The **hard** guarantees
-live elsewhere, unchanged: the OS read-only Codex sandbox (Reviewer/QA), git reversibility, and
-operator-in-the-loop review/approval (a matching commit, push/merge/rebase, or destructive command
-surfaces a click, and push/merge/rebase also need the operator's explicit word - the operator is the
-real backstop).
+commit/push/destructive dialog only fires in a permission mode that asks.
+
+**The whole git boundary above is scoped to ONE shell tool, and that is the widest gap in it.** Both
+layers are addressed to `Bash`: every rule in `templates/settings.ask-ruleset.json` is a `Bash(...)`
+rule, and Gate 4 is wired on the `Bash` matcher. On a harness that exposes a **second shell tool** -
+a Windows session carries a `PowerShell` tool next to `Bash` - the same commit, push, merge, rebase
+and reset are reachable through a tool neither layer ever sees, with no dialog from either.
+Unlike the residuals in the paragraph above, this one costs an actor
+no cleverness with the command: a subagent whose tool allowlist carries the other shell only has to
+pick it, so Gate 4's deny is bypassable by tool CHOICE. What Gate 4 does on the `Bash` tool it does
+exactly as described; it does not reach any other one.
+
+The **hard** guarantees live elsewhere, unchanged: the OS read-only Codex sandbox (Reviewer/QA), git
+reversibility, and operator-in-the-loop review/approval (a matching commit, push/merge/rebase, or
+destructive command surfaces a click, and push/merge/rebase also need the operator's explicit word -
+the operator is the real backstop).

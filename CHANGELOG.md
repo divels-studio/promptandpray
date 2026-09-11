@@ -4,6 +4,106 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.2.2] - 2026-09-09
+
+A third enforcement hook, for the two things a permission rule cannot do on its own: a background
+agent's dialog reaches nobody, and a rule only covers the form it spells out - `git.exe reset
+--hard`, `git -C <path> reset --hard` and `sudo git reset --hard` matched none of them. Nothing in
+your project changes - `0006_git-verb-gate` carries a single note.
+
+### Added
+
+- **Gate 4, the git-verb guard (GATE-001)** - `scripts/engine/pretooluse-git-verb-guard.js`, wired
+  on matcher `Bash`. It recognises `git` / `git.exe` (with an optional global `-C <path>` or
+  `-c <k=v>`) followed by an ask-class verb anywhere in the command and then decides by identity:
+  a subagent that is not the Writer is **denied**, naming the verb; the main session and the Writer
+  pass through **silently** only where a rule the payload really ships matches the subcommand byte
+  for byte (`git <verb> ...`, and `git.exe push|merge|rebase ...`), and are **asked** on everything
+  else it recognised: `git.exe` outside those three verbs, **any** `git -C <path> <verb>` (the rule
+  names `<projectRoot>`, and a hook that reads no project directory cannot confirm a path), a
+  wrapper Claude Code does not strip (`sudo`, `npx`, `docker exec`, a flagged `xargs`, a
+  `command -v` query), a nested shell (`bash -c "... git reset --hard"`), and irregular whitespace on
+  either side of the verb - a tab or a second space where a rule spells out exactly one. Those forms
+  matched no rule and raised nothing at all before. The default is
+  inverted on purpose - confirm a real rule match or ask - because a guess about which forms "look
+  gated" turns every looseness into a silent bypass, while asking is free: a hook decision does not
+  bypass the permission rules, and a hook `ask` beside a matching `ask` rule is one dialog, not two.
+  It fails closed like Gate 1, with the wider blast radius of matcher `Bash` named in its own
+  header: it reads its stdin payload and nothing else - no config, no files, no project directory.
+- **What the harness already does is left alone (GATE-001)** - Claude Code's permission documentation
+  describes an operator-aware matcher: rules are tested against each subcommand of a chained command
+  (`&&`, `||`, `;`, `|`, `|&`, `&`, newlines), the `timeout` / `time` / `nice` / `nohup` / `stdbuf` /
+  `command` / `builtin` / `noglob` / flagless-`xargs` wrappers are stripped first, and matching
+  continues past leading `NAME=value` assignments. So
+  `cd <path> && git commit -m x`, `timeout 30 git commit -m x` and `FOO=bar git push` were never
+  holes; Gate 4 stays silent on them and this release's doctrine says so instead of claiming
+  otherwise.
+- **The verb list is cross-checked, not proof-read (GATE-001)** - the hook carries one constant and
+  the self-check parses `templates/settings.ask-ruleset.json` and requires every git verb those
+  rules gate to be one the hook knows, with a control that adds a verb to a copy of the ruleset and
+  requires the assertion to fail. A rule added to the ruleset can no longer outrun the gate in
+  silence. Every shipped git rule is also parsed into its literal invocation FORM and held against
+  the hook's own accept-space in both directions - each modelled form must be accepted, each accepted
+  form must be carried by a rule, the `-C` forms must be refused - so deleting `Bash(git.exe push:*)`
+  from the ruleset while the hook still accepts that form is now a failure rather than a green suite.
+  The three gate branches are asserted as pairs - the same command from two identities, the
+  same identity on two verbs, and every bypass shape (`.exe`, `-C`, `sudo`, `npx`, a flagged
+  `xargs`, `command -v`, a nested `bash -c`, a tab or a second space on either side of the verb, a
+  leading space, a newline split, a `$(...)` or `` `...` `` substitution, a verb glued to a `;`, a
+  `)` or a backtick) against the
+  nearest form a rule really matches - in the spike matrix and in the self-check, both of which run
+  the shipped hook as the harness runs it. The verb token's reduction is a whitelist of the
+  characters a verb is made of, and the self-check pins all 26 enumerated shell metacharacters as
+  terminators, because a blacklist of them had already been wrong twice.
+
+### Changed
+
+- **The payload stops contradicting itself about second-layer shell hooks (GATE-001)** -
+  `docs/LOOP.md` claimed one was deliberately not attempted while `scripts/engine/aiwf-lib.js`
+  recorded that one had been tried and removed. Both now say the same thing: emulating shell
+  escape/continuation semantics for every command remains out of scope, the removal record stands,
+  and Gate 4 is the narrower thing that recognises verbs and decides on identity. The hook count
+  moves from two to three across the README, the doctrine, the skills and the self-check's own
+  wiring assertions, and the counted facts got a control that sabotages a copy of `hooks.json`.
+- **The doctrine describes the harness's real matching (GATE-001)** - `docs/LOOP.md`,
+  `docs/WORKFLOW.md` and `docs/OPERATOR_PROTOCOL.md` now state that permission rules are matched per
+  subcommand, past the stripped wrapper set and past `NAME=value` prefixes, and that a hook decision
+  never bypasses a rule. "Prefix matching" alone had been describing something weaker than what the
+  harness actually does.
+
+### Fixed
+
+- **The setup suite's section 23 control on macOS (POSIX-003)** - the entrypoint-identity section
+  built its "direct" fixture inside the suite's own temp directory, which on macOS already sits
+  behind a `/var` symlink, so the control that must prove "the link really defeats the naive guard
+  here" was comparing a link against a link and failed on the premise it could not hold. Every
+  fixture in that section now hangs off the resolved temp path, leaving the explicit junction as the
+  only link in the picture.
+
+### Known limits (stated, not hidden)
+
+- **The git boundary covers ONE shell tool.** Every rule in `templates/settings.ask-ruleset.json` is
+  a `Bash(...)` rule and Gate 4 is wired on the `Bash` matcher, so a harness that exposes a second
+  shell tool - a Windows session carries a `PowerShell` tool next to `Bash` - runs commit, push,
+  merge, rebase and reset through a tool neither layer sees, with no dialog at all - both halves of
+  that are readable here, in the ruleset and in `hooks/hooks.json`. This is weaker than the
+  recognition residuals below,
+  because it costs no cleverness with the command - a subagent whose tool allowlist includes the
+  other shell only has to choose it, so Gate 4's deny is bypassable by tool choice. What Gate 4 does
+  on the `Bash` tool, it does as described above.
+- **The passthrough branch rests on host behaviour this repository cannot test.** The operator-aware
+  matching above is Claude Code's documented behaviour, not something any suite here pins - every
+  assertion runs the hook against an assumed harness. If the host stopped matching per subcommand,
+  the forms Gate 4 passes through (`cd <path> && git commit -m x` first) would silently stop being
+  gated by anything and no test here would go red. The deny, the byte-exact rule test and the ask are
+  the plugin's own behaviour and are covered.
+- Gate 4 recognises, it does not parse a shell: an alias, a verb assembled from a variable
+  (`git $VERB`) and an **escaped** verb (`git \push`) are not seen. A **quoted** verb is -
+  `git 'push'` and `git "reset"` are recognised, because a verb token's surrounding quotes come off
+  before the lookup - and so is a gated verb inside a quoted string, which costs a click. The
+  decomposition does not mirror the harness's reach into subshells and command substitutions, so
+  `` `git push` `` and `$(git reset --hard)` resolve to an ask rather than a pass.
+
 ## [0.2.1] - 2026-09-03
 
 A code-only release with an uncomfortable cause: the CI matrix had a Linux and a macOS leg since it
@@ -340,6 +440,7 @@ that project (adopt mode, two Writer dispatches through the plugin-hosted loop, 
 - The `writer` template renders its template-contract comment and a mixed-slash overrides path
   into the project's `agents/writer.md` (cosmetic). (Fixed in 0.1.1.)
 
+[0.2.2]: https://github.com/divels-studio/promptandpray/releases/tag/v0.2.2
 [0.2.1]: https://github.com/divels-studio/promptandpray/releases/tag/v0.2.1
 [0.2.0]: https://github.com/divels-studio/promptandpray/releases/tag/v0.2.0
 [0.1.2]: https://github.com/divels-studio/promptandpray/releases/tag/v0.1.2
