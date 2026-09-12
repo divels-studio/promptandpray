@@ -70,6 +70,13 @@ your project changes - `0006_git-verb-gate` carries a single note.
   subcommand, past the stripped wrapper set and past `NAME=value` prefixes, and that a hook decision
   never bypasses a rule. "Prefix matching" alone had been describing something weaker than what the
   harness actually does.
+- **macOS is officially unsupported, and the payload says so (POSIX-005)** - supported channels are
+  windows and linux. Nothing is removed and no configuration changes: macOS keeps its place in the
+  `os` enum, keeps installing on the bash channel it shares with linux, and keeps its full CI leg
+  running every gate. What changes is the promise, which had been wider than the evidence - the
+  README's status section names the support tier, and the macos CI leg is now advisory
+  (non-blocking) over the known defect below instead of blocking a merge on a platform nobody
+  operates this loop on. The README's claim that no CI leg is advisory went with it.
 
 ### Fixed
 
@@ -113,6 +120,16 @@ your project changes - `0006_git-verb-gate` carries a single note.
   before the lookup - and so is a gated verb inside a quoted string, which costs a click. The
   decomposition does not mirror the harness's reach into subshells and command substitutions, so
   `` `git push` `` and `$(git reset --hard)` resolve to an ask rather than a pass.
+- **The self-check's output truncates on macOS, and the cause is not pinned (POSIX-005).** On the
+  macos runner the captured self-check output stops mid-line shortly after the role-resolver
+  section, and the run ends with no tally and no `FAILURES:` block. It is not a JS throw: the catch
+  added above prints nothing at all - no stack, no `(uncaught)` failure - so nothing threw. The
+  capture in `scripts/selfcheck/run-selfcheck.mjs:49` is a `spawnSync` with no `maxBuffer`, and the
+  self-check's `main()` ends by setting `process.exitCode` rather than exiting, which is consistent
+  with buffered stdout being dropped when a process ends while its stdout pipe is asynchronous - as
+  a pipe is on POSIX and is not on windows. That is a hypothesis with evidence behind it, not a
+  diagnosis: the exact site is unpinned, pinning it needs a macOS host, and there is none. Tracked,
+  not fixed; the macos CI leg is advisory for exactly this reason.
 
 ## [0.2.1] - 2026-09-03
 

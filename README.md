@@ -74,11 +74,14 @@ What is here:
   fixture and provenance sections each sabotage a copy one way per assertion and require the target
   check to flip. A check with no control is printed by name with the reason, never quietly as a pass.
 - **CI** (`.github/workflows/ci.yml`): on every push and pull request, three OS legs (windows,
-  ubuntu, macos), one step per gate, none of them advisory. Three things are deliberately left out
-  and say so in the file: the manifest validation, which needs a CLI a runner does not have; hook
-  parity against the reference implementation, which lives on an operator machine and is a local
-  check by nature; and `shellcheck` on the macos leg, where it is not preinstalled (the ubuntu leg
-  runs it).
+  ubuntu, macos), one step per gate. Windows and ubuntu are **blocking** - a red step is a red
+  build. The macos leg runs the same gates and asserts the same things, but is **advisory**
+  (non-blocking), because macOS is best-effort rather than supported and carries a known unfixed
+  defect (see Status below); it stays in the workflow so its result is still readable. Three things
+  are deliberately left out and say so in the file: the manifest validation, which needs a CLI a
+  runner does not have; hook parity against the reference implementation, which lives on an operator
+  machine and is a local check by nature; and `shellcheck` on the macos leg, where it is not
+  preinstalled (the ubuntu leg runs it).
 
 What is **not** here yet:
 
@@ -86,6 +89,13 @@ What is **not** here yet:
   mirror the PowerShell ones flag for flag, `/pnp:setup` accepts all three OS channels, and the CI
   matrix runs the gates on ubuntu and macos runners. What is missing is field use: the POSIX legs
   are exercised only in CI, and no POSIX machine has hosted a real loop yet.
+- **macOS support - best-effort, not supported.** The supported channels are **windows** and
+  **linux**. macOS installs and runs: it takes the same bash channel as linux, `/pnp:setup` still
+  accepts it, and its CI leg still runs every gate - but there is no support guarantee behind it,
+  that leg is advisory rather than blocking, and one measured defect stands unfixed: on macOS the
+  self-check's captured output truncates partway through and the run ends without its tally
+  (`CHANGELOG.md`, 0.2.2 § Known limits). It is tracked rather than fixed - pinning it needs a Mac,
+  and there is none.
 - **One consumer installation so far.** It has taken every release from 0.1.0 to 0.1.2 through
   `/plugin update` + `/pnp:update` - the first bump asked two take-new questions, 0.1.2 asked none -
   and there is no second consumer yet.
