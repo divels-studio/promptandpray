@@ -58,6 +58,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const util = require('util');
 
 // ---------------------------------------------------------------------------
 // CLI
@@ -101,6 +102,38 @@ function check(name, ok, detail) {
 function note(name, why) {
   notes.push({ section: currentSection, name, why });
   console.log(`  [NOTE] ${name} - not exercised: ${why}`);
+}
+
+/**
+ * Renders whatever a `throw` carried into { headline, detail } - and CANNOT itself throw.
+ *
+ * `throw` takes ANY value, not only an Error, and the obvious renderings are both traps. `String(e)`
+ * throws a TypeError of its own on a value with no path to a primitive (`Object.create(null)` is the
+ * short example, and a thrown object from a stripped-down runtime is the real one), and a plain
+ * object renders as `[object Object]`, hiding the very fields that would say what happened. Either
+ * outcome inside the crash handler recreates the failure this handler exists to prevent: a secondary
+ * exception escapes past the synthetic failure, the tally, the FAILURES block and the exit code, and
+ * the operator is left with output that stops.
+ *
+ * So: an Error is rendered from its own message/stack, anything else through `util.inspect` (node
+ * core, zero dependency), which never calls the value's own `toString`, handles a null-prototype
+ * object, a primitive, a symbol and a circular structure, and keeps the fields visible. Every single
+ * read of the value - including `instanceof` and the inspect call, either of which a hostile proxy
+ * could still make throw - goes through `safe()`, whose catch returns a literal. There is no
+ * expression in here whose failure can reach the caller.
+ */
+function describeThrowable(e) {
+  const safe = (fn, fallback) => {
+    try { const v = fn(); return typeof v === 'string' ? v : fallback; } catch (inner) { return fallback; }
+  };
+  const UNRENDERABLE = '(the thrown value could not be rendered at all)';
+  const inspected = safe(() => util.inspect(e, { depth: 4, breakLength: 120 }), UNRENDERABLE);
+  const isError = safe(() => (e instanceof Error ? 'yes' : ''), '');
+  const stack = isError ? safe(() => (e.stack ? String(e.stack) : ''), '') : '';
+  const message = isError ? safe(() => (e.message ? String(e.message) : ''), '') : '';
+  const detail = stack || inspected;
+  const headline = (message || inspected).split('\n')[0].slice(0, 200);
+  return { headline, detail };
 }
 
 const readText = (p) => { try { return fs.readFileSync(p, 'utf8'); } catch (e) { return null; } };
@@ -5349,6 +5382,7 @@ function main() {
     console.log('      breaks a copy of it and requires every one of those checks to actually fail.');
   }
 
+  let crashed = false;
   try {
     sectionGate1Identity(tmpRoot);
     sectionGate2(tmpRoot);
@@ -5370,12 +5404,43 @@ function main() {
     sectionExampleFixture(tmpRoot);
     sectionProjectLayer(PROJECT, selfAuthored);
     sectionNegativeControls(tmpRoot, pluginVersion);
+  } catch (e) {
+    // A section that THROWS must not take the report with it. Before this catch existed the
+    // exception escaped main() uncaught: the tally, the FAILURES block and the exit code below
+    // never ran, so the only thing the operator saw was output that stopped mid-run - and a run
+    // that stops mid-run reads exactly like a run whose output was truncated somewhere else.
+    // Three things are owed here, and a report that skips any one of them still misleads:
+    //   1. the thrown value itself - an Error with its full stack, anything else rendered field by
+    //      field - on STDOUT, the stream the rest of the report uses and the one
+    //      `scripts/selfcheck/run-selfcheck.mjs` relays verbatim to the operator;
+    //   2. a synthetic FAILURE in `results`, so the tally counts it, the FAILURES block names it
+    //      and process.exitCode below is 1. A crashed run must never exit 0;
+    //   3. everything that ran BEFORE the crash stays in `results` and stays printed - a partial
+    //      report is evidence, a discarded one is not.
+    // The cleanup in `finally` is unchanged and still runs, exactly as it did for the uncaught case.
+    //
+    // Nothing below may throw. `throw` accepts any value, so the rendering goes through
+    // describeThrowable(), which is written to be incapable of throwing - a secondary exception
+    // raised while reporting a crash would escape past all three points above and land the operator
+    // back at exactly the silence this handler was added to remove.
+    crashed = true;
+    const { headline, detail } = describeThrowable(e);
+    section('(uncaught)');
+    check(`the self-check crashed before it finished: ${headline}`, false,
+      'every section after this one never ran');
+    for (const line of detail.split('\n')) console.log(`    ${line}`);
   } finally {
     try { fs.rmSync(tmpRoot, { recursive: true, force: true }); } catch (e) { /* best-effort */ }
     if (temporary && !KEEP_FIXTURE) { try { fs.rmSync(PROJECT, { recursive: true, force: true }); } catch (e) { /* best-effort */ } }
   }
 
   const failed = results.filter((r) => !r.ok);
+  if (crashed) {
+    console.log('\n---- INCOMPLETE RUN ----');
+    console.log('A section threw, so every section after it never ran. The COVERAGE text below describes what a');
+    console.log('COMPLETE run executes; this run proved only the assertions printed above it. The crash is counted');
+    console.log('as a failure, so neither the tally nor the exit code can read as a pass.');
+  }
   console.log('\n---- COVERAGE (honest) ----');
   console.log('EXECUTED: all three enforcement hooks, run as the harness runs them (identity matrix, the two');
   console.log('captured live payloads, the dispatch gate\'s ask/passthrough matrix in its factory mode AND its');

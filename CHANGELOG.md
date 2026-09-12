@@ -79,6 +79,16 @@ your project changes - `0006_git-verb-gate` carries a single note.
   here" was comparing a link against a link and failed on the premise it could not hold. Every
   fixture in that section now hangs off the resolved temp path, leaving the explicit junction as the
   only link in the picture.
+- **The self-check reports even when it crashes (POSIX-004)** - a section that THREW escaped
+  `main()` uncaught, so the tally, the `FAILURES:` block and the exit code never ran and the only
+  thing the operator saw was output that stopped mid-run. An uncaught throw is now caught, printed
+  on the same stream as the rest of the report - an `Error` with its full stack, any other thrown
+  value rendered field by field rather than flattened or lost - counted as one `(uncaught)`
+  failure - so the run exits 1 and keeps every assertion that ran before the crash - and announced
+  as an INCOMPLETE RUN above the coverage text, which describes a complete one. The update
+  acceptance suite stopped truncating the evidence in the same breath: a failing spawn's detail was
+  its last three lines cut at 260 characters, and is now its complete output, printed only for the
+  checks that fail.
 
 ### Known limits (stated, not hidden)
 

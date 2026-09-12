@@ -56,14 +56,34 @@ const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'pnp-update-test-'));
 
 let failures = 0;
 let checks = 0;
+/**
+ * `detail` is either a STRING - printed as a suffix on both PASS and FAIL, as it always was - or a
+ * FUNCTION, which is invoked only when the check FAILS and printed as an indented block below it.
+ * The lazy form exists because the only detail worth reading is the one behind a failure, while an
+ * eager one is paid for on every passing check and therefore had to stay short. `why()` below is the
+ * lazy form, so a failing spawn now hands over its COMPLETE output instead of a summary of it.
+ * Producing the detail is itself wrapped: a formatter that throws must not take the suite with it,
+ * which is the same lesson the sc-crash case in section 12 asserts about the self-check.
+ */
 function check(name, ok, detail) {
   checks += 1;
   if (!ok) failures += 1;
-  console.log(`  [${ok ? 'PASS' : 'FAIL'}] ${name}${detail ? ' - ' + detail : ''}`);
+  const lazy = typeof detail === 'function';
+  console.log(`  [${ok ? 'PASS' : 'FAIL'}] ${name}${!lazy && detail ? ' - ' + detail : ''}`);
+  if (!ok && lazy) {
+    let text;
+    try { text = String(detail() ?? ''); } catch (e) { text = `(the detail could not be produced: ${e && e.message})`; }
+    if (text !== '') for (const line of text.split('\n')) console.log(`      | ${line.replace(/\r$/, '')}`);
+  }
   return !!ok;
 }
 function section(title) { console.log(`\n=== ${title} ===`); }
-const why = (r) => `exit ${r.status}: ${(r.out || '').trim().split('\n').filter(Boolean).slice(-3).join(' | ').slice(0, 260)}`;
+// The whole output of the failing run, verbatim - exit code first, then every line of it.
+// It used to be the last three lines joined and cut at 260 characters, which is how a self-check
+// that crashed on a foreign platform reached the operator as three lines that explained nothing:
+// the stack was in `r.out` all along and the log threw it away. Nothing is sliced here any more;
+// the cost is paid only on a failure, because `check()` never calls this on a pass.
+const why = (r) => () => `exit ${r.status}\n${(r.out || '').replace(/\s+$/, '') || '(the run printed nothing)'}`;
 
 // ---- filesystem helpers ----------------------------------------------------
 const read = (p) => { try { return fs.readFileSync(p, 'utf8'); } catch { return null; } };
@@ -1407,6 +1427,81 @@ section('12 - the self-check is the update\'s own last step, and a red one is ne
     `${bk.installedPluginVersion} / ${bk.lastMigrationApplied}`);
   check('and the CHANGES report is on disk too', exists(at(p, 'CHANGES_0.1.0-to-0.2.0.md')));
   check('the operator\'s hand edit was never overwritten', (read(at(p, ROLES_REL)) || '').includes('"effort": "low"'));
+}
+{
+  // The self-check CRASHES - a section throws rather than returning a red assertion. That used to
+  // escape main() as an uncaught exception: the tally, the FAILURES block and the exit code never
+  // ran, and the operator got output that simply stopped. The contract now is that a crash is
+  // reported like any other failure, with the stack, and that everything asserted BEFORE it
+  // survives. The sabotage is applied to a payload COPY - one of the real section calls is replaced
+  // by a throw - so this exercises the shipped reporting path end to end through the update engine,
+  // not a hand-built fixture of what a crash looks like.
+  const crashPayload = makePayload('crash-selfcheck-020', {
+    version: '0.2.0',
+    migrations: [{ id: '0002_noteonly', version: '0.2.0', ops: [FIXTURE_NOTE] }],
+    tweak: (dir) => patch(at(dir, 'scripts/selfcheck/aiwf-selfcheck.js'),
+      '    sectionGate2(tmpRoot);',
+      '    (() => { throw new Error(\'sc-crash injected\'); })();'),
+  });
+  const p = project('sc-crash');
+  check('install exits 0', install(p).status === 0);
+  const r = update(p, ['--apply'], { payload: crashPayload, selfcheck: true });
+  check('a self-check that CRASHES makes the update exit 1, not 0', r.status === 1, why(r));
+  check('the crash reached the operator with its own message', r.out.includes('sc-crash injected'), why(r));
+  check('and with a stack, not just a message',
+    /at [^\n]*aiwf-selfcheck\.js/.test(r.out), why(r));
+  check('the report still ran: the tally line was printed',
+    /==== \d+\/\d+ assertions passed ====/.test(r.out), why(r));
+  check('the crash is named in the FAILURES block, under its own section',
+    r.out.includes('FAILURES:') && r.out.includes('[(uncaught)]'), why(r));
+  check('and the run says out loud that it is incomplete', r.out.includes('INCOMPLETE RUN'), why(r));
+  // The assertions that ran before the throw are the evidence the crash did NOT destroy: the tally
+  // must still count them as passed, and must count at least one failure on top of them.
+  const tally = r.out.match(/==== (\d+)\/(\d+) assertions passed ====/);
+  const passed = tally ? Number(tally[1]) : 0;
+  const total = tally ? Number(tally[2]) : 0;
+  check('the assertions that ran before the crash were not lost, and the crash is counted against them',
+    passed > 0 && total > passed, tally ? tally[0] : '(no tally line was printed at all)');
+  check('the verdict still says the files WERE written and nothing was rolled back',
+    r.out.includes('WERE written') && r.out.includes('nothing was rolled back'), why(r));
+  const bk = bookkeeping(p);
+  check('which is true: the migration applied, the stamps moved and the journal is clear',
+    bk.installedPluginVersion === '0.2.0' && bk.lastMigrationApplied === '0002_noteonly' && bk.migrationJournal === null,
+    `${bk.installedPluginVersion} / ${bk.lastMigrationApplied}`);
+}
+{
+  // The SAME contract, for a throwable that is not an Error. `throw` takes any value, and the
+  // handler's own rendering is where that bites: `String(Object.create(null))` throws a TypeError of
+  // its own, and a plain object renders as "[object Object]" with every field hidden. Either one
+  // inside the crash handler is the original defect again - a secondary exception escaping past the
+  // tally, the FAILURES block and the exit code - so it gets its own injected variant rather than a
+  // note saying the Error case is representative. The thrown value carries no message and no stack,
+  // only a recognisable field, which is exactly what must still reach the operator.
+  const crashPayloadNoMessage = makePayload('crash-selfcheck-nullproto-020', {
+    version: '0.2.0',
+    migrations: [{ id: '0002_noteonly', version: '0.2.0', ops: [FIXTURE_NOTE] }],
+    tweak: (dir) => patch(at(dir, 'scripts/selfcheck/aiwf-selfcheck.js'),
+      '    sectionGate2(tmpRoot);',
+      '    (() => { throw Object.assign(Object.create(null), { code: \'sc-crash-null-proto\' }); })();'),
+  });
+  const p = project('sc-crash-null-proto');
+  check('install exits 0', install(p).status === 0);
+  const r = update(p, ['--apply'], { payload: crashPayloadNoMessage, selfcheck: true });
+  check('a throwable with no message and no stack still makes the update exit 1', r.status === 1, why(r));
+  check('its field reached the operator, and it was NOT flattened to [object Object]',
+    r.out.includes('sc-crash-null-proto') && !r.out.includes('[object Object]'), why(r));
+  check('the report still ran for it too: the tally line was printed, with the crash counted against it',
+    (() => {
+      const t = r.out.match(/==== (\d+)\/(\d+) assertions passed ====/);
+      return !!t && Number(t[1]) > 0 && Number(t[2]) > Number(t[1]);
+    })(), why(r));
+  check('and the crash is named in the FAILURES block, under its own section',
+    r.out.includes('FAILURES:') && r.out.includes('[(uncaught)]'), why(r));
+  check('and the run says out loud that it is incomplete', r.out.includes('INCOMPLETE RUN'), why(r));
+  const bk = bookkeeping(p);
+  check('which is true: the migration applied, the stamps moved and the journal is clear',
+    bk.installedPluginVersion === '0.2.0' && bk.lastMigrationApplied === '0002_noteonly' && bk.migrationJournal === null,
+    `${bk.installedPluginVersion} / ${bk.lastMigrationApplied}`);
 }
 
 // ---------------------------------------------------------------------------
