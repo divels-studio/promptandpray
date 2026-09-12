@@ -1130,6 +1130,59 @@ VERIFY не търпи паралелни редакции на repo-то" е з
 операторското решение фикс / honest unsupported. Коренът на macOS падането остава непознат по
 дизайна на тикета. Друг дълг: няма.
 
+## POSIX-005 [R2 code-class] — macOS официално неподдържан, но best-effort (роден 2026-09-12)
+
+Роден с операторската дума „обявявам го официално за неподдържан, но не и забравен" (2026-09-12),
+след като диагностичното четене на POSIX-004 (CI run 34699253663) обори предпоставката на тикета:
+дефектът НЕ е хвърляне. Уловеният изход на self-check-а се къса по средата на реда веднага след
+секцията `/pnp:roles`, процесът излиза с чист код, новият `catch` не се задейства, tally/`FAILURES:`
+не се печатат. `run-selfcheck.mjs:49` лови със `spawnSync` без `maxBuffer`; self-check `main()`
+ползва `process.exitCode` (не `process.exit`). Консистентно с асинхронен pipe stdout, губещ буфер
+при изход на POSIX (windows пише синхронно → пълен изход → зелено там; ubuntu също зелено, под
+прага). Точното място НЕ е закотвено — закотвянето е нов цикъл, вероятно с Mac машина.
+
+**Продуктово решение (оператор, 2026-09-12): best-effort, инсталируем.** `macos` ОСТАВА в schema
+`os` enum-а (нула schema промяна, нула миграционен риск) — Mac колега може да инсталира и върти
+(bash каналът, споделен с linux); README + позицията казват „неподдържан/best-effort"; CI leg-ът
+става non-blocking, но остава ВИДИМ (не се трие — постоянно червен required leg или изтрит leg и
+двете „забравят" проблема). Вози се в 0.2.2 (вече bump-ната локално за GATE-001) — без нова
+миграция/bump.
+
+**Обхват (всички котви от discovery 2026-09-12, Explore/sonnet; проверявани срещу HEAD при диспач):**
+1. `.github/workflows/ci.yml` — job-level `continue-on-error: true` на `macos` job-а (сестрински
+   ключ след `runs-on: macos-latest`, `:112`). Придружаващо изречение в comment блока (`:105-111`)
+   за best-effort/non-blocking позицията, формулирано да НЕ противоречи на `:64` (който аргументира
+   срещу декоративен `continue-on-error`): разликата е „реален gate, известен проследен бъг,
+   нарочно non-blocking", не „стъпка, която нищо не твърди". НЕ се маха job-ът, НЕ сереже списъкът
+   от 6 `run:` стъпки (selfcheck `example-ci-gates` ги pin-ва, `:4809-4832`; `continue-on-error` не
+   чупи regex-ите — доказано в discovery).
+2. `README.md:76-81` — „three OS legs …, none of them advisory" става НЕВЯРНО щом macos е
+   non-blocking → честна преработка (windows+ubuntu блокиращи, macos advisory). `README.md:85-88`
+   § Status „what is not here yet" — landing spot за изречението за позицията: поддържани windows +
+   linux; macos best-effort/неподдържан, инсталируем, CI leg advisory, известният бъг проследен.
+3. `schema/aiwf.config.schema.json:121-125` (`os` enum) — ПОТВЪРДЕН непроменен (`macos` остава);
+   `interview.mjs:133`, `generate.mjs:108` (`SUPPORTED_OS`) — потвърдени непроменени. Нула редакция.
+4. `CHANGELOG.md` блок `## [0.2.2]` (`:7-115`, неиздаден) — нов `### Changed` bullet (macOS обявен
+   неподдържан/best-effort, CI leg-ът non-blocking) + `### Known limits` bullet (реалният бъг:
+   self-check stdout се къса на macos след resolver секцията, чист изход, проследен-не-поправен,
+   иска Mac). Без нов `### Added`/version.
+5. Кандидат в `CANDIDATES.md` — реалният macOS фикс (недиагностицираният корен на POSIX-004),
+   нарочно паркиран (иска Mac), „не забравен".
+**Извън обхват:** пипане на `os` enum-а или каналите; нова миграция/bump; закотвяне на реалния бъг
+(candidate); четирите EOL-мръсни `.ps1` отвъд нужното; PS-001/RENAME-001.
+**Acceptance (буквално, Windows канал, cwd = repo root):**
+- `git grep -nE "none of them advisory" -- README.md` → празно (exit 1).
+- `git grep -c "continue-on-error: true" -- .github/workflows/ci.yml` → 1.
+- `git grep -c '"macos"' -- schema/aiwf.config.schema.json` → 1 (enum-ът непроменен).
+- Осемте VERIFY от `aiwf.config.json` → exit 0 (selfcheck ЗЕЛЕН — ci regex-ите още мачат);
+  Cyrillic `git grep` по payload пътищата → празно, exit 1.
+- README § Status носи изрично изречение за support tier-а (покажи реда).
+**Risk threshold:** блокира счупен selfcheck ci assertion, махане на `macos` от enum/канал, macos
+leg станал блокиращо-червен или изтрит, всеки VERIFY ≠ 0. Note-only за формулировка.
+**Stop condition:** VERIFY + acceptance зелени → Одиторът спира.
+**Review:** `Class: code` (ci.yml е изпълним артефакт) → Codex (`gpt-5.6-sol`/high), fact-check
+преди. Cap 2. **Assignee:** Колега. Branch `main`. Котва при диспач: записва се в брифа.
+
 ## PS-001 — изваден от плана (операторско решение 2026-09-12)
 
 Не е част от тази мисия. Текстът стои дословно в `dev/backlogs/CANDIDATES.md`, до RENAME-001;
@@ -1147,10 +1200,10 @@ records; CANDIDATES.md е празен надгробен камък; нито �
 ## Ред и гейтове
 Изпълнен ред: AUD-001 → AUD-002 → PUB-001 → PUB-002 → PUB-003 → POSIX-001 → POSIX-002 →
 POSIX-003 → GATE-001 → POSIX-004 (кодовата половина, commit `60c8928`; всичките с records).
-Остава: **POSIX-004 диагностичното четене** (клон `ci/macos-diag-posix-004` пушнат с дума
-2026-09-12, CI run 34699253663 — едно четене и операторско решение), издаването на 0.2.2 (push +
-tag, дума), после Closeout. RENAME-001 (2026-09-11) и PS-001 (2026-09-12) са извадени от плана с
-операторски решения и стоят в `dev/backlogs/CANDIDATES.md`.
+POSIX-004 диагностичното четене приключи (run 34699253663 обори предпоставката — виж POSIX-005);
+операторът обяви macOS официално неподдържан/best-effort. Остава: **POSIX-005** (чака дума за
+диспач), после издаването на 0.2.2 (push + tag, дума), после Closeout. RENAME-001 (2026-09-11) и
+PS-001 (2026-09-12) са извадени от плана с операторски решения и стоят в `dev/backlogs/CANDIDATES.md`.
 
 Гейтове: всеки тикет — дума за диспач; commit — клик; tag/push — дума + диалог; пас над
 `review.code.passes` или корекционен рунд над cap-а — отделна дума всеки (GATE-001 изяде такава за
