@@ -30,7 +30,8 @@ overrides") - not every ticket is a ceremony.
   R2/R3 cycle is doctrine, not a hook. Gate 2, the dispatch gate, puts the operator in the way
   of a Writer dispatch - a native Yes/No dialog on every one of them, or only on one whose
   `Ticket: <REF>` line names no ticket in an active PLAN, per `enforcement.dispatchGate`. Gate 4,
-  the git-verb guard on the `Bash` tool, denies an ask-class git verb to any subagent that is not
+  the git-verb guard on both shell tools (matcher `Bash|PowerShell`), denies an ask-class git verb
+  to any subagent that is not
   the Writer - a background agent's dialog reaches no operator - and asks for it in the git forms
   the shipped rules never spell out: `git.exe` outside push/merge/rebase, any `git -C <path> ...`,
   and a wrapper the harness does not strip, such as `sudo`.)
@@ -614,6 +615,15 @@ prerequisite instead: finish or checkpoint the current scope first, or use a sep
 worktree explicitly provided by the operator. Never stash, clean, reset, or otherwise hide that
 state. Merge and push run only on the operator's explicit word, through the `ask` dialog.
 
+**A session does not mutate a repository outside its own project root.** No git or filesystem
+operation that writes, moves or discards state in another repository runs without the operator's
+explicit word for that exact operation - a sibling checkout, a consumer project and a scratch clone
+are all somebody else's tree, and a branch or a dirty file lost there is lost outside every gate this
+loop has. The `-C` forms ask by construction on both shell tools: the ruleset spells out
+`git -C <projectRoot> ...` for push, merge and rebase only, and Gate 4 raises a dialog for **any**
+other `git -C <path> <verb>`, because a hook that reads no project directory cannot tell one path
+from another. The dialog is the backstop, not the rule; the rule is that the word comes first.
+
 ## Fail aggregation
 
 Reviewer and QA must return ALL visible material problems in a single round - not one problem per
@@ -639,13 +649,15 @@ them:
 ## Commit & Push Authority
 
 - **Commit:** Writer only, local only, after the review route passes AND a human explicitly
-  approves. The approval is a native Claude Code visual Yes/No dialog - `Bash(git commit:*)` is
-  an `ask` rule in the project's `.claude/settings.json`; the operator clicks **Yes** and types
+  approves. The approval is a native Claude Code visual Yes/No dialog - `Bash(git commit:*)` and
+  its `PowerShell(git commit:*)` mirror are `ask` rules in the project's `.claude/settings.json`;
+  the operator clicks **Yes** and types
   nothing (no approval token, no state file). No automatic commits.
 - **Push / merge / rebase:** executed from the session **only after the operator's explicit
   word** in chat, and each additionally surfaces a native `ask` dialog (Yes/No) as the second
   gate - `Bash(git push:*)` / `merge` / `rebase` (and the `git.exe` and
-  `git -C <projectRoot>` variants) are `ask` rules. They are deliberately **not** `deny`-blocked:
+  `git -C <projectRoot>` variants, each mirrored as a `PowerShell(...)` rule) are `ask` rules.
+  They are deliberately **not** `deny`-blocked:
   the operator does not drive git manually, so the agent must be able to run these itself, gated
   by the dialog plus the explicit-word doctrine.
 - Destructive/system-changing commands need explicit human confirmation immediately before
@@ -659,7 +671,7 @@ permission documentation that matching is operator-aware: per subcommand (split 
 `NAME=value` assignments - so they cover the matching command
 forms in a normal permission mode; they are accident-grade, not adversary-proof - see `docs/LOOP.md`
 for the full honest model, including what this repository can and cannot test about that host
-behaviour. **Gate 4** stands behind them on the `Bash` tool: an ask-class git verb
+behaviour. **Gate 4** stands behind them on both shell tools: an ask-class git verb
 (the same list the ruleset gates) is **denied** to any subagent that is not the Writer, because a
 background agent's dialog reaches nobody, and for the main session or the Writer it raises the dialog
 on the git forms **the rules never spell out**: `git.exe` outside `push|merge|rebase`, any
@@ -670,14 +682,18 @@ the verb. A subcommand a rule really does match passes through silently - the `a
 rule is already raising that dialog itself, and a hook `ask` beside it would not add a second one
 anyway.
 
-**Both layers are scoped to the `Bash` tool.** Every rule in the ruleset is a `Bash(...)` rule and
-Gate 4 is wired on the `Bash` matcher, so on a harness that exposes a **second shell tool** (a
-Windows session carries a `PowerShell` tool next to `Bash`) the same git verbs run through a tool
-neither layer sees, and no dialog appears at all.
-That is weaker than the residuals above rather than another instance of them: it needs no unusual
-command form, only the other tool, so Gate 4's deny of a background subagent is bypassable by tool
-choice. Nothing in this release changes that; it is written down so the guarantee is not read wider
-than it is.
+**Both layers cover both shell tools.** Every rule in the ruleset ships as a `Bash(<X>)` /
+`PowerShell(<X>)` mirror pair - asserted in both directions by the self-check, so neither a missing
+twin nor an orphan rule that gates one tool alone can pass - and Gate 4 is wired on the matcher
+`Bash|PowerShell`, judging each command in its own tool's dialect (PowerShell splits subcommands on
+`;`, `|`, `&&` and `||`, strips no wrapper, treats `&` as the call operator, and folds case in
+recognition but never in the rule test). `Monitor` runs its commands under the Bash rules and needs
+none of its own.
+What remains is the CLASS rather than an instance of it: a harness tool **neither layer names** would
+be outside the matcher and outside every rule. That is weaker than the residuals above rather than
+another instance of them: it needs no unusual command form, only another tool, so Gate 4's deny of a
+background subagent would be bypassable by tool choice. Closing it for a tool that exists is the
+matcher plus the mirrored rules; it is written down so the guarantee is not read wider than it is.
 
 ## Reproducibility
 
@@ -704,7 +720,8 @@ The loop is reproducible from Git plus the plugin payload - no external runtime 
   codex-only), not by QA.
 - **Enforcement:** Gate 1 (the PreToolUse mutation guard, which also carries Gate 3, the
   route-state write guard), Gate 2 (the PreToolUse dispatch gate) and Gate 4 (the PreToolUse
-  git-verb guard on the `Bash` tool), wired through the plugin's `hooks/hooks.json` - three hook
+  git-verb guard on both shell tools, matcher `Bash|PowerShell`), wired through the plugin's
+  `hooks/hooks.json` - three hook
   files, four responsibilities - plus the declarative `ask`
   permission rules merged into the project's `.claude/settings.json` from
   `templates/settings.ask-ruleset.json`, whose git verbs Gate 4 is cross-checked against.

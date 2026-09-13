@@ -57,13 +57,18 @@ The rules do not rely on the session "remembering" them - they are enforced mech
   `sudo` or `npx`. So a new prompt here means "this command would have run unasked", not "one more
   click for the same command" - and where a rule does match, the hook and the rule collapse into a
   single dialog rather than two.
-  **Where a prompt can be missing entirely:** this gate and every permission rule are addressed to
-  the `Bash` tool. If your harness offers a second shell tool - a Windows session carries a
-  `PowerShell` tool alongside `Bash` - a git command run through THAT tool reaches neither, and you
-  see no dialog for it at all. It is the one gap here that needs no unusual command, only the other
-  tool, so an agent with a broad tool allowlist can pass this gate by choosing it.
+  **Which tools this covers:** both shells. The gate is wired on `Bash|PowerShell` and every
+  permission rule exists twice, once per tool, so a Windows session that carries a `PowerShell` tool
+  alongside `Bash` gets the same dialog either way - and `Monitor`, which has no rules of its own,
+  runs its commands under the Bash ones. On PowerShell the prompts are slightly more generous,
+  because less is documented about how that tool's commands are matched: a prefixed command such as
+  `timeout 30 git commit` asks there while staying silent on Bash. **Where a prompt could still be
+  missing entirely:** a harness tool that neither layer names. That is the one gap here that needs no
+  unusual command, only another tool, so an agent with a broad tool allowlist could pass this gate by
+  choosing one - and closing it for a tool that exists is a two-line change, listed in
+  `docs/LOOP.md`.
 - **Commit** - a visual Yes/No dialog at your end (an `ask` permission rule), on every attempt
-  through the `Bash` tool. The click IS the approval: you type nothing, and there is no token or
+  through either shell tool. The click IS the approval: you type nothing, and there is no token or
   state file behind it.
 - **Push / merge / rebase** - the same dialog, **plus** an explicit word from you in the chat. Two
   independent gates, because these are the irreversible ones.
@@ -74,8 +79,9 @@ So an outsider with the plugin cannot break the process out of ignorance - the s
 says why. The commands supply the knowledge; the gates guarantee the behaviour.
 
 Two honest limitations. The permission rules are **prefix matches** on the command text, and every
-one of them - like the hook behind them - is addressed to the **`Bash` tool**, so a second shell tool
-in your harness is outside all of it (see the Gate 4 entry above). They are
+one of them - like the hook behind them - is addressed to a **tool**: both shell tools are covered,
+each rule twice, but a harness tool neither layer names would be outside all of it (see the Gate 4
+entry above). They are
 accident-grade protection against a role acting out of turn, not an adversary-proof boundary. The
 one hard boundary in the system is the OS sandbox on the Codex review path.
 

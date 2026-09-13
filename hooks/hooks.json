@@ -1,5 +1,5 @@
 {
-  "description": "PromptAndPray enforcement gates: Gate 1 (non-writer subagents cannot write), Gate 2 (the Writer dispatch gate - a click on every dispatch, or only on one the active PLANs cannot account for, per enforcement.dispatchGate) and Gate 4 (an ask-class git verb is denied to a non-writer subagent, whose dialog nobody would see, and raises one for the main session in the git forms the shipped ask rules never spell out - git.exe outside push/merge/rebase, any git -C <path> form, a wrapper the harness does not strip).",
+  "description": "PromptAndPray enforcement gates: Gate 1 (non-writer subagents cannot write), Gate 2 (the Writer dispatch gate - a click on every dispatch, or only on one the active PLANs cannot account for, per enforcement.dispatchGate) and Gate 4 (an ask-class git verb is denied to a non-writer subagent, whose dialog nobody would see, and raises one for the main session in the git forms the shipped ask rules never spell out - git.exe outside push/merge/rebase, any git -C <path> form, a wrapper the harness does not strip). Gate 4 is wired on BOTH shell tools, matcher \"Bash|PowerShell\" - a matcher of only letters, digits, _, -, space, comma and | is an exact alternation list, not a regex - because a permission rule is addressed to a tool and a Windows session carries a PowerShell tool next to Bash.",
   "hooks": {
     "PreToolUse": [
       {
@@ -21,7 +21,7 @@
         ]
       },
       {
-        "matcher": "Bash",
+        "matcher": "Bash|PowerShell",
         "hooks": [
           {
             "type": "command",

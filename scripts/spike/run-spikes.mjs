@@ -303,6 +303,19 @@ const bashEnvelope = (identity, command) => ({
   tool_input: { command, description: 'run a command' },
   tool_use_id: 'toolu_04spikeBashGitVerb',
 });
+// The SECOND shell tool, same captured shape with one field changed. Gate 4 is wired on matcher
+// `Bash|PowerShell` and reads `tool_name` from the payload, so this envelope is the whole difference
+// between the two matrices below - which is what makes any divergence attributable to the dialect.
+const powershellEnvelope = (identity, command) => ({
+  session_id: '5c3b1f2e-0000-4000-8000-000000000000',
+  cwd: 'C:\\work\\demo',
+  permission_mode: 'default',
+  ...identity,
+  hook_event_name: 'PreToolUse',
+  tool_name: 'PowerShell',
+  tool_input: { command, description: 'run a command' },
+  tool_use_id: 'toolu_04spikePwshGitVerb',
+});
 const MAIN = {};                                     // true main session: NO identity fields at all
 const WRITER = { agent_id: 'w1', agent_type: 'writer' };
 // A repo-selector path for the `git -C <path>` forms. Deliberately not a drive-letter path: the
@@ -413,6 +426,56 @@ const gate4Cases = [
   { name: 'non-object input (string) -> DENY (fail-closed)', payload: '"text"', expect: 'deny' },
   { name: 'empty stdin -> DENY (fail-closed)', payload: '', expect: 'deny' },
   { name: 'tool_input without a command string -> silent (nothing to recognise)', payload: bashEnvelope(MAIN, undefined), expect: 'allow(passthrough)' },
+];
+
+// Gate 4 on the OTHER shell tool. The rows mirror gate4Cases wherever the answer must be the same
+// (identity decides first, the shipped mirror rules cover the same forms) and diverge exactly where
+// the documented PowerShell semantics differ: the AST split is `;`, `|` and PS7's `&&`/`||`, `&` is
+// the CALL OPERATOR rather than a separator, no wrapper or `NAME=value` stripping is documented, and
+// matching is case-insensitive. Every divergence resolves towards ASKING - see the hook's header.
+const PS_ROOT = '/work/demo';
+const gate4PowershellCases = [
+  // --- silent only where a shipped PowerShell(...) mirror rule matches byte for byte
+  { name: 'ps main: bare `git commit` -> silent (the PowerShell mirror rule matches)', payload: powershellEnvelope(MAIN, 'git commit -m x'), expect: 'allow(passthrough)' },
+  { name: 'ps main: bare `git push origin main` -> silent', payload: powershellEnvelope(MAIN, 'git push origin main'), expect: 'allow(passthrough)' },
+  { name: 'ps main: `git.exe push origin main` -> silent (the mirror spells this one out too)', payload: powershellEnvelope(MAIN, 'git.exe push origin main'), expect: 'allow(passthrough)' },
+  { name: 'ps main: `git -c k=v commit` -> silent (PowerShell(git -c:*) matches byte for byte)', payload: powershellEnvelope(MAIN, 'git -c user.name=x commit -m y'), expect: 'allow(passthrough)' },
+  // The four documented separators, one row each: the harness matches the rule per subcommand.
+  { name: 'ps main: `cd X; git commit` -> silent (`;` is a documented AST separator)', payload: powershellEnvelope(MAIN, `cd ${PS_ROOT}; git commit -m y`), expect: 'allow(passthrough)' },
+  { name: 'ps main: `cd X && git commit` -> silent (PS7 `&&`)', payload: powershellEnvelope(MAIN, `cd ${PS_ROOT} && git commit -m y`), expect: 'allow(passthrough)' },
+  { name: 'ps main: `foo || git commit` -> silent (PS7 `||`)', payload: powershellEnvelope(MAIN, 'foo || git commit -m y'), expect: 'allow(passthrough)' },
+  { name: 'ps main: `git commit | Out-String` -> silent (a pipeline splits the same way)', payload: powershellEnvelope(MAIN, 'git commit -m y | Out-String'), expect: 'allow(passthrough)' },
+  // --- the divergences, all of them towards ASK
+  { name: 'ps main: `& git push` (CALL OPERATOR, not a separator) -> ASK', payload: powershellEnvelope(MAIN, '& git push origin main'), expect: 'ask' },
+  { name: 'main (Bash): the same `& git push` IS split there -> silent (the dialect control)', payload: bashEnvelope(MAIN, '& git push origin main'), expect: 'allow(passthrough)' },
+  { name: 'ps main: `timeout 30 git commit` -> ASK (no wrapper stripping is documented for PowerShell)', payload: powershellEnvelope(MAIN, 'timeout 30 git commit -m x'), expect: 'ask' },
+  { name: 'ps main: `FOO=bar git push` -> ASK (not even PowerShell syntax, let alone a stripped prefix)', payload: powershellEnvelope(MAIN, 'FOO=bar git push origin main'), expect: 'ask' },
+  { name: 'ps main: `GIT Push origin` (case variant) -> ASK (recognised: PS matching is case-insensitive)', payload: powershellEnvelope(MAIN, 'GIT Push origin'), expect: 'ask' },
+  { name: 'main (Bash): `GIT Push origin` is no verb at all -> silent (the dialect control)', payload: bashEnvelope(MAIN, 'GIT Push origin'), expect: 'allow(passthrough)' },
+  { name: 'ps main: `GIT push origin main` -> ASK (recognised, but the rule test does not fold case)', payload: powershellEnvelope(MAIN, 'GIT push origin main'), expect: 'ask' },
+  { name: 'ps main: `git.exe reset --hard` -> ASK (.exe mirrors exist for push/merge/rebase only)', payload: powershellEnvelope(MAIN, 'git.exe reset --hard'), expect: 'ask' },
+  { name: 'ps main: `git -C <root> reset --hard` -> ASK (no -C rule for a non-push verb)', payload: powershellEnvelope(MAIN, `git -C ${PS_ROOT} reset --hard`), expect: 'ask' },
+  { name: 'ps main: `git -C <root> push origin main` -> ASK (the rule names <projectRoot>, unverifiable)', payload: powershellEnvelope(MAIN, `git -C ${PS_ROOT} push origin main`), expect: 'ask' },
+  { name: 'ps main: `git  commit` (two spaces) -> ASK (irregular whitespace matches no rule)', payload: powershellEnvelope(MAIN, 'git  commit -m x'), expect: 'ask' },
+  { name: 'ps writer: `git commit` -> silent (the commit dialog is the operator\'s, unchanged)', payload: powershellEnvelope(WRITER, 'git commit -m x'), expect: 'allow(passthrough)' },
+  { name: 'ps writer: `git.exe reset --hard` -> ASK (the Writer is not exempt from the form)', payload: powershellEnvelope(WRITER, 'git.exe reset --hard'), expect: 'ask' },
+  // --- non-writer subagents: identity decides before the form, on this tool exactly as on the other
+  { name: 'ps general-purpose: `git reset --hard` -> DENY', payload: powershellEnvelope({ agent_id: 'p1', agent_type: 'general-purpose' }, 'git reset --hard'), expect: 'deny' },
+  { name: 'ps Explore: `cd X; git reset --hard` -> DENY', payload: powershellEnvelope({ agent_id: 'p2', agent_type: 'Explore' }, 'cd X; git reset --hard'), expect: 'deny' },
+  { name: 'ps reviewer: `git switch other` -> DENY', payload: powershellEnvelope({ agent_id: 'p3', agent_type: 'reviewer' }, 'git switch other'), expect: 'deny' },
+  { name: 'ps general-purpose: `& git push` -> DENY (the call operator buys no pass either)', payload: powershellEnvelope({ agent_id: 'p4', agent_type: 'general-purpose' }, '& git push'), expect: 'deny' },
+  { name: 'ps general-purpose: `GIT Push` -> DENY (the case variant is recognised here)', payload: powershellEnvelope({ agent_id: 'p5', agent_type: 'general-purpose' }, 'GIT Push'), expect: 'deny' },
+  { name: 'ps general-purpose: `git -C <root> reset --hard` -> DENY', payload: powershellEnvelope({ agent_id: 'p6', agent_type: 'general-purpose' }, `git -C ${PS_ROOT} reset --hard`), expect: 'deny' },
+  { name: 'ps agent_id present, agent_type absent: `git commit` -> DENY', payload: powershellEnvelope({ agent_id: 'p7' }, 'git commit -m x'), expect: 'deny' },
+  { name: 'ps agent_type null: `git commit` -> DENY', payload: powershellEnvelope({ agent_id: 'p8', agent_type: null }, 'git commit -m x'), expect: 'deny' },
+  // --- everything this gate does not judge stays invisible on this tool too
+  { name: 'ps subagent: `git log --oneline -5` -> silent (read-only verb)', payload: powershellEnvelope({ agent_id: 'p9', agent_type: 'Explore' }, 'git log --oneline -5'), expect: 'allow(passthrough)' },
+  { name: 'ps subagent: `Get-ChildItem` (no git at all) -> silent', payload: powershellEnvelope({ agent_id: 'p10', agent_type: 'general-purpose' }, 'Get-ChildItem'), expect: 'allow(passthrough)' },
+  { name: 'ps main: `mygit commit` is another program -> silent', payload: powershellEnvelope(MAIN, 'mygit commit'), expect: 'allow(passthrough)' },
+  { name: 'ps: tool_input without a command string -> silent (nothing to recognise)', payload: powershellEnvelope(MAIN, undefined), expect: 'allow(passthrough)' },
+  // --- the fail direction is tool-agnostic: an unparseable payload carries no tool_name either
+  { name: 'ps: empty stdin -> DENY (fail-closed; there is no tool to name)', payload: '', expect: 'deny' },
+  { name: 'ps: malformed stdin (not JSON) -> DENY (fail-closed)', payload: '{ not json ', expect: 'deny' },
 ];
 
 // ---- run -------------------------------------------------------------------
@@ -537,21 +600,51 @@ for (const c of gate4Cases) {
   if (verdict === 'FAIL') console.log(`    plugin reason: ${got.reason || '(none)'}`);
 }
 
+console.log('');
+console.log('== Gate 4 - the SAME hook on the PowerShell tool (matcher "Bash|PowerShell") ==');
+console.log('per case: [1] plugin decision matches the expectation  [2] plugin exited 0');
+console.log(`${pad('case', 62)} ${pad('expected', 18)} ${pad('plugin', 18)} ${pad('exit', 5)} verdict`);
+for (const c of gate4PowershellCases) {
+  const got = runHook(path.join(PLUGIN_HOOKS, GATE4), c.payload, c.projectDir);
+  let ok = record(got.decision === c.expect);
+  ok = record(got.exit === 0) && ok;
+  const verdict = ok ? 'PASS' : 'FAIL';
+  const gotExit = got.exit === null ? 'null' : String(got.exit);
+  console.log(`${pad(c.name, 62)} ${pad(c.expect, 18)} ${pad(got.decision, 18)} ${pad(gotExit, 5)} ${verdict}`);
+  if (verdict === 'FAIL') console.log(`    plugin reason: ${got.reason || '(none)'}`);
+}
+
 // The two decisions in words: a deny must name the verb it recognised (otherwise the subagent
 // cannot report anything useful back), and the ask must say WHY a dialog appeared - that no rule
-// covers this FORM, which is the only reason this gate ever adds one.
+// covers this FORM, which is the only reason this gate ever adds one. Both are asserted on BOTH
+// tools, because the reason text now names the tool: "Blocked Bash command" on a PowerShell payload
+// would send the operator to the wrong half of the ruleset, and the pair below is the control that
+// catches the name being hardcoded again, whichever of the two were chosen.
 console.log('');
-console.log('== Gate 4 - the deny and ask payloads themselves ==');
+console.log('== Gate 4 - the deny and ask payloads themselves, on both tools ==');
 {
   const denied = runHook(path.join(PLUGIN_HOOKS, GATE4),
     bashEnvelope({ agent_id: 'a1', agent_type: 'general-purpose' }, 'git reset --hard'));
   const asked = runHook(path.join(PLUGIN_HOOKS, GATE4), bashEnvelope(MAIN, 'git.exe reset --hard'));
-  console.log(`deny reason : ${denied.reason}`);
-  console.log(`ask reason  : ${asked.reason}`);
+  const psDenied = runHook(path.join(PLUGIN_HOOKS, GATE4),
+    powershellEnvelope({ agent_id: 'p1', agent_type: 'general-purpose' }, 'git reset --hard'));
+  const psAsked = runHook(path.join(PLUGIN_HOOKS, GATE4), powershellEnvelope(MAIN, 'git.exe reset --hard'));
+  console.log(`deny reason    : ${denied.reason}`);
+  console.log(`ask reason     : ${asked.reason}`);
+  console.log(`ps deny reason : ${psDenied.reason}`);
+  console.log(`ps ask reason  : ${psAsked.reason}`);
   const okDeny = record(denied.decision === 'deny' && denied.reason.includes('"reset"') && denied.exit === 0);
   const okAsk = record(asked.decision === 'ask' && asked.reason.includes('no permission rule covers') && asked.exit === 0);
+  const okPsDeny = record(psDenied.decision === 'deny' && psDenied.reason.includes('"reset"') && psDenied.exit === 0);
+  const okPsAsk = record(psAsked.decision === 'ask' && psAsked.reason.includes('no permission rule covers') && psAsked.exit === 0);
+  const okNames = record(
+    denied.reason.includes('Blocked Bash command') && asked.reason.includes('This Bash command')
+    && psDenied.reason.includes('Blocked PowerShell command') && !psDenied.reason.includes('Blocked Bash command')
+    && psAsked.reason.includes('This PowerShell command') && !psAsked.reason.includes('This Bash command'));
   console.log(`assert the deny names the recognised verb     : ${label(okDeny)}`);
   console.log(`assert the ask says no rule covers the form   : ${label(okAsk)}`);
+  console.log(`assert the same holds on PowerShell           : ${label(okPsDeny && okPsAsk)}`);
+  console.log(`assert each decision names its REAL tool      : ${label(okNames)}`);
 }
 
 fs.rmSync(tmpRoot, { recursive: true, force: true });

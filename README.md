@@ -40,15 +40,19 @@ What is here:
   session out of code while an R2/R3 ticket is open - the dispatch gate, Gate 2, which puts the
   operator in the way of a Writer dispatch: a click on every one of them, or (per
   `enforcement.dispatchGate`) only on a dispatch whose `Ticket: <REF>` line names no ticket in an
-  active PLAN - and the git-verb guard, Gate 4, on the `Bash` tool: an ask-class git verb is denied
+  active PLAN - and the git-verb guard, Gate 4, on both shell tools (matcher `Bash|PowerShell`): an
+  ask-class git verb is denied
   to any subagent but the Writer, because a background agent's dialog reaches nobody, and for the
   session it raises a dialog on the git forms the `ask` rules never spell out - `git.exe` outside
   push/merge/rebase, any `git -C <path> ...`, a wrapper Claude Code does not strip such as `sudo` -
   while everything the harness already gates by itself (chained subcommands, `timeout`-style
   wrappers, `NAME=value` prefixes) stays silent. The self-check holds its verb list against the
-  shipped ask-ruleset, so a rule added there cannot silently outrun the gate. Both that gate and the
-  rules are addressed to the `Bash` tool: a harness offering a second shell tool runs the same git
-  verbs where neither sees them, and `docs/LOOP.md` states that gap rather than papering over it.
+  shipped ask-ruleset, so a rule added there cannot silently outrun the gate. Both layers cover both
+  shells: every ask rule ships as a `Bash(<X>)` / `PowerShell(<X>)` mirror pair, asserted in both
+  directions, and the gate judges each command in its own tool's dialect - PowerShell splits
+  subcommands on `;`, `|`, `&&` and `||`, strips no wrapper, and treats `&` as the call operator it
+  is. What is left is the class rather than a named hole - a tool neither layer sees - and
+  `docs/LOOP.md` states it as such rather than papering over it.
 - **The role resolver and the Codex wrappers** (`scripts/native/ps/` on Windows,
   `scripts/native/sh/` on Linux/macOS - two channels that mirror each other): one review role
   resolved to

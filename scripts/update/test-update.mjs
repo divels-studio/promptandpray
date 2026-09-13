@@ -200,6 +200,14 @@ const NEW_ASK_RULE = 'Bash(pnp-fixture-new:*)';
 // in both directions, so dropping a git rule would leave a copy whose ruleset no longer backs a form
 // the hook still accepts: a real finding, and one this fixture has no business manufacturing.
 const DROPPED_ASK_RULE = 'Bash(npm run seed:*)';
+// AND THE SAME RULE ON THE OTHER SHELL TOOL, for exactly the reason above. The ask list is a 1:1
+// `Bash(<X>)` / `PowerShell(<X>)` mirror and the self-check holds that invariant in both directions,
+// so a fixture that added or dropped one spelling alone would hand `--apply`'s self-check a payload
+// with a genuine defect - a rule gating one tool - and the suite would be reporting the fixture's
+// mistake rather than the engine's behaviour. The pair moves together; the ASSERTIONS below stay on
+// the Bash spelling, because which of the two the reconcile op carries is not what they are about.
+const NEW_ASK_RULE_MIRROR = 'PowerShell(pnp-fixture-new:*)';
+const DROPPED_ASK_RULE_MIRROR = 'PowerShell(npm run seed:*)';
 
 /** Adds the config key the fixture migration introduces, so the bumped payload's schema admits it. */
 function addExampleToggleToSchema(dir) {
@@ -216,11 +224,16 @@ function changeTemplates(dir) {
   patch(at(dir, 'templates/CLAUDE.md.tmpl'), '## Your role', '## Your role (v2)');
   fs.appendFileSync(at(dir, 'templates/agents/writer.md.tmpl'), '\nA line the next payload version added.\n', 'utf8');
 }
-/** Changes the desired ask set: one rule added, one rule (which setup owns) dropped. */
+/**
+ * Changes the desired ask set: one rule added, one rule (which setup owns) dropped - each on BOTH
+ * shell tools, so the copy stays a ruleset the self-check will accept (see the constants above).
+ */
 function changeRuleset(dir) {
   const file = at(dir, 'templates/settings.ask-ruleset.json');
   const json = readJson(file);
-  json.permissions.ask = json.permissions.ask.filter((r) => r !== DROPPED_ASK_RULE).concat([NEW_ASK_RULE]);
+  const dropped = new Set([DROPPED_ASK_RULE, DROPPED_ASK_RULE_MIRROR]);
+  json.permissions.ask = json.permissions.ask.filter((r) => !dropped.has(r))
+    .concat([NEW_ASK_RULE, NEW_ASK_RULE_MIRROR]);
   writeJson(file, json);
 }
 

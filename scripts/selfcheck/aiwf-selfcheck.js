@@ -703,16 +703,23 @@ function sectionGate2Mode(tmpRoot) {
 }
 
 // ---------------------------------------------------------------------------
-// SECTION 2c - Gate 4: ask-class git verbs on the Bash tool
+// SECTION 2c - Gate 4: ask-class git verbs on BOTH shell tools (matcher `Bash|PowerShell`)
 // ---------------------------------------------------------------------------
 // Two decisions on one recogniser, and the section is built as PAIRS so neither can pass by being
 // unreachable: the same command from two identities (deny vs silent), a bypass form against the
 // nearest rule-matched one (ask vs silent), and the same identity on two verbs (deny vs silent).
 // One group is the one that would make the gate uninstallable if it were wrong - `git log` from a
 // subagent, an ordinary non-git command, a payload with no command at all - because this hook sits
-// on EVERY Bash call of the session; another asserts that everything the HARNESS already gates
-// (chained subcommands, stripped wrappers, env prefixes) stays silent, so this gate adds a dialog
-// only where none exists.
+// on EVERY shell call of the session, on either tool; another asserts that everything the HARNESS
+// already gates (chained subcommands, stripped wrappers, env prefixes) stays silent, so this gate
+// adds a dialog only where none exists.
+//
+// A THIRD pairing runs the length of the section, because the hook judges each command in its own
+// tool's DIALECT: every PowerShell row has a Bash twin, so a divergence is attributable to the
+// dialect and to nothing else. The two differ only where the documentation does - PowerShell splits
+// on `;`, `|`, `&&` and `||` (so `&` stays the call operator), documents no wrapper or `NAME=value`
+// stripping, and matches case-insensitively - and every one of those differences resolves towards
+// ASKING, never towards a passthrough.
 //
 // The cross-check against the ruleset is FORM-exact and BIDIRECTIONAL, because a verb-level one is
 // not enough: collapsing rules into a set of verbs makes `Bash(git.exe push:*)` interchangeable with
@@ -722,13 +729,19 @@ function sectionGate2Mode(tmpRoot) {
 // asserted: every rule form the hook models must be accepted, and every form the hook accepts must
 // be carried by a rule. The `git -C <projectRoot> ...` forms are the one deliberate exception, and
 // they are asserted as NOT accepted rather than quietly skipped.
-const GIT_RULE_FORM = /^Bash\((git(?:\.exe)?(?: -C <[^>]*>)? [^\s:]+):\*\)$/;
-function gitRuleForms(ruleset) {
+//
+// Both directions run PER SHELL TOOL. A permission rule is addressed to a tool, so `Bash(git push:*)`
+// and `PowerShell(git push:*)` are two different rules gating two different tools, and a coverage
+// check that pooled them would report a tool as covered on the strength of the other tool's rules.
+// The mirror BETWEEN the two lists is a separate, bidirectional assertion (askMirrorGaps below).
+const SHELL_TOOLS = ['Bash', 'PowerShell'];
+const GIT_RULE_FORM = /^(Bash|PowerShell)\((git(?:\.exe)?(?: -C <[^>]*>)? [^\s:]+):\*\)$/;
+function gitRuleForms(ruleset, tool = 'Bash') {
   const ask = (ruleset && ruleset.permissions && Array.isArray(ruleset.permissions.ask)) ? ruleset.permissions.ask : [];
   const forms = new Set();
   for (const rule of ask) {
     const m = GIT_RULE_FORM.exec(String(rule));
-    if (m) forms.add(m[1]);
+    if (m && m[1] === tool) forms.add(m[2]);
   }
   return forms;
 }
@@ -736,8 +749,8 @@ const isDashCForm = (form) => / -C /.test(form);
 // `probe` stands in for "whatever the operator typed after the prefix"; the `:*` of a real rule is
 // exactly that. The hook's accept-space is finite - {git, git.exe} x its own verb list - so the
 // reverse direction can be enumerated rather than sampled.
-function formCoverage(ruleset, hook) {
-  const forms = gitRuleForms(ruleset);
+function formCoverage(ruleset, hook, tool = 'Bash') {
+  const forms = gitRuleForms(ruleset, tool);
   const modelled = [...forms].filter((f) => !isDashCForm(f));
   const dashC = [...forms].filter(isDashCForm);
   const accepted = [];
@@ -745,7 +758,7 @@ function formCoverage(ruleset, hook) {
   for (const exe of ['git', 'git.exe']) {
     for (const verb of hook.GIT_ASK_VERBS) {
       const form = `${exe} ${verb}`;
-      if (!hook.shippedRuleMatches(`${form} probe`)) continue;
+      if (!hook.shippedRuleMatches(`${form} probe`, tool)) continue;
       accepted.push(form);
       if (!forms.has(form)) unbacked.push(form);
     }
@@ -755,23 +768,50 @@ function formCoverage(ruleset, hook) {
     modelled,
     dashC,
     accepted,
-    unbacked,                                                          // accepted, but no rule carries it
-    notAccepted: modelled.filter((f) => !hook.shippedRuleMatches(`${f} probe`)), // a rule form the hook refuses
-    dashCAccepted: dashC.filter((f) => hook.shippedRuleMatches(`${f} probe`)),   // must stay empty
+    unbacked,                                                                          // accepted, but no rule carries it
+    notAccepted: modelled.filter((f) => !hook.shippedRuleMatches(`${f} probe`, tool)), // a rule form the hook refuses
+    dashCAccepted: dashC.filter((f) => hook.shippedRuleMatches(`${f} probe`, tool)),   // must stay empty
+  };
+}
+
+// THE MIRROR INVARIANT, BOTH WAYS, over the WHOLE ask list rather than its git rules alone - the gap
+// this closes was never git-specific: `Bash(rm:*)` without its PowerShell twin leaves a recursive
+// delete ungated on the other tool just as surely as a missing `PowerShell(git push:*)` does.
+//   Both directions are asserted because they fail differently. A missing MIRROR is an unguarded
+// tool: the rule exists, and the other shell runs the same command with nothing in the way. An
+// ORPHAN - a `PowerShell(<X>)` with no `Bash(<X>)` base - is the quieter defect: it is carried,
+// rendered and owned like every other rule, so the list READS as if the command were gated, while
+// exactly one of the two tools is. Neither direction can stand in for the other, and neither is
+// inferred from a count: two lists of equal length can each miss a different rule.
+function askMirrorGaps(ruleset) {
+  const ask = (ruleset && ruleset.permissions && Array.isArray(ruleset.permissions.ask)) ? ruleset.permissions.ask : [];
+  const bash = ask.filter((r) => String(r).startsWith('Bash('));
+  const ps = ask.filter((r) => String(r).startsWith('PowerShell('));
+  const bashSet = new Set(bash);
+  const psSet = new Set(ps);
+  return {
+    bash,
+    ps,
+    missingMirror: bash.filter((r) => !psSet.has(`PowerShell(${String(r).slice('Bash('.length)}`)),
+    orphans: ps.filter((r) => !bashSet.has(`Bash(${String(r).slice('PowerShell('.length)}`)),
   };
 }
 
 function sectionGate4() {
   section('GATE 4 - ask-class git verbs: denied to a non-writer subagent, asked for in the forms no shipped rule covers');
-  const envelope = (identity, command) => Object.assign({
+  const envelope = (identity, command, tool = 'Bash') => Object.assign({
     session_id: '5c3b1f2e-0000-4000-8000-000000000000', permission_mode: 'default',
-    hook_event_name: 'PreToolUse', tool_name: 'Bash',
+    hook_event_name: 'PreToolUse', tool_name: tool,
     tool_input: { command, description: 'run a command' },
     tool_use_id: 'toolu_04selfcheckBashGitVerb',
   }, identity);
   // No project directory is passed on purpose: this gate reads the payload and nothing else - no
   // config, no plans, no route state - so a fixture would only hide a dependency if one appeared.
   const B = (identity, command) => runHook(GATE4, envelope(identity, command));
+  // The SAME command through the other shell tool. The gate is wired on `Bash|PowerShell` and reads
+  // `tool_name` from the payload, so `P` differs from `B` in exactly one field - which is what makes
+  // a divergence below attributable to the dialect and to nothing else.
+  const P = (identity, command) => runHook(GATE4, envelope(identity, command, 'PowerShell'));
   const silent = (r) => r.decision === 'allow(passthrough)' && r.exit === 0;
   const denied = (r) => r.decision === 'deny' && r.exit === 0;
   const asked = (r) => r.decision === 'ask' && r.exit === 0;
@@ -922,6 +962,80 @@ function sectionGate4() {
   }
   check('a non-object payload -> DENY (identity cannot be read)', denied(runHook(GATE4, '[]')) && denied(runHook(GATE4, '"text"')));
 
+  // --- THE SECOND SHELL TOOL --------------------------------------------------------------------
+  // Same hook, same payload shape, one field different: `tool_name: "PowerShell"`. Every row here is
+  // a PAIR with its Bash twin, because that is the only way to show the DIALECT decided it - a row
+  // that behaved identically on both tools would prove nothing about either.
+  //
+  // The three documented differences and what each one costs, in the safe direction every time:
+  // PowerShell splits on `;`, `|`, `&&`, `||` and nothing else; it documents no wrapper or
+  // `NAME=value` stripping; and its matching is case-insensitive, so recognition folds case there.
+  {
+    const r = P(SUB, 'git reset --hard');
+    check('PowerShell: non-writer subagent + `git reset --hard` -> DENY (the deny branch is on BOTH tools)',
+      denied(r) && r.reason.includes('"reset"'), r.reason.slice(0, 70));
+    // THE DIAGNOSTIC NAMES THE REAL TOOL. It said "Blocked Bash command" for every payload before the
+    // second tool existed, which on a PowerShell command points the reader at the wrong half of the
+    // ruleset. The Bash twin is the flipping control: if the name were hardcoded again, one of these
+    // two rows goes red whichever constant is chosen.
+    check('the PowerShell deny NAMES PowerShell, and the Bash deny names Bash (neither is hardcoded)',
+      r.reason.includes('Blocked PowerShell command') && !r.reason.includes('Blocked Bash command')
+      && B(SUB, 'git reset --hard').reason.includes('Blocked Bash command'), r.reason.slice(0, 40));
+  }
+  {
+    const r = P(MAIN, 'git.exe reset --hard');
+    check('PowerShell: `git.exe reset --hard` from the main session -> ASK, and the ask names PowerShell too',
+      asked(r) && r.reason.includes('no permission rule covers') && r.reason.includes('This PowerShell command'),
+      r.reason.slice(0, 70));
+  }
+  check('PowerShell: bare `git commit -m x` -> silent (the PowerShell MIRROR rule covers it byte for byte)',
+    silent(P(MAIN, 'git commit -m x')) && silent(P(MAIN, 'git push origin main'))
+    && silent(P(MAIN, 'git.exe push origin main')));
+  check('PowerShell: the documented separators split the command (`;`, `|`, `&&`, `||`)',
+    silent(P(MAIN, 'cd X; git commit -m y')) && silent(P(MAIN, 'cd X && git commit -m y'))
+    && silent(P(MAIN, 'cd X || git commit -m y')) && silent(P(MAIN, 'git commit -m y | Out-String')));
+  // `&` is the CALL OPERATOR in PowerShell, not a list separator. Splitting on it would manufacture
+  // the fragment `git push` out of a command whose first token is `&` and call it rule-matched.
+  check('PowerShell: `& git push` (the call operator) -> ASK, because `&` is not a separator there',
+    asked(P(MAIN, '& git push origin main')));
+  check('...while on Bash the same text IS a separator and the fragment really is rule-matched (the control)',
+    silent(B(MAIN, '& git push origin main')));
+  // No wrapper stripping is documented for PowerShell, and `NAME=value` is not even its syntax.
+  check('PowerShell: an unstripped prefix -> ASK (`timeout 30 git commit`, `FOO=bar git push`)',
+    asked(P(MAIN, 'timeout 30 git commit -m x')) && asked(P(MAIN, 'FOO=bar git push origin main')));
+  check('...and both of those are silent on Bash, where the stripping IS documented (the control)',
+    silent(B(MAIN, 'timeout 30 git commit -m x')) && silent(B(MAIN, 'FOO=bar git push origin main')));
+  // Case folding, one direction only: recognition, never the rule test.
+  check('PowerShell: `GIT Push` is RECOGNISED (matching is case-insensitive there) -> DENY / ASK',
+    denied(P(SUB, 'GIT Push origin')) && asked(P(MAIN, 'GIT Push origin')));
+  check('...and on Bash it is not a verb at all (the control: `GIT Push` -> silent)',
+    silent(B(SUB, 'GIT Push origin')) && silent(B(MAIN, 'GIT Push origin')));
+  check('PowerShell: the rule test does NOT fold case (a passthrough may not rest on an unobserved rewrite)',
+    asked(P(MAIN, 'GIT push origin main')) && silent(P(MAIN, 'git push origin main')));
+  check('PowerShell: every `-C` form still asks, and the Writer is not exempt',
+    asked(P(MAIN, `git -C ${ROOT} push origin main`)) && asked(P(MAIN, `git -C ${ROOT} reset --hard`))
+    && asked(P(WRITER, 'git.exe reset --hard')));
+  check('PowerShell: identity decides before the form (a subagent is DENIED in those same forms)',
+    denied(P(SUB, 'git.exe reset --hard')) && denied(P(SUB, `git -C ${ROOT} reset --hard`))
+    && denied(P(SUB, '& git push')));
+  check('PowerShell: the passthrough branch is intact (a read-only verb, a non-git command, no command at all)',
+    silent(P(SUB, 'git log --oneline -5')) && silent(P(SUB, 'node --version'))
+    && silent(runHook(GATE4, { hook_event_name: 'PreToolUse', tool_name: 'PowerShell', tool_input: { description: 'x' } })));
+  {
+    // THE FAIL DIRECTION DOES NOT DEPEND ON THE TOOL. A payload that PARSES but is not an object
+    // carries no `tool_name` either, so this deny is worded for neither shell - naming one would be
+    // an invention. (Empty stdin never reaches this branch at all: it throws in parseInput and the
+    // fail-closed wrapper answers, as asserted above.)
+    const r = runHook(GATE4, '[]');
+    check('a parseable but non-object payload names no tool -> DENY, worded for neither shell',
+      denied(r) && r.reason.includes('Blocked shell command') && r.reason.includes('fail-closed')
+      && !r.reason.includes('Blocked Bash command'), r.reason.slice(0, 60));
+  }
+  // A payload whose tool_name is a THIRD, unknown string is judged in the PowerShell dialect - the
+  // stricter of the two on every axis - so an unexpected tool can only make this gate ask more.
+  check('an unknown tool_name is judged in the stricter dialect (`timeout 30 git commit` -> ASK, not silent)',
+    asked(runHook(GATE4, envelope(MAIN, 'timeout 30 git commit -m x', 'SomeFutureShell'))));
+
   // --- the verb list against the shipped ruleset, in the direction that can hide a hole --------
   let hook = null;
   try { hook = require(GATE4); } catch (e) { hook = null; }
@@ -932,37 +1046,67 @@ function sectionGate4() {
     && typeof hook.everyGitFormIsRuleMatched === 'function')) return;
   const ruleset = readJson(path.join(PLUGIN_ROOT, 'templates', 'settings.ask-ruleset.json'));
   if (!check('templates/settings.ask-ruleset.json parses', ruleset != null)) return;
-  const cover = formCoverage(ruleset, hook);
-  check('the ruleset really yields git rule FORMS (the parser is live, not silently matching nothing)',
-    cover.forms.length >= 18 && cover.forms.includes('git commit') && cover.forms.includes('git.exe push')
-    && cover.forms.includes('git -c') && cover.dashC.length === 3,
-    `${cover.forms.length} forms, ${cover.dashC.length} of them -C: ${cover.forms.join(' | ')}`);
-  check('every git rule form the hook models is ACCEPTED by shippedRuleMatches (no hole)',
-    cover.notAccepted.length === 0, cover.notAccepted.join(', '));
-  check('every form shippedRuleMatches ACCEPTS is carried by a shipped rule (no over-permission)',
-    cover.unbacked.length === 0, `${cover.accepted.length} accepted: ${cover.accepted.join(' | ')}`);
-  check('the `git -C <projectRoot>` rule forms are deliberately NOT accepted (the path is unverifiable here)',
-    cover.dashCAccepted.length === 0, cover.dashC.join(' | '));
+  // Once per shell tool. A rule is addressed to a tool, so covering the two lists in one pool would
+  // let one tool's rules vouch for the other's - the exact confusion this ticket removed.
+  for (const tool of SHELL_TOOLS) {
+    const cover = formCoverage(ruleset, hook, tool);
+    check(`[${tool}] the ruleset really yields git rule FORMS (the parser is live, not silently matching nothing)`,
+      cover.forms.length >= 18 && cover.forms.includes('git commit') && cover.forms.includes('git.exe push')
+      && cover.forms.includes('git -c') && cover.dashC.length === 3,
+      `${cover.forms.length} forms, ${cover.dashC.length} of them -C: ${cover.forms.join(' | ')}`);
+    check(`[${tool}] every git rule form the hook models is ACCEPTED by shippedRuleMatches (no hole)`,
+      cover.notAccepted.length === 0, cover.notAccepted.join(', '));
+    check(`[${tool}] every form shippedRuleMatches ACCEPTS is carried by a shipped rule (no over-permission)`,
+      cover.unbacked.length === 0, `${cover.accepted.length} accepted: ${cover.accepted.join(' | ')}`);
+    check(`[${tool}] the \`git -C <projectRoot>\` rule forms are deliberately NOT accepted (the path is unverifiable here)`,
+      cover.dashCAccepted.length === 0, cover.dashC.join(' | '));
+  }
   {
     // Both directions get a control that sabotages a COPY of the ruleset, because both are the
     // failure mode this section exists for. The removal direction is the one a verb-level check
     // could not see: `git.exe push` disappears from the rules while EXE_RULE_VERBS still accepts
-    // that form, which must be reported, not tolerated.
-    const added = JSON.parse(JSON.stringify(ruleset));
-    added.permissions.ask.push('Bash(git bisect:*)');
-    const removedExe = JSON.parse(JSON.stringify(ruleset));
-    removedExe.permissions.ask = removedExe.permissions.ask.filter((r) => r !== 'Bash(git.exe push:*)');
-    const removedBare = JSON.parse(JSON.stringify(ruleset));
-    removedBare.permissions.ask = removedBare.permissions.ask.filter((r) => r !== 'Bash(git stash:*)');
-    const a = formCoverage(added, hook);
-    const b = formCoverage(removedExe, hook);
-    const c = formCoverage(removedBare, hook);
-    check('the cross-check can FAIL: a rule form added to a copy is reported as not accepted',
-      a.notAccepted.length === 1 && a.notAccepted[0] === 'git bisect', a.notAccepted.join(', '));
-    check('and the other way: removing Bash(git.exe push:*) from a copy reports git.exe push as unbacked',
-      b.unbacked.length === 1 && b.unbacked[0] === 'git.exe push', b.unbacked.join(', '));
-    check('the same holds for a BARE rule: removing Bash(git stash:*) reports git stash as unbacked',
-      c.unbacked.length === 1 && c.unbacked[0] === 'git stash', c.unbacked.join(', '));
+    // that form, which must be reported, not tolerated. Each control is applied to ONE tool's rules,
+    // and the assertion names that tool - a control that broke both lists at once could not tell a
+    // per-tool check from a pooled one.
+    const sabotage = (mutate) => { const copy = JSON.parse(JSON.stringify(ruleset)); mutate(copy.permissions); return copy; };
+    const drop = (rule) => sabotage((p) => { p.ask = p.ask.filter((r) => r !== rule); });
+    for (const tool of SHELL_TOOLS) {
+      const a = formCoverage(sabotage((p) => p.ask.push(`${tool}(git bisect:*)`)), hook, tool);
+      const b = formCoverage(drop(`${tool}(git.exe push:*)`), hook, tool);
+      const c = formCoverage(drop(`${tool}(git stash:*)`), hook, tool);
+      check(`[${tool}] the cross-check can FAIL: a rule form added to a copy is reported as not accepted`,
+        a.notAccepted.length === 1 && a.notAccepted[0] === 'git bisect', a.notAccepted.join(', '));
+      check(`[${tool}] and the other way: removing ${tool}(git.exe push:*) from a copy reports git.exe push as unbacked`,
+        b.unbacked.length === 1 && b.unbacked[0] === 'git.exe push', b.unbacked.join(', '));
+      check(`[${tool}] the same holds for a BARE rule: removing ${tool}(git stash:*) reports git stash as unbacked`,
+        c.unbacked.length === 1 && c.unbacked[0] === 'git stash', c.unbacked.join(', '));
+    }
+    // A control that proves the two coverages are really SEPARATE: break one tool's list and the
+    // OTHER tool must stay clean. Pooling the rules would make this row impossible to satisfy.
+    const onlyBashBroken = formCoverage(drop('Bash(git.exe push:*)'), hook, 'PowerShell');
+    check('breaking the Bash list leaves the PowerShell coverage clean (the two are not pooled)',
+      onlyBashBroken.unbacked.length === 0 && onlyBashBroken.notAccepted.length === 0,
+      `${onlyBashBroken.unbacked.join(', ')} / ${onlyBashBroken.notAccepted.join(', ')}`);
+
+    // --- THE MIRROR, BOTH WAYS, with a flipping control on each direction ------------------------
+    const gaps = askMirrorGaps(ruleset);
+    check('the ask list is a 1:1 mirror: every Bash rule has a PowerShell twin',
+      gaps.missingMirror.length === 0 && gaps.bash.length > 0,
+      `${gaps.bash.length} Bash / ${gaps.ps.length} PowerShell rules; missing: ${gaps.missingMirror.join(', ')}`);
+    check('and the other way: every PowerShell rule has a Bash base (no rule gates only one tool)',
+      gaps.orphans.length === 0, gaps.orphans.join(', '));
+    check('the blanket allow covers BOTH shell tools (an ask list on a tool with no allow is half a posture)',
+      Array.isArray(ruleset.permissions.allow)
+      && SHELL_TOOLS.every((t) => ruleset.permissions.allow.includes(`${t}(*)`)),
+      JSON.stringify(ruleset.permissions.allow));
+    const mirrorRemoved = askMirrorGaps(drop('PowerShell(git push:*)'));
+    const orphanAdded = askMirrorGaps(sabotage((p) => p.ask.push('PowerShell(git bisect:*)')));
+    check('the mirror check can FAIL: a PowerShell twin removed from a copy is reported as a missing mirror',
+      mirrorRemoved.missingMirror.length === 1 && mirrorRemoved.missingMirror[0] === 'Bash(git push:*)'
+      && mirrorRemoved.orphans.length === 0, mirrorRemoved.missingMirror.join(', '));
+    check('and the ORPHAN direction can FAIL too: a PowerShell rule with no Bash base is reported',
+      orphanAdded.orphans.length === 1 && orphanAdded.orphans[0] === 'PowerShell(git bisect:*)'
+      && orphanAdded.missingMirror.length === 0, orphanAdded.orphans.join(', '));
   }
 
   // --- the recogniser itself, on constructed input (the production functions, not a mirror) ----
@@ -1045,6 +1189,41 @@ function sectionGate4() {
       && hook.recognisedVerb('git-lfs push') === null
       && hook.recognisedVerb('git2 push') === null
       && hook.recognisedVerb('git.exe reset --hard') === 'reset');
+  }
+  {
+    // THE DIALECT DIFFERENCE, ON THE PURE FUNCTIONS. The hook rows above prove the decisions; these
+    // pin the three data differences themselves, each against its Bash value, so a dialect quietly
+    // collapsing into the other one fails here and not only in a decision far downstream.
+    check('the tool argument is a real parameter: the two dialects disagree on the same input',
+      hook.subcommandsOf('a && b || c ; d | e |& f & g\nh').length === 8
+      && hook.subcommandsOf('a && b || c ; d | e |& f & g\nh', 'PowerShell').length === 7);
+    check('PowerShell splits on `;`, `|`, `&&`, `||` and newlines - and NOT on `&` or `|&`',
+      hook.subcommandsOf('git push & git reset', 'PowerShell').length === 1
+      && hook.subcommandsOf('git push |& cat', 'PowerShell').length === 2   // the `|` alone splits it
+      && hook.subcommandsOf('git push & git reset').length === 2);          // Bash: `&` IS a separator
+    check('PowerShell strips no wrapper and no NAME=value prefix (the identity function, by design)',
+      hook.stripWrappers('timeout 30 git commit -m x', 'PowerShell') === 'timeout 30 git commit -m x'
+      && hook.stripWrappers('FOO=bar git push', 'PowerShell') === 'FOO=bar git push'
+      && hook.stripWrappers('timeout 30 git commit -m x') === 'git commit -m x');
+    check('so the same wrapped command is a rule match on Bash and NOT one on PowerShell',
+      hook.shippedRuleMatches('timeout 30 git commit -m x') === true
+      && hook.shippedRuleMatches('timeout 30 git commit -m x', 'PowerShell') === false
+      && hook.shippedRuleMatches('git commit -m x', 'PowerShell') === true);
+    check('recognition folds case on PowerShell only, and the RULE test folds it on neither',
+      hook.recognisedVerb('GIT Push', 'PowerShell') === 'push'
+      && hook.recognisedVerb('GIT Push') === null
+      && hook.shippedRuleMatches('git Push origin', 'PowerShell') === false
+      && hook.shippedRuleMatches('git push origin', 'PowerShell') === true);
+    // The escape character is per dialect too: a backslash is an ordinary path separator in
+    // PowerShell, and the backtick is what makes the next character literal.
+    check('the escape character is the backtick on PowerShell and the backslash on Bash',
+      hook.subcommandsOf('git push `; echo x', 'PowerShell').length === 1
+      && hook.subcommandsOf('git push \\; echo x', 'PowerShell').length === 2
+      && hook.subcommandsOf('git push \\; echo x').length === 1);
+    check('an unknown tool name resolves to the STRICTER dialect, never to Bash',
+      hook.dialectOf('SomeFutureShell') === hook.DIALECTS[hook.TOOL_POWERSHELL]
+      && hook.dialectOf(undefined) === hook.DIALECTS[hook.TOOL_POWERSHELL]
+      && hook.dialectOf('Bash') === hook.DIALECTS[hook.TOOL_BASH]);
   }
   check('everyGitFormIsRuleMatched is FALSE when the verb is in no mappable subcommand (the empty case)',
     hook.everyGitFormIsRuleMatched('git\ncommit -m x') === false
@@ -1468,8 +1647,13 @@ function sectionHookWiring() {
   // whole gate without failing anything else.
   check('Gate 2 matcher is exactly "Agent" (the real subagent-dispatch tool name)',
     !!g2 && g2.matcher === 'Agent', g2 ? `matcher=${JSON.stringify(g2.matcher)}` : 'entry not found');
-  check('Gate 4 matcher is exactly "Bash" (the shell tool it judges)',
-    !!g4 && g4.matcher === 'Bash', g4 ? `matcher=${JSON.stringify(g4.matcher)}` : 'entry not found');
+  // BOTH shell tools, in the documented EXACT-LIST form. A matcher built only from letters, digits,
+  // `_`, `-`, space, `,` and `|` is an alternation LIST, not a regex, so the string is the contract:
+  // drop one alternative and the whole ask list is silently ungated on that tool, with nothing else
+  // in the suite going red. The rule mirror in templates/settings.ask-ruleset.json is the other half
+  // and is asserted in the Gate 4 section.
+  check('Gate 4 matcher is exactly "Bash|PowerShell" (both shell tools the harness exposes)',
+    !!g4 && g4.matcher === 'Bash|PowerShell', g4 ? `matcher=${JSON.stringify(g4.matcher)}` : 'entry not found');
   check('all three wired hook files exist on disk',
     fs.existsSync(GATE1) && fs.existsSync(GATE2) && fs.existsSync(GATE4));
   // The control for the two counts: the same function over a copy with the Gate 4 entry removed
@@ -3328,7 +3512,12 @@ const DOCTRINE_NEWBORN_SENTENCE =
   'A NEWLY BORN ticket - one that is not in the PLAN\'s recorded execution order - is written into '
   + 'the PLAN, announced in ONE sentence, and STOPS the same way.';
 const DOCTRINE_NEWBORN_SKILLS = ['mission', 'work'];
-const BLANKET_GIT_C_RULE = 'Bash(git -C:*)';
+// The refusal of a blanket `git -C` rule is doctrine, and doctrine is per TOOL now that the ask list
+// is mirrored: re-adding it on PowerShell alone would gate every read-only `git -C <other repo> log`
+// on a Windows session while the Bash half stayed correct, which is the same defect wearing the
+// other tool's name. Both spellings are held, and so are both tools' rendered `<projectRoot>` forms.
+const BLANKET_GIT_C_RULES = ['Bash(git -C:*)', 'PowerShell(git -C:*)'];
+const GIT_C_PROJECT_TOOLS = ['Bash', 'PowerShell'];
 // Step 0b/0c is THREE claims, and each rots on its own: that the brief carries the class at all,
 // that the class is resolved as a ROW of the audit table through the resolver's `-Class` flag, and
 // that the Claude host it can select is a DISPATCHABLE agent. The last one is not decoration.
@@ -3645,14 +3834,16 @@ function payloadDoctrineFindings(pluginRoot) {
   const ruleset = readJson(path.join(pluginRoot, 'templates', 'settings.ask-ruleset.json'));
   const ask = (ruleset && ruleset.permissions && Array.isArray(ruleset.permissions.ask)) ? ruleset.permissions.ask : null;
   add('doctrine-no-blanket-git-c',
-    `the factory ruleset carries no blanket "${BLANKET_GIT_C_RULE}" (it gated read-only -C forms too)`,
-    ask !== null && !ask.includes(BLANKET_GIT_C_RULE),
+    `the factory ruleset carries no blanket "git -C" rule on EITHER shell tool (${BLANKET_GIT_C_RULES.join(' / ')}) - it gated read-only -C forms too`,
+    ask !== null && BLANKET_GIT_C_RULES.every((r) => !ask.includes(r)),
     ask === null ? 'the ruleset declares no permissions.ask list' : `${ask.length} rules`);
   // The rendered `git -C <projectRoot> ...` forms are the reason the blanket rule was removable at
-  // all: the push/merge/rebase gate must still hold for the -C form of THIS repository.
+  // all: the push/merge/rebase gate must still hold for the -C form of THIS repository - and it must
+  // hold on both tools, or the -C form of this repository is gated on one shell and free on the other.
   add('doctrine-git-c-project-forms',
-    'the three rendered "git -C <projectRoot>" push/merge/rebase forms are still there',
-    ask !== null && ['push', 'merge', 'rebase'].every((verb) => ask.includes(`Bash(git -C <projectRoot> ${verb}:*)`)),
+    'the rendered "git -C <projectRoot>" push/merge/rebase forms are still there, on both shell tools (6)',
+    ask !== null && GIT_C_PROJECT_TOOLS.every((tool) =>
+      ['push', 'merge', 'rebase'].every((verb) => ask.includes(`${tool}(git -C <projectRoot> ${verb}:*)`))),
     ask === null ? 'no ask list' : `${ask.filter((r) => r.includes('git -C <projectRoot>')).length} -C forms`);
   return out;
 }
@@ -3726,10 +3917,20 @@ const DOCTRINE_CONTROLS = [
     apply: (r) => doctrinePhrase(r, 'skills/review/SKILL.md', DOCTRINE_REVIEW_READINESS_SENTENCE, 'the engine the Reviewer role names, always') },
   { id: 'doctrine-update-conflict-rule', label: '/pnp:update reworded back to the two-predicate rule - a dialog for an artifact the operator never touched',
     apply: (r) => doctrinePhrase(r, 'skills/update/SKILL.md', 'a conflict is raised **only when you edited** the artifact', 'a conflict is raised when you edited the artifact OR the payload changed it') },
-  { id: 'doctrine-no-blanket-git-c', label: 'the blanket git -C rule put back into the factory ruleset',
-    apply: (r) => doctrineRuleset(r, (j) => { j.permissions.ask.push(BLANKET_GIT_C_RULE); }) },
-  { id: 'doctrine-git-c-project-forms', label: 'a rendered git -C <projectRoot> form dropped with it',
-    apply: (r) => doctrineRuleset(r, (j) => { j.permissions.ask = j.permissions.ask.filter((x) => x !== 'Bash(git -C <projectRoot> push:*)'); }) },
+  // One control per TOOL on each of the two rules: a doctrine that is only enforced on Bash is the
+  // half-enforcement this ticket removed, and only a per-tool control can tell the two apart.
+  ...BLANKET_GIT_C_RULES.map((rule) => ({
+    id: 'doctrine-no-blanket-git-c',
+    label: `the blanket "${rule}" put back into the factory ruleset`,
+    apply: (r) => doctrineRuleset(r, (j) => { j.permissions.ask.push(rule); }),
+  })),
+  ...GIT_C_PROJECT_TOOLS.map((tool) => ({
+    id: 'doctrine-git-c-project-forms',
+    label: `the rendered ${tool}(git -C <projectRoot> push) form dropped with it`,
+    apply: (r) => doctrineRuleset(r, (j) => {
+      j.permissions.ask = j.permissions.ask.filter((x) => x !== `${tool}(git -C <projectRoot> push:*)`);
+    }),
+  })),
   // One control per surface, generated from the same table the assertions come from: a surface
   // added to the table without a control would be a check nobody proved can fail, and the runner
   // reports exactly that as a [NOTE] at the end of the section.
@@ -4987,8 +5188,23 @@ const EXAMPLE_CONTROLS = [
   { id: 'example-bump-ops-types', label: 'the note operation dropped, so one op type is undemonstrated',
     apply: (r) => mutateJson(r, exampleBumpOps(r),
       (o) => { o.operations = o.operations.filter((x) => x.op !== 'note'); }) },
+  // DERIVED FROM THE MANIFEST IN THE COPY, not a hardcoded number and not the fixture's own number
+  // either. The finding asks whether the entry this bump declares itself to FOLLOW (position N-1)
+  // exists, so the sabotage has to name a position past the end - and "past the end" depends on the
+  // manifest it is measured against, which is not the same in every copy this control runs over:
+  //   - the shipped payload has N entries and the fixture is numbered N+1;
+  //   - the example CYCLE appends the bump to the manifest first, so there the same fixture number
+  //     sits at N, and "one past the fixture" would name an entry that really does exist.
+  // A literal was worse still: `0009` at base `0007` really did name nothing, and at base `0008`
+  // would name the entry the cycle just appended - the sabotage would stop sabotaging and the row
+  // would go green while proving nothing. `length + 2` overshoots by exactly one in every copy.
   { id: 'example-bump-id', label: 'the bump renumbered so it follows a manifest entry that does not exist',
-    apply: (r) => mutateJson(r, ['examples', 'example-project', 'bump', 'bump.json'], (b) => { b.migration = '0009_example-bump'; }) },
+    apply: (r) => {
+      const manifest = readJson(path.join(r, 'migrations', 'index.json'));
+      if (!Array.isArray(manifest) || manifest.length === 0) throw new Error('the copy carries no readable migrations/index.json');
+      mutateJson(r, ['examples', 'example-project', 'bump', 'bump.json'],
+        (b) => { b.migration = `${String(manifest.length + 2).padStart(4, '0')}_example-bump`; });
+    } },
   { id: 'example-bump-version', label: 'the bump target version no longer rises above its predecessor',
     apply: (r) => mutateJson(r, ['examples', 'example-project', 'bump', 'bump.json'], (b) => { b.targetPluginVersion = '0.0.1'; }) },
   { id: 'example-bump-schema-key', label: 'schema-key.json points at a schema block that does not exist',
@@ -5448,7 +5664,8 @@ function main() {
   console.log('ref is really in an active PLAN, the configured paths.plansDir is proven to be read, and every');
   console.log('non-"off-plan" state of the key asks anyway - and the route-state');
   console.log('guard across R2/R3/unusable/cleared/absent state, and its enforcement.routeWriteGuard toggle,');
-  console.log('whose every failure mode leaves the guard ARMED - and the git-verb gate on the Bash tool, whose');
+  console.log('whose every failure mode leaves the guard ARMED - and the git-verb gate on BOTH shell tools');
+  console.log('(matcher Bash|PowerShell, each command judged in its own tool\'s dialect), whose');
   console.log('three branches are asserted as PAIRS: the same command from a subagent and from the main session');
   console.log('(deny vs silent), each form the shipped rules do NOT spell out - git.exe outside push/merge/rebase,');
   console.log('every -C form, an unstripped wrapper such as sudo or npx or a flagged xargs, irregular whitespace,');
@@ -5458,7 +5675,9 @@ function main() {
   console.log('an ask-class and a read-only verb (deny vs silent), with every shipped git rule parsed into its');
   console.log('literal invocation FORM and held against the hook\'s own accept-space in BOTH directions - each');
   console.log('modelled form must be accepted, each accepted form must be carried by a rule, and the -C forms');
-  console.log('must be refused - with a control per direction on a sabotaged copy of the ruleset) - the role');
+  console.log('must be refused - with a control per direction on a sabotaged copy of the ruleset, run once per');
+  console.log('shell tool, plus the BIDIRECTIONAL mirror between the two tools\' rule lists: every Bash rule has a');
+  console.log('PowerShell twin and every PowerShell rule a Bash base, each direction with its own control) - the role');
   console.log('resolver at its real entrypoint,');
   console.log('including the claude factory fallback and the qal enabled gate - and the config validator at');
   console.log('its own CLI entrypoint, in both directions (a healthy config is accepted, the mistakes the');

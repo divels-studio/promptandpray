@@ -142,7 +142,8 @@ it off with `enforcement.routeWriteGuard: false` in `aiwf.config.json`; every ot
 key - absent, non-boolean, or a config that cannot be read at all - leaves the guard ARMED, and the
 toggle never reaches Gate 1.
 
-**Gate 4** (the plugin's PreToolUse git-verb guard, on the `Bash` tool) covers the two things a
+**Gate 4** (the plugin's PreToolUse git-verb guard, on both shell tools - matcher `Bash|PowerShell`)
+covers the two things a
 declarative `ask` rule cannot do by itself: a background agent's dialog reaches nobody, and a rule
 only covers the form it spells out. It recognises `git` / `git.exe` (with an optional global
 `-C <path>` or `-c <k=v>`) followed by an ask-class verb anywhere in the command - and the verb list
@@ -192,7 +193,8 @@ byte-exact rule test, the ask) is covered; the decision to stay **silent** is wh
 borrows a promise from the documentation.
 
 It fails **closed** like Gate 1, and its header states the risk that comes with that: it sits on
-matcher `Bash`, i.e. on every shell command, so it reads its payload and nothing else - no config,
+matcher `Bash|PowerShell`, i.e. on every shell command of either tool, so it reads its payload and
+nothing else - no config,
 no files, no project directory. It is a **recogniser, not a shell parser**: it does not interpret
 escapes, aliases or env-indirection, so `git \push` and a verb assembled from a variable are not
 seen at all, while a gated verb inside a quoted string still costs a click. Its quote handling is
@@ -204,17 +206,30 @@ the harness's reach into subshells and command substitutions - a `$(git reset --
 but never confirmed as a rule match, which resolves to ask. The guarantee is the identity check and
 the byte-exact rule test; recognition is best-effort.
 
-**One limit is of a different and weaker kind, and is stated separately for that reason: this gate
-sees ONE shell tool.** It is wired on the `Bash` matcher. A harness that exposes a **second shell
-tool** - a Windows session carries a `PowerShell` tool next to `Bash` - runs the same git verbs
-through a tool this hook is never invoked for, and the permission layer does not cover it either:
-every rule in `templates/settings.ask-ruleset.json` is a `Bash(...)` rule, so the entire ask list
-(commit, push, merge, rebase, reset and the rest) has **no coverage** on a second shell tool - both
-halves of which you can check here, in that file and in the matcher in `hooks/hooks.json`. It bites
-hardest on the deny branch: a subagent whose tool allowlist includes the other shell reaches a gated
-git verb
-by **choosing that tool** - no alias, no assembled verb, no quoting - which is why it is not one of
-the recognition residuals above and must not be read as one.
+**Both shell tools are covered, on both layers - and what is left is a CLASS, not a named hole.**
+Gate 4 is wired on the matcher `Bash|PowerShell` (a matcher of letters, digits, `_`, `-`, space, `,`
+and `|` is an exact alternation list, not a regex), and every rule in
+`templates/settings.ask-ruleset.json` ships as a `Bash(<X>)` / `PowerShell(<X>)` mirror pair, with
+the blanket allow present for both tools. Both halves are checkable here, in that file and in the
+matcher in `hooks/hooks.json`, and the self-check asserts the mirror in **both** directions - a
+missing twin leaves a tool unguarded, an orphan `PowerShell(...)` rule with no `Bash(...)` base reads
+as coverage while gating one tool only.
+
+The two dialects are **not** assumed identical, and each difference is resolved towards asking:
+PowerShell's documented AST split is `;`, `|` and (PS7+) `&&` / `||`, so `&` is the **call operator**
+there rather than a separator (`& git push` matches no rule form and asks); no wrapper or
+`NAME=value` stripping is documented for it, so `timeout 30 git commit` asks on PowerShell while
+staying silent on Bash; and its matching is case-insensitive, so recognition folds case there
+(`GIT Push` is recognised) while the byte-exact rule test folds it on neither - a passthrough may not
+rest on a rewrite this repository cannot observe. `Monitor` needs no rules of its own: it runs its
+commands **under the Bash permission rules**, with no namespace of its own.
+
+The residual is the class itself: **a tool neither layer sees.** A harness tool that executed
+commands under some third namespace would be outside the matcher and outside every rule, and a
+subagent whose allowlist carried it would reach a gated git verb by **choosing that tool** - no
+alias, no assembled verb, no quoting, which is why this class is weaker than the recognition
+residuals above and must not be read as one of them. Closing it for a tool that exists is two lines
+(the matcher, and the mirrored rules); a tool nobody has named yet cannot be closed in advance.
 
 ## Commit gate (click-based, no tokens)
 
@@ -222,7 +237,8 @@ Commits are **local only**, and only after the review route passes **and** the o
 approves. The operator types **nothing** - the gate is Claude Code's native visual permission
 dialog:
 
-- After review passes, the Writer attempts the local `git commit`. `Bash(git commit:*)` is an
+- After review passes, the Writer attempts the local `git commit`. `Bash(git commit:*)` - and its
+  `PowerShell(git commit:*)` mirror, so the tool it runs on makes no difference - is an
   **`ask`** rule in the project's `.claude/settings.json`, so Claude Code shows a visual **Yes/No
   permission dialog** -> the operator clicks **Yes** to allow the commit (or **No** to refuse). No
   approval token, no state file, no HEAD/content binding - the operator's click on the current
@@ -231,7 +247,9 @@ dialog:
   **explicit word** in chat (the doctrine gate) AND a native **`ask`** dialog (Yes/No) as the second
   gate. They are `ask` rules, not `deny`: `Bash(git push:*)` / `Bash(git merge:*)` /
   `Bash(git rebase:*)`, their `git.exe` variants, and the `Bash(git -C <projectRoot> ...)`
-  repo-selector forms. The operator does not drive git manually, so the agent must be able to run
+  repo-selector forms - each of them mirrored as a `PowerShell(...)` rule, so the boundary does not
+  depend on which shell tool the session reaches for. The operator does not drive git manually, so
+  the agent must be able to run
   these itself; the gate is the dialog + the explicit-word doctrine + branch isolation.
   Accident-grade, not adversary-proof: the `ask` rules match by prefix, so an explicit push URL, an
   alias/env-indirection, or an escaped verb is out of scope (accepted residual). **Gate 4** narrows
@@ -260,15 +278,16 @@ or escaped push forms, obfuscated command forms, and a few non-prefix-expressibl
 (raw SQL in a DB client, production flags, platform-specific deletes) remain out of scope, and the
 commit/push/destructive dialog only fires in a permission mode that asks.
 
-**The whole git boundary above is scoped to ONE shell tool, and that is the widest gap in it.** Both
-layers are addressed to `Bash`: every rule in `templates/settings.ask-ruleset.json` is a `Bash(...)`
-rule, and Gate 4 is wired on the `Bash` matcher. On a harness that exposes a **second shell tool** -
-a Windows session carries a `PowerShell` tool next to `Bash` - the same commit, push, merge, rebase
-and reset are reachable through a tool neither layer ever sees, with no dialog from either.
-Unlike the residuals in the paragraph above, this one costs an actor
-no cleverness with the command: a subagent whose tool allowlist carries the other shell only has to
-pick it, so Gate 4's deny is bypassable by tool CHOICE. What Gate 4 does on the `Bash` tool it does
-exactly as described; it does not reach any other one.
+**The git boundary above is scoped to the shell tools both layers name, and the widest remaining gap
+is a tool that is on neither list.** Both layers now cover both shells: every rule in
+`templates/settings.ask-ruleset.json` exists as a `Bash(<X>)` / `PowerShell(<X>)` mirror pair, and
+Gate 4 is wired on the `Bash|PowerShell` matcher, so the same commit, push, merge, rebase and reset
+raise a dialog whichever of the two a Windows session picks. `Monitor` is covered by the same rules,
+because it runs its commands under the Bash ones. What is NOT covered is a harness tool neither
+layer names - and unlike the residuals in the paragraph above, that class costs an actor no
+cleverness with the command: a subagent whose tool allowlist carried such a tool would only have to
+pick it, so Gate 4's deny would be bypassable by tool CHOICE. What Gate 4 does on the two shell tools
+it does exactly as described; it does not reach any other one.
 
 The **hard** guarantees live elsewhere, unchanged: the OS read-only Codex sandbox (Reviewer/QA), git
 reversibility, and operator-in-the-loop review/approval (a matching commit, push/merge/rebase, or

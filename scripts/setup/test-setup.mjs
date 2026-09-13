@@ -231,8 +231,11 @@ check('memory seeds are PRINTED for the operator', r1.out.includes('MEMORY SEEDS
   check('the ask ruleset is rendered (no <projectRoot> placeholder survives)', ask.length > 0 && !ask.some((r) => r.includes('<projectRoot>')));
   check('ownedAskRules records what setup inserted, and all of it is present in settings.json',
     Array.isArray(bk.ownedAskRules) && bk.ownedAskRules.length === ask.length && bk.ownedAskRules.every((r) => ask.includes(r)));
-  check('the factory allow/deny posture applied to a project with no permissions block of its own',
-    JSON.stringify((settings.permissions || {}).allow) === JSON.stringify(['Bash(*)']) && JSON.stringify((settings.permissions || {}).deny) === JSON.stringify([]));
+  // The blanket allow exists once per SHELL TOOL the ask list gates, because a permission rule is
+  // addressed to a tool: a posture that allowed only `Bash(*)` while the ask list carries
+  // `PowerShell(...)` rules would be half a posture.
+  check('the factory allow/deny posture applied to a project with no permissions block of its own (both shell tools)',
+    JSON.stringify((settings.permissions || {}).allow) === JSON.stringify(['Bash(*)', 'PowerShell(*)']) && JSON.stringify((settings.permissions || {}).deny) === JSON.stringify([]));
 }
 {
   const r = spawnSync(process.execPath, [SELFCHECK, '--plugin-root', PLUGIN_ROOT, '--project-fixture', p1], { encoding: 'utf8' });
@@ -1261,7 +1264,15 @@ section('21 - a changed project root retires the owned rules rendered for the ol
   check('the install at root A exits 0', r1.status === 0, why(r1));
   const ownedA = ((readJson(at(oldRoot, CONFIG_REL)) || {})._aiwf || {}).ownedAskRules || [];
   const staleRules = ownedA.filter((rule) => rule.includes(oldRoot));
-  check('the fixture precondition holds: root A rules are owned', staleRules.length === 3, `${staleRules.length} rules`);
+  // DERIVED from the payload, not a literal. The `<projectRoot>` rules are three push/merge/rebase
+  // forms PER SHELL TOOL, so the number moved from 3 to 6 the day the ruleset gained its PowerShell
+  // mirror - and it would move again for a third tool. The `> 0` half keeps the precondition from
+  // going vacuous if the template ever lost those rules altogether.
+  const templatedRules = (((readJson(path.join(PLUGIN_ROOT, 'templates', 'settings.ask-ruleset.json')) || {})
+    .permissions || {}).ask || []).filter((rule) => rule.includes('<projectRoot>'));
+  check('the fixture precondition holds: root A rules are owned, one per templated payload rule',
+    templatedRules.length > 0 && staleRules.length === templatedRules.length,
+    `${staleRules.length} owned vs ${templatedRules.length} templated`);
 
   // The project MOVES: same tree, new path. A foreign rule that happens to mention the old root
   // goes in by hand - it is the operator's, and nothing here may touch it.

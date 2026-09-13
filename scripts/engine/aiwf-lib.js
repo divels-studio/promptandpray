@@ -10,12 +10,15 @@
  *     no OS cell); the hard OS `--sandbox read-only` cell applies only on the codex review path.
  *   - pretooluse-dispatch-gate.js (Gate 2, AIWF-G2): raises a native Yes/No dialog when a `writer`
  *     subagent dispatch cannot be traced to a ticket that exists in an active Mission PLAN.
- *   - pretooluse-git-verb-guard.js (Gate 4, AIWF-G4): on the Bash tool. DENIES an ask-class git verb
+ *   - pretooluse-git-verb-guard.js (Gate 4, AIWF-G4): on BOTH shell tools (matcher
+ *     `Bash|PowerShell`, mirroring the `Bash(<X>)` / `PowerShell(<X>)` rule pairs in the ruleset).
+ *     DENIES an ask-class git verb
  *     to any subagent that is not the Writer (a background agent's dialog reaches no operator) and
  *     ASKS for the main session/Writer in the git forms the shipped `ask` rules never spell out:
  *     `git.exe` outside push/merge/rebase, any `git -C <path> <verb>`, and a wrapper the harness
  *     does not strip. What the harness already matches by itself - each subcommand of a chained
- *     command, a `timeout`/`nice` prefix, a `NAME=value` prefix - stays silent.
+ *     command, a `timeout`/`nice` prefix, a `NAME=value` prefix - stays silent. Those last two are
+ *     Bash-only: nothing of the sort is documented for PowerShell, so that dialect asks instead.
  *
  * DELIBERATE ASYMMETRY IN THE FAIL DIRECTION — a decision, not an oversight:
  *   - Gate 1 fails CLOSED (deny). The stake there is a FOREIGN subagent writing to the repo; on a

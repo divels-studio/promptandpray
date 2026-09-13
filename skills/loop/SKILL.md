@@ -83,14 +83,16 @@ and `docs/LOOP.md` (the one-page native mapping).
    correction round and is **not** routed to the Writer.
 6. **Commit gate (click-based).** The gate passes when every required role returns `pass`
    **or** `pass-with-notes` (only a `fail` blocks; a QA `BLOCKED` pauses for the precondition above).
-   The Writer then attempts the **local** `git commit`; `Bash(git commit:*)` is an `ask` rule, so
+   The Writer then attempts the **local** `git commit`; `Bash(git commit:*)` - and its
+   `PowerShell(...)` mirror - is an `ask` rule, so
    Claude Code shows a visual **Yes/No permission dialog** -> the operator clicks **Yes** to allow
    the commit. The operator types **nothing** - the click on the current attempt is the approval;
    there is no token, no state file, no HEAD/content binding. No automatic commits.
 7. **Push / merge / rebase** - executed from the session **only** after the operator's **explicit
    word** in chat **and** a native **Yes/No** permission dialog. These are `ask` prefix rules for
    the common forms - `Bash(git push:*)` / `Bash(git merge:*)` / `Bash(git rebase:*)`, their
-   `git.exe` variants, and the `Bash(git -C <projectRoot> ...)` forms - **plus** branch isolation.
+   `git.exe` variants, and the `Bash(git -C <projectRoot> ...)` forms, each with a `PowerShell(...)`
+   mirror so the tool makes no difference - **plus** branch isolation.
    Accident-grade, not adversary-proof (prefix match, so an explicit push URL / alias / escaped
    verb is out of scope); the operator does not drive git manually. **Destructive / system-changing
    commands** (`git reset/clean/rm/restore/revert/pull/fetch`, database reset/seed, migration
@@ -118,7 +120,8 @@ and `docs/LOOP.md` (the one-page native mapping).
 - Push/merge/rebase run from the session only after the operator's explicit word **and** a native
   Yes/No dialog (`ask` prefix rules + branch isolation); commit and destructive ops
   likewise surface a visual Yes/No dialog for a matching command (`ask` rules). Gate 4 stands behind
-  those rules on the `Bash` tool: denied outright from a non-writer subagent, and a dialog on the git
+  those rules on both shell tools: denied outright from a non-writer subagent, and a dialog on the git
   forms the rules never spell out - `git.exe` outside push/merge/rebase, any `git -C <path> ...`, an
-  unstripped wrapper such as `sudo`. Rules and hook are both `Bash`-scoped, so a second shell tool in
-  the harness is outside both (`docs/LOOP.md`). Accident/role protection, not adversary-proof.
+  unstripped wrapper such as `sudo`. Rules and hook cover `Bash` and `PowerShell` alike (mirrored
+  rules, matcher `Bash|PowerShell`); what is outside both is a tool neither layer names
+  (`docs/LOOP.md`). Accident/role protection, not adversary-proof.

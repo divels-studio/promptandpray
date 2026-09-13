@@ -4,6 +4,71 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.2.3] - 2026-09-13
+
+The gate that was addressed to one shell tool now covers both. A permission rule names a TOOL, and a
+Windows session carries a `PowerShell` tool next to `Bash` - so until now the whole ask list and
+Gate 4 alike stopped at `Bash`, and the same commit, push, reset or recursive delete run through the
+other tool raised no dialog at all. `0007_powershell-ask-ruleset` adds the 54 mirror rules to your
+`.claude/settings.json`; rules you wrote or removed yourself are untouched.
+
+### Added
+
+- **A `PowerShell(<X>)` mirror for every ask rule (HARD-001)** - `templates/settings.ask-ruleset.json`
+  carries 54 pairs instead of 54 rules: the git verbs (including the three `git.exe` forms and the
+  three rendered `git -C <projectRoot>` forms), the package-manager, migration-tool and container
+  rules, and the four delete commands, each in a `Bash(<X>)` and a `PowerShell(<X>)` spelling, plus
+  `PowerShell(*)` next to `Bash(*)` in the factory allow posture. The mirror is an invariant, not a
+  convention: the self-check asserts it in BOTH directions - a `Bash` rule with no PowerShell twin
+  leaves that tool unguarded, and an orphan `PowerShell` rule with no `Bash` base reads as coverage
+  while gating one tool only - each direction with its own flipping control on a sabotaged copy. On a
+  session with no PowerShell tool the new rules are inert, by the same prefix-matching argument that
+  already lets one OS-neutral ruleset carry `Remove-Item` and `rm` side by side.
+- **Gate 4 runs on both shell tools (HARD-001)** - the hook is wired on matcher `Bash|PowerShell` (a
+  matcher of letters, digits, `_`, `-`, space, `,` and `|` is an exact alternation list, not a regex)
+  and reads `tool_name` from the payload to judge each command in that tool's dialect. The deny
+  branch is identical on both and still runs before the form is looked at: a non-writer subagent
+  cannot reach a gated git verb by CHOOSING the other shell any more.
+- **The PowerShell dialect is modelled as LESS, never as the same (HARD-001)** - three documented
+  differences, each resolved towards asking. Its AST split is `;`, `|` and PS7's `&&` / `||`, so `&`
+  stays the call operator it is and `& git push` matches no rule form; no wrapper or `NAME=value`
+  stripping is documented for it, so `timeout 30 git commit` asks there while staying silent on Bash;
+  and its matching is case-insensitive, so recognition folds case (`GIT Push` is recognised, and a
+  background subagent is denied for it) while the byte-exact rule test folds case on neither tool - a
+  passthrough may not rest on a rewrite this repository cannot observe. An unknown `tool_name`
+  resolves to the PowerShell dialect, the stricter of the two on every axis.
+
+### Changed
+
+- **Every deny and ask names the REAL tool (HARD-001)** - the diagnostics said "Blocked Bash command"
+  for every payload, which on a PowerShell command sent the reader to the wrong half of the ruleset;
+  they now carry the tool from the payload, and a payload too malformed to name one says "shell"
+  rather than inventing a name. Asserted on both tools with the other as the flipping control, in the
+  spike matrix and in the self-check.
+- **The honest limit is now a class, not a named hole (HARD-001)** - `README.md`,
+  `docs/LOOP.md`, `docs/WORKFLOW.md`, `docs/OPERATOR_PROTOCOL.md`, `skills/loop/SKILL.md` and the two
+  engine headers said "this gate sees one shell tool" and "every rule is a `Bash(...)` rule". Both
+  layers now cover both shells, `Monitor` is documented as running under the Bash rules, and what
+  remains is stated as the class it is: a tool NEITHER layer names, closable in two lines for any
+  tool that exists, unclosable in advance for one nobody has named.
+- **Branch policy states the cross-repository rule (HARD-001)** - a session does not run a mutating
+  git or filesystem operation against a repository outside its own project root without the
+  operator's explicit word for that exact operation. The `-C` forms ask by construction on both
+  tools; the dialog is the backstop, the word is the rule.
+- **The example fixture's negative control is relative (HARD-001)** - the self-check's
+  `example-bump-id` sabotage hardcoded `0009_example-bump` against a fixture at `0007`. The fixture
+  ascends by 1 with every shipped migration, so that constant would have become a VALID id two
+  releases on and the control would have gone green while proving nothing. It now renumbers one past
+  whatever the fixture currently is.
+
+### Security
+
+- The commit / push / merge / rebase / destructive boundary no longer depends on which shell tool an
+  agent reaches for. Both the declarative `ask` rules and the hook behind them cover `Bash` and
+  `PowerShell`; a background subagent is denied an ask-class git verb on either. This was the widest
+  gap in that boundary, because unlike every other residual it needed no unusual command form - only
+  the other tool.
+
 ## [0.2.2] - 2026-09-09
 
 A third enforcement hook, for the two things a permission rule cannot do on its own: a background
@@ -467,6 +532,7 @@ that project (adopt mode, two Writer dispatches through the plugin-hosted loop, 
 - The `writer` template renders its template-contract comment and a mixed-slash overrides path
   into the project's `agents/writer.md` (cosmetic). (Fixed in 0.1.1.)
 
+[0.2.3]: https://github.com/divels-studio/promptandpray/releases/tag/v0.2.3
 [0.2.2]: https://github.com/divels-studio/promptandpray/releases/tag/v0.2.2
 [0.2.1]: https://github.com/divels-studio/promptandpray/releases/tag/v0.2.1
 [0.2.0]: https://github.com/divels-studio/promptandpray/releases/tag/v0.2.0

@@ -1,6 +1,15 @@
 'use strict';
 /*
- * Gate 4 - PreToolUse(Bash). ASK-CLASS GIT VERBS, JUDGED BY WHO IS RUNNING THE COMMAND.
+ * Gate 4 - PreToolUse(Bash|PowerShell). ASK-CLASS GIT VERBS, JUDGED BY WHO IS RUNNING THE COMMAND.
+ *
+ * TWO SHELL TOOLS, ONE GATE. A permission rule is addressed to a TOOL, and a Windows session carries
+ * a `PowerShell` tool next to `Bash`, so a gate wired on one of them left the same git verbs
+ * completely ungated on the other - no unusual command form needed, only the other tool. This hook is
+ * therefore wired on matcher `Bash|PowerShell` (a matcher built only from letters, digits, `_`, `-`,
+ * space, `,` and `|` is a documented EXACT alternation list, not a regex), and every ask rule in
+ * templates/settings.ask-ruleset.json exists as a `Bash(<X>)` / `PowerShell(<X>)` mirror pair. The
+ * hook reads `tool_name` from the payload and judges the command in THAT tool's dialect; what the two
+ * dialects do and do not share is spelled out in face (2) below and encoded in DIALECTS.
  *
  * Two faces of one hole, neither of them adversarial:
  *
@@ -28,6 +37,28 @@
  *     harness does not strip (`sudo`, `npx`, `docker exec`, `direnv exec`, `watch`, `setsid`,
  *     `flock`, `find -exec`, a flagged `xargs`), and irregular whitespace between the tokens. Those
  *     reach nobody today; for those, this gate asks.
+ *       THE POWERSHELL DIALECT IS NARROWER, AND DELIBERATELY MODELLED AS LESS, NOT AS THE SAME.
+ *     The documentation describes an AST split into subcommands on `;`, `|` and (PowerShell 7+)
+ *     `&&` / `||`, with the rule required to match every subcommand - so those four separators are
+ *     mirrored here. Three differences are load-bearing and each is resolved towards ASKING:
+ *       - `&` is NOT a separator here. In PowerShell it is the CALL OPERATOR (`& git push` invokes
+ *         git), not a background/list operator, so treating it as a separator would manufacture the
+ *         fragment `git push` out of a command whose first token is `&` - a fragment the harness
+ *         never matches a rule against, i.e. a false passthrough. `& git push` therefore matches no
+ *         rule form and asks. `|&` is not a PowerShell operator at all and is likewise absent.
+ *       - NO WRAPPER OR `NAME=value` STRIPPING IS MODELLED. Neither is documented for PowerShell
+ *         (and `NAME=value` is not even PowerShell syntax), so a recognised verb behind anything at
+ *         all - `sudo`, `timeout`, `Start-Process`, a call operator - is a form outside the exact
+ *         shipped rule and asks. Modelling a rewrite the host may not perform is the one mistake
+ *         that turns into a silent pass.
+ *       - MATCHING IS CASE-INSENSITIVE WITH ALIAS CANONICALIZATION, so RECOGNITION here is
+ *         case-insensitive too on this tool: `GIT Push` is recognised as `push`. That is the safe
+ *         direction and it closes a real edge - a rule `PowerShell(git push:*)` would match that
+ *         spelling, and a matching rule is a dialog raised at a background subagent, which reaches
+ *         nobody. The RULE TEST below stays byte-exact and case-SENSITIVE all the same: this
+ *         repository cannot observe the host's canonicalization, and a passthrough is the one
+ *         decision that must not rest on an unobserved rewrite. So `GIT Push` is recognised, denied
+ *         to a subagent, and ASKED for the session.
  *
  * ASKING WHERE A RULE ALSO MATCHES IS FREE, WHICH IS WHY THE DEFAULT IS INVERTED. A hook decision
  * does not bypass the permission rules: an `ask` rule still prompts after a hook returned `allow`,
@@ -69,27 +100,27 @@
  * byte-exact rule test and the ask branch are this repository's own behaviour and are covered; the
  * decision to STAY SILENT is the part that borrows a promise from the documentation.
  *
- * A DIFFERENT AND WEAKER LIMIT, WHICH IS NOT ONE OF THE ABOVE: THIS GATE SEES ONE SHELL TOOL. It is
- * wired on matcher `Bash`. A harness that exposes a SECOND shell tool - a Windows session carries a
- * `PowerShell` tool next to `Bash` - can run the very same git verbs through that other tool, and
- * this hook is never invoked for it. Neither is the permission layer: every rule in
- * templates/settings.ask-ruleset.json is a `Bash(...)` rule, so the whole ask list - commit, push,
- * merge, rebase, reset and the rest - has NO coverage on a second shell tool. Both halves of that
- * are checkable from this repository: read the matcher in hooks/hooks.json and the rule prefixes in
- * the ruleset.
- *   That matters most for the DENY branch, and it is stated plainly rather than folded into the
- * residuals above: a subagent whose tool allowlist includes the other shell can reach a gated git
- * verb by CHOOSING THAT TOOL. It needs no exotic command form - no alias, no assembled verb, no
- * quoting - which is what makes this weaker than everything listed above it. Nothing in this file
- * closes it; what this file does close, on the Bash tool, it closes exactly as described.
- * This is why the record of the hook removed in N4-R still stands (see scripts/engine/aiwf-lib.js):
- * emulating shell semantics for everyone remains a treadmill nobody should walk. This gate does not
- * try to - it recognises, and it decides on identity.
+ * THE TOOL-CHOICE RESIDUAL, NOW A CLASS RATHER THAN A NAMED HOLE. Both shell tools a Claude Code
+ * session exposes are covered on both layers: this hook is wired on `Bash|PowerShell`, and every ask
+ * rule ships as a `Bash(<X>)` / `PowerShell(<X>)` mirror pair. Both halves stay checkable from this
+ * repository - read the matcher in hooks/hooks.json and the rule prefixes in the ruleset - and the
+ * self-check asserts the mirror in BOTH directions, so a rule added on one tool alone is a failure
+ * rather than a quiet gap. `Monitor` needs no rules of its own: it runs its commands UNDER the Bash
+ * permission rules and has no namespace of its own.
+ *   What remains is the CLASS, not an instance of it: a tool NEITHER layer sees. A future harness
+ * tool that executes commands under some third namespace would be outside both the matcher above and
+ * every rule in the ruleset, and a subagent whose allowlist carried it could reach a gated git verb
+ * by CHOOSING THAT TOOL - no alias, no assembled verb, no quoting, which is what makes this class
+ * weaker than every recognition residual above. Closing it for a tool that exists is two lines (the
+ * matcher, and the mirrored rules); what cannot be closed in advance is a tool nobody has named yet.
+ * This is also why the record of the hook removed in N4-R still stands (see
+ * scripts/engine/aiwf-lib.js): emulating shell semantics for everyone remains a treadmill nobody
+ * should walk. This gate does not try to - it recognises, and it decides on identity.
  *
  * FAIL DIRECTION: DENY (`runFailClosed`), like Gate 1 - WITH A NAMED RISK, because the blast radius
- * is not Gate 1's. Gate 1 sits on four mutation tools; this one sits on matcher `Bash`, i.e. on
- * EVERY shell command of the session, so a hook that throws stops the session's whole shell rather
- * than one tool class. Three consequences, deliberate:
+ * is not Gate 1's. Gate 1 sits on four mutation tools; this one sits on matcher `Bash|PowerShell`,
+ * i.e. on EVERY shell command of the session on EITHER tool, so a hook that throws stops the
+ * session's whole shell rather than one tool class. Three consequences, deliberate:
  *   - this file requires nothing but ./aiwf-lib: no fs, no config, no project directory, no I/O
  *     that can fail. There is nothing here for an environment to break;
  *   - the spike and self-check matrices carry an ordinary non-git command and a malformed stdin as
@@ -114,8 +145,10 @@
  *     `git.exe push ...` goes on being passed through here with nothing gating it.
  *   - the three `git -C <projectRoot> ...` rule forms are the one deliberate exception and are
  *     asserted as REFUSED rather than skipped (the reason is on EXE_RULE_VERBS below).
- * Each direction carries its own control on a sabotaged copy of the ruleset: a form added, the
- * `git.exe` rule removed, a bare rule removed.
+ * Both directions run PER TOOL, over the `Bash(...)` and the `PowerShell(...)` rules separately, and
+ * the mirror between the two lists is its own bidirectional assertion. Each direction carries its own
+ * control on a sabotaged copy of the ruleset: a form added, the `git.exe` rule removed, a bare rule
+ * removed, a mirror removed, an orphan `PowerShell(...)` rule with no `Bash(...)` base added.
  *   That cross-check, and the same need for every other decision this
  * file makes, is why the gate RUNS only when this is the main module while the constants and the
  * pure functions beside them are EXPORTED (see `module.exports` at the end for the current surface -
@@ -160,6 +193,14 @@ const EXE_RULE_VERBS = new Set(['push', 'merge', 'rebase']);
 // sees - and a manufactured subcommand is exactly the shape that turns into a false passthrough.
 const TWO_CHAR_SEPARATORS = ['&&', '||', '|&'];
 const ONE_CHAR_SEPARATORS = new Set([';', '|', '&', '\n', '\r']);
+// The PowerShell set is SMALLER, and every character missing from it is missing for a reason (see
+// face (2) in the header): the documented AST split is `;`, `|` and, on PowerShell 7+, `&&` / `||`.
+// `&` is the CALL OPERATOR there, not a list operator, and `|&` is not an operator at all - treating
+// either as a separator would manufacture a fragment the harness never matches a rule against.
+// Fewer separators means LONGER fragments, which are harder to resolve into a rule prefix, so this
+// asymmetry can only make the gate ask more.
+const PS_TWO_CHAR_SEPARATORS = ['&&', '||'];
+const PS_ONE_CHAR_SEPARATORS = new Set([';', '|', '\n', '\r']);
 // Wrappers the harness strips before matching. This set is CLOSED on purpose: `sudo`, `npx`,
 // `docker exec`, `direnv exec`, `watch`, `setsid`, `flock` and `find -exec` are NOT stripped by the
 // harness, so a command behind one of them matches no rule and must reach the ask branch here.
@@ -175,6 +216,48 @@ const FLAG_SENSITIVE_WRAPPERS = new Set(['xargs', 'command', 'builtin']);
 // `nice -n 10`, `stdbuf -oL`). The others take the command directly, so consuming tokens after them
 // would be inventing a rewrite the harness never performs.
 const WRAPPERS_WITH_ARGS = new Set(['timeout', 'time', 'nice', 'stdbuf']);
+
+// ---- the two shell dialects -------------------------------------------------------------------
+// One table, so that every difference between the tools is a DATA difference at one place rather
+// than a second copy of the decomposition, the rule test and the recogniser. Everything the pure
+// functions below do differently between the two tools is a field here.
+//
+// `escape` is the character that makes the NEXT character literal outside single quotes. In Bash
+// that is `\`; in PowerShell it is the BACKTICK, and `\` is an ordinary path separator - modelling
+// `\` as an escape on PowerShell would swallow the character after every separator of an ordinary
+// Windows path, which is the wrong kind of wrong even though it happens to fail safe.
+// `stripsWrappers` is false for PowerShell
+// because no wrapper or `NAME=value` stripping is documented there; `caseInsensitiveVerb` is true
+// for PowerShell because its rule matching is documented as case-insensitive, so recognition must
+// not be narrower than the rule layer. Both PowerShell settings resolve towards ASKING; see the
+// header for why that direction is the only safe one.
+const TOOL_BASH = 'Bash';
+const TOOL_POWERSHELL = 'PowerShell';
+const DIALECTS = Object.freeze({
+  [TOOL_BASH]: Object.freeze({
+    name: TOOL_BASH,
+    twoCharSeparators: TWO_CHAR_SEPARATORS,
+    oneCharSeparators: ONE_CHAR_SEPARATORS,
+    escape: '\\',
+    stripsWrappers: true,
+    caseInsensitiveVerb: false,
+  }),
+  [TOOL_POWERSHELL]: Object.freeze({
+    name: TOOL_POWERSHELL,
+    twoCharSeparators: PS_TWO_CHAR_SEPARATORS,
+    oneCharSeparators: PS_ONE_CHAR_SEPARATORS,
+    escape: '`',
+    stripsWrappers: false,
+    caseInsensitiveVerb: true,
+  }),
+});
+// ANYTHING THAT IS NOT EXACTLY "Bash" RESOLVES TO THE POWERSHELL DIALECT, and that default is the
+// decision, not an accident: PowerShell is the stricter of the two on every axis (a subset of the
+// separators, no wrapper stripping, case-insensitive recognition), so an unexpected or missing
+// `tool_name` can only make this gate ask MORE, never less. The pure functions below default the
+// other way, to `Bash`, because their callers are the self-check and the spike matrix, whose Bash
+// rows predate the second tool and name it explicitly nowhere.
+const dialectOf = (tool) => (tool === TOOL_BASH ? DIALECTS[TOOL_BASH] : DIALECTS[TOOL_POWERSHELL]);
 
 // `git` / `git.exe` as a whole word - the MIRROR of the verb-token question below, decided by the
 // same two rules, and audited the same way.
@@ -250,7 +333,7 @@ const VERB_TOKEN_PREFIX = /^[A-Za-z-]*/;
 // the glued `-c<k>=<v>`. A bare `-c` is NOT stepped over - it is a member of the verb set. This is
 // RECOGNITION only, i.e. "is an ask-class verb being invoked here at all"; whether any rule covers
 // the form is a separate question, answered by shippedRuleMatches below.
-function verbAfterGit(rest) {
+function verbAfterGit(rest, dialect) {
   const tokens = rest.match(TOKEN) || [];
   let i = 0;
   while (i < tokens.length) {
@@ -262,20 +345,31 @@ function verbAfterGit(rest) {
   const token = tokens[i];
   if (typeof token !== 'string') return null;
   const bare = VERB_TOKEN_PREFIX.exec(token.replace(/^["']/, '').replace(/["']$/, ''))[0];
-  return VERB_SET.has(bare) ? bare : null;
+  if (VERB_SET.has(bare)) return bare;
+  // Case folding is a PER-DIALECT question, not a global one. On Bash `Push` is simply not a verb -
+  // git's own subcommand lookup is case-sensitive and so is the rule matcher. On PowerShell the rule
+  // matcher is documented as case-insensitive, so `PowerShell(git push:*)` would match `GIT Push`,
+  // and a matching rule is a dialog - one that reaches nobody when a background subagent raises it.
+  // Folding here keeps recognition from being NARROWER than the rule layer; the byte-exact rule test
+  // below deliberately does not fold, so the extra recognitions resolve to deny or ask, never to a
+  // passthrough.
+  if (!dialect.caseInsensitiveVerb) return null;
+  const folded = bare.toLowerCase();
+  return VERB_SET.has(folded) ? folded : null;
 }
 
 // The FIRST ask-class git verb invoked anywhere in the command, or null. Exported for the
 // self-check, which asserts the recogniser on constructed input as well as through a real hook run.
-function recognisedVerb(command) {
+function recognisedVerb(command, tool = TOOL_BASH) {
   if (typeof command !== 'string') return null;
+  const dialect = dialectOf(tool);
   const re = new RegExp(`${NOT_IDENT_BEFORE}(${GIT_WORD})${NOT_IDENT_AFTER}`, 'gi');
   let m;
   while ((m = re.exec(command)) !== null) {
     // m[0] includes the character BEFORE the git token, so m.index + m[0].length - where exec has
     // already parked lastIndex - is the end of the token itself. The scan therefore continues at
     // the next character and a second `git` right after the first is still seen.
-    const verb = verbAfterGit(command.slice(m.index + m[0].length));
+    const verb = verbAfterGit(command.slice(m.index + m[0].length), dialect);
     if (verb !== null) return verb;
   }
   return null;
@@ -295,18 +389,19 @@ function recognisedVerb(command) {
 // backslash escapes the next character outside single quotes, for the same reason. Both only ever
 // make fragments LONGER, i.e. harder to match a rule prefix, which is the safe direction; neither
 // pretends to be shell parsing (see the header).
-function subcommandsOf(command) {
+function subcommandsOf(command, tool = TOOL_BASH) {
+  const dialect = dialectOf(tool);
   const src = String(command);
   const parts = [];
   let buf = '';
   let quote = null;
   for (let i = 0; i < src.length; i += 1) {
     const ch = src[i];
-    if (ch === '\\' && quote !== "'" && i + 1 < src.length) { buf += ch + src[i + 1]; i += 1; continue; }
+    if (ch === dialect.escape && quote !== "'" && i + 1 < src.length) { buf += ch + src[i + 1]; i += 1; continue; }
     if (quote !== null) { buf += ch; if (ch === quote) quote = null; continue; }
     if (ch === '"' || ch === "'") { quote = ch; buf += ch; continue; }
-    if (TWO_CHAR_SEPARATORS.includes(src.slice(i, i + 2))) { parts.push(buf); buf = ''; i += 1; continue; }
-    if (ONE_CHAR_SEPARATORS.has(ch)) { parts.push(buf); buf = ''; continue; }
+    if (dialect.twoCharSeparators.includes(src.slice(i, i + 2))) { parts.push(buf); buf = ''; i += 1; continue; }
+    if (dialect.oneCharSeparators.has(ch)) { parts.push(buf); buf = ''; continue; }
     buf += ch;
   }
   parts.push(buf);
@@ -318,7 +413,12 @@ function subcommandsOf(command) {
 // Stripping only ever makes a subcommand look MORE like a rule, so it is kept literal and closed:
 // a wrapper that is not on the list stops the loop, which is what sends `sudo git reset --hard` to
 // the ask branch instead of quietly matching `git reset`.
-function stripWrappers(subcommand) {
+function stripWrappers(subcommand, tool = TOOL_BASH) {
+  // PowerShell documents NO wrapper stripping and has no `NAME=value` prefix syntax at all, so on
+  // that dialect this is the identity function: a recognised verb behind anything whatsoever is a
+  // form outside the exact shipped rule, and it asks. Modelling a rewrite the host may not perform
+  // is the single mistake that converts into a silent pass.
+  if (!dialectOf(tool).stripsWrappers) return String(subcommand);
   let rest = String(subcommand);
   let m;
   while ((m = /^([A-Za-z_][A-Za-z0-9_]*=\S*) /.exec(rest)) !== null) rest = rest.slice(m[0].length);
@@ -342,6 +442,9 @@ function stripWrappers(subcommand) {
 // and nothing else (templates/settings.ask-ruleset.json):
 //   - `git <verb>` for every ask-class verb - the bare rules, e.g. Bash(git commit:*);
 //   - `git.exe <verb>` for push|merge|rebase only - the three `git.exe` rules.
+// The two shapes are the SAME on both tools, because the ruleset ships a 1:1 `PowerShell(<X>)`
+// mirror of every `Bash(<X>)` rule and the self-check asserts that mirror in both directions. Only
+// the pre-match rewriting differs, and it is `stripWrappers` that carries the difference.
 // EXACTLY ONE SPACE, on BOTH sides of the verb: no leading whitespace, one space between the
 // executable and the verb, and after the verb either the end of the string or one space followed by
 // a non-space. A tab or a second space is whitespace this test cannot resolve into a rule prefix -
@@ -350,8 +453,8 @@ function stripWrappers(subcommand) {
 // asks. The comparison is case-SENSITIVE for the same reason. Everything it cannot confirm -
 // `git  commit`, `git commit\t-m x`, `GIT commit`, `git -C <path> <anything>`, `git.exe reset` -
 // is a form this predicate refuses to call gated.
-function shippedRuleMatches(subcommand) {
-  const rest = stripWrappers(subcommand);
+function shippedRuleMatches(subcommand, tool = TOOL_BASH) {
+  const rest = stripWrappers(subcommand, tool);
   const m = /^(git\.exe|git) (\S+)(?: (?!\s)|$)/.exec(rest);
   if (m === null) return false;
   const verb = m[2];
@@ -366,18 +469,28 @@ function shippedRuleMatches(subcommand) {
 // recognised somewhere in the command but in no subcommand this function could map to a rule - a
 // form neither layer would gate (`git\ncommit` splits into `git` and `commit`, and neither is a
 // rule match). Reporting "nothing to see" there is exactly the silent bypass being avoided.
-function everyGitFormIsRuleMatched(command) {
-  const withVerb = subcommandsOf(command).filter((s) => recognisedVerb(s) !== null);
+function everyGitFormIsRuleMatched(command, tool = TOOL_BASH) {
+  const withVerb = subcommandsOf(command, tool).filter((s) => recognisedVerb(s, tool) !== null);
   if (withVerb.length === 0) return false;
-  return withVerb.every((s) => shippedRuleMatches(s));
+  return withVerb.every((s) => shippedRuleMatches(s, tool));
 }
 
-// The Bash tool names its payload `command`. Anything else - a tool_input that is not an object, a
-// missing or blank command - is "nothing to recognise", which is a passthrough (see the header).
+// BOTH shell tools name their payload `command`. Anything else - a tool_input that is not an object,
+// a missing or blank command - is "nothing to recognise", which is a passthrough (see the header).
 function commandOf(input) {
   if (!isPlainObject(input.tool_input)) return null;
   const c = input.tool_input.command;
   return (typeof c === 'string' && c.trim() !== '') ? c : null;
+}
+
+// The tool the harness says it is about to run, for the DIAGNOSTICS. A deny or an ask that names the
+// wrong shell sends the reader to the wrong rules, so this is read from the payload rather than
+// hardcoded; the DECISION is taken in `dialectOf(name)`, which treats everything but "Bash" as
+// PowerShell. A payload with no usable `tool_name` is reported as the neutral "shell" and judged in
+// the stricter dialect.
+function toolNameOf(input) {
+  const t = input.tool_name;
+  return (typeof t === 'string' && t.trim() !== '') ? t : 'shell';
 }
 
 if (require.main === module) {
@@ -388,14 +501,18 @@ if (require.main === module) {
     // Gate 1). This is the hook-level error case, not the "unreadable command" case above.
     if (!isPlainObject(input)) {
       return lib.denyPreTool(
-        `Blocked Bash command: hook input is not an object; cannot verify actor identity ` +
+        `Blocked shell command: hook input is not an object; cannot verify actor identity ` +
         `(fail-closed). ${G4}`
       );
     }
 
+    // The tool decides the dialect BEFORE anything is recognised, and it names itself in every
+    // diagnostic below: "Blocked Bash command" on a PowerShell payload would point the reader at the
+    // wrong half of the ruleset.
+    const toolName = toolNameOf(input);
     const command = commandOf(input);
     if (command === null) return lib.allowPassthrough();
-    const verb = recognisedVerb(command);
+    const verb = recognisedVerb(command, toolName);
     if (verb === null) return lib.allowPassthrough(); // the overwhelmingly common case: not a gated git command
 
     // Identity, with the SAME own-property semantics as Gate 1: presence, never truthiness. Only
@@ -411,8 +528,8 @@ if (require.main === module) {
         ? `agent_type ${input.agent_type === null ? 'null' : JSON.stringify(input.agent_type)}`
         : 'agent_id present, agent_type absent';
       return lib.denyPreTool(
-        `Blocked Bash command: it invokes the ask-class git verb "${verb}", and a non-writer or ` +
-        `incomplete subagent identity (${detail}) may not run one. Such a command is gated by an ` +
+        `Blocked ${toolName} command: it invokes the ask-class git verb "${verb}", and a non-writer ` +
+        `or incomplete subagent identity (${detail}) may not run one. Such a command is gated by an ` +
         `operator dialog, and a background agent's dialog never reaches the operator - from here it ` +
         `would either stall or pass unseen. Report the command to the main session (or the Writer), ` +
         `where the dialog is visible and the operator can answer it. ${G4}`
@@ -421,21 +538,31 @@ if (require.main === module) {
 
     // Main session / Writer. Silent only where a shipped rule really matches the subcommand the
     // harness would test - the harness is about to raise that dialog itself.
-    if (everyGitFormIsRuleMatched(command)) return lib.allowPassthrough();
+    if (everyGitFormIsRuleMatched(command, toolName)) return lib.allowPassthrough();
 
+    // The two dialects fail on different forms, so the advice names the ones that really apply to
+    // the tool in hand. Getting this wrong is not cosmetic: telling a PowerShell operator that a
+    // `timeout`-prefixed command is already gated would be advice this repository has no basis for.
+    const covered = dialectOf(toolName).stripsWrappers
+      ? `(and so does a chained or wrapper-prefixed one - the harness splits subcommands and strips `
+        + `timeout/nice/env prefixes itself), but a git.exe form outside push/merge/rebase, any `
+        + `"git -C <path> ..." form, an unstripped wrapper such as sudo or npx, and irregular `
+        + `spacing between the tokens match nothing`
+      : `(and so does each subcommand of a ";" / "|" / "&&" / "||" compound, which the harness `
+        + `splits on its own), but a git.exe form outside push/merge/rebase, any `
+        + `"git -C <path> ..." form, a call-operator invocation such as "& git ${verb}", any `
+        + `prefix at all (PowerShell documents no wrapper stripping, so none is assumed here), and `
+        + `irregular spacing between the tokens match nothing`;
     return lib.askPreTool(
-      `This command invokes the ask-class git verb "${verb}" in a form no permission rule covers. ` +
-      `The rules are literal: "git ${verb} ..." raises your dialog (and so does a chained or ` +
-      `wrapper-prefixed one - the harness splits subcommands and strips timeout/nice/env prefixes ` +
-      `itself), but a git.exe form outside push/merge/rebase, any "git -C <path> ..." form, an ` +
-      `unstripped wrapper such as sudo or npx, and irregular spacing between the tokens match ` +
-      `nothing and would raise no dialog at all. This is that dialog. Run it as a plain ` +
+      `This ${toolName} command invokes the ask-class git verb "${verb}" in a form no permission ` +
+      `rule covers. The rules are literal: "git ${verb} ..." raises your dialog ` +
+      `${covered} and would raise no dialog at all. This is that dialog. Run it as a plain ` +
       `"git ${verb} ..." from the repository root to keep the ordinary one. ${G4}`
     );
   });
 }
 
 module.exports = {
-  GIT_ASK_VERBS, recognisedVerb, subcommandsOf, stripWrappers, shippedRuleMatches,
-  everyGitFormIsRuleMatched,
+  GIT_ASK_VERBS, TOOL_BASH, TOOL_POWERSHELL, DIALECTS, dialectOf,
+  recognisedVerb, subcommandsOf, stripWrappers, shippedRuleMatches, everyGitFormIsRuleMatched,
 };
