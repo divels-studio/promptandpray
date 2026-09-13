@@ -1,8 +1,8 @@
 {
   "$schema": "D:/promptandpray/schema/aiwf.config.schema.json",
   "_aiwf": {
-    "installedPluginVersion": "0.2.3",
-    "lastMigrationApplied": "0007_powershell-ask-ruleset",
+    "installedPluginVersion": "0.2.4",
+    "lastMigrationApplied": "0008_consumer-correctness",
     "migrationJournal": null,
     "managedRegions": {
       ".claude/aiwf-native/roles.json": {

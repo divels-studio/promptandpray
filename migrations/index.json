@@ -5,5 +5,6 @@
   { "id": "0004_audit-table", "targetPluginVersion": "0.2.0" },
   { "id": "0005_posix-legs", "targetPluginVersion": "0.2.1" },
   { "id": "0006_git-verb-gate", "targetPluginVersion": "0.2.2" },
-  { "id": "0007_powershell-ask-ruleset", "targetPluginVersion": "0.2.3" }
+  { "id": "0007_powershell-ask-ruleset", "targetPluginVersion": "0.2.3" },
+  { "id": "0008_consumer-correctness", "targetPluginVersion": "0.2.4" }
 ]

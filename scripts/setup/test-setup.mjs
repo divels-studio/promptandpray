@@ -27,7 +27,10 @@
  *      take-new applies the render), a decision nobody can answer STOPS the run with zero bytes
  *      written, an answer for an address nobody asked about is refused by name, "merge" is not an
  *      adopt word, an installed project is refused outright, the pre-adopt blockers keep their exact
- *      force, and the superseded-legacy list is advisory text that touches nothing.
+ *      force, and the superseded-legacy list is advisory text that touches nothing;
+ *  10. a project that ALREADY carries plans under `<plansDir>/active/`, or an overrides document, is
+ *      warned about on both paths - the interview at the question, the generator as a note in its
+ *      plan and report - and is never blocked, with a clean project as the flipping control.
  *
  * WHY MOST CASES PASS --no-selfcheck
  *   Every install below would otherwise pay for a full self-check run (300+ assertions, a fresh
@@ -511,27 +514,29 @@ section('11 - an existing CLAUDE.md gets the region APPENDED, never a rewrite');
 }
 
 // ---------------------------------------------------------------------------
+// The transport is the only thing the CLI adds, so the flow is driven here with a scripted `ask`.
+// Everything NOT in this map is answered with an empty string and therefore takes the schema default
+// - which is what proves the defaults really reach the operator instead of being hardcoded somewhere
+// downstream. The keys with no schema default of their own (a required name, the models and efforts)
+// have to be answered or the question would repeat forever.
+const SCRIPTED_ANSWERS = new Map([
+  ['Project name', 'Interviewed'],
+  ['Writer model', 'claude-opus-5[1m]'],
+  ['Writer reasoning effort', 'high'],
+  ['reviewer: model', 'opus'],
+  ['reviewer: reasoning effort', 'high'],
+  ['qa: model', 'sonnet'],
+  ['qa: reasoning effort', 'medium'],
+]);
+const scriptedAsk = async (question) => {
+  for (const [needle, value] of SCRIPTED_ANSWERS) if (question.includes(needle)) return value;
+  return '';
+};
+const loadSchemaJson = () => JSON.parse(read(path.join(PLUGIN_ROOT, 'schema', 'aiwf.config.schema.json')));
+
 section('12 - the interactive question flow itself (scripted answers, no readline)');
 {
-  // The transport is the only thing the CLI adds, so the flow is driven here with a scripted `ask`.
-  // Everything answered with an empty string takes the schema default - which is what proves the
-  // defaults really reach the operator instead of being hardcoded somewhere downstream.
-  const scripted = new Map([
-    ['Project name', 'Interviewed'],
-    ['Writer model', 'claude-opus-5[1m]'],
-    ['Writer reasoning effort', 'high'],
-    ['reviewer: model', 'opus'],
-    ['reviewer: reasoning effort', 'high'],
-    ['qa: model', 'sonnet'],
-    ['qa: reasoning effort', 'medium'],
-  ]);
-  const answers = await runInterview({
-    schema: JSON.parse(read(path.join(PLUGIN_ROOT, 'schema', 'aiwf.config.schema.json'))),
-    ask: async (question) => {
-      for (const [needle, value] of scripted) if (question.includes(needle)) return value;
-      return '';
-    },
-  });
+  const answers = await runInterview({ schema: loadSchemaJson(), ask: scriptedAsk });
   check('the required answer is captured', answers.project.name === 'Interviewed');
   check('an empty answer takes the schema default', answers.os === 'windows' && answers.paths.plansDir === 'docs/backlogs' && answers.loop.correctionRoundsCap === 2);
   check('the enforcement questions are asked and default to the factory posture',
@@ -545,6 +550,72 @@ section('12 - the interactive question flow itself (scripted answers, no readlin
   const r = install(p17, answers, ['--no-seeds']);
   check('the interview\'s own output installs cleanly', r.status === 0, why(r));
   check('and the rendered qa agent exists (claude-hosted by default)', exists(at(p17, '.claude/agents/qa.md')));
+}
+
+// ---------------------------------------------------------------------------
+section('12b - a project that already has plans is WARNED about, on both paths, and never blocked');
+{
+  // The situation: setup is pointed at a project whose `docs/backlogs/active/` is already full of
+  // somebody else's plans, and whose overrides document already exists. Nothing here is an error -
+  // it may be exactly what the operator wants - but `enforcement.dispatchGate: off-plan` will read
+  // every one of those PLAN_*.md files as an active pnp plan, so it is never adopted in silence.
+  const p = project('inherited-plans');
+  fs.mkdirSync(at(p, 'docs/backlogs/active'), { recursive: true });
+  fs.writeFileSync(at(p, 'docs/backlogs/active/PLAN_FOREIGN.md'), '# somebody else\n\n## FOR-001 - a ticket\n');
+  fs.writeFileSync(at(p, 'docs/backlogs/active/PLAN_OTHER.md'), '# and another\n');
+  // Two shapes that must NOT be counted, because Gate 2 does not read them either: a file that is
+  // not a PLAN_*.md, and a DIRECTORY whose name happens to match the pattern.
+  fs.writeFileSync(at(p, 'docs/backlogs/active/notes.md'), 'not a plan\n');
+  fs.mkdirSync(at(p, 'docs/backlogs/active/PLAN_DIRECTORY.md'), { recursive: true });
+  fs.mkdirSync(at(p, 'docs/ai'), { recursive: true });
+  fs.writeFileSync(at(p, 'docs/ai/PROJECT_OVERRIDES.md'), '# my own overrides\n');
+
+  const said = [];
+  const answers = await runInterview({
+    schema: loadSchemaJson(), ask: scriptedAsk, projectRoot: p, out: { write: (s) => said.push(s) },
+  });
+  const heard = said.join('');
+  check('the interview warns AT the plans question, counting only what Gate 2 would read (2, not 4)',
+    heard.includes('2 existing PLAN_*.md in docs/backlogs/active'), heard.split('\n').filter((l) => l.includes('PLAN_')).join(' | ') || '(no such line)');
+  check('and it names the consequence, not just the count',
+    heard.includes('Gate 2 off-plan will read them as active pnp plans'));
+  check('the overrides question says the document is already there and will not be rewritten',
+    heard.includes('docs/ai/PROJECT_OVERRIDES.md already exists') && heard.includes('never rewrites it'),
+    heard.split('\n').filter((l) => l.includes('PROJECT_OVERRIDES')).join(' | ') || '(no such line)');
+  check('the warning changes no answer: the schema defaults are still what the interview returns',
+    answers.paths.plansDir === 'docs/backlogs' && answers.paths.overridesDoc === 'docs/ai/PROJECT_OVERRIDES.md',
+    JSON.stringify(answers.paths));
+
+  // The SECOND path: the generator says it too, so --dry-run and the non-interactive --answers-file
+  // install (which never sees a question) are covered as well.
+  const before = snapshot(p);
+  const dry = install(p, baseAnswers(), ['--no-seeds', '--dry-run']);
+  check('--dry-run exits 0 - a full plans directory is a warning, not a blocker', dry.status === 0, why(dry));
+  check('the dry-run report carries the same line as a note',
+    dry.out.includes('note   2 existing PLAN_*.md in docs/backlogs/active')
+    && dry.out.includes('Gate 2 off-plan will read them as active pnp plans'),
+    dry.out.split('\n').filter((l) => l.includes('PLAN_*.md')).join(' | ') || '(no such line)');
+  check('--dry-run still wrote nothing at all', diffSnapshots(before, snapshot(p)).length === 0,
+    diffSnapshots(before, snapshot(p)).join(', '));
+
+  const real = install(p, baseAnswers(), ['--no-seeds']);
+  check('and the real install goes through, warning and all', real.status === 0, why(real));
+  check('the foreign plans are exactly as they were', read(at(p, 'docs/backlogs/active/PLAN_OTHER.md')) === '# and another\n');
+  check('the operator\'s overrides document was not rewritten', read(at(p, 'docs/ai/PROJECT_OVERRIDES.md')) === '# my own overrides\n');
+}
+{
+  // The flipping control: the same two checks on a project that has neither. A warning that cannot
+  // be absent is not a warning.
+  const clean = project('no-inherited-plans');
+  const said = [];
+  await runInterview({
+    schema: loadSchemaJson(), ask: scriptedAsk, projectRoot: clean, out: { write: (s) => said.push(s) },
+  });
+  check('a clean project hears nothing about plans or an overrides document',
+    !said.join('').includes('existing PLAN_*.md') && !said.join('').includes('already exists'),
+    said.join('').split('\n').filter((l) => l.trim().startsWith('docs')).join(' | ') || 'silent');
+  const dry = install(clean, baseAnswers(), ['--no-seeds', '--dry-run']);
+  check('and its dry-run report carries no such note', dry.status === 0 && !dry.out.includes('existing PLAN_*.md'), why(dry, true).slice(0, 120));
 }
 
 // ---------------------------------------------------------------------------

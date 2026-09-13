@@ -10,6 +10,14 @@
  *   already installed - so a value the operator edited by hand survives a re-interview instead of
  *   being quietly reset to the factory value.
  *
+ * WHAT IT WARNS ABOUT
+ *   The two path questions look at the project before they are answered - on the offered default and
+ *   again on the typed answer. A `<plansDir>/active/` that already holds PLAN_*.md files is named
+ *   with its count, because `enforcement.dispatchGate: off-plan` will read those files as active pnp
+ *   plans; an overrides document that already exists is named too, because setup seeds that file
+ *   once and never rewrites it. Both are WARNINGS - the operator may mean exactly that - and the
+ *   generator repeats the first one in its plan/report, so --dry-run shows it as well.
+ *
  * WHAT IT REFUSES
  *   An os outside the schema's three channels (windows | linux | macos), fail-closed: windows
  *   renders the PowerShell wrappers, linux and macos the bash ones, and an unknown channel would
@@ -50,8 +58,9 @@ import { stdin as input, stdout as output } from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { loadSchema, collectDefaults } from './validate-config.mjs';
 import {
-  DEFAULT_PLUGIN_ROOT, SetupError, adoptRefusal, assertSupportedOs, formatReport,
-  generateProject, makeAdoptResolver, readMemorySeeds, resolveProjectRoot,
+  DEFAULT_PLUGIN_ROOT, SetupError, adoptRefusal, assertSupportedOs, existingOverridesWarning,
+  existingPlansWarning, formatReport, generateProject, makeAdoptResolver, readMemorySeeds,
+  resolveProjectRoot,
 } from './generate.mjs';
 import { finishWithSelfCheck } from '../selfcheck/run-selfcheck.mjs';
 
@@ -77,8 +86,12 @@ function set(obj, dotted, value) {
  * Runs the question flow. `ask(question, fallback)` returns the raw answer string; the caller owns
  * the transport (readline in the CLI, a scripted function in a test).
  * `installed` is the config already present, if any - its values become the offered defaults.
+ * `projectRoot` is what a question is allowed to LOOK AT before it is answered (the path warnings
+ * below); without it those checks are skipped rather than guessed at from the cwd.
+ * `out` is the stream the interview speaks on - injectable so a test can read what the operator
+ * would have seen.
  */
-export async function runInterview({ schema, ask, installed = null }) {
+export async function runInterview({ schema, ask, installed = null, projectRoot = null, out = output }) {
   const factory = collectDefaults(schema) || {};
   const answers = {};
   const fallback = (dotted) => {
@@ -86,13 +99,25 @@ export async function runInterview({ schema, ask, installed = null }) {
     return current !== undefined ? current : get(factory, dotted);
   };
 
-  const text = async (dotted, question, { allowEmpty = true } = {}) => {
+  /**
+   * A question may WARN about the value it is holding - the offered default before it is asked, and
+   * again the value the operator actually chose, because a typed answer is a different path from
+   * the one the default named. The same line is not repeated when both are the same path: the
+   * re-check exists to catch a second bad path, not to say the first one twice.
+   */
+  const text = async (dotted, question, { allowEmpty = true, warn = null } = {}) => {
     const def = fallback(dotted);
+    let said = null;
+    const warnAbout = (value) => {
+      const line = warn ? warn(value) : null;
+      if (line && line !== said) { out.write(`  ${line}\n`); said = line; }
+    };
+    if (def !== undefined) warnAbout(String(def));
     for (;;) {
       const raw = (await ask(question, def)).trim();
       const value = raw === '' && def !== undefined ? String(def) : raw;
-      if (value !== '' || allowEmpty) { set(answers, dotted, value); return value; }
-      output.write('  a value is required here.\n');
+      if (value !== '' || allowEmpty) { warnAbout(value); set(answers, dotted, value); return value; }
+      out.write('  a value is required here.\n');
     }
   };
   const choice = async (dotted, question, options) => {
@@ -101,7 +126,7 @@ export async function runInterview({ schema, ask, installed = null }) {
       const raw = (await ask(`${question} [${options.join('|')}]`, def)).trim();
       const value = raw === '' && def !== undefined ? String(def) : raw;
       if (options.includes(value)) { set(answers, dotted, value); return value; }
-      output.write(`  answer with one of: ${options.join(', ')}\n`);
+      out.write(`  answer with one of: ${options.join(', ')}\n`);
     }
   };
   const yesNo = async (dotted, question) => {
@@ -110,7 +135,7 @@ export async function runInterview({ schema, ask, installed = null }) {
       const raw = (await ask(`${question} [y/n]`, def === undefined ? undefined : (def ? 'y' : 'n'))).trim().toLowerCase();
       const value = raw === '' && def !== undefined ? (def ? 'y' : 'n') : raw;
       if (['y', 'yes', 'n', 'no'].includes(value)) { set(answers, dotted, value.startsWith('y')); return value.startsWith('y'); }
-      output.write('  answer y or n.\n');
+      out.write('  answer y or n.\n');
     }
   };
   const integer = async (dotted, question) => {
@@ -119,27 +144,27 @@ export async function runInterview({ schema, ask, installed = null }) {
       const raw = (await ask(question, def)).trim();
       const value = raw === '' && def !== undefined ? Number(def) : Number(raw);
       if (Number.isInteger(value)) { set(answers, dotted, value); return value; }
-      output.write('  a whole number is required.\n');
+      out.write('  a whole number is required.\n');
     }
   };
 
-  output.write('\n-- project --\n');
+  out.write('\n-- project --\n');
   await text('project.name', 'Project name', { allowEmpty: false });
   await text('project.description', 'One line of product description');
   await text('project.stack', 'One line of stack description');
   await text('project.defaultBranch', 'Default integration branch');
 
-  output.write('\n-- platform --\n');
+  out.write('\n-- platform --\n');
   const os = await choice('os', 'Operating system channel', ['windows', 'linux', 'macos']);
   assertSupportedOs(os); // fail-closed, before a single file is planned
 
-  output.write('\n-- operator channel --\n');
+  out.write('\n-- operator channel --\n');
   await text('operator.language', 'Language of the COO <-> operator channel (agent-to-agent stays English)');
   await text('operator.roleNicknames.writer', 'Conversational name for the Writer');
   await text('operator.roleNicknames.reviewer', 'Conversational name for the Reviewer');
   await text('operator.roleNicknames.qa', 'Conversational name for QA');
 
-  output.write('\n-- roles --\n');
+  out.write('\n-- roles --\n');
   await text('roles.writer.model', 'Writer model (a FULL model id is valid here)', { allowEmpty: false });
   await text('roles.writer.effort', 'Writer reasoning effort', { allowEmpty: false });
   for (const role of ['reviewer', 'qa']) {
@@ -159,14 +184,14 @@ export async function runInterview({ schema, ask, installed = null }) {
     set(answers, 'roles.qal.effort', get(installed, 'roles.qal.effort') || 'high');
   }
 
-  output.write('\n-- loop --\n');
+  out.write('\n-- loop --\n');
   await integer('loop.correctionRoundsCap', 'Correction-round cap (the operator lifts it, never the COO)');
   await yesNo('enforcement.routeWriteGuard', 'Gate 3: block main-session code writes while an R2/R3 ticket is open');
   await choice('enforcement.dispatchGate',
     'Gate 2: ask on every Writer dispatch, or only when the brief\'s Ticket: <REF> is in no active PLAN',
     ['always', 'off-plan']);
 
-  output.write('\n-- verify --\n');
+  out.write('\n-- verify --\n');
   const commands = [];
   for (;;) {
     const name = (await ask(`VERIFY command #${commands.length + 1} - short name (empty to finish)`, '')).trim();
@@ -186,11 +211,21 @@ export async function runInterview({ schema, ask, installed = null }) {
     await text('verify.e2e.outputDir', 'e2e: artifact output directory');
   }
 
-  output.write('\n-- paths --\n');
-  await text('paths.plansDir', 'Plans directory (the PARENT of active/ and archive/)', { allowEmpty: false });
-  await text('paths.overridesDoc', 'Project overrides document', { allowEmpty: false });
+  // The two path questions are the only ones whose answer can silently ADOPT something the project
+  // already has: a plans directory Gate 2 will then read as pnp's own, and an overrides document
+  // setup will not write because it never rewrites that file. Each is checked on the offered
+  // default AND on the answer, and each is a warning - the operator may mean exactly this.
+  out.write('\n-- paths --\n');
+  await text('paths.plansDir', 'Plans directory (the PARENT of active/ and archive/)', {
+    allowEmpty: false,
+    warn: (value) => existingPlansWarning({ projectRoot, plansDir: value }),
+  });
+  await text('paths.overridesDoc', 'Project overrides document', {
+    allowEmpty: false,
+    warn: (value) => existingOverridesWarning({ projectRoot, overridesDoc: value }),
+  });
 
-  output.write('\n-- product boundary checks (rendered into the Reviewer; empty is a valid answer) --\n');
+  out.write('\n-- product boundary checks (rendered into the Reviewer; empty is a valid answer) --\n');
   const checks = [];
   for (;;) {
     const line = (await ask(`boundary check #${checks.length + 1} (empty to finish)`, '')).trim();
@@ -263,6 +298,7 @@ if (isMain()) {
         answers = await runInterview({
           schema,
           installed,
+          projectRoot,
           ask: (question, def) => rl.question(def === undefined || def === '' ? `${question}: ` : `${question} [${def}]: `),
         });
       } finally { rl.close(); }

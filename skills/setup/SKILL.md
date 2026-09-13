@@ -86,6 +86,23 @@ Three constraints worth stating before the operator answers:
   line names no ticket in `<plansDir>/active/PLAN_*.md` - quieter, and it only means anything in a
   project that really keeps its plans there.
 
+**The two path questions look at the project before they are answered** - the offered default first,
+then whatever is typed - and each can print one warning line:
+
+- `N existing PLAN_*.md in <plansDir>/active - Gate 2 off-plan will read them as active pnp plans;
+  pick another paths.plansDir if they are not.` This is the whole reason the warning exists: in
+  `off-plan` mode Gate 2 counts a ticket as planned when its `<REF>` appears in a `PLAN_*.md` file
+  under that directory, and it stays **silent** on a dispatch that names one. Pointed at a directory
+  of somebody else's plans, the gate goes quiet on refs nobody in this loop ever approved - so an
+  installation that inherits a full plans directory must be a deliberate answer rather than a
+  default nobody looked at.
+- `<overridesDoc> already exists - setup seeds that document once and never rewrites it ...` - the
+  install is correct and writes nothing there, which is invisible unless it is said.
+
+Neither is a blocker: both describe a project an operator may want exactly as it is. The plans one is
+repeated by the generator as a `note` line in the plan and the report, so `--dry-run` (Step 3) shows
+it too - including on the non-interactive `--answers-file` path, which never sees the interview.
+
 ## Step 3 - Dry run, then generate
 
 `--dry-run` prints the exact action list and writes nothing. Show it to the operator when the

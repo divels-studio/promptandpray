@@ -803,6 +803,48 @@ function regionOf(rendered) {
 }
 
 /**
+ * THE TWO WARNINGS SETUP OWES A PROJECT THAT WAS NOT EMPTY, in one place because two spellings of
+ * the same sentence would eventually disagree - and the interview and the generator each say them
+ * on their own path (the interview at the question, the generator in its plan/report).
+ *
+ * Neither is a blocker. Both describe a situation an operator may want on purpose; what must not
+ * happen is that setup adopts it in SILENCE.
+ */
+
+/**
+ * A pre-existing `<plansDir>/active/` that already holds `PLAN_*.md` files. The predicate is
+ * deliberately the byte-for-byte one Gate 2 uses (`entry.isFile()` + `/^PLAN_.*\.md$/`, see
+ * scripts/engine/pretooluse-dispatch-gate.js) - a count that did not describe exactly the set the
+ * gate reads would be a warning about a different thing.
+ * Returns the warning line, or null when there is nothing to warn about.
+ */
+export function existingPlansWarning({ projectRoot, plansDir }) {
+  if (!projectRoot || typeof plansDir !== 'string' || plansDir.trim() === '') return null;
+  const rel = toPosix(path.join(plansDir, 'active'));
+  let entries;
+  try {
+    entries = fs.readdirSync(path.resolve(projectRoot, plansDir, 'active'), { withFileTypes: true });
+  } catch { return null; } // absent or unreadable: nothing observed, so nothing claimed
+  const count = entries.filter((e) => e.isFile() && /^PLAN_.*\.md$/.test(e.name)).length;
+  if (count === 0) return null;
+  return `${count} existing PLAN_*.md in ${rel} - Gate 2 off-plan will read them as active pnp plans; pick another paths.plansDir if they are not.`;
+}
+
+/**
+ * A pre-existing overrides document. Setup seeds that file ONCE and never rewrites it, so pointing
+ * `paths.overridesDoc` at a file that is already there means this install writes no template at all
+ * - correct behaviour, and invisible unless it is said out loud.
+ * Returns the warning line, or null when there is nothing to warn about.
+ */
+export function existingOverridesWarning({ projectRoot, overridesDoc }) {
+  if (!projectRoot || typeof overridesDoc !== 'string' || overridesDoc.trim() === '') return null;
+  try {
+    if (!fs.statSync(path.resolve(projectRoot, overridesDoc)).isFile()) return null;
+  } catch { return null; }
+  return `${toPosix(overridesDoc)} already exists - setup seeds that document once and never rewrites it, so this install will leave your file exactly as it is and write no template there.`;
+}
+
+/**
  * Decides the whole installation without touching the filesystem.
  * Returns { config, actions, blockers, notes, artifacts, askPlan, adopt } - `actions` is what
  * apply() will do, and `adopt` is null unless this is an adopt run.
@@ -1204,6 +1246,15 @@ export function planInstall({
   }
 
   // ---- 7. directories ------------------------------------------------------
+  // A plans directory that is already FULL is not an error - an operator may be pointing setup at
+  // the plans this project keeps, on purpose. It is reported rather than adopted in silence:
+  // `enforcement.dispatchGate: off-plan` reads every PLAN_*.md there as an active pnp plan, so a
+  // Writer dispatch naming a ticket in one of them raises no dialog at all. Said in the plan and in
+  // the report, so a --dry-run shows it before anything is written.
+  {
+    const warning = existingPlansWarning({ projectRoot, plansDir: merged.paths.plansDir });
+    if (warning) notes.push(warning);
+  }
   for (const rel of [merged.paths.scratchDir, path.join(merged.paths.plansDir, 'active'), path.join(merged.paths.plansDir, 'archive'), path.dirname(CONFIG_REL), AGENTS_DIR, path.dirname(overridesRel)]) {
     const dir = abs(rel);
     if (!fs.existsSync(dir)) actions.push({ kind: 'mkdir', file: dir, rel: toPosix(rel), why: 'created' });

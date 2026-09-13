@@ -1,0 +1,12 @@
+{
+  "migration": "0008_consumer-correctness",
+  "targetPluginVersion": "0.2.4",
+  "operations": [
+    {
+      "op": "note",
+      "id": "setup-warns-about-a-pre-existing-plans-directory",
+      "text": "0.2.4 changes /pnp:setup only, and it changes nothing that is already installed - this note is the whole migration. Until now an install pointed at a project whose `<plansDir>/active/` already held PLAN_*.md files adopted that directory in complete silence, and the consequence is not cosmetic: with `enforcement.dispatchGate: off-plan`, Gate 2 counts a Writer dispatch as planned when the brief's `Ticket: <REF>` appears in a PLAN_*.md file there, and stays silent instead of raising the Yes/No dialog. Pointed at somebody else's plans, the gate goes quiet on refs nobody in this loop ever approved. The interview now checks that path before the question is answered - the offered default first, then whatever is typed - and prints one line naming the count and the consequence; the generator repeats it as a note in its plan and in its report, so `--dry-run` and the non-interactive `--answers-file` install (which never sees a question) show it too. The overrides-document question gained the same treatment for a different reason: setup seeds that file once and never rewrites it, so pointing it at a file that already exists means this install writes no template there at all - correct behaviour, and invisible unless it is said out loud. NEITHER IS A BLOCKER. An operator may want exactly that directory, and an install is never refused over it. Nothing about your project changes here: no managed artifact is re-rendered, no config key is added, no permission rule is reconciled, and the schema defaults are untouched (`paths.plansDir` is still \"docs/backlogs\", `paths.overridesDoc` still \"docs/ai/PROJECT_OVERRIDES.md\"). The warning is worth re-reading only when you next run /pnp:setup on a project that was not empty - and if your own project's plans live somewhere other than the directory this installation configured, that is the moment to notice it",
+      "docRefs": ["CHANGELOG.md"]
+    }
+  ]
+}

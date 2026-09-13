@@ -4,6 +4,31 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.2.4] - 2026-09-13
+
+Setup stops adopting a plans directory in silence. An install pointed at a project whose
+`<plansDir>/active/` already holds `PLAN_*.md` files was handing Gate 2's `off-plan` mode a set of
+plans nobody in this loop had approved, and saying nothing about it. `0008_consumer-correctness` is a
+note-only migration: nothing already installed changes.
+
+### Added
+
+- **Setup warns about a pre-existing plans directory (HARD-003)** - the `paths.plansDir` question now
+  checks the candidate path before it is answered (the offered default first, then whatever is typed)
+  and prints `N existing PLAN_*.md in <path>/active - Gate 2 off-plan will read them as active pnp
+  plans; pick another paths.plansDir if they are not.` The count is exactly the set Gate 2 reads - a
+  real file matching `PLAN_*.md` - so a directory with that name, or a `notes.md` beside the plans,
+  is not counted. It matters because in `off-plan` mode Gate 2 stays SILENT on a Writer dispatch
+  whose `Ticket: <REF>` appears in one of those files: pointed at somebody else's plans, the dispatch
+  gate goes quiet on refs this loop never approved. The generator repeats the line as a `note` in its
+  plan and report, so `--dry-run` and the non-interactive `--answers-file` install - which never sees
+  a question - show it too. It is a WARNING, never a blocker: an operator may want that directory on
+  purpose, and no install is refused over it. The schema defaults are untouched.
+- **Setup says when the overrides document is already there (HARD-003)** - the same treatment on
+  `paths.overridesDoc`, for the opposite reason: setup seeds that file once and never rewrites it, so
+  pointing it at an existing file means this install writes no template there at all. Correct
+  behaviour that produced no output, and was therefore indistinguishable from having been written.
+
 ## [0.2.3] - 2026-09-13
 
 The gate that was addressed to one shell tool now covers both. A permission rule names a TOOL, and a
