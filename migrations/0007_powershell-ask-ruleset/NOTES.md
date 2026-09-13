@@ -73,6 +73,21 @@ The reconcile operation adds what is missing and touches nothing else. A payload
 carry in your own wording is left exactly as you wrote it - it is not adopted, not rewritten and not
 reported as owned, which also means the engine will never update it for you.
 
+Two consequences, because ownership decides neither of them:
+
+- **Missing is added, owned or not.** The added set is what the payload wants that your settings do
+  not have, minus only the removals the engine can recognise as yours - a rule it had inserted and
+  you then deleted is tombstoned and never forced back, while a rule it never owned has no such
+  protection and comes back on the next reconcile. A project whose
+  `_aiwf.ownedAskRules` is empty (a hand-written ask list, a bookkeeping that was reset) still
+  receives every mirror rule its settings do not already carry, and the engine then owns exactly what
+  it inserted and nothing else.
+- **Identical is left alone, and stays that way.** A mirror rule you had already written in the
+  payload's own spelling is not adopted by this update: it is never rewritten, never removed and
+  never tombstoned, so no later release will maintain it for you either. The run now says so instead
+  of leaving you to infer it from a diff with no lines - `N payload rule(s) present but not owned
+  here` - and your `CHANGES_*.md` names each of those rules under the `reconcile-ask-ruleset` entry.
+
 ## If you are updating from 0.1.x or 0.2.x
 
 `0002_operator-word-and-hygiene`, `0003_quiet-rerender`, `0004_audit-table`, `0005_posix-legs` and

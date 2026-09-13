@@ -120,5 +120,12 @@ state - `payload-current` (the payload version is what is on disk) or `held (you
 and the report also lists the doctrine sections worth re-reading and the artifacts whose payload
 version changed while you kept your own.
 
+When the run produced a **`N payload rule(s) present but not owned here`** line - a
+`reconcile-ask-ruleset` found payload ask rules the project already carries in the payload's own
+spelling, which it never inserted - the report carries that line too, with the count and where to
+read the names (the `reconcile-ask-ruleset` entry of the same `CHANGES_*.md` lists them). Those rules
+are left alone by this update and by every later one, so the operator is the only one who maintains
+them; with no such rules the line does not exist and the report says nothing about it.
+
 **This command never commits.** The diff goes through the normal review + commit gate, like any
 other change.

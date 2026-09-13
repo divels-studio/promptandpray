@@ -684,6 +684,116 @@ section('5 - settings: ownership without takeover, and a shape the engine will n
     return rr.status === 0 && !askRules(p).includes(victim);
   })());
 }
+// The claim these two cases exist to settle: "with `ownedAskRules: []` the reconcile adds nothing".
+// It is false, and the formula says why - `to-add = (desired - actual) - suppressed` has no
+// ownership term in it (generate.mjs `planAskRules`). What ownership really decides is the OTHER
+// half: what the engine may remove, and what it will report as none of its business. Both faces are
+// measured here on the real entrypoint, because a consumer whose ask rules were written by hand is
+// the project that will meet them.
+{
+  // FACE ONE - the add. Nothing is owned; one payload rule is missing from settings by hand.
+  const p = project('settings-unowned-add');
+  install(p);
+  const cfg = readJson(at(p, CONFIG_REL));
+  cfg._aiwf.ownedAskRules = [];
+  writeJson(at(p, CONFIG_REL), cfg);
+  const HAND_REMOVED = 'Bash(git stash:*)';
+  const settings = readJson(at(p, SETTINGS_REL));
+  check('unowned: the fixture starts from a rule the payload wants and this project has',
+    settings.permissions.ask.includes(HAND_REMOVED));
+  settings.permissions.ask = settings.permissions.ask.filter((r) => r !== HAND_REMOVED);
+  writeJson(at(p, SETTINGS_REL), settings);
+
+  const askBefore = askRules(p);
+  // What the run must report as present-but-not-owned: every rule this project carries that the
+  // 0.2.0 payload still wants. The dropped pair is no longer desired and the hand-removed rule is
+  // not present, so neither is foreign. Derived from the settings file instead of hardcoded - the
+  // number then follows the shipped ruleset instead of pinning its size.
+  const notDesired = new Set([DROPPED_ASK_RULE, DROPPED_ASK_RULE_MIRROR]);
+  const expectedForeign = askBefore.filter((r) => !notDesired.has(r));
+
+  const r = update(p, ['--apply', '--resolution-file', resolutionFile('unowned', FULL_RESOLUTIONS)], { payload: P020 });
+  check('unowned: the update completes', r.status === 0, why(r));
+  const ask = askRules(p);
+  const bk = bookkeeping(p);
+  check('unowned: a payload rule MISSING from settings is added even though this project owns nothing',
+    ask.includes(HAND_REMOVED), HAND_REMOVED);
+  check('unowned: and so is the rule the newer payload introduces',
+    ask.includes(NEW_ASK_RULE) && ask.includes(NEW_ASK_RULE_MIRROR));
+  check('unowned: what it inserted, it owns - and NOTHING else was adopted',
+    bk.ownedAskRules.length === 3 && [HAND_REMOVED, NEW_ASK_RULE, NEW_ASK_RULE_MIRROR].every((rule) => bk.ownedAskRules.includes(rule)),
+    () => `owned: ${JSON.stringify(bk.ownedAskRules)}`);
+  check('unowned: with nothing owned there is nothing to tombstone',
+    (bk.suppressedAskRules || []).length === 0, () => JSON.stringify(bk.suppressedAskRules));
+  check('unowned: the dropped payload rule is NOT removed - it was never owned here',
+    ask.includes(DROPPED_ASK_RULE) && ask.includes(DROPPED_ASK_RULE_MIRROR));
+
+  const foreignLine = `${expectedForeign.length} payload rule(s) present but not owned here - hand-edited, the engine will never touch them`;
+  // The count is printed on the PASS too: it is the measured size of the reported set, and a suite
+  // log that only says "the line was there" hides the number the operator will actually read.
+  check('unowned: the run says how many payload rules it found present but not owned',
+    r.out.includes(foreignLine), `measured ${expectedForeign.length} present but not owned`);
+  const changes = read(at(p, 'CHANGES_0.1.0-to-0.2.0.md')) || '';
+  check('unowned: the CHANGES report carries the same count', changes.includes(`  - ${foreignLine}:`),
+    () => changes.split('\n').filter((l) => l.includes('not owned')).join(' | ') || '(no such line)');
+  const named = changes.split('\n').map((l) => /^ {4}- `(.+)`$/.exec(l)).filter(Boolean).map((m) => m[1]);
+  check('unowned: and names every one of them, in payload order',
+    named.length === expectedForeign.length && named.every((rule, i) => rule === expectedForeign[i]),
+    () => `named ${named.length}, expected ${expectedForeign.length}`);
+  check('unowned: the rule it added is not among them - it is owned now',
+    !named.includes(HAND_REMOVED) && !named.includes(NEW_ASK_RULE));
+}
+{
+  // FACE TWO - the rule nothing happens to. A payload rule the project wrote by hand, in the
+  // payload's own spelling: not added (already there), not removed (not owned), not tombstoned
+  // (nobody removed it). The engine's entire behaviour towards it is to leave it alone, which is
+  // invisible in a diff with no lines - so the report is the only place that rule exists.
+  const p = project('settings-present-foreign');
+  install(p);
+  const HAND_WRITTEN = ['Bash(git commit:*)', 'PowerShell(git commit:*)'];
+  const cfg = readJson(at(p, CONFIG_REL));
+  cfg._aiwf.ownedAskRules = cfg._aiwf.ownedAskRules.filter((r) => !HAND_WRITTEN.includes(r));
+  writeJson(at(p, CONFIG_REL), cfg);
+  check('present-foreign: the fixture keeps the rules in settings and drops only the ownership claim',
+    HAND_WRITTEN.every((rule) => askRules(p).includes(rule))
+    && !HAND_WRITTEN.some((rule) => bookkeeping(p).ownedAskRules.includes(rule)));
+
+  const r = update(p, ['--apply', '--resolution-file', resolutionFile('present-foreign', FULL_RESOLUTIONS)], { payload: P020 });
+  check('present-foreign: the update completes', r.status === 0, why(r));
+  const ask = askRules(p);
+  const bk = bookkeeping(p);
+  check('present-foreign: the rules are still there, byte for byte', HAND_WRITTEN.every((rule) => ask.includes(rule)));
+  check('present-foreign: the update did NOT adopt them into ownership',
+    !HAND_WRITTEN.some((rule) => bk.ownedAskRules.includes(rule)), () => JSON.stringify(bk.ownedAskRules));
+  check('present-foreign: and did not tombstone them either',
+    !HAND_WRITTEN.some((rule) => (bk.suppressedAskRules || []).includes(rule)));
+  check('present-foreign: the run says so out loud, with the count',
+    r.out.includes('2 payload rule(s) present but not owned here - hand-edited, the engine will never touch them'), why(r));
+  const changes = (read(at(p, 'CHANGES_0.1.0-to-0.2.0.md')) || '').split('\n');
+  const at0 = changes.findIndex((l) => l.startsWith('- `reconcile-ask-ruleset`'));
+  check('present-foreign: the CHANGES report names them, directly under the reconcile entry',
+    at0 !== -1 && changes.slice(at0 + 1, at0 + 4).join('\n') === [
+      '  - 2 payload rule(s) present but not owned here - hand-edited, the engine will never touch them:',
+      '    - `Bash(git commit:*)`',
+      '    - `PowerShell(git commit:*)`',
+    ].join('\n'),
+    () => changes.slice(Math.max(at0, 0), at0 + 4).join('\n'));
+}
+{
+  // FLIPPING: the same payload, the same op, a project whose ownership bookkeeping is intact. The
+  // part is ABSENT, not a zero - a report that always prints a line teaches the operator to skip it.
+  const p = project('settings-no-foreign');
+  install(p);
+  const r = update(p, ['--apply', '--resolution-file', resolutionFile('no-foreign', FULL_RESOLUTIONS)], { payload: P020 });
+  check('no-foreign: the update completes', r.status === 0, why(r));
+  check('no-foreign: nothing is reported as present but not owned', !r.out.includes('present but not owned'), why(r));
+  const changes = read(at(p, 'CHANGES_0.1.0-to-0.2.0.md')) || '';
+  check('no-foreign: and the CHANGES report is silent about it too', !changes.includes('present but not owned'),
+    () => changes.split('\n').filter((l) => l.includes('not owned')).join(' | '));
+  check('no-foreign: its reconcile entry is the bare one',
+    changes.includes('- `reconcile-ask-ruleset` templates/settings.ask-ruleset.json\n'),
+    () => changes.split('\n').filter((l) => l.includes('reconcile-ask-ruleset')).join(' | '));
+}
 for (const [name, permissions, needle] of [
   ['permissions is a string', 'weird', 'not an object'],
   ['permissions.ask is a string', { ask: 'nope' }, 'not a list'],

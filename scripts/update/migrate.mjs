@@ -734,11 +734,19 @@ function planReconcile(ctx, op, address) {
   if (plan.toAdd.length) parts.push(`+${plan.toAdd.length}`);
   if (toRemove.length) parts.push(`-${toRemove.length} (owned, no longer desired)`);
   if (plan.newlyTombstoned.length) parts.push(`${plan.newlyTombstoned.length} tombstoned`);
+  // The one thing the reconcile does NOT do, said out loud. A payload rule the project already
+  // carries in the payload's own spelling but never had inserted by this engine is left alone
+  // forever - correct, and invisible in a diff that has no lines for it, which is how an operator
+  // comes to believe those rules are maintained for them. It is appended AFTER the parenthesis
+  // rather than mixed into the change parts, so "nothing to change" stays the honest first half.
+  const foreignNote = plan.presentForeign.length
+    ? `; ${plan.presentForeign.length} payload rule(s) present but not owned here - hand-edited, the engine will never touch them`
+    : '';
   return {
     op, mode: 'settings', target: SETTINGS_POSIX, key: SETTINGS_POSIX,
     preHash, postHash, content, resolution: null,
     bookkeeping: { ownedAskRules: owned, suppressedAskRules: plan.suppressed },
-    summary: `ask ruleset reconciled: ${parts.length ? parts.join(', ') : 'nothing to change'} (foreign rules untouched)`,
+    summary: `ask ruleset reconciled: ${parts.length ? parts.join(', ') : 'nothing to change'} (foreign rules untouched)${foreignNote}`,
   };
 }
 
@@ -1054,11 +1062,68 @@ function recover(ctx, pending) {
 // CHANGES report
 // ---------------------------------------------------------------------------
 /**
+ * The rules the reconcile deliberately did not touch, measured for the report.
+ *
+ * Measured from the FINAL state - the settings file as it now is plus the final bookkeeping - and
+ * NOT collected while the operations ran, for the same reason `assembleChanges` is: a run that was
+ * interrupted and resumed in a second process has no in-memory record of the operations the first
+ * one applied, and a report built from such an accumulator would silently lose exactly the rules it
+ * exists to name. The set is invariant across the reconcile (see `planAskRules`' header), so
+ * measuring it afterwards is the same answer, available in every process.
+ *
+ * Returns a Map keyed by the ruleset ref, so two migrations reconciling the same ruleset in one run
+ * report one measurement - which is what the final state is.
+ */
+function measureForeignAskRules(ctx, pending) {
+  const out = new Map();
+  for (const entry of pending) {
+    const ops = (ctx.payload.migrations.get(entry.id) || { operations: [] }).operations;
+    for (const op of ops) {
+      if (op.op !== 'reconcile-ask-ruleset' || out.has(op.ruleset)) continue;
+      // Anything unreadable here is reported, never swallowed: the operation itself has already
+      // read both of these successfully, so a failure at report time is news, and a missing line
+      // would read as "no foreign rules" - the one wrong answer.
+      const rulesetRaw = readText(path.join(ctx.pluginRoot, ...op.ruleset.split('/')));
+      const settingsRaw = ctx.readProjected(SETTINGS_POSIX);
+      let desired = null;
+      let actual = null;
+      try {
+        const ruleset = rulesetRaw === null ? null : JSON.parse(rulesetRaw);
+        if (isPlainObject(ruleset) && isPlainObject(ruleset.permissions) && Array.isArray(ruleset.permissions.ask)) {
+          desired = ruleset.permissions.ask.map((rule) => rule.split('<projectRoot>').join(ctx.projectRoot));
+        }
+        const settings = settingsRaw === null ? null : JSON.parse(settingsRaw);
+        if (isPlainObject(settings) && isPlainObject(settings.permissions) && Array.isArray(settings.permissions.ask)) {
+          actual = settings.permissions.ask;
+        }
+      } catch { /* handled by the null checks below */ }
+      if (desired === null || actual === null) {
+        ctx.warn(
+          `the ask ruleset "${op.ruleset}" could not be re-read against ${SETTINGS_POSIX} after it was applied, so the ` +
+          'report names no rules as "present but not owned" for it. Run /pnp:selfcheck to inspect the settings file.',
+        );
+        continue;
+      }
+      const bk = ctx.config._aiwf;
+      const { presentForeign } = planAskRules({
+        desired,
+        actual,
+        owned: Array.isArray(bk.ownedAskRules) ? bk.ownedAskRules : [],
+        suppressed: Array.isArray(bk.suppressedAskRules) ? bk.suppressedAskRules : [],
+      });
+      out.set(op.ruleset, presentForeign);
+    }
+  }
+  return out;
+}
+
+/**
  * Assembled from the pending operations and the FINAL bookkeeping - never from an accumulator built
  * during the run. That is what makes it identical whether the run completed in one process or in
- * three after two crashes.
+ * three after two crashes. `foreignAskRules` obeys the same rule: it is measured from the final
+ * state by `measureForeignAskRules` above, not accumulated by the operations that ran.
  */
-export function assembleChanges({ from, to, pending, migrations, managedRegions }) {
+export function assembleChanges({ from, to, pending, migrations, managedRegions, foreignAskRules = new Map() }) {
   const lines = [];
   lines.push(`# What changed: ${from} -> ${to}`, '');
   lines.push('This report is generated by `/pnp:update`. It is a one-off note to you, not tracked bookkeeping:');
@@ -1121,7 +1186,16 @@ export function assembleChanges({ from, to, pending, migrations, managedRegions 
           : record.override === true ? 'held (your version kept)' : 'payload-current';
         lines.push(`- \`rerender-managed-region\` ${key}${label ? ` - ${label}` : ''}`);
       }
-      else if (op.op === 'reconcile-ask-ruleset') lines.push(`- \`reconcile-ask-ruleset\` ${op.ruleset}`);
+      else if (op.op === 'reconcile-ask-ruleset') {
+        lines.push(`- \`reconcile-ask-ruleset\` ${op.ruleset}`);
+        // BY NAME, because a count alone sends the operator hunting through a 100-rule list for
+        // rules that are indistinguishable from the maintained ones by looking at them.
+        const foreign = foreignAskRules.get(op.ruleset) || [];
+        if (foreign.length) {
+          lines.push(`  - ${foreign.length} payload rule(s) present but not owned here - hand-edited, the engine will never touch them:`);
+          for (const rule of foreign) lines.push(`    - \`${rule}\``);
+        }
+      }
       else lines.push(`- \`note\` ${op.id}`);
     }
     lines.push('');
@@ -1242,6 +1316,7 @@ export function runUpdate({ pluginRoot, projectRoot, resolve, dryRun = false, lo
   // atomic config write that moves the version stamps and clears the journal.
   const changes = assembleChanges({
     from, to, pending, migrations: payload.migrations, managedRegions: ctx.config._aiwf.managedRegions,
+    foreignAskRules: measureForeignAskRules(ctx, pending),
   });
   const changesFile = path.join(projectRoot, `CHANGES_${from}-to-${to}.md`);
   writeAtomic(changesFile, changes);

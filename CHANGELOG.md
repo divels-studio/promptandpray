@@ -14,6 +14,17 @@ other tool raised no dialog at all. `0007_powershell-ask-ruleset` adds the 54 mi
 
 ### Added
 
+- **The update names the payload rules it did not add and does not own (HARD-002)** - a payload ask
+  rule your project already carries in the payload's own spelling is left alone forever: not added
+  (it is there), not removed (it is not owned), not tombstoned (nobody removed it). That correct
+  behaviour used to be invisible, because it produces no diff, and an operator reasonably read the
+  silence as coverage. `planAskRules` now measures the set - `(desired n actual) - owned` - the
+  reconcile summary reports it as `N payload rule(s) present but not owned here - hand-edited, the
+  engine will never touch them`, and the `CHANGES_<from>-to-<to>.md` report lists those rules by name
+  under the `reconcile-ask-ruleset` entry. Zero such rules, and the line is absent rather than zero.
+  Nothing about what the reconcile adds, removes or tombstones changed: the add half never consulted
+  ownership, and a project that owns nothing still receives every payload rule it is missing - now
+  proven by the acceptance suite on the real entrypoint rather than described.
 - **A `PowerShell(<X>)` mirror for every ask rule (HARD-001)** - `templates/settings.ask-ruleset.json`
   carries 54 pairs instead of 54 rules: the git verbs (including the three `git.exe` forms and the
   three rendered `git -C <projectRoot>` forms), the package-manager, migration-tool and container

@@ -471,6 +471,19 @@ export function orderConfig(config) {
 //   to-remove = owned' - desired                     (the engine retiring its OWN render)
 //   owned''   = ((owned n actual) + to-add) - to-remove
 //   tombstone: an owned rule missing from actual moves to suppressed and is reported
+//   present-foreign = (desired n actual) - owned     (measured, never acted on - see below)
+//
+// PRESENT-FOREIGN: THE FACE THAT IS NOT A DECISION
+//   A payload rule the project already carries in a spelling identical to the payload's, which this
+//   engine never inserted: it is not added (it is already there), not removed (it is not owned), not
+//   tombstoned (nobody removed it) - the engine's whole behaviour towards it is to leave it alone.
+//   It is computed here anyway, because "the engine will never touch this rule" is exactly the fact
+//   an operator cannot see from a diff that has no lines: the reconcile report names it, and nothing
+//   else in the return changes because of it.
+//   The set is invariant across the reconcile it describes - (desired n actual) - owned is the same
+//   before and after, because to-add lands in BOTH actual and owned and to-remove is disjoint from
+//   desired - which is what lets the CHANGES report re-measure it from the FINAL state instead of
+//   carrying an accumulator through a run that may have been interrupted (`assembleChanges`).
 //
 // TO-REMOVE, AND WHY IT IS NOT A TOMBSTONE
 //   `owned` is by construction a subset of the desired set of the payload/root that inserted it, so
@@ -485,6 +498,7 @@ export function planAskRules({ desired, actual, owned, suppressed }) {
   const actualSet = new Set(actual);
   const desiredSet = new Set(desired);
   const suppressedSet = new Set(suppressed);
+  const ownedSet = new Set(owned);
   const newlyTombstoned = owned.filter((r) => !actualSet.has(r));
   for (const r of newlyTombstoned) suppressedSet.add(r);
   const toAdd = desired.filter((r) => !actualSet.has(r) && !suppressedSet.has(r));
@@ -498,6 +512,8 @@ export function planAskRules({ desired, actual, owned, suppressed }) {
     ask: actual.concat(toAdd).filter((r) => !removedSet.has(r)),
     owned: ownedNext.filter((r) => !removedSet.has(r)),
     suppressed: [...suppressedSet],
+    // In payload order, so a report that prints it is stable across runs.
+    presentForeign: desired.filter((r) => actualSet.has(r) && !ownedSet.has(r)),
   };
 }
 
@@ -1148,7 +1164,7 @@ export function planInstall({
     settings = null;
   }
 
-  let askPlan = { toAdd: [], toRemove: [], newlyTombstoned: [], ask: [], owned: [], suppressed: [] };
+  let askPlan = { toAdd: [], toRemove: [], newlyTombstoned: [], ask: [], owned: [], suppressed: [], presentForeign: [] };
   if (settings) {
     const ruleset = JSON.parse(fs.readFileSync(templatePath(pluginRoot, 'settings.ask-ruleset.json'), 'utf8'));
     const desired = ruleset.permissions.ask.map((rule) => rule.split('<projectRoot>').join(resolvedRoot));
