@@ -27,6 +27,7 @@
 | HARD-009 | REF (един префикс на план) | 0.2.6 |
 | HARD-010 | DOC-001 | 0.2.6 |
 | HARD-011 | README-001 | 0.2.6 + release |
+| HARD-012 | — (вердикт-докладът, роден 2026-09-13) | 0.2.5 |
 
 ## Context (discovery 2026-09-12: 4× Explore/sonnet + claude-code-guide; котви проверявани при диспач)
 
@@ -625,6 +626,31 @@ hash; `origin/main...main` → `0 0`.
 **Risk threshold / Stop:** като HARD-005. **Review:** `Class: code` → Codex; cap 2.
 **Assignee:** Колега. Branch `main`.
 
+### HARD-012 [R2 code-class] — вердиктът на Одитора се докладва по същество (роден 2026-09-13, операторска дума)
+
+**Контекст:** операторска корекция на живо — вердиктите се подминаваха с половин ред по пътя към
+следващата стъпка. Правилото трябва да е в payload-а, не в паметта на една сесия: 7 проекта
+ползват плъгина.
+
+**Outcome:** доктрината и скиловете изискват: всеки Reviewer/QA вердикт се докладва на оператора
+с вердикта + 1–2 изречения по същество (какво потвърди / какви са блокерите или бележките) —
+никога голо „pass, продължавам", никога ферман; ПРЕДИ следващата диспач стъпка.
+
+**Обхват:** `skills/review/SKILL.md` (отчетната стъпка след вердикта) + `skills/qa/SKILL.md`
+(същото) + `docs/WORKFLOW.md` § How the COO speaks to the operator (нова точка 4, литералната
+фраза за grep: "the verdict plus one or two sentences of its substance, before the next
+dispatch"); selfcheck пин + flipping контрол по механизма на доктринните фрази; CHANGELOG
+`[0.2.5]` § Added. Вози се в изданието 0.2.5 (review-loop дисциплина) — без собствена
+миграция/bump.
+**Извън обхват:** формат на самите вердикти (REVIEW_CHECKLIST е непипнат); операторският език.
+**Acceptance:** `git grep -L "one or two sentences of its substance" -- docs/WORKFLOW.md
+skills/review/SKILL.md skills/qa/SKILL.md` → празно, exit 1; selfcheck exit 0 с пина + контрола;
+бързото трио exit 0; Cyrillic празно.
+**Risk threshold:** блокира промяна на вердиктната семантика (pass/fail/PASS/NEEDS-FIX);
+note-only за формулировка. **Stop condition:** acceptance зелен → стоп.
+**Review:** `Class: code` (selfcheck в диффа) → Codex, fact-check преди; cap 2.
+**Assignee:** Колега. Branch `main`.
+
 ## 0.2.6 — Legibility & housekeeping · tag `v0.2.6`
 
 ### HARD-008 (ROLES-001) [R2 code-class] — одитната таблица се чете от човек и не се пре-рендира
@@ -782,8 +808,8 @@ VERIFY 8/8; след release: `git ls-remote --tags origin v0.2.6` → hash; `or
 ## Ред и гейтове
 
 Изпълнителен ред: HARD-001 → HARD-002 (+release 0.2.3) → HARD-003 → HARD-004 (+release 0.2.4)
-→ HARD-005 → HARD-006 → HARD-007 (+release 0.2.5) → HARD-008 → HARD-009 → HARD-010 → HARD-011
-(+release 0.2.6). Вторите имена — в таблицата под header-а.
+→ HARD-005 → HARD-006 → HARD-012 → HARD-007 (+release 0.2.5) → HARD-008 → HARD-009 → HARD-010 →
+HARD-011 (+release 0.2.6). Вторите имена — в таблицата под header-а.
 
 Гейтове: всеки тикет — собствена дума за диспач; commit — клик (стейдж по изрични пътища,
 едноредово съобщение, нула trailers, PLAN файлът и трите EOL-дрейфащи `.ps1` извън кодовия
