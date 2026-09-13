@@ -288,6 +288,49 @@ EOL дрейфа (PS-EOL е кандидат, не тук — не се коми
 **Review:** `Class: code` → Codex (`gpt-5.6-sol`/high), fact-check преди; cap 2.
 **Assignee:** Колега. Branch `main`. Котва при диспач: в брифа.
 
+#### HARD-001 — Completion record (2026-09-13)
+
+**Commit `5fe0bb4f2406bb420e4695f13e28b790c9805acc`** върху котвата `1a4e117` (branch `main`,
+локален, непушнат): 26 файла, 1064+/200− (`git show --stat 5fe0bb4`); едноредово съобщение, нула
+trailers (`git log -1 --format=%b` празно); PLAN файлът и `dev/`/`.aiwf/` извън commit-а; трите
+codex `.ps1` не дрейфнаха тази сесия (нула в `git status`). Изпълнено по обхвата §1–6: 54-те
+`PowerShell(<X>)` огледала + `PowerShell(*)` в allow; Gate 4 на matcher `"Bash|PowerShell"` с
+DIALECTS таблица (PS: `;`/`|`/`&&`/`||`, `&` е call operator, нула обелване, case-fold само в
+разпознаването; непознат tool → по-строгия диалект); диагностиката именува реалния tool;
+selfcheck: per-tool coverage ×2 + двупосочна огледална инварианта с два flipping контрола +
+16 PS hook реда с Bash контроли + 6 dialect пина + относителен `example-bump-id` контрол; spikes
++34 PS реда (318 checks); пълният доктринен sweep (7-те сайта + pass-1 инвентарът + 4 открити в
+полет); READY-004 изречението в § Branch policy; миграция `0007_powershell-ask-ruleset`
+(reconcile + note), bump 0.2.3, fixture → `0008_example-bump`, self-install apply (+54,
+ownedAskRules 54→108, 0 диалога), `CHANGES_0.2.2-to-0.2.3.md`.
+
+**Отклонения (приети от COO):** (1) case-fold само в разпознаването, никога в rule теста —
+passthrough не стъпва на ненаблюдавана канонизация; (2) непознат `tool_name` → PS диалектът
+(по-строгият по всяка ос); (3) 4 sweep сайта отвъд pass-1 инвентара; (4) две
+fixture-precondition тестови очаквания станаха derived с non-vacuous гард (`<projectRoot>`
+броят per tool; `changeRuleset` мести двойката); (5) нула Claude trailers въпреки harness
+reminder-а — проектното правило печели, обявено, не мълчаливо.
+
+**Ревю:** fact-check над диффа (Explore/sonnet) — 0 находки, вкл. независим пълен VERIFY рън.
+Codex `gpt-5.6-sol`/high, `Class: code`: пас 1 **`pass-with-notes`, нула блокери** — първият
+тикет от раждането на loop-а с чист първи пас. Четирите бележки: 3 текстови (LOOP.md:196
+matcher-ът; selfcheck банер/COVERAGE проза; `[0.2.3]` link ref) взети в микро-рунд преди
+commit-а и проверени първолично от COO + бързото трио; 4-тата (R100 стейджнати rename-ове) —
+без действие. Корекционната делта е само проза → втори пас не се дължи по правилото.
+
+**Верификация (точни кодове):** Колегата 8/8 exit 0 И независим COO-диспачнат рън 8/8 exit 0
+(validate-payload „7 migration(s) … 0.2.3"; test-setup 316/0; test-update 468/0; example cycles
+2×44/0; spikes 318/0; plugin validate ✔; `aiwf-update --check` „up to date … 0.2.3"); acceptance
+командите — буквално, вкл. двете mirror one-liner-а и празните grep-ове (exit 1). **Selfcheck на
+финалното дърво: 975/975** (3 последователни рънa, детерминистично; независимият междинен рън
+отчете 978 — разликата е NOTE-деградации, зависими от среда/fixture: 24 NOTE реда тук, част от
+тях само защото reviewer/qa са codex-hosted и Windows chmod е advisory — записано, не гонено).
+
+**Инцидент (средата, не тикетът):** D: удари 0 байта свободни по средата (един Edit умря с
+ENOSPC, нула частичен запис); възстанови се; операторът освободи до 1.8 GB. Пробният
+`spacetest.bin` изтрит с операторска дума. Останал дълг: няма. Tag `v0.2.3`/push/consumer proof
+се возят в HARD-002 по плана.
+
 ### HARD-002 (UPD-001) [R2 code-class] — ъпдейтът казва какво НЕ е добавил; release 0.2.3
 
 **Outcome:** `/pnp:update` не оставя оператора да мисли, че е покрит, когато не е: отчетът и
@@ -657,7 +700,11 @@ commit); docs commit отделен; tag/push — дума + диалог все
 cap 2 — отделна дума всеки. Route-state при всеки диспач, `{}` при close; completion record
 веднага след commit-а, същата сесия. Верификация: рънът на Колегата + независим COO-диспачнат
 рън (Одиторската клетка не пуска суитите — не се приема отчет); двата example цикъла и
-`test-update` във фон, без паралелни редакции.
+`test-update` във фон, без паралелни редакции. **VERIFY каданс (COO решение 2026-09-13):**
+пълните 8/8 гейтват затварянето на тикета (преди commit клика) — веднъж, с точни кодове;
+междинен корекционен рунд ре-рънва само засегнатите суити; доктрина/docs тикети въртят на рунд
+бързите три (selfcheck, validate-payload, plugin-validate), а пълните 8/8 — на release тикета
+на изданието преди tag-а.
 
 Readiness на този план: COO self-pass (шестте проверки, отделен ход) → fact-check (+ „every
 acceptance command exists and can fail") → Codex pass 1 (`Class: plan`, `gpt-5.6-sol`/high) →
