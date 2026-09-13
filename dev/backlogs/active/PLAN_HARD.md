@@ -372,6 +372,51 @@ CHANGES файлът назовават payload правилата, които �
 **Stop condition:** VERIFY + acceptance зелени → стоп.
 **Review:** `Class: code` → Codex, fact-check преди; cap 2. **Assignee:** Колега. Branch `main`.
 
+#### HARD-002 — Completion record, кодовата половина (2026-09-13)
+
+**Commit `240337d7d9e43aabdab11074ded571337a002cf2`** върху котвата `1514e65` (branch `main`,
+локален, непушнат): 6 файла, 239+/5− (`git show --stat 240337d`); едноредово съобщение, нула
+trailers (`git log -1 --format=%b` празно); дърво чисто след commit-а. Изпълнено по обхвата
+§1–3: `planAskRules` връща адитивно `presentForeign = (desired ∩ actual) − owned` в payload ред
+(инвариантно през reconcile-а — аргументът в header-а на `generate.mjs`); reconcile summary-то
+носи „N payload rule(s) present but not owned here…" само при N > 0; `assembleChanges` ги
+изписва поименно през `measureForeignAskRules()` — мери от ФИНАЛНОТО състояние (не акумулатор;
+нечетимост → `ctx.warn`, никога тихо „няма чужди"); skill отчетният контракт носи реда;
+CHANGELOG `[0.2.3]` § Added + NOTES.md двете последствия за ръчни списъци. Без миграция/bump —
+вози се в 0.2.3.
+
+**Доказаното от тестовете (три fixture-а на реалния entrypoint, update suite 468 → 490):**
+кандидатската претенция „ownedAskRules:[] → reconcile не добавя нищо" е ОПРОВЕРГАНА — липсващо
+правило се добавя независимо от ownership и engine-ът притежава точно каквото е вкарал (3 от 3);
+ръчно махнато никога-owned правило се ВРЪЩА (tombstone пази само owned премахване); present-
+but-not-owned е инертно (не пипнато/не осиновено/не tombstone-нато) и вече се докладва с брой +
+поименно в CHANGES (105 измерени в wiped-ownership fixture-а, в payload ред); flipping: без
+чужди правила редът отсъства, не е „0". Следствие за втория консуматор: `/pnp:update` ще добави
+всяко липсващо огледало и там; каквото е имал в точното payload изписване, излиза поименно в
+CHANGES и остава негово за поддръжка.
+
+**Отклонения (приети от COO):** (1) „днес не се докладва" assertion-ът в позитивната си
+пост-тикетна форма + flipping за отсъствие; (2) `presentForeign: []` в setup fallback литерала
+(shape-only); (3) CHANGES списъкът нарочно без cap — имената са стойността; (4) измереният брой
+се печата като PASS detail на един check.
+
+**Ревю:** fact-check над диффа — 1 находка (NOTES.md изречение, обещаващо защита за never-owned
+ръчни премахвания, каквато формулата не дава) → микро-рунд, изречението поправено. Codex
+`gpt-5.6-sol`/high, `Class: code`: пас 1 **`pass`, нула находки** — втори пореден чист първи
+пас.
+
+**Верификация (точни кодове):** пълни 8/8 exit 0 на финалното дърво — validate-payload
+„7 migration(s) … 0.2.3"; test-setup 316/0; **test-update 490/0** (+22); example cycles 2×44/0;
+selfcheck 975/975; spikes 318/0; plugin validate ✔; acceptance grep-овете точно по плана
+(„present but not owned" 10 hits в scripts/update; Cyrillic празно exit 1). Записана
+out-of-scope находка (не пипната): след crash-resume загубеният ownership delta законно ще
+издуе „present but not owned" броя — консистентно с warn-а на engine-а;
+`run-example-cycle.mjs:584` не следи новата част (update suite я покрива).
+
+**Остатък (release опашката на 0.2.3, операторски стъпки):** tag `v0.2.3` @ `240337d` (дума) →
+push main + tag (дума + диалог) → CI → consumer proof + проверката на втория консуматор.
+Записва се тук при изпълнение.
+
 ## 0.2.4 — Correctness на реален консуматор · tag `v0.2.4`
 
 ### HARD-003 (SETUP-001) [R2 code-class] — setup вижда заварения `<plansDir>/active/`
