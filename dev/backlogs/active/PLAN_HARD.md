@@ -413,9 +413,16 @@ out-of-scope находка (не пипната): след crash-resume заг�
 издуе „present but not owned" броя — консистентно с warn-а на engine-а;
 `run-example-cycle.mjs:584` не следи новата част (update suite я покрива).
 
-**Остатък (release опашката на 0.2.3, операторски стъпки):** tag `v0.2.3` @ `240337d` (дума) →
-push main + tag (дума + диалог) → CI → consumer proof + проверката на втория консуматор.
-Записва се тук при изпълнение.
+**Release 0.2.3 — изпълнено (2026-09-13):** tag `v0.2.3` @ `240337d` (дума) + `git push origin
+main` (`6fd2512..f3c4cac`, 7 commit-а) + push на тага (думи + диалози); `git ls-remote --tags
+origin v0.2.3` → `240337d…`; `origin/main...main` = `0 0`. **Consumer proof (Furnissimo, relay):**
+`/plugin marketplace update` (само вдига плъгина — измерено още 2026-09-13) → `/reload-plugins` →
+`/pnp:update` 0.2.2 → 0.2.3: apply exit 0, **+54 PowerShell огледала, 0 конфликта, 0 диалога,
+selfcheck там PASS 979/979**; CHANGES файлът именува **точно 54-те „present but not owned" Bash
+правила поименно в payload ред, вкл. трите рендирани `git -C D:\Furnissimo` форми** — setup и
+update рендерът на `<projectRoot>` съвпадат на реален консуматор. Ръчен пас НЕ потрябва —
+огледалата влязоха автоматично (доказаното от HARD-002 т.1, на терен). Commit-ът там чака клика
+на оператора (hash — при relay). CI run 34762983709 на push-а: резултатът се дописва тук.
 
 ## 0.2.4 — Correctness на реален консуматор · tag `v0.2.4`
 
