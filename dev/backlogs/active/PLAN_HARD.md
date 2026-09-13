@@ -422,7 +422,9 @@ selfcheck там PASS 979/979**; CHANGES файлът именува **точн�
 правила поименно в payload ред, вкл. трите рендирани `git -C D:\Furnissimo` форми** — setup и
 update рендерът на `<projectRoot>` съвпадат на реален консуматор. Ръчен пас НЕ потрябва —
 огледалата влязоха автоматично (доказаното от HARD-002 т.1, на терен). Commit-ът там чака клика
-на оператора (hash — при relay). CI run 34762983709 на push-а: резултатът се дописва тук.
+на оператора (hash — при relay). **CI run 34762983709: windows ✔ + ubuntu ✔ (двата блокиращи,
+~17m), macos advisory-red на update суита** (известният проследен дефект; run-ът общо success —
+`continue-on-error` държи).
 
 ## 0.2.4 — Correctness на реален консуматор · tag `v0.2.4`
 
@@ -462,6 +464,43 @@ update рендерът на `<projectRoot>` съвпадат на реален 
 **Risk threshold:** блокира схема промяна, блокираща инсталация semantics, пипане на Gate 2.
 **Stop condition:** VERIFY + acceptance зелени → стоп.
 **Review:** `Class: code` → Codex, fact-check преди; cap 2. **Assignee:** Колега. Branch `main`.
+
+#### HARD-003 — Completion record (2026-09-13)
+
+**Commit `d137f87d1bf577c1c70fbc41300a571df48b6558`** върху котвата `c0cd8b7` (branch `main`,
+локален, непушнат): 15 файла, 336+/54− (`git show --stat d137f87`); едноредово съобщение, нула
+trailers; дърво чисто; двата fixture rename-а записани като rename. Изпълнено по обхвата §1–5:
+`existingPlansWarning`/`existingOverridesWarning` — споделени exported helper-и (предикатът
+byte-for-byte този на Gate 2, fact-check потвърдено срещу кода); интервюто предупреждава на
+default-а И на отговора (без повторение; `runInterview` с `projectRoot` + инжектируем `out` —
+предупреждението е тестваемо на production пътя); генераторът повтаря plans реда като note в
+плана/отчета (покрива `--dry-run` и `--answers-file`); skill прозата с Gate 2 обосновката; тест
+секция 12b (12 checks: брои 2 от 4 decoy-а — точно Gate 2 множеството; двата пътя; dry-run пише
+нула; clean flipping контрол); release 0.2.4 отворен: миграция `0008_consumer-correctness`
+(note-only), 8-и манифестен запис, `plugin.json` 0.2.4, fixture → `0009_example-bump`
+(относителният selfcheck контрол от HARD-001 не поиска пипане — точно за каквото беше направен),
+self-install apply (1 note, 0 диалога), `CHANGES_0.2.3-to-0.2.4.md`.
+
+**Отклонения (приети от COO):** (1) инжектируем `out` на `runInterview` (иначе тестът мери
+огледална логика); (2) секция `12b`, не преномериране (прецедент 6b); (3) scripted ask вдигнат
+на module scope, секция 12 байт-идентична; (4) генераторът повтаря само plans предупреждението —
+overrides note-ът вече съществува там и не се дублира; (5) нула пипнати съществуващи assertions.
+
+**Ревю:** fact-check над диффа — 0 находки (вкл. предикатът срещу dispatch-gate кода и „six
+times" срещу git историята; setup suite независимо ре-рънната 328/0). Codex `gpt-5.6-sol`/high,
+`Class: code`: пас 1 **`pass`, нула находки** — трети пореден чист първи пас.
+
+**Верификация (точни кодове):** пълни 8/8 exit 0 — validate-payload „8 migration(s) … 0.2.4";
+**test-setup 328/0** (+12, секция 12b); test-update 490/0; example cycles 2×44/0; selfcheck
+975/975; spikes 318/0; plugin validate ✔; `aiwf-update --check` „up to date … 0.2.4"; acceptance
+grep-овете точно по плана (стар fixture id празно; Cyrillic празно, exit 1).
+
+**Записани out-of-scope находки (не пипнати):** (а) ре-интервю на инсталиран проект винаги ще
+види plans предупреждението (default-ът е собствената му plansDir) — изречението остава вярно
+(условната клауза), потискане би скрило реда точно при смяна на пътя; (б) `assembleChanges`
+печата безусловно изречение за рендирани артефакти, невярно за note-only release
+(`CHANGES_0.2.3-to-0.2.4.md:6`, заварено). Останал дълг: няма. Release опашката на 0.2.4 (tag,
+push, consumer proof) — в HARD-004 по плана.
 
 ### HARD-004 (GATE-002) [R2 code-class] — честният лимит на commit клика; release 0.2.4
 
