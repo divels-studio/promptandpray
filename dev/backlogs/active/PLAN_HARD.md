@@ -711,8 +711,20 @@ operator's explicit word — one word per pass"); `templates/CLAUDE.md.tmpl` г�
 op + self-install re-apply през `--resolve`, механиката на AUD-002 §3); литералната фраза за
 grep/пин: "one word per pass"; selfcheck пин + контрол. Прозаичното изключение остава: корекция
 само в проза не иска пас (fact-check + COO проверка, както днес).
-**Извън обхват:** формат на самите вердикти (REVIEW_CHECKLIST е непипнат); операторският език;
-ретроактивни промени по вече затворени тикети.
+**COO scope решение при диспач (2026-09-14):** падащият default се пренаписва на ВСЕКИ payload
+сайт, който го твърди — не само двата named: + `docs/WORKFLOW.md:328-337` (readiness цикълът),
+`docs/REVIEW_CHECKLIST.md:22` (само изречението за standing word — вердиктният формат остава),
+`skills/review/SKILL.md:64,107-109,226-228`, `skills/roles/SKILL.md:109`,
+`skills/work/SKILL.md:59`, `docs/OPERATOR_PROTOCOL.md:98`, `schema/aiwf.config.schema.json:367`
+(само description), `aiwf-roles.ps1:26`/`aiwf-roles.sh:27` (header коментари),
+`templates/PROJECT_OVERRIDES.md.tmpl:172` (бъдещи инсталации; заварените overrides документи са
+операторски — казва се в NOTES). Причина: иначе `/pnp:review` и одитната доктрина сами
+инструктират отмененото правило. Guard (b) сайтовете („a standing word covers the work it was
+given for") и историята (CHANGELOG, migration NOTES) НЕ се пипат; таблицata на `--show` остава
+байт-идентична. CHANGELOG получава и липсващия `[0.2.4]` link ref покрай новия `[0.2.5]`.
+
+**Извън обхват:** формат на самите вердикти (REVIEW_CHECKLIST — само standing-word изречението
+на `:22`, нищо друго); операторският език; ретроактивни промени по вече затворени тикети.
 **Acceptance:** `git grep -L "one or two sentences of its substance" -- docs/WORKFLOW.md
 skills/review/SKILL.md skills/qa/SKILL.md` → празно, exit 1; `git grep -n "one word per pass"
 -- docs/WORKFLOW.md templates/CLAUDE.md.tmpl` → ≥1 hit всеки; `git grep -n "standing word"
@@ -725,6 +737,58 @@ dev/CHANGELOG) → празно, exit 1; пълни 8/8 (release-отварящ 
 note-only за формулировка. **Stop condition:** acceptance зелен → стоп.
 **Review:** `Class: code` (selfcheck в диффа) → Codex, fact-check преди; cap 2.
 **Assignee:** Колега. Branch `main`.
+
+#### HARD-012 — Completion record (2026-09-14)
+
+**Commit `b1b62350c1e0a88b75256be2279da146d6250345`** върху котвата `79b8b1e` (branch `main`,
+локален, непушнат): 27 файла, 340+/68− (`git show --stat b1b6235`); едноредово съобщение, нула
+trailers (`git log -1 --format=%b` празно, проверено с `cat -A`); PLAN файлът и `.aiwf/` извън
+commit-а; трите codex `.ps1` не дрейфнаха. Изпълнено по обхвата (a)–(d) + COO scope решението:
+P1 фразата на трите сайта (WORKFLOW точка 4 в § How the COO speaks, review/qa Step 4); падащият
+default пренаписан на ВСИЧКИ payload сайтове, които го твърдяха — WORKFLOW (гейт клаузата :150,
+loop-shape bullet-ът, readiness цикълът :333-347 И стартовото изречение :308, пас-1 корекция),
+REVIEW_CHECKLIST:22, OPERATOR_PROTOCOL:98, README:215, CLAUDE.md.tmpl гейт редовете,
+PROJECT_OVERRIDES.md.tmpl сийд редът, reviewer.md.tmpl:106-113, review/roles/work скиловете,
+schema description-ът, двата resolver header-а; guard (b) сайтовете и историята непипнати,
+`--show` таблицата байт-идентична. Selfcheck: нов `DOCTRINE_PASS_SURFACES` (5 пина: P1×3,
+"one word per pass"×2) + генеричен assertion + 5 авто-генерирани flipping контрола, всеки
+саботира с реалната регресия. Release 0.2.5 отворен: миграция `0009_readiness-discipline`
+(note + rerender `CLAUDE.md#aiwf-core` + rerender `.claude/agents/reviewer.md` c
+`ifRecorded: true` — третият op роден от пас-1 блокер B3), 9-и манифестен запис, bump 0.2.5,
+fixture → `0010_example-bump` (относителният контрол от HARD-001 пак не поиска пипане),
+self-install apply (2 операции, 0 диалога, регионът директно — bookkeeping upstream==local;
+третият op е no-op тук: reviewer-ът е codex-hosted, запис няма), `CHANGES_0.2.4-to-0.2.5.md`.
+
+**Отклонения (приети от COO):** (1) пиновете в нов масив `DOCTRINE_PASS_SURFACES`, не в
+`DOCTRINE_TABLE_SURFACES` (контрактът на таблицата е "кой одитира"; същият механизъм); (2)
+template ref-ът на региона с `#aiwf-core` суфикс по образеца 0004 (без него op-ът пише целия
+шаблон в региона — проверено срещу `migrate.mjs:334-347`); (3) fixture rename-ът staged с
+`git mv` (unstage би бил `git reset` — операторски клас); (4) две fixture сайта отвъд плановия
+списък (examples README :78-79); (5) CHANGELOG получи и липсващия `[0.2.4]` link ref; (6) при
+commit-а: двата RM fixture файла имаха unstaged content-делта върху staged rename — стейджнати
+с обявление (иначе `ops.json` ляга с грешен migration id); (7) нула trailers въпреки harness
+reminder-а — проектното правило, обявено.
+
+**Ревю (пълна история):** fact-check над диффа (Explore/sonnet) — 0 находки (вкл. override/skip
+клоновете срещу `migrate.mjs`, "seven times", сийд цитата). Codex `gpt-5.6-sol`/high,
+`Class: code`: пас 1 **`fail`, 3 блокера, един клас** — заварена проза с отменения модел без
+фразата "standing word" (WORKFLOW:308 „no intermediate human permission"; README:215;
+reviewer.md.tmpl:107 — рендира се у консуматори) → корекционен рунд 1: трите пасажа пренаписани
++ COO решение: трети op в миграцията (`ifRecorded` rerender на reviewer.md, образецът 0004);
+note текстът и CHANGELOG направени верни за трите op-а. Делта fact-check — 0 находки. Пас 2
+(верификационен, **изрична операторска дума „пускай" — първият пас, диспачнат по правилото,
+което самият тикет вкарва**): **`pass`, нула находки** — B1–B3 решени, третият op проверен и по
+journal-recovery пътя.
+
+**Верификация (точни кодове):** пълни 8/8 exit 0 на финалното дърво (двукратно: след рунд 0 и
+след рунд 1) — validate-payload „9 migration(s) … 0.2.5"; test-setup 328/0; test-update 490/0;
+example cycles 2×44/0; **selfcheck 1003/1003** (`node scripts/selfcheck/aiwf-selfcheck.js
+--plugin-root . --project-fixture .`; 5-те нови контрола „FAIL as required"); spikes 318/0;
+plugin validate ✔; `aiwf-update --check` „up to date … 0.2.5". Acceptance дословно: P1 grep-ът
+-L празен exit 1; "one word per pass" ≥1 hit в WORKFLOW и CLAUDE.md.tmpl; останалите
+"standing word" в WORKFLOW само guard (b) (:188, wrap-нат) и двете изречения на НОВОТО правило
+(:152, :337); Cyrillic празно exit 1; стар fixture id празно exit 1. Останал дълг: няма.
+Release опашката на 0.2.5 (tag, push, CI, consumer proof) — в HARD-007 по плана.
 
 ## 0.2.6 — Legibility & housekeeping · tag `v0.2.6`
 

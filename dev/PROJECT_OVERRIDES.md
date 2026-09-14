@@ -244,8 +244,10 @@ mechanics and are **not** editable here (see the payload doc `docs/WORKFLOW.md` 
 - **R1 uses no orchestration loop** - it is done directly in the main session.
 - **QA is conditional** - only when a brief declares observable runtime/UI behavior; never in R1 or
   non-runtime R2.
-- Plan readiness runs `review.plan.passes` passes (the audit table, `/pnp:roles`; factory 2) on the
-  ticket's standing word, one more with the operator's explicit word - independent of the cap above.
+- Plan readiness runs `review.plan.passes` passes (the audit table, `/pnp:roles`; factory 2) as a
+  ceiling: the first on the ticket's standing word, each further one on the operator's own explicit
+  word - one word per pass - and one more beyond the configured number is always available with
+  that word. Independent of the cap above.
 
 ## Product boundary checks (rendered into the Reviewer)
 
