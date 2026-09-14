@@ -8,8 +8,9 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 
 Setup stops adopting a plans directory in silence. An install pointed at a project whose
 `<plansDir>/active/` already holds `PLAN_*.md` files was handing Gate 2's `off-plan` mode a set of
-plans nobody in this loop had approved, and saying nothing about it. `0008_consumer-correctness` is a
-note-only migration: nothing already installed changes.
+plans nobody in this loop had approved, and saying nothing about it. The commit gate stops
+overstating itself in the same release: the click approves an invocation, not a final tree.
+`0008_consumer-correctness` is a note-only migration: nothing already installed changes.
 
 ### Added
 
@@ -28,6 +29,32 @@ note-only migration: nothing already installed changes.
   `paths.overridesDoc`, for the opposite reason: setup seeds that file once and never rewrites it, so
   pointing it at an existing file means this install writes no template there at all. Correct
   behaviour that produced no output, and was therefore indistinguishable from having been written.
+- **The commit click's honest limit is written down (HARD-004)** - `docs/LOOP.md` § Commit gate and
+  `docs/WORKFLOW.md` § Commit & Push Authority now both say that the click **approves the
+  invocation**, not the final tree content. On a project carrying commit automation - a
+  `post-commit` hook that amends, a `pre-commit` formatter, a version stamper - the approved tree
+  and the tree that lands diverge silently; measured on a real consumer, an unstaged version file
+  was amended into the commit the operator had just approved. Every guard of the form "this ticket
+  touched exactly these files", including a brief's HEAD-at-dispatch anchor, is wrong by
+  construction there. Binding the click to content (a token, a state file, a HEAD hash) stays
+  refused by design, so the limit is stated instead of hidden.
+- **The self-check reports commit automation as a `[NOTE]` (HARD-004)** - a new COMMIT AUTOMATION
+  section reads the inspected project for an active `pre-commit`/`post-commit` hook (git's own
+  `.sample` files are inert and never counted) and for a `core.hooksPath` that moves them, and
+  prints the limit above as a `[NOTE]`. Never a failure and never a blocker: such a hook is a
+  legitimate project choice, and a note is deliberately not counted in the pass/fail tally. The
+  lookup follows git rather than a guess at it: a linked worktree is resolved through its
+  `commondir` to the common directory where git really keeps hooks and config, and the effective
+  `core.hooksPath` is layered as git layers it - `[core "sub"]` is not `[core]`, the last assignment
+  wins, plain `[include]` files are followed to a 3-hop cap, and a per-worktree `config.worktree`
+  overrides the shared config. The value itself is read as git reads one - a comment starts at an
+  unquoted `#` wherever it stands, `\"` `\\` `\n` `\t` `\b` are escapes, a trailing backslash
+  continues the value on the next line, `~/` expands against the home directory, and a value git
+  would refuse is read as no value rather than as a guess. A `hooksPath` armed only through a
+  conditional `[includeIf]`, and a `~user/` path, are deliberately not resolved; the self-check's
+  COVERAGE text names both as non-claims. Both directions are asserted on repositories the section
+  builds itself, including the inverse for the worktree case: a hook planted where git never looks
+  must not be reported.
 
 ## [0.2.3] - 2026-09-13
 

@@ -243,6 +243,16 @@ dialog:
   permission dialog** -> the operator clicks **Yes** to allow the commit (or **No** to refuse). No
   approval token, no state file, no HEAD/content binding - the operator's click on the current
   attempt is the approval.
+- **The click approves the invocation, not the final tree content.** The dialog is raised for the
+  `git commit` command about to run; what the *project* does around it is outside the dialog. On a
+  project carrying commit automation - a `post-commit` hook that amends, a `pre-commit` formatter, a
+  version stamper - the approved tree and the tree that lands diverge silently: measured on a real
+  consumer, an unstaged version file was amended into the commit the operator had just approved.
+  Because nothing binds the click to content (that binding is refused by design, see above), every
+  guard of the form "this ticket touched exactly these files" - including a brief's HEAD-at-dispatch
+  anchor - is wrong by construction on such a project. Such a hook is a legitimate choice; the
+  plugin's `/pnp:selfcheck` reports one as a `[NOTE]`, never a failure, and auditing what it does
+  stays the project's own job.
 - **Push / merge / rebase** are executed **from the session** - but only after the operator's
   **explicit word** in chat (the doctrine gate) AND a native **`ask`** dialog (Yes/No) as the second
   gate. They are `ask` rules, not `deny`: `Bash(git push:*)` / `Bash(git merge:*)` /

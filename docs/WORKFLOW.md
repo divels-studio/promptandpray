@@ -653,6 +653,14 @@ them:
   its `PowerShell(git commit:*)` mirror are `ask` rules in the project's `.claude/settings.json`;
   the operator clicks **Yes** and types
   nothing (no approval token, no state file). No automatic commits.
+  **The click approves the invocation, not the final tree content:** on a project carrying commit
+  automation - a `post-commit` hook that amends, a `pre-commit` formatter, a version stamper - the
+  approved tree and the tree that lands diverge silently (measured on a real consumer: an unstaged
+  version file was amended in), and every guard of the form "this ticket touched exactly these
+  files", including the HEAD-at-dispatch anchor above, is wrong by construction there. The
+  click-to-content binding that would close this is refused by design (`docs/LOOP.md` § Commit
+  gate); such a hook is a legitimate choice, so `/pnp:selfcheck` reports one as a `[NOTE]`, never a
+  failure, and auditing what it does stays the project's own job.
 - **Push / merge / rebase:** executed from the session **only after the operator's explicit
   word** in chat, and each additionally surfaces a native `ask` dialog (Yes/No) as the second
   gate - `Bash(git push:*)` / `merge` / `rebase` (and the `git.exe` and

@@ -86,6 +86,7 @@ if (!fs.existsSync(path.join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json'))) {
 // ---------------------------------------------------------------------------
 const results = [];
 const notes = [];
+const observations = [];
 let currentSection = '(none)';
 
 function section(title) {
@@ -102,6 +103,15 @@ function check(name, ok, detail) {
 function note(name, why) {
   notes.push({ section: currentSection, name, why });
   console.log(`  [NOTE] ${name} - not exercised: ${why}`);
+}
+// A fact OBSERVED about the inspected project that is not a pass/fail claim about it - the project
+// is within its rights, and the note exists to state a limit the operator would otherwise not see.
+// Printed in the same `[NOTE]` class as above and, like it, deliberately not counted as a passed
+// assertion; kept in a list of its own so the "not exercised" report stays true - this one WAS
+// exercised, it simply asserts nothing.
+function observation(name, why) {
+  observations.push({ section: currentSection, name, why });
+  console.log(`  [NOTE] ${name} - ${why}`);
 }
 
 /**
@@ -3457,6 +3467,472 @@ function sectionProjectLayer(projectRoot, selfAuthored) {
 }
 
 // ---------------------------------------------------------------------------
+// SECTION - commit automation (the honest limit of the operator's commit click)
+// ---------------------------------------------------------------------------
+// The commit gate is a native permission dialog raised for ONE `git commit` invocation. Nothing
+// binds that click to content - no token, no state file, no HEAD hash - and that binding is refused
+// by design, so a project whose own git hooks amend or rewrite after the click lands a tree the
+// operator never saw. This is NOT a failure: such a hook is a legitimate project choice, and the
+// plugin has no business blocking an installation over it. What the plugin owes the operator is the
+// limit, stated where it can be seen - hence a `[NOTE]`, and never a FAIL.
+const COMMIT_AUTOMATION_LIMIT =
+  'the commit dialog approves the invocation, not the final tree content - commit automation that '
+  + 'amends or rewrites makes the approved tree and the landed tree diverge silently, and every '
+  + '"this ticket touched exactly these files" guard is wrong by construction here';
+// Only the two hooks that run around a commit. A `.sample` file is never one of them: git runs a
+// hook by EXACT name, so the shipped `pre-commit.sample` is inert, and matching by exact name is
+// what makes "non-sample" true rather than asserted.
+const COMMIT_HOOK_NAMES = ['pre-commit', 'post-commit'];
+
+// The two git directories of a project, or null when there is no repository at all:
+//   gitDir    - $GIT_DIR, what `.git` resolves to;
+//   commonDir - $GIT_COMMON_DIR, where the hooks and the repository config really live.
+// They differ for a LINKED WORKTREE, and the difference is the whole point: `.git` is a FILE there
+// (as it is for a submodule) whose `gitdir:` line points at `<main>/.git/worktrees/<name>` - a
+// per-worktree directory that holds no hooks and no config. Git finds the shared ones by reading
+// the `commondir` file inside it. Resolving only the gitdir would look for hooks in a directory git
+// never keeps them in and report "no automation" for every linked worktree - the honest-looking
+// wrong answer. A gitfile with NO `commondir` (the submodule shape) is its own common dir.
+function gitDirsOf(projectRoot) {
+  const dot = path.join(projectRoot, '.git');
+  let st = null;
+  try { st = fs.statSync(dot); } catch (e) { return null; }
+  let gitDir = null;
+  if (st.isDirectory()) {
+    gitDir = dot;
+  } else if (st.isFile()) {
+    const m = /^gitdir:\s*(.+)$/m.exec(readText(dot) || '');
+    if (!m) return null;
+    const target = m[1].trim();
+    gitDir = path.isAbsolute(target) ? target : path.resolve(projectRoot, target);
+  } else {
+    return null;
+  }
+  // Read for BOTH shapes: git reads $GIT_DIR/commondir however GIT_DIR was found, and a check that
+  // only read it for the gitfile case would be guessing about the other.
+  const commonRaw = (readText(path.join(gitDir, 'commondir')) || '').trim();
+  if (!commonRaw) return { gitDir, commonDir: gitDir };
+  return { gitDir, commonDir: path.isAbsolute(commonRaw) ? commonRaw : path.resolve(gitDir, commonRaw) };
+}
+
+// A git-config VALUE, parsed character by character the way git parses one - a regex over the line
+// gets three of these rules wrong at once, and each wrong one reads a real config as a different
+// value than git does:
+//   - outside quotes, `#` and `;` start a comment ANYWHERE, not only after whitespace, so
+//     `.hooks#c` is the directory `.hooks`;
+//   - `\` escapes exactly `\"` `\\` `\n` `\t` `\b` (newline, tab, backspace), in and out of quotes;
+//   - a `\` at end of line CONTINUES the value on the next physical line;
+//   - inside quotes whitespace is literal, outside it trailing whitespace is dropped.
+// Anything git itself refuses - an unknown escape, an unterminated quote, a continuation running
+// off the end of the file - returns null: a value git will not read is not one this check invents a
+// reading for. `next` is the last physical line the value consumed, so the caller can skip it.
+function gitConfigParseValue(first, lines, startIndex) {
+  let out = '';
+  let keep = 0; // length of `out` up to the last character that survives a trailing-space trim
+  let quoted = false;
+  let i = startIndex;
+  let s = String(first).replace(/^[ \t]+/, '');
+  let pos = 0;
+  const ESCAPES = { '"': '"', '\\': '\\', n: '\n', t: '\t', b: '\b' };
+  for (;;) {
+    if (pos >= s.length) {
+      if (quoted) return { value: null, next: i }; // unterminated quote - git errors here
+      break;
+    }
+    const ch = s[pos];
+    if (ch === '\\') {
+      const nx = s[pos + 1];
+      if (nx === undefined) { // trailing backslash: the value continues on the next line
+        i += 1;
+        if (i >= lines.length) return { value: null, next: i - 1 };
+        s = lines[i];
+        pos = 0;
+        continue;
+      }
+      if (!Object.prototype.hasOwnProperty.call(ESCAPES, nx)) return { value: null, next: i };
+      out += ESCAPES[nx];
+      keep = out.length; // an escaped character is deliberate, never trimmed
+      pos += 2;
+      continue;
+    }
+    if (ch === '"') { quoted = !quoted; pos += 1; continue; }
+    if (!quoted && (ch === '#' || ch === ';')) break; // a comment, wherever it starts
+    out += ch;
+    if (quoted || (ch !== ' ' && ch !== '\t')) keep = out.length;
+    pos += 1;
+  }
+  return { value: out.slice(0, keep), next: i };
+}
+
+// A PATH-valued config value: git expands a leading `~/` against the home directory.
+// NOT supported, and null rather than guessed: the `~user/` form. Git resolves it through the
+// system's user database; reproducing that from Node would be invention, and a wrong path reads as
+// "no hook here". Stated as a non-claim in the COVERAGE text, like the includeIf limit.
+function gitConfigPathValue(value) {
+  if (!value) return null;
+  if (value === '~') return os.homedir();
+  if (value.startsWith('~/') || value.startsWith('~\\')) return path.join(os.homedir(), value.slice(2));
+  if (value.startsWith('~')) return null;
+  return value;
+}
+
+// Where an `[include] path = ...` points: `~/` expanded, relative resolved against the directory of
+// the file doing the including (git's rule), never against the project root.
+function gitIncludeTarget(value, includingFile) {
+  const v = gitConfigPathValue(value);
+  if (!v) return null;
+  return path.isAbsolute(v) ? v : path.resolve(path.dirname(includingFile), v);
+}
+
+// How many `[include]` hops are followed. A cap rather than a cycle set: it terminates a config that
+// includes itself, and a hooksPath buried four files deep is beyond what this check claims to see.
+const GIT_INCLUDE_DEPTH = 3;
+
+// The LAST `core.hooksPath` in one config file, or null - in document order, following plain
+// `[include]` files where they appear, because that is the order git applies them in: a later
+// assignment overrides an earlier one, whoever wrote it.
+//
+// Read as text rather than through `git config`: this runs against fixtures that are not
+// repositories, and spawning git there would answer about THIS repository instead of about them.
+//
+// NOT evaluated, by decision rather than by omission: `[includeIf "<condition>"]`. Its conditions
+// (gitdir, onbranch, hasconfig) need git's own matching semantics, and a wrong evaluation would be
+// worse than an absent one - so a hooksPath armed only through a conditional include is NOT seen by
+// this check, and the COVERAGE text says so in those words.
+function gitConfigFileHooksPath(file, depth) {
+  const text = readText(file);
+  if (text === null) return null;
+  // Indexed, not for-of: a value ending in `\` consumes the next physical line, and the scan has to
+  // skip what the value already ate. CR is stripped so a CRLF config parses like an LF one.
+  const lines = text.split('\n').map((l) => l.replace(/\r$/, ''));
+  let last = null;
+  let sectionName = null;
+  let sectionSub = null;
+  for (let index = 0; index < lines.length; index += 1) {
+    let rest = lines[index].trim();
+    if (!rest || rest.startsWith('#') || rest.startsWith(';')) continue;
+    // `[core]` and `[core "sub"]` are DIFFERENT sections: a subsection carries no core.hooksPath,
+    // so the header is matched exactly instead of by prefix. Git also allows the key on the SAME
+    // line as the header (`[core] hooksPath = x`), so what follows the header keeps being parsed.
+    const sec = /^\[\s*([A-Za-z0-9.-]+)\s*(?:"((?:[^"\\]|\\.)*)")?\s*\]/.exec(rest);
+    if (sec) {
+      sectionName = sec[1].toLowerCase();
+      sectionSub = sec[2] === undefined ? null : sec[2];
+      rest = rest.slice(sec[0].length).trim();
+      if (!rest || rest.startsWith('#') || rest.startsWith(';')) continue;
+    }
+    if (sectionName === null || sectionSub !== null) continue;
+    if (sectionName === 'core') {
+      const kv = /^hooksPath\s*=\s*(.*)$/i.exec(rest);
+      if (kv) {
+        const parsed = gitConfigParseValue(kv[1], lines, index);
+        index = parsed.next;
+        // A value git refuses (null) leaves no hooksPath in force: git would not read this config
+        // at all, so neither an earlier assignment nor an invented reading survives it.
+        last = parsed.value;
+      }
+    } else if (sectionName === 'include' && depth > 0) {
+      const kv = /^path\s*=\s*(.*)$/i.exec(rest);
+      if (kv) {
+        const parsed = gitConfigParseValue(kv[1], lines, index);
+        index = parsed.next;
+        const target = parsed.value === null ? null : gitIncludeTarget(parsed.value, file);
+        const nested = target ? gitConfigFileHooksPath(target, depth - 1) : null;
+        // An include that sets nothing must not CLEAR what was set before it.
+        if (nested !== null) last = nested;
+      }
+    }
+  }
+  return last;
+}
+
+// The EFFECTIVE core.hooksPath for a project: the shared config first, then the per-worktree
+// `config.worktree` on top of it - that is the order git layers them, so the worktree file wins.
+// `config.worktree` is honoured whenever the file is present: git only reads it when
+// `extensions.worktreeConfig` is set, and reading it unconditionally is the cheap approximation in
+// the direction of SEEING a hook rather than missing one, which is the safe direction for a note.
+function gitEffectiveHooksPath(dirs) {
+  let value = null;
+  const layers = [path.join(dirs.commonDir, 'config'), path.join(dirs.gitDir, 'config.worktree')];
+  for (const file of layers) {
+    const v = gitConfigFileHooksPath(file, GIT_INCLUDE_DEPTH);
+    if (v !== null) value = v;
+  }
+  // An empty assignment is treated as "not set": git would resolve the empty path against the
+  // current directory, which is not a hook location any project means to arm. `~/` is expanded
+  // here rather than in the parser, because that expansion is a property of a PATH-valued key.
+  return value ? gitConfigPathValue(value) : null;
+}
+
+// A hook file git would actually run. On POSIX git skips a hook without the execute bit, so the bit
+// is the difference between an active hook and a disabled leftover. On Windows there is no such bit
+// to read - git runs the hook through sh whatever fs reports - so presence is the whole test there,
+// and pretending to read a mode would only invent a distinction the platform does not have.
+function isActiveHook(p) {
+  let st = null;
+  try { st = fs.statSync(p); } catch (e) { return false; }
+  if (!st.isFile()) return false;
+  if (process.platform === 'win32') return true;
+  return (st.mode & 0o111) !== 0;
+}
+
+// What in this project can rewrite a commit after the click - as a list of evidence strings, empty
+// when there is none. Pure with respect to the filesystem it is pointed at, so the controls below
+// run the same function over fixtures instead of over a description of it.
+function commitAutomationEvidence(projectRoot) {
+  const dirs = gitDirsOf(projectRoot);
+  if (!dirs) return [];
+  const found = [];
+  const hooksPath = gitEffectiveHooksPath(dirs);
+  // A configured hooksPath REPLACES the hooks directory - git looks in one place, not both - so a
+  // hook left behind under a redirect is dead code and must not be reported as live. Without one,
+  // the hooks live in the COMMON directory, which is the shared one for a linked worktree.
+  const hooksDir = hooksPath
+    ? (path.isAbsolute(hooksPath) ? hooksPath : path.resolve(projectRoot, hooksPath))
+    : path.join(dirs.commonDir, 'hooks');
+  if (hooksPath) found.push(`core.hooksPath = ${hooksPath}`);
+  for (const name of COMMIT_HOOK_NAMES) {
+    const p = path.join(hooksDir, name);
+    if (isActiveHook(p)) {
+      const rel = path.relative(projectRoot, p);
+      found.push((rel && !rel.startsWith('..') ? rel : p).split(path.sep).join('/'));
+    }
+  }
+  return found;
+}
+
+// The `[NOTE]` itself, or null when the project carries no commit automation.
+function commitAutomationNote(projectRoot) {
+  const found = commitAutomationEvidence(projectRoot);
+  if (!found.length) return null;
+  return { name: `the project carries commit automation (${found.join(', ')})`, why: COMMIT_AUTOMATION_LIMIT };
+}
+
+function writeHookFile(dir, name, executable) {
+  fs.mkdirSync(dir, { recursive: true });
+  const p = path.join(dir, name);
+  fs.writeFileSync(p, '#!/bin/sh\nexit 0\n');
+  fs.chmodSync(p, executable ? 0o755 : 0o644);
+  return p;
+}
+function writeGitDirFixture(root, configBody) {
+  fs.mkdirSync(path.join(root, '.git', 'hooks'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.git', 'config'),
+    '[core]\n\trepositoryformatversion = 0\n' + (configBody || ''));
+  // The hooks git itself ships: inert, and the reason "non-sample" has to be part of the test.
+  for (const name of COMMIT_HOOK_NAMES) writeHookFile(path.join(root, '.git', 'hooks'), name + '.sample', true);
+  return root;
+}
+// The gitfile git writes for a worktree or a submodule: one `gitdir:` line, forward slashes.
+function writeGitFile(root, target) {
+  fs.mkdirSync(root, { recursive: true });
+  fs.writeFileSync(path.join(root, '.git'), `gitdir: ${target.split(path.sep).join('/')}\n`);
+  return root;
+}
+// The exact shape `git worktree add` leaves behind:
+//   <base>/main/.git/                      the main (common) git directory - hooks and config here
+//   <base>/main/.git/worktrees/<name>/     the per-worktree git directory, carrying `commondir`
+//   <base>/wt/.git                         a gitfile pointing at the per-worktree directory
+// `commondir` holds the relative path back to the common directory, exactly as git writes it.
+function writeLinkedWorktreeFixture(base, configBody) {
+  const mainRoot = path.join(base, 'main');
+  const worktreeRoot = path.join(base, 'wt');
+  writeGitDirFixture(mainRoot, configBody);
+  const worktreeGitDir = path.join(mainRoot, '.git', 'worktrees', 'wt');
+  fs.mkdirSync(worktreeGitDir, { recursive: true });
+  fs.writeFileSync(path.join(worktreeGitDir, 'commondir'), '../..\n');
+  fs.writeFileSync(path.join(worktreeGitDir, 'gitdir'), path.join(worktreeRoot, '.git') + '\n');
+  writeGitFile(worktreeRoot, worktreeGitDir);
+  return { mainRoot, worktreeRoot, worktreeGitDir };
+}
+
+function sectionCommitAutomation(projectRoot, tmpRoot) {
+  section('COMMIT AUTOMATION - what the commit click cannot cover (reported, never failed)');
+
+  const observed = commitAutomationNote(projectRoot);
+  if (observed) observation(observed.name, observed.why);
+  else console.log('  (no active pre-commit/post-commit hook and no core.hooksPath in the inspected project)');
+
+  // Both directions, on repositories this section builds itself: a detector that reports nothing is
+  // indistinguishable from a clean project, and one that reports always is indistinguishable from a
+  // dirty one. The real project above is whatever it is; these two say the reading was real.
+  const clean = writeGitDirFixture(path.join(tmpRoot, 'commit-automation-clean'));
+  const cleanNote = commitAutomationNote(clean);
+  check('a project with only git\'s own .sample hooks produces NO commit-automation note',
+    cleanNote === null, cleanNote ? `reported: ${cleanNote.name}` : 'nothing reported, as required');
+
+  const hooked = writeGitDirFixture(path.join(tmpRoot, 'commit-automation-hooked'));
+  writeHookFile(path.join(hooked, '.git', 'hooks'), 'post-commit', true);
+  const hookedNote = commitAutomationNote(hooked);
+  check('an injected executable .git/hooks/post-commit produces exactly the [NOTE], with the honest limit',
+    !!hookedNote && hookedNote.name.includes('.git/hooks/post-commit') && hookedNote.why === COMMIT_AUTOMATION_LIMIT,
+    hookedNote ? hookedNote.name : 'nothing reported');
+  // The tally semantics are the point of the whole section: a finding that turned into a `check()`
+  // would fail an installation over a legitimate hook. Converting the note back into an assertion
+  // puts its name in `results`, and this is what notices.
+  if (observed) {
+    check('the commit-automation finding is reported as a [NOTE], never as a counted assertion',
+      !results.some((r) => r.name.startsWith('the project carries commit automation')),
+      'reported through the note channel, outside the pass/fail tally');
+  } else {
+    note('the commit-automation finding is reported as a [NOTE], never as a counted assertion',
+      'the inspected project carries no commit automation, so this run produced no finding to classify');
+  }
+
+  // core.hooksPath is the other way a project arms a commit hook, and it REPLACES `.git/hooks`:
+  // the redirected hook must be found and the one left in `.git/hooks` must not, or the note names
+  // a file git would never run.
+  const moved = writeGitDirFixture(path.join(tmpRoot, 'commit-automation-moved'), '\thooksPath = .githooks\n');
+  writeHookFile(path.join(moved, '.git', 'hooks'), 'post-commit', true);
+  writeHookFile(path.join(moved, '.githooks'), 'pre-commit', true);
+  const movedEvidence = commitAutomationEvidence(moved);
+  check('core.hooksPath is followed: the redirected hook is reported and the dead .git/hooks one is not',
+    movedEvidence.includes('core.hooksPath = .githooks')
+      && movedEvidence.includes('.githooks/pre-commit')
+      && !movedEvidence.some((e) => e.includes('.git/hooks/')),
+    movedEvidence.join(', ') || 'nothing reported');
+
+  // A `.git` FILE with no `commondir` beside its target - the submodule shape - is its own git
+  // directory, and the hooks are there.
+  const sub = path.join(tmpRoot, 'commit-automation-gitfile');
+  const subGitDir = path.join(tmpRoot, 'commit-automation-gitfile-gitdir');
+  fs.mkdirSync(sub, { recursive: true });
+  writeGitDirFixture(subGitDir);
+  fs.renameSync(path.join(subGitDir, '.git'), path.join(subGitDir, 'realgit'));
+  writeGitFile(sub, path.join(subGitDir, 'realgit'));
+  writeHookFile(path.join(subGitDir, 'realgit', 'hooks'), 'pre-commit', true);
+  check('a submodule-shaped .git FILE (no commondir) is followed to the real git directory',
+    commitAutomationEvidence(sub).some((e) => e.endsWith('hooks/pre-commit')),
+    commitAutomationEvidence(sub).join(', ') || 'nothing reported');
+
+  // A LINKED WORKTREE: `.git` is a file pointing at <main>/.git/worktrees/<name>, that directory
+  // carries a `commondir`, and git keeps the hooks and the config in the COMMON directory it names.
+  // Both directions in one fixture, because each alone can be satisfied by the wrong reading: the
+  // shared hook MUST be found, and a hook planted in the per-worktree directory - where git never
+  // looks for one - must NOT be reported.
+  const lw = writeLinkedWorktreeFixture(path.join(tmpRoot, 'commit-automation-linked'));
+  writeHookFile(path.join(lw.mainRoot, '.git', 'hooks'), 'post-commit', true);
+  writeHookFile(path.join(lw.worktreeGitDir, 'hooks'), 'pre-commit', true);
+  const linkedEvidence = commitAutomationEvidence(lw.worktreeRoot);
+  check('a linked worktree is followed to the COMMON git directory, where git keeps the hooks',
+    linkedEvidence.some((e) => e.endsWith('/.git/hooks/post-commit')),
+    linkedEvidence.join(', ') || 'nothing reported');
+  check('a hook in the per-worktree git directory is NOT reported (git never looks there)',
+    !linkedEvidence.some((e) => e.includes('/worktrees/')),
+    linkedEvidence.join(', ') || 'nothing reported');
+
+  // The config reading, held against how git resolves the SAME file.
+  const decoy = writeGitDirFixture(path.join(tmpRoot, 'commit-automation-subsection'),
+    '[core "decoy"]\n\thooksPath = .decoy-hooks\n');
+  writeHookFile(path.join(decoy, '.git', 'hooks'), 'post-commit', true);
+  writeHookFile(path.join(decoy, '.decoy-hooks'), 'post-commit', true);
+  const decoyEvidence = commitAutomationEvidence(decoy);
+  check('[core "sub"] is not [core]: a subsection hooksPath does not move the hooks directory',
+    !decoyEvidence.some((e) => e.startsWith('core.hooksPath'))
+      && decoyEvidence.includes('.git/hooks/post-commit'),
+    decoyEvidence.join(', ') || 'nothing reported');
+
+  const twice = writeGitDirFixture(path.join(tmpRoot, 'commit-automation-twice'),
+    '\thooksPath = .first-hooks\n[core]\n\thooksPath = .last-hooks\n');
+  writeHookFile(path.join(twice, '.first-hooks'), 'post-commit', true);
+  writeHookFile(path.join(twice, '.last-hooks'), 'pre-commit', true);
+  const twiceEvidence = commitAutomationEvidence(twice);
+  check('two core.hooksPath assignments: the LAST one wins, as git resolves it',
+    twiceEvidence.includes('core.hooksPath = .last-hooks')
+      && twiceEvidence.includes('.last-hooks/pre-commit')
+      && !twiceEvidence.some((e) => e.includes('.first-hooks')),
+    twiceEvidence.join(', ') || 'nothing reported');
+
+  const inc = writeGitDirFixture(path.join(tmpRoot, 'commit-automation-include'),
+    '[include]\n\tpath = extra.cfg\n');
+  // The included file also carries the key on the SAME line as its section header - a form git
+  // accepts, so the parser has to as well.
+  fs.writeFileSync(path.join(inc, '.git', 'extra.cfg'), '[core] hooksPath = .included-hooks\n');
+  writeHookFile(path.join(inc, '.included-hooks'), 'post-commit', true);
+  const incEvidence = commitAutomationEvidence(inc);
+  check('a plain [include] file is followed, and a hooksPath set there counts (key on the header line)',
+    incEvidence.includes('core.hooksPath = .included-hooks')
+      && incEvidence.includes('.included-hooks/post-commit'),
+    incEvidence.join(', ') || 'nothing reported');
+
+  // The cap, which is also what makes a self-including config terminate: one hop past it is not
+  // read, and the check says "not seen" rather than looping.
+  const deep = writeGitDirFixture(path.join(tmpRoot, 'commit-automation-include-deep'),
+    '[include]\n\tpath = inc1.cfg\n');
+  for (let n = 1; n <= GIT_INCLUDE_DEPTH; n += 1) {
+    fs.writeFileSync(path.join(deep, '.git', `inc${n}.cfg`), `[include]\n\tpath = inc${n + 1}.cfg\n`);
+  }
+  fs.writeFileSync(path.join(deep, '.git', `inc${GIT_INCLUDE_DEPTH + 1}.cfg`),
+    '[core]\n\thooksPath = .too-deep-hooks\n');
+  writeHookFile(path.join(deep, '.too-deep-hooks'), 'post-commit', true);
+  check(`an include chain deeper than the ${GIT_INCLUDE_DEPTH}-hop cap is not followed (so a config cycle terminates)`,
+    !commitAutomationEvidence(deep).some((e) => e.includes('too-deep')),
+    commitAutomationEvidence(deep).join(', ') || 'nothing reported');
+
+  // The VALUE rules, asserted on the pure reader's return rather than through the note text: these
+  // are exact strings (a tab is a tab), and a check that only looked at the evidence line could not
+  // tell `a<TAB>b` from `atb`. One config file per rule, written where the reader will find it.
+  const valueCases = [
+    { id: 'comment-no-space', body: '[core]\n\thooksPath = .hooks#c\n', expect: () => '.hooks',
+      label: 'an unquoted `#` starts a comment with no whitespace before it (`.hooks#c` is `.hooks`)' },
+    { id: 'escapes', body: '[core]\n\thooksPath = "a\\tb"\n', expect: () => 'a\tb',
+      label: 'a quoted \\t is a TAB, not the letter t' },
+    { id: 'continuation', body: '[core]\n\thooksPath = .a\\\nb-hooks\n', expect: () => '.ab-hooks',
+      label: 'a trailing backslash continues the value on the next line' },
+    { id: 'bad-escape', body: '[core]\n\thooksPath = "a\\qb"\n', expect: () => null,
+      label: 'an escape git refuses (\\q) makes the value unusable, not a guess' },
+    { id: 'unterminated', body: '[core]\n\thooksPath = "a\n', expect: () => null,
+      label: 'an unterminated quote makes the value unusable, not a guess' },
+  ];
+  const valueDir = path.join(tmpRoot, 'commit-automation-values');
+  fs.mkdirSync(valueDir, { recursive: true });
+  for (const c of valueCases) {
+    const f = path.join(valueDir, `${c.id}.cfg`);
+    fs.writeFileSync(f, c.body);
+    const got = gitConfigFileHooksPath(f, GIT_INCLUDE_DEPTH);
+    check(`core.hooksPath value: ${c.label}`, got === c.expect(),
+      `read ${JSON.stringify(got)}, expected ${JSON.stringify(c.expect())}`);
+  }
+
+  // `~/` is expanded against the real home directory - the expectation is built from os.homedir(),
+  // so a hard-coded path in either the code or the test would show up as a mismatch.
+  const tilde = writeGitDirFixture(path.join(tmpRoot, 'commit-automation-tilde'), '\thooksPath = ~/x-hooks\n');
+  const tildeDirs = gitDirsOf(tilde);
+  check('core.hooksPath `~/` expands against the home directory, not the project root',
+    gitEffectiveHooksPath(tildeDirs) === path.join(os.homedir(), 'x-hooks'),
+    `read ${JSON.stringify(gitEffectiveHooksPath(tildeDirs))}`);
+  const tildeUser = writeGitDirFixture(path.join(tmpRoot, 'commit-automation-tilde-user'),
+    '\thooksPath = ~someone/x-hooks\n');
+  check('core.hooksPath `~user/` is refused rather than guessed (git resolves it, this check does not)',
+    gitEffectiveHooksPath(gitDirsOf(tildeUser)) === null,
+    `read ${JSON.stringify(gitEffectiveHooksPath(gitDirsOf(tildeUser)))}`);
+
+  // Per-worktree config: `config.worktree` in the gitdir is layered ON TOP of the shared config.
+  const wtCfg = writeLinkedWorktreeFixture(path.join(tmpRoot, 'commit-automation-worktree-config'),
+    '\thooksPath = .shared-hooks\n');
+  fs.writeFileSync(path.join(wtCfg.worktreeGitDir, 'config.worktree'), '[core]\n\thooksPath = .wt-hooks\n');
+  writeHookFile(path.join(wtCfg.worktreeRoot, '.shared-hooks'), 'post-commit', true);
+  writeHookFile(path.join(wtCfg.worktreeRoot, '.wt-hooks'), 'post-commit', true);
+  const wtCfgEvidence = commitAutomationEvidence(wtCfg.worktreeRoot);
+  check('a per-worktree config.worktree overrides the shared core.hooksPath',
+    wtCfgEvidence.includes('core.hooksPath = .wt-hooks')
+      && wtCfgEvidence.includes('.wt-hooks/post-commit')
+      && !wtCfgEvidence.some((e) => e.includes('.shared-hooks')),
+    wtCfgEvidence.join(', ') || 'nothing reported');
+
+  if (process.platform === 'win32') {
+    note('a hook without the POSIX execute bit is ignored',
+      'this run is on win32, where git runs a commit hook through sh whatever the mode bits say, so the '
+      + 'distinction does not exist to be asserted');
+  } else {
+    const inert = writeGitDirFixture(path.join(tmpRoot, 'commit-automation-inert'));
+    writeHookFile(path.join(inert, '.git', 'hooks'), 'post-commit', false);
+    check('a post-commit hook WITHOUT the execute bit is not reported (git would not run it)',
+      commitAutomationNote(inert) === null, 'nothing reported, as required');
+  }
+}
+
+// ---------------------------------------------------------------------------
 // SECTION - payload integrity (skills, cross-references, command prefix)
 // ---------------------------------------------------------------------------
 function listFiles(dir, filter, acc) {
@@ -5619,6 +6095,7 @@ function main() {
     sectionProvenance(tmpRoot);
     sectionExampleFixture(tmpRoot);
     sectionProjectLayer(PROJECT, selfAuthored);
+    sectionCommitAutomation(PROJECT, tmpRoot);
     sectionNegativeControls(tmpRoot, pluginVersion);
   } catch (e) {
     // A section that THROWS must not take the report with it. Before this catch existed the
@@ -5750,6 +6227,28 @@ function main() {
   console.log('claude-hosted), and version bookkeeping - proven able to fail by the negative controls,');
   console.log('which run against a fixture this script synthesises for that purpose alone. Checks with no');
   console.log('control are named individually above, each with its reason.');
+  console.log('COMMIT AUTOMATION: the inspected project is read for an active pre-commit/post-commit hook and');
+  console.log('for a core.hooksPath that moves them, and one is reported as a [NOTE] - never a failure, because');
+  console.log('such a hook is a legitimate choice - carrying the limit it creates: the click covers one commit');
+  console.log('invocation, not the final tree content. Both directions are asserted on repositories the section');
+  console.log('builds itself - only git\'s own .sample hooks produce nothing, an injected executable post-commit');
+  console.log('produces exactly the note, a core.hooksPath redirect is followed away from the hooks directory, a');
+  console.log('submodule-shaped .git FILE is followed to the real git directory, and a LINKED WORKTREE is');
+  console.log('followed through its commondir to the COMMON directory where git keeps hooks and config (with the');
+  console.log('inverse asserted too: a hook planted in the per-worktree directory, where git never looks, is not');
+  console.log('reported). The effective core.hooksPath is resolved the way git layers it: a [core "sub"]');
+  console.log('subsection is not [core], the LAST assignment wins, plain [include] files are followed to a');
+  console.log('3-hop cap (so a self-including config terminates), and a per-worktree config.worktree overrides');
+  console.log('the shared config. The VALUE is parsed as git parses one, each rule asserted on the reader\'s own');
+  console.log('return: an unquoted # or ; starts a comment wherever it stands, the escapes are \\" \\\\ \\n \\t \\b');
+  console.log('(a quoted \\t is a TAB), a trailing backslash continues the value on the next line, ~/ expands');
+  console.log('against the home directory, and a value git itself refuses - an unknown escape, an unterminated');
+  console.log('quote - is read as no value rather than as a guess. What is NOT proven or claimed: what such a');
+  console.log('hook DOES to a commit (only that one is armed); that a hooksPath armed only through a conditional');
+  console.log('[includeIf] is seen - it is NOT, because evaluating git\'s conditions wrongly would be worse than');
+  console.log('not evaluating them; that a ~user/ path is resolved - it is refused, since another user\'s home is');
+  console.log('not knowable from here; and that extensions.worktreeConfig is set - config.worktree is honoured');
+  console.log('whenever the file exists, which errs toward seeing a hook rather than missing one.');
   console.log('NOT PROVEN, and not claimed: that the harness ENFORCES the declarative permission rules, that it');
   console.log('RENDERS the Yes/No dialog for an "ask" decision, or that it matches those rules the way the gates');
   console.log('assume (per subcommand, past the stripped wrappers). None of that is reachable from Node: it rests');
@@ -5760,6 +6259,10 @@ function main() {
   if (notes.length) {
     console.log('\nNOT EXERCISED IN THIS RUN (deliberately not counted as passes):');
     for (const n of notes) console.log(`  - ${n.name}: ${n.why}`);
+  }
+  if (observations.length) {
+    console.log('\nOBSERVED ON THE INSPECTED PROJECT (notes, not assertions - nothing here is a failure):');
+    for (const n of observations) console.log(`  - ${n.name}: ${n.why}`);
   }
   console.log(`\n==== ${results.length - failed.length}/${results.length} assertions passed ====`);
   if (failed.length) {
