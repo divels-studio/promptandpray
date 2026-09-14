@@ -611,9 +611,8 @@ consumer-доказани с един update.
    механизъм пин-ва и HARD-004 изречението „approves the invocation" на двата му сайта
    (`docs/LOOP.md` § Commit gate, `docs/WORKFLOW.md` § Commit & Push Authority) с контрол —
    записаната дупка от HARD-004 handback-а (изречението няма пин и може да гние тихо).
-4. Миграция `migrations/0009_readiness-discipline/` (note-only) + 9-и запис 0.2.5 +
-   `plugin.json` 0.2.5 + CHANGELOG `## [0.2.5]` + fixture → `0010_example-bump` + self-install
-   apply + `CHANGES_0.2.4-to-0.2.5.md`.
+4. CHANGELOG `[0.2.5]` допълнен. (Release механиката на изданието — миграция 0009, bump,
+   fixture → 0010, apply — легна в HARD-012, който отваря 0.2.5.)
 **Извън обхват:** имплементационният (`pass/fail`) режим отвъд редa в REVIEW_CHECKLIST (fail
 aggregation важи и там, договорът за листата е readiness-специфичен — имплементационните пасове
 са 1 по подразбиране); пас броячи/конфигурация.
@@ -692,8 +691,12 @@ hash; `origin/main...main` → `0 0`.
 (същото) + `docs/WORKFLOW.md` § How the COO speaks to the operator (нова точка 4, литералната
 фраза за grep: "the verdict plus one or two sentences of its substance, before the next
 dispatch"); selfcheck пин + flipping контрол по механизма на доктринните фрази; CHANGELOG
-`[0.2.5]` § Added. Вози се в изданието 0.2.5 (review-loop дисциплина) — без собствена
-миграция/bump.
+`[0.2.5]` § Added. **ПЪРВИ в 0.2.5 (операторска дума 2026-09-14) — отваря изданието и носи
+release механиката му:** миграция `migrations/0009_readiness-discipline/` (note op за изданието
++ `rerender-managed-region CLAUDE.md#aiwf-core` за гейт редовете — регионът се прилага директно
+с apply-а, без `--resolve`, защото миграцията и промяната са в един тикет), 9-и манифестен
+запис 0.2.5, `plugin.json` 0.2.5, fixture → `0010_example-bump` (сайтовете от Context),
+self-install apply + `CHANGES_0.2.4-to-0.2.5.md`.
 
 **Втора половина (операторска дума 2026-09-14, роденa от HARD-004 инцидента): доктринният
 default за пасовете пада.** Днешното „a second pass above the scan tier after a correction
@@ -714,8 +717,10 @@ grep/пин: "one word per pass"; selfcheck пин + контрол. Проза�
 skills/review/SKILL.md skills/qa/SKILL.md` → празно, exit 1; `git grep -n "one word per pass"
 -- docs/WORKFLOW.md templates/CLAUDE.md.tmpl` → ≥1 hit всеки; `git grep -n "standing word"
 -- docs/WORKFLOW.md` → нула останали в контекста на втория пас (показва се поименно);
-selfcheck exit 0 с двата пина + контролите; бързото трио exit 0; Cyrillic празно; регионът
-re-apply-нат на self-install-а (bookkeeping upstream==local).
+selfcheck exit 0 с двата пина + контролите; Cyrillic празно; регионът приложен на
+self-install-а (bookkeeping upstream==local); `validate-payload` → `9 migration(s)`;
+`aiwf-update --check` → „up to date … 0.2.5"; стар fixture id grep (`0009_example-bump` извън
+dev/CHANGELOG) → празно, exit 1; пълни 8/8 (release-отварящ тикет).
 **Risk threshold:** блокира промяна на вердиктната семантика (pass/fail/PASS/NEEDS-FIX);
 note-only за формулировка. **Stop condition:** acceptance зелен → стоп.
 **Review:** `Class: code` (selfcheck в диффа) → Codex, fact-check преди; cap 2.
@@ -878,8 +883,9 @@ VERIFY 8/8; след release: `git ls-remote --tags origin v0.2.6` → hash; `or
 ## Ред и гейтове
 
 Изпълнителен ред: HARD-001 → HARD-002 (+release 0.2.3) → HARD-003 → HARD-004 (+release 0.2.4)
-→ HARD-005 → HARD-006 → HARD-012 → HARD-007 (+release 0.2.5) → HARD-008 → HARD-009 → HARD-010 →
-HARD-011 (+release 0.2.6). Вторите имена — в таблицата под header-а.
+→ **HARD-012 (пръв в 0.2.5 — операторска дума 2026-09-14: коригиращият доктрината тикет не чака
+козметиката)** → HARD-005 → HARD-006 → HARD-007 (+release 0.2.5) → HARD-008 → HARD-009 →
+HARD-010 → HARD-011 (+release 0.2.6). Вторите имена — в таблицата под header-а.
 
 Гейтове: всеки тикет — собствена дума за диспач; commit — клик (стейдж по изрични пътища,
 едноредово съобщение, нула trailers, PLAN файлът и трите EOL-дрейфащи `.ps1` извън кодовия
