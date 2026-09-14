@@ -687,10 +687,28 @@ hash; `origin/main...main` → `0 0`.
 dispatch"); selfcheck пин + flipping контрол по механизма на доктринните фрази; CHANGELOG
 `[0.2.5]` § Added. Вози се в изданието 0.2.5 (review-loop дисциплина) — без собствена
 миграция/bump.
-**Извън обхват:** формат на самите вердикти (REVIEW_CHECKLIST е непипнат); операторският език.
+
+**Втора половина (операторска дума 2026-09-14, роденa от HARD-004 инцидента): доктринният
+default за пасовете пада.** Днешното „a second pass above the scan tier after a correction
+round that touched code runs on the ticket's standing word" се заменя с: **пас 1 е в думата за
+тикета; ВСЕКИ следващ одиторски пас — вкл. верификационният след кодова корекция — се диспачва
+само с изрична операторска дума, една дума на пас.** Сайтове: `docs/WORKFLOW.md` § operator
+gates (клаузата „the passes the route already prescribes… the second pass above the scan tier…"
+се пренаписва) и § Loop shape (правилото „A second pass above the scan tier only when…" става
+„a code-touching correction round WARRANTS a verification pass; dispatching it takes the
+operator's explicit word — one word per pass"); `templates/CLAUDE.md.tmpl` гейт редовете
+(managed регион → миграцията на 0.2.5 получава `rerender-managed-region CLAUDE.md#aiwf-core`
+op + self-install re-apply през `--resolve`, механиката на AUD-002 §3); литералната фраза за
+grep/пин: "one word per pass"; selfcheck пин + контрол. Прозаичното изключение остава: корекция
+само в проза не иска пас (fact-check + COO проверка, както днес).
+**Извън обхват:** формат на самите вердикти (REVIEW_CHECKLIST е непипнат); операторският език;
+ретроактивни промени по вече затворени тикети.
 **Acceptance:** `git grep -L "one or two sentences of its substance" -- docs/WORKFLOW.md
-skills/review/SKILL.md skills/qa/SKILL.md` → празно, exit 1; selfcheck exit 0 с пина + контрола;
-бързото трио exit 0; Cyrillic празно.
+skills/review/SKILL.md skills/qa/SKILL.md` → празно, exit 1; `git grep -n "one word per pass"
+-- docs/WORKFLOW.md templates/CLAUDE.md.tmpl` → ≥1 hit всеки; `git grep -n "standing word"
+-- docs/WORKFLOW.md` → нула останали в контекста на втория пас (показва се поименно);
+selfcheck exit 0 с двата пина + контролите; бързото трио exit 0; Cyrillic празно; регионът
+re-apply-нат на self-install-а (bookkeeping upstream==local).
 **Risk threshold:** блокира промяна на вердиктната семантика (pass/fail/PASS/NEEDS-FIX);
 note-only за формулировка. **Stop condition:** acceptance зелен → стоп.
 **Review:** `Class: code` (selfcheck в диффа) → Codex, fact-check преди; cap 2.
