@@ -344,6 +344,10 @@ is exactly:
 1. adversarially review the complete draft and return all visible material gaps at once;
 2. after the COO revises the plan, review the complete plan again - not only the changed lines.
 
+The brief of pass N+1 carries pass N's blocker list into the next pass, with the origin duty that
+comes with it (§ Fail aggregation) - the later pass is handed the earlier result, never asked to
+remember it.
+
 That numbered pair is the factory-2 illustration, not the contract - and the second of the two is
 already a pass the operator is asked for. At `review.plan.passes: 3` one further configured pass
 is available on a word of its own; at `1` only the first runs; at `0` the plan gets no auditor at
@@ -642,6 +646,17 @@ from another. The dialog is the backstop, not the rule; the rule is that the wor
 
 Reviewer and QA must return ALL visible material problems in a single round - not one problem per
 cycle. A later round may not raise a blocker that was already visible earlier.
+
+**In the plan-readiness cycle that ban is instrumented rather than trusted, and the mechanism is
+HANDING the list:** the pass N+1 brief carries pass N's blocker list verbatim, and every NEW blocker
+declares why it was not visible on the previous pass - a blocker with no declaration is a contract
+violation, reported separately from the verdict. The declaration is an origin, not an apology
+(born of the revision between the passes, or a fact the previous pass could not see). Why a
+mechanism and not the ban alone: the ban alone was measured to fail twice - a readiness cycle on a
+real consumer that still ran to 9 blockers, and a fifth blocker raised a round late on the very plan
+that introduced the audit table, with the ban above already written. A pass that is handed the
+previous list cannot re-derive it from scratch, and the COO sees which blockers the revision
+created.
 
 ## Tests
 

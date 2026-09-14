@@ -211,6 +211,14 @@ serialize fail reasons across rounds; a later round may not raise a "new" blocke
 visible. For each blocker: name the exact failing surface and require proof on that exact surface;
 forbid proxy closure (adapter-only, type-only, unit-only, prose-only, generic green test).
 
+**On pass 2 and later of a plan-readiness cycle the Reviewer is handed the previous list and owes a
+declaration for anything outside it:** the pass N+1 brief carries pass N's blocker list verbatim,
+and every NEW blocker declares why it was not visible on the previous pass - a blocker with no
+declaration is a contract violation, reported separately from the verdict. Name the origin in one
+clause (born of the revision between the passes, or a fact the previous pass could not see); if the
+brief arrived WITHOUT the previous list, say so as a precondition and review anyway - a missing list
+is the COO's contract violation, not a reason to withhold blockers.
+
 ## Verdict (both roles)
 
 Return exactly one:

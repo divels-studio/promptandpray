@@ -112,5 +112,11 @@ one word per pass. A pass beyond `review.plan.passes` is on top of that a budget
 decision, so `review.plan.passes` + 1 is the hard maximum. Do not edit
 the plan.
 
+From pass 2 of a readiness cycle on, the brief hands you the PREVIOUS pass's blocker list - read it
+before you read the plan. Every new blocker you raise must then declare why it was not visible on
+the previous pass: born of the revision between the passes, or a fact that pass could not see. A new
+blocker without such a declaration is a contract violation - report it as one, separately from your
+verdict. If the brief arrived without the previous list, say so as a precondition and review anyway.
+
 You return your verdict to the COO. You never fix, and you never decide acceptance or the
 commit gate - those are the COO's.

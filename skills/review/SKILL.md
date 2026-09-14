@@ -226,7 +226,17 @@ implementation, not a code diff - the contract is different:
   condition** (and the BUDGET TARGET line), and set the OUTPUT CONTRACT verdict to
   `PASS` / `NEEDS-FIX`.
 - **One invocation = ONE pass.** The next pass is a **separate** `/pnp:review` invocation *after the
-  COO revises the plan*. `$row.passes` is the configured CEILING of readiness passes this project's
+  COO revises the plan*.
+
+  Pass N+1 is HANDED pass N's result rather than trusted to re-derive it: the brief of every pass
+  after the first mandatorily carries (a) pass N's FULL blocker list, quoted as it was returned, and
+  (b) the origin duty this puts on the Reviewer. In one sentence -
+  the pass N+1 brief carries pass N's blocker list verbatim, and every NEW blocker declares why it
+  was not visible on the previous pass - a blocker with no declaration is a contract violation,
+  reported separately from the verdict
+  (`docs/WORKFLOW.md` § Fail aggregation, `docs/REVIEW_CHECKLIST.md` § Fail aggregation).
+
+  `$row.passes` is the configured CEILING of readiness passes this project's
   plans get (factory 2): the first runs on the ticket's standing word, and every further configured
   pass takes the operator's own explicit word before its dispatch - one word per pass. One MORE
   beyond the ceiling runs only if blockers remain **and** the operator gives

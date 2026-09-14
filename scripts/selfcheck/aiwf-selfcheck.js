@@ -4142,6 +4142,59 @@ const DOCTRINE_PASS_SURFACES = [
     what: 'the managed CLAUDE.md region states the same rule in the operator-gates paragraph' },
 ];
 
+// ---------------------------------------------------------------------------
+// TWO CONTRACTS STATED IN MORE THAN ONE DOCUMENT, each pinned with the regression it exists against
+// ---------------------------------------------------------------------------
+// Neither of these is about who audits or about what surrounds a pass, so they do not belong in
+// either table above; what they share is the failure mode: a sentence that carries a MECHANISM,
+// repeated across documents, which a well-meaning edit shortens back into the weaker statement it
+// replaced. Structurally identical to the tables above (one file, one phrase, whitespace-collapsed,
+// one replacement per entry), so the same generic assertion and the same generated control cover
+// them.
+//   - The readiness carry contract. Fail aggregation used to be a BAN ("a later round may not raise
+//     a blocker that was already visible earlier") and nothing but a ban, which was measured to fail
+//     twice; the rule that replaces it is a mechanism - the next pass is HANDED the previous list -
+//     and it has to be greppable at all three sites that dispatch or judge a readiness pass, or the
+//     next edit collapses it back into the ban.
+//   - The honest limit of the commit click. Nothing binds the click to content, and the sentence
+//     that says so is the only thing standing between an operator and the belief that the approved
+//     tree is the tree that lands. It carried no pin until now, which is exactly how a sentence
+//     rots silently. (The `[NOTE]` of the commit-automation section states the same limit in its
+//     own words for a project that carries such a hook; this pin is about the DOC sites, and the
+//     two texts are deliberately not the same string.)
+const DOCTRINE_READINESS_CARRY =
+  'the pass N+1 brief carries pass N\'s blocker list verbatim, and every NEW blocker declares why '
+  + 'it was not visible on the previous pass - a blocker with no declaration is a contract '
+  + 'violation, reported separately from the verdict';
+const DOCTRINE_COMMIT_CLICK_LIMIT = 'The click approves the invocation, not the final tree content';
+const DOCTRINE_CONTRACT_SURFACES = [
+  { id: 'doctrine-readiness-carry-review',
+    file: 'skills/review/SKILL.md',
+    phrase: DOCTRINE_READINESS_CARRY,
+    replacement: 'a later round may not raise a blocker that was already visible earlier',
+    what: '/pnp:review plan-readiness mode makes the pass N+1 brief carry pass N\'s blocker list' },
+  { id: 'doctrine-readiness-carry-workflow',
+    file: 'docs/WORKFLOW.md',
+    phrase: DOCTRINE_READINESS_CARRY,
+    replacement: 'a later round may not raise a blocker that was already visible earlier',
+    what: 'WORKFLOW states fail aggregation as a mechanism (handing the list), not only as a ban' },
+  { id: 'doctrine-readiness-carry-checklist',
+    file: 'docs/REVIEW_CHECKLIST.md',
+    phrase: DOCTRINE_READINESS_CARRY,
+    replacement: 'a later round may not raise a blocker that was already visible earlier',
+    what: 'the verdict rules put the origin declaration on the Reviewer from pass 2 on' },
+  { id: 'doctrine-commit-click-limit-loop',
+    file: 'docs/LOOP.md',
+    phrase: DOCTRINE_COMMIT_CLICK_LIMIT,
+    replacement: 'The click approves the final tree content that lands',
+    what: 'the commit gate states the honest limit of the click' },
+  { id: 'doctrine-commit-click-limit-workflow',
+    file: 'docs/WORKFLOW.md',
+    phrase: DOCTRINE_COMMIT_CLICK_LIMIT,
+    replacement: 'The click approves the final tree content that lands',
+    what: 'Commit & Push Authority states the same limit where the commit rule itself lives' },
+];
+
 // THE FACT-CHECK QUALIFIER, asserted per site. The gate is stated in more than one document, and
 // an unqualified statement of it is not a paraphrase - it is a DIFFERENT rule. "Before every pass"
 // reads as unconditional; the rule is "before every pass ABOVE THE SCAN TIER", with exactly one
@@ -4325,6 +4378,13 @@ function payloadDoctrineFindings(pluginRoot) {
       text == null ? 'the file is missing' : (present ? `"${collapseWs(s.phrase)}"` : `the sentence is missing or reworded: "${collapseWs(s.phrase)}"`));
   }
 
+  for (const s of DOCTRINE_CONTRACT_SURFACES) {
+    const text = readText(path.join(pluginRoot, ...s.file.split('/')));
+    const present = text != null && collapseWs(text).includes(collapseWs(s.phrase));
+    add(s.id, `${s.file}: ${s.what}`, present,
+      text == null ? 'the file is missing' : (present ? `"${collapseWs(s.phrase)}"` : `the sentence is missing or reworded: "${collapseWs(s.phrase)}"`));
+  }
+
   const notesFiles = doctrineNotesFiles(pluginRoot);
   const bareNotes = notesFiles
     .filter((f) => collapseWs(readText(f) || '').includes(collapseWs(DOCTRINE_FACTCHECK_NOTES_UNQUALIFIED)))
@@ -4473,6 +4533,15 @@ const DOCTRINE_CONTROLS = [
   ...DOCTRINE_PASS_SURFACES.map((s) => ({
     id: s.id,
     label: `${s.file}: the rule reworded away ("${collapseWs(s.phrase).slice(0, 60)}" -> "${s.replacement}")`,
+    apply: (r) => doctrinePhrase(r, s.file, s.phrase, s.replacement),
+  })),
+  // One control per contract surface, and each sabotages with the REAL regression rather than with a
+  // generic rewording: the readiness contract collapses back into the bare ban it replaced, and the
+  // commit click goes back to approving the tree that actually lands - the two beliefs these
+  // sentences exist to prevent.
+  ...DOCTRINE_CONTRACT_SURFACES.map((s) => ({
+    id: s.id,
+    label: `${s.file}: the contract reworded away ("${collapseWs(s.phrase).slice(0, 60)}" -> "${s.replacement}")`,
     apply: (r) => doctrinePhrase(r, s.file, s.phrase, s.replacement),
   })),
   // One control per fact-check site, and it is the regression itself rather than a generic rewording:

@@ -25,6 +25,21 @@ of the doctrine. Nothing else of your project changes.
   rule that fixed it lived in one session's memory until now. The verdict vocabulary is untouched
   (`pass` / `pass-with-notes` / `fail`, `PASS` / `NEEDS-FIX`); the self-check pins the sentence at
   all three sites, each with a control that rewords it back into a one-line status.
+- **Fail aggregation becomes an instrumented contract (HARD-005)** - the rule that a later round may
+  not raise an already-visible blocker was a ban and nothing else, and a ban was measured to fail
+  twice. In the plan-readiness cycle it becomes a mechanism instead: the brief of the next pass hands
+  the Reviewer the blocker list the previous pass returned, and any blocker that is new must name its
+  origin - why a pass earlier could not see it - with an undeclared one reported as a broken contract
+  rather than folded into the verdict. The contract sentence itself is stated at the three sites that
+  dispatch or judge a readiness pass (`/pnp:review` plan-readiness mode, `docs/WORKFLOW.md`
+  § Fail aggregation, with a cross-reference from the readiness cycle, and `docs/REVIEW_CHECKLIST.md`),
+  each pinned by the self-check with a control that collapses it back into the bare ban; the rendered
+  `reviewer` agent states the same duty in its own voice, so a Claude-hosted auditor meets it where it
+  works. The same mechanism now also pins the sentence that states the honest limit of the commit
+  click - that the click approves the invocation rather than the tree that finally lands - at its two
+  sites (`docs/LOOP.md` § Commit gate, `docs/WORKFLOW.md` § Commit & Push Authority), which until now
+  could rot silently. Implementation reviews are untouched, and so are pass counts and every existing
+  pass contract.
 
 ### Changed
 
