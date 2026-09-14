@@ -147,10 +147,12 @@ Scope structuring, brief content, technical sequencing, and what-lands-in-which-
 an approved plan) are the COO's calls - decided and REPORTED with a one-line rationale, not
 offered as questions. The operator's gates are exactly: the commit click / the push word (a
 commit is the native dialog alone; push/merge/rebase need an explicit word plus their dialog),
-review passes BEYOND the review contract (a pass beyond `review.plan.passes`, a correction round
-past the cap - each needs its own explicit word; the passes the route already prescribes - the
-implementation pass, the readiness passes `review.plan.passes` names, the second pass above the
-scan tier after a correction round that touched code - run on the ticket's standing word),
+review passes BEYOND THE FIRST (a pass beyond `review.plan.passes`, a correction round past the
+cap - each needs its own explicit word, and so does every auditor pass after the first one of a
+route: only the FIRST pass rides the ticket's standing word - the implementation pass, or the
+first readiness pass - while a further configured readiness pass, the verification pass after a
+correction round that touched code, and any pass beyond the contract are each dispatched on the
+operator's own word, one word per pass),
 destructive or system-changing operations, and product/UX
 choices (what the user sees or loses as functionality). A question outside those gates blocks the
 operator without adding value - asking it is a workflow defect, not politeness.
@@ -172,6 +174,11 @@ Deciding well is not enough; the report has to land.
    wrong on the substance, or only in the wording? Correct exactly that and restate the rest
    calmly. Judgements that move with the operator's tone are worth nothing, including the ones
    that happen to be right.
+4. **Report a verdict in substance.** Every Reviewer or QA verdict reaches the operator as
+   the verdict plus one or two sentences of its substance, before the next dispatch - what the
+   pass confirmed, or what its blockers and notes are. Never a bare "pass, moving on": the
+   operator paid for that audit and a half-line on the way to the next step hides what it bought.
+   Never the verdict's full text pasted as a wall either - two sentences, then the next step.
 
 ## Operator-interaction guards
 
@@ -251,13 +258,14 @@ Not configurable, and enforced here regardless of the project:
 - Plan readiness runs on its own contract - `review.plan.passes`, the audit table's plan row
   (below) - independent of the correction cap.
 - The risk threshold and the stop condition are mandatory in every R2/R3 brief.
-- **A second pass above the scan tier only when the correction round touched code.** Such a pass
-  costs the operator - external quota on a Codex host, top-tier tokens on a Claude one - and a
-  correction round whose whole delta is PROSE does not buy a second one: it is verified by the
-  fact-check gate (one cheap scan agent over the changed text) plus the COO's own first-hand
-  verification of the delta, and both are recorded in the ticket's completion record. The moment a
-  correction round changes code, the second pass runs on the row's host as usual. The operator may
-  always ask for another pass explicitly - this rule removes a default, never an option.
+- **A code-touching correction round WARRANTS a verification pass above the scan tier - and
+  dispatching it takes the operator's explicit word.** Such a pass costs the operator - external
+  quota on a Codex host, top-tier tokens on a Claude one - so it is asked for before the dispatch,
+  one word per pass, and a correction round whose whole delta is PROSE does not warrant one at
+  all: it is verified by the fact-check gate (one cheap scan agent over the changed text) plus the
+  COO's own first-hand verification of the delta, and both are recorded in the ticket's completion
+  record. The moment a correction round changes code the pass is warranted, on the row's host as
+  usual - what is gone is the default that dispatched it without asking.
 
 ## Planning lock
 
@@ -297,8 +305,11 @@ Plans for durable R2 work and all R3 work receive an independent read-only revie
 presents the final plan for execution approval. Small R1 and non-durable R2 work do not receive
 this ceremony. The Planner/COO may not approve its own plan.
 
-Once the COO has a concrete draft, it starts this readiness review automatically; no intermediate
-human permission is required. The COO also owns routine engineering choices such as
+Once the COO has a concrete draft, it starts this readiness review automatically: the FIRST pass
+rides the ticket's standing word and needs no intermediate human permission. That licence covers
+pass 1 and nothing else - every further pass of the cycle, configured or beyond the ceiling, is
+dispatched only on the operator's own explicit word, one word per pass. The COO also owns routine
+engineering choices such as
 policy-required tests, file/directory naming, local module boundaries, and step sequencing. It
 asks the operator before readiness only when missing authority or an unresolved alternative would
 materially change product intent, an architecture boundary, security/external risk or cost, or an
@@ -325,16 +336,19 @@ COO's own account.
 The same Reviewer performs `review.plan.passes` full passes, and it is a CYCLE rather than a fixed
 pair: each pass adversarially reads the COMPLETE plan - not only the lines that changed - and
 returns all visible material gaps at once; the COO revises between passes; this repeats until
-`review.plan.passes` is exhausted. EVERY one of those configured passes runs on the ticket's
-standing word, whatever the number is. With the factory value of 2 the cycle is exactly:
+`review.plan.passes` is exhausted. The FIRST of those configured passes runs on the ticket's
+standing word; EVERY further one - configured or not - is dispatched only on the operator's own
+explicit word, one word per pass, whatever the number is. With the factory value of 2 the cycle
+is exactly:
 
 1. adversarially review the complete draft and return all visible material gaps at once;
 2. after the COO revises the plan, review the complete plan again - not only the changed lines.
 
-That numbered pair is the factory-2 illustration, not the contract. At `review.plan.passes: 3` a
-further configured pass runs on the same standing word; at `1` only the first runs; at `0` the plan
-gets no auditor at all and the COO's own reading plus the fact-check gate is the whole contract - a
-configuration `/pnp:roles` prints as `no auditor`, never a shortcut taken silently.
+That numbered pair is the factory-2 illustration, not the contract - and the second of the two is
+already a pass the operator is asked for. At `review.plan.passes: 3` one further configured pass
+is available on a word of its own; at `1` only the first runs; at `0` the plan gets no auditor at
+all and the COO's own reading plus the fact-check gate is the whole contract - a configuration
+`/pnp:roles` prints as `no auditor`, never a shortcut taken silently.
 
 Only once the CONFIGURED passes are exhausted and blockers remain may the COO revise once more and -
 with the **operator's explicit permission**, requested before dispatch - run one final extra pass. A

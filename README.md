@@ -212,8 +212,9 @@ does not pretend those two are the same guarantee.
 Which host reviews a given ticket is the **audit table**, not a rule in a document: `review.plan`,
 `review.code` and `review.docs` in `aiwf.config.json`, one row per review class, each with its own
 pass count and optionally its own engine and model. The review brief's `Class:` line names the row;
-`review.plan.passes` is how many readiness passes a plan gets before one more needs the operator's
-word. `/pnp:roles` prints the whole table and changes any of it. What is deliberately NOT in the
+`review.plan.passes` is the CEILING of readiness passes a plan may get - the first runs on the word
+you gave for the ticket, every further one, configured or the one beyond the ceiling, takes a word
+of its own. `/pnp:roles` prints the whole table and changes any of it. What is deliberately NOT in the
 table: the fact-check gate, which runs before every pass above the scan tier, over a diff or a plan.
 
 ## FAQ

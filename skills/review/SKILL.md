@@ -61,7 +61,8 @@ $row = pwsh -NoProfile -File "${CLAUDE_PLUGIN_ROOT}/scripts/native/ps/aiwf-roles
   -Role reviewer -Class <class> -RolesPath "<root>/.claude/aiwf-native/roles.json" -AsJson `
   | ConvertFrom-Json
 # $row.engine -> 'codex' or 'claude';  $row.model -> the model that engine runs;
-# $row.passes -> how many passes this class gets on the ticket's standing word
+# $row.passes -> this class's configured pass CEILING (pass 1 rides the ticket's word;
+#                every further pass takes the operator's own word)
 ```
 
 **os `linux` / `macos`:**
@@ -104,9 +105,11 @@ changes it.
 - **`Class: plan`** - a plan-readiness pass over a durable R2/R3 plan before implementation. Row
   `review.plan`, whose `passes` IS the readiness contract (see "Plan-readiness mode").
 
-`$row.passes` is how many passes that class gets on the ticket's standing word. For `code` and
-`docs`: `1` = one Reviewer pass (the factory value); `2` = a second full pass after the first
-returns `pass`, dispatched by the COO on the same standing word; `0` = **no auditor** - the COO
+`$row.passes` is that class's configured pass CEILING, not a budget the COO may spend on its own:
+pass 1 runs on the ticket's standing word, and EVERY further pass is dispatched only after the
+operator's own explicit word, one word per pass. For `code` and `docs`: `1` = one Reviewer pass
+(the factory value); `2` = a second full pass available after the first returns `pass`, dispatched
+only once the operator says so; `0` = **no auditor** - the COO
 reviews first-hand and the fact-check gate still runs. `/pnp:roles --show` prints a zero row as
 `no auditor`, so it can never be a silent omission. For `plan`, see "Plan-readiness mode".
 
@@ -223,8 +226,10 @@ implementation, not a code diff - the contract is different:
   condition** (and the BUDGET TARGET line), and set the OUTPUT CONTRACT verdict to
   `PASS` / `NEEDS-FIX`.
 - **One invocation = ONE pass.** The next pass is a **separate** `/pnp:review` invocation *after the
-  COO revises the plan*. `$row.passes` is how many passes this project's plans get on the ticket's
-  standing word (factory 2). One MORE runs only if blockers remain **and** the operator gives
+  COO revises the plan*. `$row.passes` is the configured CEILING of readiness passes this project's
+  plans get (factory 2): the first runs on the ticket's standing word, and every further configured
+  pass takes the operator's own explicit word before its dispatch - one word per pass. One MORE
+  beyond the ceiling runs only if blockers remain **and** the operator gives
   explicit permission, requested BEFORE the dispatch - a pass beyond `review.plan.passes` is a
   budget/limits-gated operator decision, whatever engine hosts the Reviewer - so
   `review.plan.passes` + 1 is the hard maximum (`docs/WORKFLOW.md`); if the plan still does not pass
@@ -335,3 +340,9 @@ Return the Reviewer's `pass` / `pass-with-notes` / `fail` verdict and its blocke
 COO (for a **plan-readiness** pass, relay `PASS` / `NEEDS-FIX` instead). Do not act on the findings
 yourself - routing corrections back to the Writer (within the correction-round cap), scheduling the
 next readiness pass, and any commit gate are the COO's calls, not this skill's.
+
+The COO then owes the OPERATOR its own report of that verdict:
+the verdict plus one or two sentences of its substance, before the next dispatch - what the pass
+confirmed, or what its blockers are (`docs/WORKFLOW.md` § How the COO speaks to the operator).
+Verbatim to the COO, two sentences to the operator; a bare "pass, moving on" hides an audit the
+operator paid for.

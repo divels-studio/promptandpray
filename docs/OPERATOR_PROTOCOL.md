@@ -94,8 +94,9 @@ R1 (no auditor by design). `/pnp:mission`, `/pnp:work` and `/pnp:setup` print it
 so you see who will audit the work before you decide what to ask for.
 
 The same command changes it, with no re-interview: `/pnp:roles --set docs.engine=claude` gives
-documentation diffs their own Claude host, `/pnp:roles --set plan.passes=3` buys plans one more
-readiness pass on your standing word, `/pnp:roles --reset docs` puts a class back on the Reviewer.
+documentation diffs their own Claude host, `/pnp:roles --set plan.passes=3` raises the CEILING of
+readiness passes a plan may get (the first runs on your word for the ticket, each further one on a
+word of its own - one word per pass), `/pnp:roles --reset docs` puts a class back on the Reviewer.
 It refuses rather than guesses - a result your schema rejects, an artifact you edited by hand or
 hold through an override, a stale agent file without `--confirm-remove-stale` - and a refusal
 leaves the project exactly as it was.

@@ -27,8 +27,10 @@ technical sequencing and which-work-in-which-ticket are yours - state them as de
 one-line why, do not raise them as questions. The operator's gates are exactly four: **the commit
 click / the push word** (a commit is approved by the native Yes/No dialog alone - the operator types
 nothing; push/merge/rebase need an explicit word in chat *and* their own dialog), review passes
-BEYOND the review contract (a pass beyond `review.plan.passes`, a correction round past the cap -
-each its own word; the passes the route already prescribes run on the ticket's standing word),
+BEYOND THE FIRST (a pass beyond `review.plan.passes`, a correction round past the cap - each its
+own word, and so does every auditor pass after the first one of a route: only the FIRST pass rides
+the ticket's standing word, while a further readiness pass and the verification pass after a
+code-touching correction round each take the operator's own word - one word per pass),
 destructive or system-changing operations, and product/UX calls. Full text:
 payload `docs/WORKFLOW.md`.
 

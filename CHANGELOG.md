@@ -4,6 +4,51 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.2.5] - 2026-09-14
+
+Two live operator corrections become payload rules. A verdict now reaches the operator in
+substance rather than as half a line on the way to the next dispatch, and the default that let a
+LATER auditor pass ride the word given for the ticket is revoked: pass 1 rides that word, every
+further pass takes one of its own. `0009_readiness-discipline` re-renders the two managed artifacts
+that stated the revoked default in writing: the `aiwf-core` region of your `CLAUDE.md`, and - where
+one was rendered at all - `.claude/agents/reviewer.md`, which a Claude-hosted Reviewer reads instead
+of the doctrine. Nothing else of your project changes.
+
+### Added
+
+- **Every Reviewer/QA verdict is reported in substance (HARD-012)** - `docs/WORKFLOW.md` § How the
+  COO speaks to the operator gains a fourth point, and `/pnp:review` and `/pnp:qa` carry it at the
+  step that relays the verdict: the COO reports the verdict plus one or two sentences of its
+  substance, before the next dispatch - what the pass confirmed, or what its blockers and notes
+  are. Verbatim to the COO, two sentences to the operator. The observed defect was the opposite of
+  a wall of text: a bare "pass, moving on" that hid an audit the operator had paid for, and the
+  rule that fixed it lived in one session's memory until now. The verdict vocabulary is untouched
+  (`pass` / `pass-with-notes` / `fail`, `PASS` / `NEEDS-FIX`); the self-check pins the sentence at
+  all three sites, each with a control that rewords it back into a one-line status.
+
+### Changed
+
+- **One word per pass replaces the standing-word default (HARD-012)** - the doctrine used to say
+  that "the passes the route already prescribes run on the ticket's standing word", which let the
+  COO spend a paid pass - external quota on a Codex host, top-tier tokens on a Claude one - without
+  asking. From this release only the FIRST auditor pass of a route rides the ticket's word. Every
+  further pass - a further configured readiness pass, the verification pass after a correction
+  round that touched code, a pass beyond the review contract, a round past the correction cap - is
+  dispatched on the operator's own explicit word, one word per pass. `review.<class>.passes` is
+  therefore a CEILING rather than a budget, and `passes + 1` remains the hard maximum for plan
+  readiness. Rewritten everywhere it was stated: `docs/WORKFLOW.md` (operator gates, loop shape,
+  the readiness cycle and the sentence that used to start the whole cycle without a word),
+  `docs/REVIEW_CHECKLIST.md`, `docs/OPERATOR_PROTOCOL.md`, `README.md`,
+  `templates/CLAUDE.md.tmpl`, `templates/PROJECT_OVERRIDES.md.tmpl`,
+  `templates/agents/reviewer.md.tmpl`, `/pnp:review`, `/pnp:roles`,
+  `/pnp:work`, the config schema's `review.plan` description and both role-resolver headers - a
+  rule left standing in the skill that dispatches the pass would keep instructing the revoked
+  default. Unchanged: the correction-round cap, the pass COUNTS in your audit table, and the
+  prose exception - a correction round whose whole delta is prose still warrants no pass at all,
+  being covered by the fact-check gate plus the COO's own verification. Your overrides document
+  keeps its seeded wording: that file is yours and no update rewrites it;
+  `0009_readiness-discipline`'s notes say which line to correct if you want it true.
+
 ## [0.2.4] - 2026-09-13
 
 Setup stops adopting a plans directory in silence. An install pointed at a project whose
@@ -595,6 +640,8 @@ that project (adopt mode, two Writer dispatches through the plugin-hosted loop, 
 - The `writer` template renders its template-contract comment and a mixed-slash overrides path
   into the project's `agents/writer.md` (cosmetic). (Fixed in 0.1.1.)
 
+[0.2.5]: https://github.com/divels-studio/promptandpray/releases/tag/v0.2.5
+[0.2.4]: https://github.com/divels-studio/promptandpray/releases/tag/v0.2.4
 [0.2.3]: https://github.com/divels-studio/promptandpray/releases/tag/v0.2.3
 [0.2.2]: https://github.com/divels-studio/promptandpray/releases/tag/v0.2.2
 [0.2.1]: https://github.com/divels-studio/promptandpray/releases/tag/v0.2.1

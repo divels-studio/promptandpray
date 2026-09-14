@@ -4097,6 +4097,51 @@ const DOCTRINE_TABLE_SURFACES = [
     what: 'the README describes the product as it is' },
 ];
 
+// ---------------------------------------------------------------------------
+// WHAT HAPPENS AROUND A PASS - the report of its verdict, and the word that buys the next one
+// ---------------------------------------------------------------------------
+// Two rules that are not about WHO audits (that is the table above) but about what surrounds a
+// pass, and both were learned from a live operator correction rather than from a design:
+//   - the verdict REACHES the operator in substance, before the COO moves on. A verdict summarised
+//     as "pass, moving on" hides the audit the operator paid for, which is the observed violation.
+//   - every auditor pass AFTER THE FIRST is dispatched on a word of its own. The revoked default -
+//     "the passes the route already prescribes run on the ticket's standing word" - let a paid pass
+//     be spent without asking, and the phrase that replaces it has to be greppable or the next COO
+//     reinvents the default.
+// Same shape as the table surfaces (one file, one phrase, whitespace-collapsed), so the generic
+// assertion and the generated control cover them; each entry carries the REPLACEMENT its control
+// sabotages with, because the honest regression differs per rule - the report collapses back into
+// a half-line, and the pass goes back to riding the standing word.
+const DOCTRINE_VERDICT_SUBSTANCE = 'the verdict plus one or two sentences of its substance, before the next dispatch';
+const DOCTRINE_ONE_WORD_PER_PASS = 'one word per pass';
+const DOCTRINE_PASS_SURFACES = [
+  { id: 'doctrine-verdict-substance-workflow',
+    file: 'docs/WORKFLOW.md',
+    phrase: DOCTRINE_VERDICT_SUBSTANCE,
+    replacement: 'a one-line status',
+    what: 'WORKFLOW requires every Reviewer/QA verdict to be reported in substance before the next dispatch' },
+  { id: 'doctrine-verdict-substance-review',
+    file: 'skills/review/SKILL.md',
+    phrase: DOCTRINE_VERDICT_SUBSTANCE,
+    replacement: 'a one-line status',
+    what: '/pnp:review hands the COO the reporting duty together with the verdict' },
+  { id: 'doctrine-verdict-substance-qa',
+    file: 'skills/qa/SKILL.md',
+    phrase: DOCTRINE_VERDICT_SUBSTANCE,
+    replacement: 'a one-line status',
+    what: '/pnp:qa hands the COO the same reporting duty' },
+  { id: 'doctrine-one-word-per-pass-workflow',
+    file: 'docs/WORKFLOW.md',
+    phrase: DOCTRINE_ONE_WORD_PER_PASS,
+    replacement: 'on the ticket\'s standing word',
+    what: 'WORKFLOW dispatches every auditor pass after the first on a word of its own' },
+  { id: 'doctrine-one-word-per-pass-claude-template',
+    file: 'templates/CLAUDE.md.tmpl',
+    phrase: DOCTRINE_ONE_WORD_PER_PASS,
+    replacement: 'on the ticket\'s standing word',
+    what: 'the managed CLAUDE.md region states the same rule in the operator-gates paragraph' },
+];
+
 // THE FACT-CHECK QUALIFIER, asserted per site. The gate is stated in more than one document, and
 // an unqualified statement of it is not a paraphrase - it is a DIFFERENT rule. "Before every pass"
 // reads as unconditional; the rule is "before every pass ABOVE THE SCAN TIER", with exactly one
@@ -4273,6 +4318,13 @@ function payloadDoctrineFindings(pluginRoot) {
       text == null ? 'the file is missing' : (present ? `"${collapseWs(s.phrase)}"` : `the sentence is missing or reworded: "${collapseWs(s.phrase)}"`));
   }
 
+  for (const s of DOCTRINE_PASS_SURFACES) {
+    const text = readText(path.join(pluginRoot, ...s.file.split('/')));
+    const present = text != null && collapseWs(text).includes(collapseWs(s.phrase));
+    add(s.id, `${s.file}: ${s.what}`, present,
+      text == null ? 'the file is missing' : (present ? `"${collapseWs(s.phrase)}"` : `the sentence is missing or reworded: "${collapseWs(s.phrase)}"`));
+  }
+
   const notesFiles = doctrineNotesFiles(pluginRoot);
   const bareNotes = notesFiles
     .filter((f) => collapseWs(readText(f) || '').includes(collapseWs(DOCTRINE_FACTCHECK_NOTES_UNQUALIFIED)))
@@ -4414,6 +4466,14 @@ const DOCTRINE_CONTROLS = [
     id: s.id,
     label: `${s.file}: the audit-table sentence reworded away ("${collapseWs(s.phrase).slice(0, 60)}...")`,
     apply: (r) => doctrinePhrase(r, s.file, s.phrase, 'the rule below decides it'),
+  })),
+  // One control per pass surface, sabotaged with the regression the rule exists against rather than
+  // with a generic rewording: the verdict report shrinks to a one-line status, and the pass goes
+  // back to riding the ticket's standing word - the two defaults this doctrine revoked.
+  ...DOCTRINE_PASS_SURFACES.map((s) => ({
+    id: s.id,
+    label: `${s.file}: the rule reworded away ("${collapseWs(s.phrase).slice(0, 60)}" -> "${s.replacement}")`,
+    apply: (r) => doctrinePhrase(r, s.file, s.phrase, s.replacement),
   })),
   // One control per fact-check site, and it is the regression itself rather than a generic rewording:
   // it replaces the qualified sentence with the UNQUALIFIED one, which is what a well-meaning edit

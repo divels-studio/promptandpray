@@ -106,10 +106,12 @@ R1            -       -                  -       0       no auditor
 
 - A row showing the Reviewer's host is **inherited**: it carries only `passes` in the config, and
   the whole host - engine, model and effort together - comes from `roles.reviewer`.
-- `passes`: for `plan`, the readiness passes that run on the ticket's standing word (one MORE is
-  always available with the operator's explicit word, so `passes + 1` is the hard maximum). For
-  `code` and `docs`: `1` = one Reviewer pass, `2` = a second full pass after the first returns
-  `pass`, `0` = no auditor. Correction rounds stay capped by `loop.correctionRoundsCap`.
+- `passes`: the class's configured pass CEILING. Pass 1 runs on the ticket's standing word; every
+  further pass is dispatched only on the operator's own explicit word - one word per pass. For
+  `plan`, one MORE beyond the configured number is always available with that word, so
+  `passes + 1` is the hard maximum. For
+  `code` and `docs`: `1` = one Reviewer pass, `2` = a second full pass available after the first
+  returns `pass`, `0` = no auditor. Correction rounds stay capped by `loop.correctionRoundsCap`.
 - `(the Reviewer's)` after an effort means the row is Claude-hosted and shares the reviewer agent
   file; there is no per-row effort to set.
 - `(below the top tier)` marks a Claude auditor whose model is not the top tier. It is printed for

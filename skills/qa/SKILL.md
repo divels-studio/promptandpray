@@ -256,3 +256,9 @@ Return QA's `pass` / `pass-with-notes` / `fail` (or precondition `BLOCKED`) verd
 verbatim to the COO. Corrections route back to the Writer (within the correction-round cap; a
 failing spec or missing coverage returns to the Writer to fix the code and/or the `.spec`); the
 commit gate stays the COO's/operator's call.
+
+The COO then owes the OPERATOR its own report of that verdict:
+the verdict plus one or two sentences of its substance, before the next dispatch - what the run
+confirmed, or what its blockers and notes are (`docs/WORKFLOW.md` § How the COO speaks to the
+operator). Verbatim to the COO, two sentences to the operator; a bare "pass, moving on" hides an
+audit the operator paid for.

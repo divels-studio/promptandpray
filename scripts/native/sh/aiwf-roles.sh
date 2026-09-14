@@ -24,7 +24,7 @@
 # Without --class this script prints exactly what it always printed. With --class plan|code|docs it
 # resolves the EFFECTIVE row of that review class from review.<class> in roles.json - the row the
 # renderer already resolved (own host, or the Reviewer's inherited whole) - and adds "passes", the
-# number of paid passes that class gets on the ticket's standing word. --class is valid ONLY with
+# class's configured ceiling of paid passes. --class is valid ONLY with
 # --role reviewer (any other role -> exit 2) and only for a known class (-> exit 2): a class
 # silently ignored on the wrong role would route a pass to a host nobody chose. JSON becomes
 # {"role":"reviewer","class":..,"engine":..,"model":..,"effort":..,"passes":<int>} and the plain

@@ -19,9 +19,10 @@ For durable R2 and all R3 plans, the Reviewer performs `review.plan.passes` full
 before execution approval - the plan row of the audit table, factory 2, shown and changed by
 `/pnp:roles`. It is a CYCLE, not a fixed pair: each pass reads the complete plan and returns all
 visible material gaps at once, the COO revises between passes, and this repeats until
-`review.plan.passes` is exhausted. Every one of those passes runs on the ticket's standing word.
-ONLY a pass BEYOND that number needs the **operator's explicit permission, requested before the
-dispatch** - it is a budget/limits-gated operator decision, whatever engine hosts the Reviewer - so
+`review.plan.passes` is exhausted. The FIRST of those passes runs on the ticket's standing word;
+every further one - configured or beyond that number - needs the **operator's explicit permission,
+requested before the dispatch**, one word per pass. A pass BEYOND the configured number is on top
+of that a budget/limits-gated operator decision, whatever engine hosts the Reviewer - so
 `review.plan.passes` + 1 is the hard maximum; if the plan still does not pass there, stop and return
 the unresolved blockers to the operator. The Planner/COO never approves its own plan, and the
 fact-check gate runs before every one of these passes above the scan tier - it is skipped only when

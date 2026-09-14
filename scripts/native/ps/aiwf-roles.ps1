@@ -23,7 +23,7 @@
   Without -Class this script prints exactly what it always printed. With -Class plan|code|docs it
   resolves the EFFECTIVE row of that review class from `review.<class>` in roles.json - the row the
   renderer already resolved (own host, or the Reviewer's inherited whole) - and adds `passes`, the
-  number of paid passes that class gets on the ticket's standing word. -Class is valid ONLY with
+  class's configured ceiling of paid passes. -Class is valid ONLY with
   -Role reviewer (any other role -> exit 2) and only for a known class (-> exit 2): a class silently
   ignored on the wrong role would route a pass to a host nobody chose.
   A roles.json that carries no `review.<class>` record was rendered before the table existed -> exit

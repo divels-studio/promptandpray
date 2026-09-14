@@ -364,7 +364,7 @@
         },
         "plan": {
           "type": "object",
-          "description": "Plan readiness. `passes` is how many readiness passes run on the ticket's standing word; one MORE is always available with the operator's explicit word, so passes+1 is the hard maximum. 0 means no readiness pass at all (the fact-check gate still runs - it is not configurable).",
+          "description": "Plan readiness. `passes` is the CEILING of readiness passes, not a budget the COO may spend on its own: the first runs on the ticket's standing word, every further one needs the operator's explicit word - one word per pass - and one MORE beyond `passes` is always available with that word, so passes+1 is the hard maximum. 0 means no readiness pass at all (the fact-check gate still runs - it is not configurable).",
           "additionalProperties": false,
           "required": ["passes"],
           "properties": {

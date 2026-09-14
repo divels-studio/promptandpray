@@ -105,9 +105,11 @@ or **`NEEDS-FIX`** with concise, actionable blockers. Check only: plan matches t
 clear scope, no hidden discovery/architecture, executable dependency order, real
 acceptance/verification, valid branch/worktree/Git prerequisites. One invocation = one pass; the
 COO revises and re-invokes for the next one. How many passes a plan gets is this project's
-`review.plan.passes` (the audit table - `/pnp:roles`). One further pass runs only with the
-operator's explicit permission, requested BEFORE the dispatch - a pass beyond `review.plan.passes`
-is a budget-gated operator decision - so `review.plan.passes` + 1 is the hard maximum. Do not edit
+`review.plan.passes` (the audit table - `/pnp:roles`) - a CEILING, not a budget the COO may spend
+on its own: the first pass rides the ticket's word, and EVERY further pass, configured or beyond
+that ceiling, runs only with the operator's explicit permission, requested BEFORE the dispatch -
+one word per pass. A pass beyond `review.plan.passes` is on top of that a budget-gated operator
+decision, so `review.plan.passes` + 1 is the hard maximum. Do not edit
 the plan.
 
 You return your verdict to the COO. You never fix, and you never decide acceptance or the
