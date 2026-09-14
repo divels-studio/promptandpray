@@ -6,13 +6,20 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 
 ## [0.2.5] - 2026-09-14
 
-Two live operator corrections become payload rules. A verdict now reaches the operator in
-substance rather than as half a line on the way to the next dispatch, and the default that let a
-LATER auditor pass ride the word given for the ticket is revoked: pass 1 rides that word, every
-further pass takes one of its own. `0009_readiness-discipline` re-renders the two managed artifacts
-that stated the revoked default in writing: the `aiwf-core` region of your `CLAUDE.md`, and - where
-one was rendered at all - `.claude/agents/reviewer.md`, which a Claude-hosted Reviewer reads instead
-of the doctrine. Nothing else of your project changes.
+Live operator corrections and one consumer proof become payload rules, and they all land on the
+same surface: what surrounds an audit pass, and what a plan owes before one is paid for. A verdict
+now reaches the operator in substance rather than as half a line on the way to the next dispatch.
+The default that let a LATER auditor pass ride the word given for the ticket is revoked: pass 1
+rides that word, every further pass takes one of its own. Fail aggregation inside the
+plan-readiness cycle stops being a bare ban and becomes a mechanism - the next pass is handed the
+previous pass's blocker list, and a new blocker declares why that pass could not see it. And a
+durable plan now owes an inventory of consumers and adjacent contracts before its first draft, a
+walk of the ticket's own process against the gates before every paid pass, verification commands
+that are written rather than described, and the contract that has to move with the change inside
+the scope of the change. `0009_readiness-discipline` re-renders the managed artifacts that stated
+the revoked default in writing: the `aiwf-core` region of your `CLAUDE.md`, and - where one was
+rendered at all - `.claude/agents/reviewer.md`, which a Claude-hosted Reviewer reads instead of the
+doctrine. Nothing else of your project changes.
 
 ### Added
 
@@ -51,6 +58,20 @@ of the doctrine. Nothing else of your project changes.
   check of the pass; the self-check pins both sites, each with a control that dissolves the
   specific requirement back into the generic discovery rule. No new skill and no new tool - this is
   doctrine over the scan mechanism that already exists.
+- **Three rules of plan precision (HARD-007)** - what a consumer proof paid for in correction rounds
+  is now stated where plans are written and judged, all three in `docs/WORKFLOW.md`. First, a
+  verification command in a PLAN document is literal and can fail: readiness check 5 asks for a
+  command runnable as written, with a named output that would mean "broken", instead of criteria
+  that are "real and sufficient" - and § Proof-surface feasibility says the same about the plan
+  itself, so a proof nobody can write as a command is a discovery item rather than an acceptance
+  criterion. Second, before every paid readiness pass the COO walks the ticket's PROCESS against the
+  gates it will hit, in order - the word that starts it, the tree its commands assume, each pass that
+  needs a word of its own, the commit click, the tag and the push - because the fact-check gate reads
+  claims and a wrong ORDER of correct steps leaves every claim true. Third, the brief-authoring list
+  grows a sixth failure: the contract that has to move with the change is scoped beside it, a
+  dependency pin bringing its lockfile and a deploy change its deployment canon. The self-check pins
+  each of the three at its site, with a control that weakens it back into the rule it replaced -
+  described proofs, a process folded into the fact-check gate, and "keep the scope tight".
 
 ### Changed
 

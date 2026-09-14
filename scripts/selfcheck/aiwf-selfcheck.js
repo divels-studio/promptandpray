@@ -4216,6 +4216,50 @@ const DOCTRINE_CONTRACT_SURFACES = [
     what: '/pnp:review plan-readiness mode states the inventory as a precondition of the draft' },
 ];
 
+// ---------------------------------------------------------------------------
+// THREE RULES OF PLAN PRECISION, each stated in exactly ONE document
+// ---------------------------------------------------------------------------
+// Deliberately NOT in the contract table above: that family exists for a sentence repeated across
+// documents, and these three are stated once each, in `docs/WORKFLOW.md`, because that is where a
+// plan is written and judged. What makes them worth a pin is not repetition but how they dissolve:
+// each replaces a WEAKER rule that still reads perfectly well, so the regression is an edit that
+// keeps a true sentence and loses the requirement. They were paid for in correction rounds on a
+// real consumer proof, and the replacement per entry is that weaker rule, not a nonsense string.
+//   - A verify command in a PLAN is literal. "Real and sufficient" was read as "described", and a
+//     proof nobody can write as a command is a discovery item that reached acceptance.
+//   - The process gets its own dry trace. The fact-check gate reads CLAIMS; an order of gates can
+//     be wrong while every sentence around it is true, so folding the trace into that gate loses
+//     exactly the defect class it exists for.
+//   - Adjacency is scope. "Keep the scope tight" is the advice that drops the lockfile a dependency
+//     pin needs, and the partner artifact is then found out of step by the review.
+const DOCTRINE_PLAN_VERIFY_LITERAL =
+  'this holds for the PLAN document itself: a proof without a writable command is a discovery row, '
+  + 'not acceptance';
+const DOCTRINE_PLAN_PROCESS_TRACE =
+  'before every paid readiness pass, a dry process trace of the ticket\'s PROCESS against the '
+  + 'gates - commit/push/QA order, the state of the tree - because the fact-check gate catches '
+  + 'facts, not process defects';
+const DOCTRINE_PLAN_ADJACENT_CONTRACT =
+  'an adjacent contract rides with the change it depends on: a dependency pin pulls the lockfile '
+  + 'into the worklist, a deploy change pulls the deployment canon into scope';
+const DOCTRINE_PLAN_PRECISION_SURFACES = [
+  { id: 'doctrine-plan-verify-literal',
+    file: 'docs/WORKFLOW.md',
+    phrase: DOCTRINE_PLAN_VERIFY_LITERAL,
+    replacement: 'in a plan a proof may still be described rather than written as a command',
+    what: '§ Proof-surface feasibility carries the fail-capable verify rule into the PLAN document' },
+  { id: 'doctrine-plan-process-trace',
+    file: 'docs/WORKFLOW.md',
+    phrase: DOCTRINE_PLAN_PROCESS_TRACE,
+    replacement: 'the fact-check gate before the pass covers the process as well',
+    what: '§ Plan readiness review requires a dry trace of the ticket PROCESS against the gates' },
+  { id: 'doctrine-plan-adjacent-contract',
+    file: 'docs/WORKFLOW.md',
+    phrase: DOCTRINE_PLAN_ADJACENT_CONTRACT,
+    replacement: 'keep the scope tight and name only what the ticket is about',
+    what: 'the brief-authoring failures include the adjacent contract that rides with the change' },
+];
+
 // THE FACT-CHECK QUALIFIER, asserted per site. The gate is stated in more than one document, and
 // an unqualified statement of it is not a paraphrase - it is a DIFFERENT rule. "Before every pass"
 // reads as unconditional; the rule is "before every pass ABOVE THE SCAN TIER", with exactly one
@@ -4290,6 +4334,7 @@ const DOCTRINE_RETIRED_PATTERNS = [
   'minimum of two',
   'Three passes are the hard maximum',
   'Four brief-authoring',
+  'Five brief-authoring',
   'no paid pass to protect',
   'paid external engine \\(the codex branch\\)',
 ];
@@ -4400,6 +4445,13 @@ function payloadDoctrineFindings(pluginRoot) {
   }
 
   for (const s of DOCTRINE_CONTRACT_SURFACES) {
+    const text = readText(path.join(pluginRoot, ...s.file.split('/')));
+    const present = text != null && collapseWs(text).includes(collapseWs(s.phrase));
+    add(s.id, `${s.file}: ${s.what}`, present,
+      text == null ? 'the file is missing' : (present ? `"${collapseWs(s.phrase)}"` : `the sentence is missing or reworded: "${collapseWs(s.phrase)}"`));
+  }
+
+  for (const s of DOCTRINE_PLAN_PRECISION_SURFACES) {
     const text = readText(path.join(pluginRoot, ...s.file.split('/')));
     const present = text != null && collapseWs(text).includes(collapseWs(s.phrase));
     add(s.id, `${s.file}: ${s.what}`, present,
@@ -4563,6 +4615,15 @@ const DOCTRINE_CONTROLS = [
   ...DOCTRINE_CONTRACT_SURFACES.map((s) => ({
     id: s.id,
     label: `${s.file}: the contract reworded away ("${collapseWs(s.phrase).slice(0, 60)}" -> "${s.replacement}")`,
+    apply: (r) => doctrinePhrase(r, s.file, s.phrase, s.replacement),
+  })),
+  // One control per plan-precision rule, sabotaged with the WEAKER rule each one replaced - a
+  // verify requirement that no longer has to be writable, a process trace folded back into the
+  // fact-check gate, adjacency dropped back to "keep the scope tight". Those are the edits that
+  // actually happen: each leaves a sentence that still reads true and takes the requirement with it.
+  ...DOCTRINE_PLAN_PRECISION_SURFACES.map((s) => ({
+    id: s.id,
+    label: `${s.file}: the plan-precision rule weakened back ("${collapseWs(s.phrase).slice(0, 60)}" -> "${s.replacement}")`,
     apply: (r) => doctrinePhrase(r, s.file, s.phrase, s.replacement),
   })),
   // One control per fact-check site, and it is the regression itself rather than a generic rewording:

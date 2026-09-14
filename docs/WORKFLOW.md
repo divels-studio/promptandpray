@@ -344,6 +344,19 @@ author's own (shortcuts, a decision left open, code not read), and the pass afte
 which 11 had been visible in the first. A paid pass verifies decisions; precision is paid for on the
 COO's own account.
 
+**The PROCESS gets its own dry run, and it is the half the fact-check gate cannot see.** The pass
+above reads what the plan SAYS; this one walks what executing it would DO: before every paid
+readiness pass, a dry process trace of the ticket's PROCESS against the gates - commit/push/QA
+order, the state of the tree - because the fact-check gate catches facts, not process defects. The
+trace walks the gates in the order the ticket will hit them: the operator's word that starts the
+ticket, the branch and tree state its commands assume, each review pass and which of them needs a
+word of its own, the QA pass when the ticket declares observable behavior, the commit click, and
+the tag and push words when the ticket carries a release. A defect there is an ORDER rather than
+a claim - a tag before the commit that carries it, a diff guard anchored to a tree the Writer will
+not be standing on, an acceptance step assuming a clean tree the previous ticket leaves dirty - and
+every sentence around it can be true while the sequence is wrong, which is exactly what a gate
+that verifies claims returns clean.
+
 The same Reviewer performs `review.plan.passes` full passes, and it is a CYCLE rather than a fixed
 pair: each pass adversarially reads the COMPLETE plan - not only the lines that changed - and
 returns all visible material gaps at once; the COO revises between passes; this repeats until
@@ -381,7 +394,8 @@ The readiness review checks only:
 2. scope and out-of-scope boundaries are clear;
 3. no hidden discovery or unresolved architectural decision remains;
 4. tickets/steps are executable in the correct dependency order;
-5. acceptance criteria and verification commands are real and sufficient;
+5. acceptance criteria are sufficient, and every verification command is literal and can fail -
+   runnable as written rather than described, with a named output that would mean "broken";
 6. branch, worktree, and Git prerequisites are valid.
 
 The readiness review is live orchestration state only, not a Git document. The approved plan
@@ -434,7 +448,7 @@ no config, an unreadable or malformed config, a missing key, a non-boolean value
 guard armed exactly as it is with no config layer at all. The toggle never touches Gate 1: no
 config value can buy a non-writer subagent the right to write.
 
-Five brief-authoring failures each cost a correction round:
+Six brief-authoring failures each cost a correction round:
 
 - **State the end state, not the edit.** "A reader cannot reach step X without having established
   the prerequisite" is checkable; "add the version constraint" is not - and it can land *after*
@@ -457,6 +471,11 @@ Five brief-authoring failures each cost a correction round:
   failure the Writer cannot (and must not) fix. Guards that intentionally span several tickets
   (e.g. "no `messages/**` change since `<base>`") stay on their named base, but say so
   explicitly.
+- **Scope the contract that has to move with the change** - an adjacent contract rides with the
+  change it depends on: a dependency pin pulls the lockfile into the worklist, a deploy change
+  pulls the deployment canon into scope. A brief that names only the artifact the ticket is
+  "about" leaves its partner stating the old truth, and the pair is found out of step by the
+  review - a correction round for a dependency that one line of the worklist would have carried.
 
 **The brief carries its full precision in the first draft.** A readiness or implementation
 review VERIFIES decisions the COO has already made; it is never the mechanism that extracts
@@ -489,7 +508,9 @@ proof is a **readiness blocker**, not an execution-time note:
   explicitly in scope.
 - **A verify command must be able to fail.** If you cannot name the output that would mean
   "broken", it is not a check. A grep that silently matches nothing has manufactured a false pass
-  that survived to review; byte-level facts are counted at byte level.
+  that survived to review; byte-level facts are counted at byte level. Nor is this a ticket-brief
+  rule only - this holds for the PLAN document itself: a proof without a writable command is
+  a discovery row, not acceptance.
 
 ### Out-of-scope failures found during work
 

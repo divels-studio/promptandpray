@@ -2,7 +2,8 @@
 
 **A verdict that was reported in half a line, and a paid pass that was dispatched without asking.**
 Both were observed in a live session, and both used to live only in the memory of the session that
-had been corrected. This release writes them into the payload.
+had been corrected. This release writes them into the payload - together with the rest of what
+0.2.5 changes around a paid audit pass and around the plan that earns one.
 
 - **The verdict is reported in substance.** Every Reviewer or QA verdict reaches the operator as the
   verdict plus one or two sentences of its substance, before the next dispatch - what the pass
@@ -15,12 +16,24 @@ had been corrected. This release writes them into the payload.
   correction round that touched code, a pass beyond the review contract, a round past the correction
   cap - is dispatched only on the operator's own explicit word. `review.<class>.passes` is therefore
   a CEILING, not a budget the COO may spend on its own.
+- **Fail aggregation is a mechanism.** Inside the plan-readiness cycle the ban on raising an
+  already-visible blocker late is instrumented: from pass 2 on, the brief hands the Reviewer the
+  blocker list the previous pass returned, and every new blocker declares why that pass could not
+  see it - one raised without the declaration is reported as a broken contract, separately from the
+  verdict.
+- **A plan owes an inventory before it owes a draft.** For everything the plan touches - a column, a
+  permission, a command, a contract - one scan-tier agent harvests who consumes it and which
+  contracts sit next to it, and the draft answers that list before the first paid pass.
+- **A plan owes literal proofs, a process trace and its adjacent contracts.** A verification command
+  in a PLAN document is written rather than described; before every paid readiness pass the COO
+  walks the ticket's own process against the gates it will hit, in order; and the contract that has
+  to move with a change is scoped beside it.
 
 Three operations.
 
 | # | op | what it does here |
 |---|----|-------------------|
-| 0 | `note` | one paragraph in your `CHANGES_*.md`: what the two rules are, and that the doctrine itself ships with `/plugin update` rather than with this migration. |
+| 0 | `note` | one paragraph in your `CHANGES_*.md`: what the rules of this release are, and that the doctrine itself ships with `/plugin update` rather than with this migration. |
 | 1 | `rerender-managed-region` | re-renders the `aiwf-core` region of your `CLAUDE.md`. That region's operator-gates paragraph stated the revoked default in one line, so it changes here. |
 | 2 | `rerender-managed-region` | re-renders `.claude/agents/reviewer.md`, whose plan-readiness section described the same revoked model - the configured passes as granted, only the one beyond them as needing your word. `ifRecorded: true`: on a project whose Reviewer is Codex-hosted no such agent file was ever rendered, and the operation is reported as skipped rather than adopting a file this engine did not write. |
 
@@ -64,8 +77,8 @@ No config key is added, no permission rule is reconciled, no schema default move
 table's numbers are exactly what they were - `review.plan.passes`, `review.code.passes` and
 `review.docs.passes` keep their values and their meaning as a maximum. The verdict vocabulary is
 untouched as well: `pass` / `pass-with-notes` / `fail` for implementation, `PASS` / `NEEDS-FIX` for
-plan readiness. What changed is who releases each pass after the first, and how its result is
-reported to you.
+plan readiness. What changed is who releases each pass after the first, how its result is reported
+to you, and what a plan owes before a pass is paid for at all.
 
 ## If you are updating from 0.1.x or 0.2.x
 
