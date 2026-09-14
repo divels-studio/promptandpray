@@ -993,6 +993,14 @@ VERIFY 8/8; след release: `git ls-remote --tags origin v0.2.6` → hash; `or
 
 ## Ред и гейтове
 
+**COO модел за останалите тикети (операторско решение 2026-09-14, по COO препоръка):** Опус като
+COO е приемлив за HARD-006, HARD-008, HARD-010 и HARD-011 (доктрина/докс обем + release-open по
+записания двукратен образец) и приемлив с внимание за HARD-007 (release церемонията на 0.2.5 е
+записана в records 0.2.3/0.2.4 — рискът е гейтова дисциплина, не код); HARD-009 остава на Fable
+(единственият enforcement-код тикет: Gate 2 lookup, изнесен production helper, `--resolve`
+re-apply, naming assertion). Одиторът е Codex на всички → „auditor never below author" не се
+засяга; Writer pin-ът и fact-check tier-ът не зависят от COO модела.
+
 Изпълнителен ред: HARD-001 → HARD-002 (+release 0.2.3) → HARD-003 → HARD-004 (+release 0.2.4)
 → **HARD-012 (пръв в 0.2.5 — операторска дума 2026-09-14: коригиращият доктрината тикет не чака
 козметиката)** → HARD-005 → HARD-006 → HARD-007 (+release 0.2.5) → HARD-008 → HARD-009 →
