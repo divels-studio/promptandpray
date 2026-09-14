@@ -537,6 +537,48 @@ hook, който пише файлове. 0.2.4 е издадена.
 **Review:** `Class: code` (selfcheck е код) → Codex, fact-check преди; cap 2.
 **Assignee:** Колега. Branch `main`.
 
+#### HARD-004 — Completion record (2026-09-14)
+
+**Commit `8ab2af0fa57c73b368172b22c4040e7087287c59`** върху котвата `6152c7d` (branch `main`,
+локален, непушнат): 4 файла, 550+/2− (`git show --stat 8ab2af0`); едноредово съобщение, нула
+trailers; дърво чисто. Изпълнено по обхвата §1–4: честният лимит „the click approves the
+invocation, not the final tree content" на двата сайта (`docs/LOOP.md:246`,
+`docs/WORKFLOW.md:656`, по 1 hit точно); selfcheck секция COMMIT AUTOMATION — `[NOTE]`-клас
+`observation()` канал (никога FAIL; отделен от `note()`, за да не лъже „not exercised");
+детекторът: commondir резолюция за linked worktree, gitfile за submodule, hooksPath като
+ефективна стойност (character-wise парсер: коментари навсякъде извън кавички, четирите escape-а,
+continuation, последна стойност печели, точна секция, плоски include-и с дълбочина 3,
+`config.worktree` слой, `~/` през homedir), `.sample` изключени, win32 честност; заявени
+non-claims: `includeIf`, `~user/`, `extensions.worktreeConfig` не се чете, „какво ПРАВИ hook-ът"
+не се твърди. CHANGELOG `[0.2.4]` допълнен. Без нова миграция/bump (0008 легна в HARD-003).
+
+**Ревю (пълна история):** fact-check над диффа — 0 находки. Codex `gpt-5.6-sol`/high, `Class:
+code`: пас 1 `fail` (2 блокера P2, един клас — git-dir/config резолюцията: worktree hooks живеят
+в commondir; hooksPath парсерът бъркаше subsection/first-wins/includes) → корекционен рунд 1 →
+пас 2 `fail` (1 блокер: стойностният парсинг — коментари, escape-и, `~/`; блокер 1 приет, нула
+нови, договорът спазен) → корекционен рунд 2 (cap изчерпан). **Пас 3 НЕ е пуснат — операторско
+решение (2026-09-14).** На негово място, всичко записано: (а) **диференциален тест срещу ЖИВ
+git** — 6/6 MATCH (`git hook run` + `git config --file` върху 6 fixture случая: коментар без
+интервал, quoted `\t` — реален TAB байт-идентичен, continuation, subsection decoy + last-wins,
+include, `~/`); (б) делта fact-check ×2 (рунд 1 и рунд 2) — 0 находки, selfcheck 993/993
+независимо потвърден; (в) първоличен COO прочит на парсера. Страничен жив резултат: Gate 4
+ДЕНАЙНА `git config` на диференциалния субагент — deny клонът, доказан в production употреба.
+
+**Процесен инцидент (записан честно):** пас 2 беше диспачнат на доктринния default („кодова
+корекция → верификационен пас на стоящата дума") БЕЗ изрична операторска дума — операторът
+отхвърли това четене; действащото правило оттук: **пас 1 е в думата за тикета; всеки следващ
+пас — изрична дума, всеки поотделно**; „прецедентна" аргументация не е договор. Доктрналният
+default подлежи на корекция с тикет (виси за операторско решение).
+
+**Верификация (точни кодове):** закриващи пълни 8/8 exit 0 — validate-payload „8 migration(s) …
+0.2.4"; test-setup 328/0; test-update 490/0; example cycles 2×44/0; **selfcheck 993/993** (991
+на hooked fixture с `[NOTE]` реда; sabotage flip-proof: 6/7 нови проверки падат при revert в
+копие, седмата е с обратна посока); spikes 318/0; plugin validate ✔. Записан остатък (COO
+прочит, не гонен): конфиг файл с невалидна стойност — git отказва целия файл, детекторът
+продължава да сканира; приближение в NOTE-клас, недостижимо от валиден конфиг. Останал дълг:
+няма. Release опашката на 0.2.4 (tag `v0.2.4` @ `8ab2af0`, push, consumer proof) — операторски
+думи, записва се тук при изпълнение.
+
 ## 0.2.5 — Review-loop прецизност · tag `v0.2.5`
 
 ### HARD-005 (READY-002) [R2 code-class] — fail aggregation става инструментиран договор (котвата, 9/9 доказано)
@@ -558,7 +600,10 @@ hook, който пише файлове. 0.2.4 е издадена.
    забраната; `docs/REVIEW_CHECKLIST.md:205-211` — редът за Одитора (декларацията е негово
    задължение на пас ≥2).
 3. Selfcheck: нов доктринен assertion (до `:3389-3416`) — пин на договорната фраза в трите
-   сайта + flipping контрол (днес fail-aggregation няма никакъв пин — грепнато нула).
+   сайта + flipping контрол (днес fail-aggregation няма никакъв пин — грепнато нула). Същият
+   механизъм пин-ва и HARD-004 изречението „approves the invocation" на двата му сайта
+   (`docs/LOOP.md` § Commit gate, `docs/WORKFLOW.md` § Commit & Push Authority) с контрол —
+   записаната дупка от HARD-004 handback-а (изречението няма пин и може да гние тихо).
 4. Миграция `migrations/0009_readiness-discipline/` (note-only) + 9-и запис 0.2.5 +
    `plugin.json` 0.2.5 + CHANGELOG `## [0.2.5]` + fixture → `0010_example-bump` + self-install
    apply + `CHANGES_0.2.4-to-0.2.5.md`.
