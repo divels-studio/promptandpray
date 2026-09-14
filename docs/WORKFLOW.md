@@ -322,6 +322,17 @@ fact-check gate runs before every one of these passes above the scan tier, over 
 it runs over a diff, and is skipped only when the reviewer itself runs on a scan-tier model - it
 returns no verdict and it is never one of the passes.
 
+**The inventory comes before the draft.** § COO owns broad scans puts discovery before a ticket
+brief ("Discovery precedes dispatch"); a durable plan gets the same move one step earlier, ahead of
+its own first sentence - before the first draft, a consumer-inventory scan: for every touched
+column, permission, command or contract, the consumers and adjacent contracts, harvested at scan
+tier. One `sonnet` agent (the evidence-gathering tier of that section) returns them as `file:line`
+pointers, and the draft addresses them BEFORE the first paid pass. The reason is where the defects
+sit: in a measured readiness cycle the auditor's blockers were dominated by integration defects - a
+consumer the draft had never opened, an adjacent contract that had to move with the change - and
+each of them was a grep away. A paid pass that discovers them buys at the most expensive tier what
+the cheapest one proves.
+
 **The COO's own pass comes first, and it is not one of the counted ones.** Once the draft is
 "finished", the COO re-reads it in a SEPARATE turn against the six readiness checks below, before
 any auditor is dispatched: every `file:line` opened, every command executable on the OS channel the

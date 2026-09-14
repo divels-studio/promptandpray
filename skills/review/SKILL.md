@@ -216,6 +216,11 @@ Reviewer's pass.
 If the brief is a **plan-readiness** check - reviewing a durable R2/R3 **plan** *before*
 implementation, not a code diff - the contract is different:
 
+- **A precondition on the COO, not a check of this pass:** the plan should already have been
+  through, before the first draft, a consumer-inventory scan: for every touched column, permission,
+  command or contract, the consumers and adjacent contracts, harvested at scan tier
+  (`docs/WORKFLOW.md` § Plan readiness review). It matters here because a plan that arrives
+  without it spends this paid pass on what a scan-tier agent returns for free.
 - **Host:** the `review.plan` row - Step 0b resolved it with `-Class plan`. It is a row like any
   other: which engine and model audits plans is what `/pnp:roles` shows and changes. What is NOT
   configurable is that the Planner/COO never approves its own plan, and that the fact-check gate

@@ -40,6 +40,17 @@ of the doctrine. Nothing else of your project changes.
   sites (`docs/LOOP.md` § Commit gate, `docs/WORKFLOW.md` § Commit & Push Authority), which until now
   could rot silently. Implementation reviews are untouched, and so are pass counts and every existing
   pass contract.
+- **The consumer inventory becomes a readiness precondition (HARD-006)** - a durable plan now owes a
+  scan before it owes a draft: one scan-tier agent harvests, for everything the plan touches - a
+  column, a permission, a command, a contract - who consumes it and which contracts sit next to it,
+  and the draft answers that list before the first paid review pass. In a measured readiness cycle
+  the blockers were dominated by integration defects sitting a grep away from the author; a paid
+  pass that discovers them buys at the most expensive tier what the cheapest one proves. The
+  requirement is stated in `docs/WORKFLOW.md` § Plan readiness review, immediately before the COO's
+  own pass, and in `/pnp:review` plan-readiness mode as a precondition on the COO rather than a
+  check of the pass; the self-check pins both sites, each with a control that dissolves the
+  specific requirement back into the generic discovery rule. No new skill and no new tool - this is
+  doctrine over the scan mechanism that already exists.
 
 ### Changed
 

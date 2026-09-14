@@ -4143,9 +4143,9 @@ const DOCTRINE_PASS_SURFACES = [
 ];
 
 // ---------------------------------------------------------------------------
-// TWO CONTRACTS STATED IN MORE THAN ONE DOCUMENT, each pinned with the regression it exists against
+// THREE CONTRACTS STATED IN MORE THAN ONE DOCUMENT, each pinned with the regression it exists against
 // ---------------------------------------------------------------------------
-// Neither of these is about who audits or about what surrounds a pass, so they do not belong in
+// None of these is about who audits or about what surrounds a pass, so they do not belong in
 // either table above; what they share is the failure mode: a sentence that carries a MECHANISM,
 // repeated across documents, which a well-meaning edit shortens back into the weaker statement it
 // replaced. Structurally identical to the tables above (one file, one phrase, whitespace-collapsed,
@@ -4162,11 +4162,22 @@ const DOCTRINE_PASS_SURFACES = [
 //     rots silently. (The `[NOTE]` of the commit-automation section states the same limit in its
 //     own words for a project that carries such a hook; this pin is about the DOC sites, and the
 //     two texts are deliberately not the same string.)
+//   - The consumer inventory before the first draft. The mechanism is the SPECIFIC one - every
+//     touched column, permission, command or contract, its consumers and the adjacent contracts,
+//     harvested at scan tier before a line of the plan is written - while the generic discovery
+//     rule already stands in § COO owns broad scans, which runs the cheap-agent discovery whenever
+//     the delegation triggers are met. An edit that merges the two keeps a true sentence and loses
+//     the requirement, which is why each control here replaces the specific rule with exactly that
+//     generic one (DOCTRINE_CONSUMER_INVENTORY_GENERIC below).
 const DOCTRINE_READINESS_CARRY =
   'the pass N+1 brief carries pass N\'s blocker list verbatim, and every NEW blocker declares why '
   + 'it was not visible on the previous pass - a blocker with no declaration is a contract '
   + 'violation, reported separately from the verdict';
 const DOCTRINE_COMMIT_CLICK_LIMIT = 'The click approves the invocation, not the final tree content';
+const DOCTRINE_CONSUMER_INVENTORY =
+  'before the first draft, a consumer-inventory scan: for every touched column, permission, '
+  + 'command or contract, the consumers and adjacent contracts, harvested at scan tier';
+const DOCTRINE_CONSUMER_INVENTORY_GENERIC = 'a cheap discovery scan when the delegation triggers are met';
 const DOCTRINE_CONTRACT_SURFACES = [
   { id: 'doctrine-readiness-carry-review',
     file: 'skills/review/SKILL.md',
@@ -4193,6 +4204,16 @@ const DOCTRINE_CONTRACT_SURFACES = [
     phrase: DOCTRINE_COMMIT_CLICK_LIMIT,
     replacement: 'The click approves the final tree content that lands',
     what: 'Commit & Push Authority states the same limit where the commit rule itself lives' },
+  { id: 'doctrine-consumer-inventory-workflow',
+    file: 'docs/WORKFLOW.md',
+    phrase: DOCTRINE_CONSUMER_INVENTORY,
+    replacement: DOCTRINE_CONSUMER_INVENTORY_GENERIC,
+    what: '§ Plan readiness review requires the consumer inventory before the first draft of a plan' },
+  { id: 'doctrine-consumer-inventory-review',
+    file: 'skills/review/SKILL.md',
+    phrase: DOCTRINE_CONSUMER_INVENTORY,
+    replacement: DOCTRINE_CONSUMER_INVENTORY_GENERIC,
+    what: '/pnp:review plan-readiness mode states the inventory as a precondition of the draft' },
 ];
 
 // THE FACT-CHECK QUALIFIER, asserted per site. The gate is stated in more than one document, and
@@ -4536,9 +4557,9 @@ const DOCTRINE_CONTROLS = [
     apply: (r) => doctrinePhrase(r, s.file, s.phrase, s.replacement),
   })),
   // One control per contract surface, and each sabotages with the REAL regression rather than with a
-  // generic rewording: the readiness contract collapses back into the bare ban it replaced, and the
-  // commit click goes back to approving the tree that actually lands - the two beliefs these
-  // sentences exist to prevent.
+  // generic rewording: the readiness contract collapses back into the bare ban it replaced, the
+  // commit click goes back to approving the tree that actually lands, and the consumer inventory
+  // dissolves into the generic discovery rule - the beliefs these sentences exist to prevent.
   ...DOCTRINE_CONTRACT_SURFACES.map((s) => ({
     id: s.id,
     label: `${s.file}: the contract reworded away ("${collapseWs(s.phrase).slice(0, 60)}" -> "${s.replacement}")`,
