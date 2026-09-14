@@ -626,6 +626,53 @@ assertion + контрол; `validate-payload` → `9 migration(s)`; `aiwf-updat
 **Review:** `Class: code` (selfcheck код в диффа) → Codex, fact-check преди; cap 2.
 **Assignee:** Колега. Branch `main`.
 
+#### HARD-005 — Completion record (2026-09-14)
+
+**Commit `a7f3950ad842a9d44bfb997de82bf225a369844b`** върху котвата `e792583` (branch `main`,
+локален, непушнат): 7 файла, 125+/2− (`git show --stat a7f3950`); едноредово съобщение, тяло
+празно, нула trailers; дърво чисто след commit-а. Изпълнено по обхвата §1–4: P3 договорната
+фраза дословно на ТОЧНО трите сайта (`skills/review/SKILL.md:234-236` в One-invocation bullet-а;
+`docs/WORKFLOW.md:651-653` § Fail aggregation — механизмът + двете истории съкратено, +
+cross-ref изречение в readiness цикъла `:347-348`; `docs/REVIEW_CHECKLIST.md:215-217` —
+одиторската origin duty от пас 2 + missing-list precondition правилото); selfcheck: нов
+`DOCTRINE_CONTRACT_SURFACES` (5 пина: P3×3 + „The click approves the invocation, not the final
+tree content"×2 — записаната дупка от HARD-004) с per-entry replacement контроли (P3 →
+колапс до голата забрана; P4 → „approves the final tree content that lands"), нула колизия с
+COMMIT_AUTOMATION_LIMIT (различен стринг, доказано); CHANGELOG `[0.2.5]` § Added допълнен.
+
+**COO scope решения при диспач (вписани):** (1) reviewer шаблонът получи duty параграфа в
+readiness секцията си БЕЗ P3 като substring (пин сайтовете остават три) — вози се БЕЗПЛАТНО в
+съществуващия 0009 rerender op (`ifRecorded`), без нова миграция; note текстът на op-а обявява и
+третата промяна (едно-стрингова редакция). (2) `skills/review/SKILL.md` имплементационният режим
+остава голата забрана — договорът за листата е readiness-специфичен по плана (имплементационен
+пас N+1 с блокери не съществува по конструкция: fail → корекционен рунд, а code pass 2 идва само
+след `pass`); не е дълг, решение по същество.
+
+**Отклонения (приети от COO):** (1) пиновете в нов масив `DOCTRINE_CONTRACT_SURFACES`, не в
+PASS_SURFACES — контрактният коментар на PASS_SURFACES щеше да стане неверен; (2) Writer отказа
+неверифицируемото „9/9" в payload прозата → „ran to 9 blockers" (наративен клас, прецедентът
+10/8/14/11); (3) един `; echo "exit=$?"` рефлекс — самоуловен, заменен със scratchpad runner;
+(4) в корекционния рунд Колегата самоинициативно парафразира и P4 от CHANGELOG (същият дефектен
+клас като B1) — обявено, прието.
+
+**Ревю (пълна история):** fact-check над диффа — 0 находки (P3 стринг==константата, контролите
+non-vacuous, P4 дословно на двата сайта). Codex `gpt-5.6-sol`/high, `Class: code`, пас 1
+(изрична дума при ограничена квота): **`fail`, 2 блокера, нула бележки** — и двата прозаична
+прецизност: P3 дословно и в CHANGELOG (4-то копие извън пиновете) + note op-ът още „two
+things/both" при обявена трета промяна → корекционен рунд 1: CHANGELOG парафразиран (P3 и P4),
+note-ът „three things/all three" с изброено трето. Делтата САМО проза → верификационен пас НЕ
+се дължи по правилото: делта fact-check (независим, 0 находки — фразови броячи потвърдени:
+P3 три сайта + план + константа; P4 два сайта + константа) + първоличен COO прочит на двата
+текста — двете записани тук.
+
+**Верификация (точни кодове):** пълни 8/8 exit 0 на дървото преди корекцията — validate-payload
+„9 migration(s) … 0.2.5"; test-setup 328/0; test-update 490/0; example cycles 2×44/0;
+**selfcheck 1013/1013** (5-те нови контрола „FAIL as required"); spikes 318/0; plugin validate ✔;
+след прозаичната корекция — бързото трио + фразовите grep-ове (validate-payload 0, selfcheck
+1013/1013, plugin validate 0; P3 CHANGELOG grep 0 hits exit 1; трите -L сайта exit 1).
+`aiwf-update --check` „up to date … 0.2.5". Без commit автоматика (selfcheck: нула NOTE) —
+одобреното дърво == легналото. Останал дълг: няма.
+
 ### HARD-006 (READY-003) [R2 code-class] — интеграционен инвентар преди първата чернова
 
 **Outcome:** § Plan readiness иска: преди първата чернова COO диспачва евтин scan (sonnet),
