@@ -794,6 +794,79 @@ hash; `origin/main...main` → `0 0`.
 **Risk threshold / Stop:** като HARD-005. **Review:** `Class: code` → Codex; cap 2.
 **Assignee:** Колега. Branch `main`.
 
+#### HARD-007 — Completion record, кодовата половина (2026-09-14)
+
+**Commit `5ad3a63009573d3cef03aa332f8f9419c3cbc63d`** върху котвата `1f017bb` (branch `main`,
+локален, непушнат): 5 файла, 131+/15− (`git show --stat 5ad3a63`); едноредово съобщение, тяло
+празно (`git log -1 --format=%b | cat -A` → един `$`), нула trailers; дърво чисто след commit-а;
+PLAN файлът, `dev/` и `.aiwf/` извън commit-а. Изпълнено по обхвата: **(1)** readiness проверка 5
+пренаписана — „acceptance criteria are sufficient, and every verification command is literal and
+can fail - runnable as written rather than described, with a named output that would mean
+'broken'" (`docs/WORKFLOW.md:397-398`), списъкът остава шест и „the six readiness checks" на `:337`
+остава вярно; § Proof-surface feasibility bullet-ът получава плановото изречение (`:509-513`);
+**(2)** нов параграф в § Plan readiness review (`:347-358`), ТОЧНО след COO self-pass параграфа —
+редът е инвентар → чернова → self-pass → процесен trace → платен пас; параграфът изброява кои
+гейтове върви trace-ът и защо дефектът е РЕД, а не твърдение; **(3)** „Five" → „Six brief-authoring
+failures" (`:451`) + шести bullet (`:474-478`), петте заварени непипнати. Selfcheck: нов масив
+`DOCTRINE_PLAN_PRECISION_SURFACES` (три едно-сайтови правила, стандартната 5-полева форма) с
+собствен header коментар защо НЕ е в `DOCTRINE_CONTRACT_SURFACES`; един цикъл в
+`payloadDoctrineFindings` и един `.map` spread в `DOCTRINE_CONTROLS` по съседния образец, нула
+bespoke assertion; `'Five brief-authoring'` добавено в `DOCTRINE_RETIRED_PATTERNS` (18 patterns).
+CHANGELOG: bullet за HARD-007 + **пренаписано интро на `[0.2.5]`** (описваше само първия тикет на
+изданието). `migrations/0009_readiness-discipline/ops.json` note-ът и `NOTES.md` — доведени до
+истина за цялото издание. Без нова миграция/bump/fixture rename.
+
+**COO scope решения при диспач (вписани, извън буквалния плановен обхват):** (1) интрото на
+`[0.2.5]` и note текстът на `0009` се коригират ТУК — изданието още не е тагнато и непушнато, а
+това е прозата, която всеки консуматор чете при apply; да тръгне с „two live operator corrections"
+и „three things the loop DOES" при пет реални промени би било невярно твърдение, изнесено навън;
+(2) `'Five brief-authoring'` в retired patterns — механизмът за count-neutrality вече съществува
+(`'Four brief-authoring'` от AUD-002) и без новия запис връщане към „Five" минава тихо; (3)
+пиновете в НОВ масив, не в `DOCTRINE_CONTRACT_SURFACES` — онзи header изрично е за изречение,
+повторено в няколко документа, а тези три са едно-сайтови (прецедентът на HARD-005/012 е същият:
+нов масив, когато съществуващият коментар би станал неверен).
+
+**Записана out-of-scope находка (нарочно НЕ пипната):** `CHANGES_0.2.4-to-0.2.5.md:10` още казва
+„0.2.5 changes two things the loop DOES" — генериран отчет на реален локален apply рън, който
+наистина е отпечатал това; ръчна редакция би фалшифицирала изход на рън, а консуматорът генерира
+своя от коригирания `ops.json`. Одиторът прегледа решението изрично: „honest provenance, not a
+release blocker".
+
+**Отклонения (приети от COO):** (1) шестият bullet е с частичен bold lead (образецът на bullets 3
+и 4), за да остане закованата фраза байт-идентична в дадената малка буква; (2) NOTES.md получи
+повече от корекцията на броя — същото остаряло твърдение стоеше в таблична клетка и в двуелементен
+списък; (3) интрото на CHANGELOG изпусна думата-брой „the two managed artifacts" (броят е верен, но
+вторият rerender е условен); (4) exit кодовете на `git grep` проверките пак минаха през scratchpad
+probe (harness-ът не връща exit код за `git`); (5) нула Claude trailers въпреки harness reminder-а.
+
+**Ревю (пълна история):** discovery преди брифа — 2 Explore/sonnet агента (жива геометрия на
+`docs/WORKFLOW.md`; count sweep + одит на release състоянието), които намериха и двете заварени
+неверни твърдения за 0.2.5 и съществуващия count-neutrality механизъм. Fact-check над диффа
+(Explore/sonnet, с изричен акцент върху ординали, обратни препратки и release метаданни) —
+**0 находки**. COO първоличен прочит на целия дифф + собствен сух процесен trace на остатъка от
+тикета (commit клик → tag върху КОДОВИЯ commit → push → CI → consumer proof) — правилото, което
+самият тикет въвежда, приложено на него. Codex `gpt-5.6-sol`/high, `Class: code`: пас 1 **`pass`,
+нула находки** — „all three rules are executable, correctly placed, and each pinned sentence occurs
+exactly once in the payload; both affected lists still contain exactly six items; the controls are
+non-vacuous with realistic weakenings; the 0.2.5 release prose, migration operations, ordinals and
+back-references are consistent with this tree; no changed line alters gate fail direction, verdict
+vocabulary, pass counts, or the audit table". Прие изрично и двете COO решения (новия масив;
+непипнатия CHANGES файл). Одиторът записа и една честна граница: sweep-ът на retired patterns има
+ЕДИН фиксиран негативен контрол, така че новият запис се вози на него — прието като достатъчно
+(контролът доказва посоката на падане, а стрингът мачва точно сценария на връщане на броя).
+
+**Верификация (точни кодове):** пълни 8/8 exit 0, пуснати последователно на замразено дърво (след
+инцидента в HARD-006) — validate-payload „9 migration(s) … 0.2.5"; test-setup 328/0; test-update
+490/0; example cycles 2×44/0 + „repository byte-identical"; **selfcheck 1023/1023** (1017 преди
+тикета: +3 пина, +3 генерирани контрола, всеки печата „FAIL as required"); spikes 318/0; plugin
+validate ✔; `aiwf-update --check` „up to date … 0.2.5". Дванадесетте acceptance проверки — с точни
+кодове: „Five brief-authoring" в `docs` празно exit 1; „Six brief-authoring" 1 hit; трите фразови
+броя по 1; двата node one-liner-а exit 0, доказано fail-capable (обратните посоки върнаха exit 1);
+Cyrillic празно exit 1; диффгардът при котвата exit 0. Останал дълг: няма.
+
+**Release 0.2.5 — опашката (tag, push, CI, consumer proof) чака операторски думи; вписва се тук
+при изпълнение.**
+
 ### HARD-012 [R2 code-class] — вердиктът на Одитора се докладва по същество (роден 2026-09-13, операторска дума)
 
 **Контекст:** операторска корекция на живо — вердиктите се подминаваха с половин ред по пътя към
