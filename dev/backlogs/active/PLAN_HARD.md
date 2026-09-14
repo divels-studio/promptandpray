@@ -422,8 +422,9 @@ origin v0.2.3` → `240337d…`; `origin/main...main` = `0 0`. **Consumer proof 
 selfcheck там PASS 979/979**; CHANGES файлът именува **точно 54-те „present but not owned" Bash
 правила поименно в payload ред, вкл. трите рендирани `git -C D:\Furnissimo` форми** — setup и
 update рендерът на `<projectRoot>` съвпадат на реален консуматор. Ръчен пас НЕ потрябва —
-огледалата влязоха автоматично (доказаното от HARD-002 т.1, на терен). Commit-ът там чака клика
-на оператора (hash — при relay). **CI run 34762983709: windows ✔ + ubuntu ✔ (двата блокиращи,
+огледалата влязоха автоматично (доказаното от HARD-002 т.1, на терен). Онзи apply не беше
+комитнат и е бил дискарднат; финалният consumer proof мина на 2026-09-14 като 0.2.2 → 0.2.4 с
+един update (виж HARD-004 record-а) — commit там `2a7dbb83`. **CI run 34762983709: windows ✔ + ubuntu ✔ (двата блокиращи,
 ~17m), macos advisory-red на update суита** (известният проследен дефект; run-ът общо success —
 `continue-on-error` държи).
 
@@ -579,8 +580,11 @@ default подлежи на корекция с тикет (виси за опе
 няма. **Release 0.2.4 — tag/push изпълнени (2026-09-14, дума „1, после 3"):** tag `v0.2.4` @
 `8ab2af0` на remote (`git ls-remote` потвърдено), push `f3c4cac..b5d4b16`,
 `origin/main...main` = `0 0`; **CI run 34813275023: windows ✔ (27m) + ubuntu ✔, macos
-advisory-red на update суита** (известният дефект; overall success). Consumer proof — чака
-операторска relay сесия, записва се тук.
+advisory-red на update суита** (известният дефект; overall success). **Consumer proof (relay
+2026-09-14):** 0.2.2 → 0.2.4 през публичния път (`/plugin marketplace update` → `/reload-plugins`
+→ `/pnp:update`): 3 операции (0007 reconcile +54 + note; 0008 note), нула конфликти, нула пипнати
+чужди правила, **selfcheck там PASS 997/997**, commit там `2a7dbb83`. Двете издания
+consumer-доказани с един update.
 
 ## 0.2.5 — Review-loop прецизност · tag `v0.2.5`
 
