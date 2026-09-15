@@ -93,14 +93,21 @@ already is the render, so the run takes the already-applied branch and completes
 
 ```
 role/class    host    model              effort  passes  notes
+-- roles (who does the work) --
 writer        claude  claude-opus-5[1m]  high    -       -
 reviewer      codex   gpt-5.6-sol        high    -       -
 qa            codex   gpt-5.6-sol        high    -       runtime/UI tickets only
 qal           off     -                  -       -       operator-gated
+
+-- review classes (what gets audited, how many passes) --
 plan          codex   gpt-5.6-sol        high    2       +1 with your word; fact-check before each pass
 code (R2/R3)  codex   gpt-5.6-sol        high    1       correction rounds cap 2; fact-check before each pass
 docs (R2)     codex   gpt-5.6-sol        high    1       fact-check before each pass
+
+-- always-on gate --
 fact-check    claude  sonnet             -       always  not configurable
+
+-- routes --
 R1            -       -                  -       0       no auditor
 ```
 

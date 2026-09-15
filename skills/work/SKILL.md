@@ -35,7 +35,7 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
    without it works without the product's boundaries.
 2. **Tree check.** Current branch, `git status`, the last ~5 commits. Identify uncommitted work -
    NEVER touch or stage foreign uncommitted files; commit only by explicit paths.
-   Print the **audit table** with it -
+   Print the **audit table** with it, **verbatim** - the tool's literal output, never a retelling -
    `node "${CLAUDE_PLUGIN_ROOT}/scripts/setup/aiwf-roles.mjs" --show --project-root "<root>"
    --plugin-root "${CLAUDE_PLUGIN_ROOT}"` - so the operator sees who will audit this work, on which
    engine and with how many passes, before deciding what to ask for. `/pnp:roles` changes it.

@@ -541,6 +541,28 @@ function roleLine(label, role, notes) {
  * The table. It is the answer to "who audits what", so every cell is a resolved value, never a
  * template: an inherited row prints the Reviewer's host because that is what will really run.
  *
+ * FOUR KINDS OF ROW, AND THE OUTPUT SAYS WHICH IS WHICH. The rows are not one list of settings;
+ * they are four different kinds of thing, printed as four labelled blocks under one shared header:
+ *   `-- roles (who does the work) --`     writer / reviewer / qa / qal: who runs, on what;
+ *   `-- review classes (...) --`          plan / code / docs: what gets audited and with how many
+ *                                         passes - the rows `--reset` addresses, and the only ones
+ *                                         that carry `passes`;
+ *   `-- always-on gate --`                the fact-check gate, which runs before every paid pass;
+ *   `-- routes --`                        R1, which has no auditor at all.
+ *
+ * The blocks exist because an EMPTY CELL means something different in each kind, and one
+ * undifferentiated list cannot say which: `-` in a ROLE's `passes` is structural (a role is not a
+ * review class and has no pass count), `-` in the fact-check row's `effort` is structural too
+ * (nothing about that gate is configurable), and R1's `0 / no auditor` is the route stating that
+ * there is nothing to configure. None of them is a setting somebody forgot to fill in - which is
+ * exactly what they looked like while the nine rows arrived in one stream.
+ *
+ * Two mechanical rules hold the format together. The HEADER stays the first line of output, ahead
+ * of every label, because it names the columns of all four blocks. And the LABEL lines are emitted
+ * outside the column padding: they are prose, not rows, and routing the longest of them - the
+ * 57-character review-classes label - through the width computation below would widen the first
+ * column of every data line from 12 characters to 57.
+ *
  * Two markers earn their place:
  *   `(the Reviewer's)` on a Claude row's effort - the row has no effort of its own and the number
  *     shown is the agent file's, so a reader does not go looking for a setting that is not there;
@@ -551,20 +573,21 @@ function roleLine(label, role, notes) {
 export function showLines(config) {
   const roles = isPlainObject(config.roles) ? config.roles : {};
   const cap = (isPlainObject(config.loop) && config.loop.correctionRoundsCap) || 2;
-  const rows = [];
-  rows.push(roleLine('writer', roles.writer, DASH));
+  const roleRows = [];
+  roleRows.push(roleLine('writer', roles.writer, DASH));
   const reviewerRow = roleLine('reviewer', roles.reviewer, DASH);
   // The Reviewer role carries the same "auditor is never below the author" marker as the rows.
   if (isPlainObject(roles.reviewer) && roles.reviewer.engine === 'claude' && roles.reviewer.model !== TOP_TIER) {
     reviewerRow.model = `${roles.reviewer.model} (below the top tier)`;
   }
-  rows.push(reviewerRow);
-  rows.push(roleLine('qa', roles.qa, 'runtime/UI tickets only'));
+  roleRows.push(reviewerRow);
+  roleRows.push(roleLine('qa', roles.qa, 'runtime/UI tickets only'));
   const qal = isPlainObject(roles.qal) ? roles.qal : null;
-  rows.push(qal && qal.enabled === true
+  roleRows.push(qal && qal.enabled === true
     ? { label: 'qal', host: qal.engine, model: qal.model, effort: qal.effort, passes: DASH, notes: 'operator-gated' }
     : { label: 'qal', host: 'off', model: DASH, effort: DASH, passes: DASH, notes: 'operator-gated' });
 
+  const classRows = [];
   const CLASS_LABEL = { plan: 'plan', code: 'code (R2/R3)', docs: 'docs (R2)' };
   const CLASS_NOTE = {
     plan: '+1 with your word; fact-check before each pass',
@@ -574,28 +597,48 @@ export function showLines(config) {
   for (const cls of REVIEW_CLASSES) {
     const row = effectiveReviewRow(config, cls);
     if (!row) {
-      rows.push({ label: CLASS_LABEL[cls], host: DASH, model: DASH, effort: DASH, passes: DASH, notes: 'no review.' + cls + ' row - run /pnp:update' });
+      classRows.push({ label: CLASS_LABEL[cls], host: DASH, model: DASH, effort: DASH, passes: DASH, notes: 'no review.' + cls + ' row - run /pnp:update' });
       continue;
     }
     if (row.passes === 0) {
-      rows.push({ label: CLASS_LABEL[cls], host: DASH, model: DASH, effort: DASH, passes: '0', notes: 'no auditor' });
+      classRows.push({ label: CLASS_LABEL[cls], host: DASH, model: DASH, effort: DASH, passes: '0', notes: 'no auditor' });
       continue;
     }
     const marked = row.engine === 'claude' && row.model !== TOP_TIER ? `${row.model} (below the top tier)` : row.model;
     const effort = row.engine === 'claude' ? `${row.effort} (${CLAUDE_ROW_EFFORT_NOTE})` : row.effort;
-    rows.push({ label: CLASS_LABEL[cls], host: row.engine, model: marked, effort, passes: String(row.passes), notes: CLASS_NOTE[cls] });
+    classRows.push({ label: CLASS_LABEL[cls], host: row.engine, model: marked, effort, passes: String(row.passes), notes: CLASS_NOTE[cls] });
   }
-  rows.push({ label: 'fact-check', host: 'claude', model: 'sonnet', effort: DASH, passes: 'always', notes: 'not configurable' });
-  rows.push({ label: 'R1', host: DASH, model: DASH, effort: DASH, passes: '0', notes: 'no auditor' });
+
+  // The two rows nothing configures. They are their own blocks precisely because a reader kept
+  // reading them as rows with settings missing, and a re-render of the table has been observed
+  // dropping both of them silently.
+  const gateRows = [{ label: 'fact-check', host: 'claude', model: 'sonnet', effort: DASH, passes: 'always', notes: 'not configurable' }];
+  const routeRows = [{ label: 'R1', host: DASH, model: DASH, effort: DASH, passes: '0', notes: 'no auditor' }];
+
+  const blocks = [
+    { label: '-- roles (who does the work) --', rows: roleRows },
+    { label: '-- review classes (what gets audited, how many passes) --', rows: classRows },
+    { label: '-- always-on gate --', rows: gateRows },
+    { label: '-- routes --', rows: routeRows },
+  ];
 
   const header = { label: 'role/class', host: 'host', model: 'model', effort: 'effort', passes: 'passes', notes: 'notes' };
-  const all = [header, ...rows];
+  // Widths come from the header and the DATA rows only - the block labels never enter this.
+  const all = [header, ...blocks.flatMap((b) => b.rows)];
   const width = (key) => Math.max(...all.map((r) => String(r[key]).length));
   const w = { label: width('label'), host: width('host'), model: width('model'), effort: width('effort'), passes: width('passes') };
   const pad = (s, n) => String(s) + ' '.repeat(Math.max(0, n - String(s).length));
-  return all.map((r) => (
+  const render = (r) => (
     `${pad(r.label, w.label)}  ${pad(r.host, w.host)}  ${pad(r.model, w.model)}  ${pad(r.effort, w.effort)}  ${pad(r.passes, w.passes)}  ${r.notes}`
-  ).replace(/\s+$/, ''));
+  ).replace(/\s+$/, '');
+
+  const out = [render(header)];
+  for (const block of blocks) {
+    if (block !== blocks[0]) out.push('');
+    out.push(block.label);
+    for (const row of block.rows) out.push(render(row));
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------

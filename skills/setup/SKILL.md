@@ -167,9 +167,10 @@ role reads before starting work.
 The **memory seeds** the run printed are for the operator's own memory tool. They are printed, never
 written: the store's format and location are machine-local, and the plugin does not assume them.
 
-Then print the **audit table**, so the operator sees who will audit what before the first ticket -
-the interview asks no question about it, and the three review classes arrive from the schema's own
-defaults (`plan` 2 passes, `code` 1, `docs` 1, each inheriting the Reviewer's host):
+Then print the **audit table** **verbatim** - the tool's literal output, not a retelling - so the
+operator sees who will audit what before the first ticket. The interview asks no question about it,
+and the three review classes arrive from the schema's own defaults (`plan` 2 passes, `code` 1,
+`docs` 1, each inheriting the Reviewer's host):
 
 ```powershell
 node "${CLAUDE_PLUGIN_ROOT}/scripts/setup/aiwf-roles.mjs" --show `

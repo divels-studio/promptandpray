@@ -4,6 +4,52 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.2.6] - 2026-09-15
+
+The audit table stops reading like a list of settings and starts reading like what it is. The one
+screen that answers "who audits this work, on which engine, with how many passes" was printing four
+different KINDS of row - the roles, the review classes, the fact-check gate and R1 - as one
+undifferentiated stream, where a structural blank and an unset value look identical. It now prints
+as four labelled blocks under the same header, with every value, marker and column width unchanged
+to the byte. The two rows nothing configures are pinned by the self-check with a control that
+removes one of them, because a session re-rendering the table came back with seven rows and the
+missing two had no setting anywhere to give them away. `0010_plan-prefix-legibility` carries the
+release note; the renderer and the skills that print it are payload, so this change arrives with
+`/plugin update` rather than as an operation on your files.
+
+### Changed
+
+- **The audit table reads as four kinds of row (HARD-008)** - `/pnp:roles --show` prints its header,
+  then `-- roles (who does the work) --`, `-- review classes (what gets audited, how many passes) --`,
+  `-- always-on gate --` and `-- routes --`, one blank line between blocks. The nine data lines are
+  byte-for-byte what they were - the same cells, the same `(below the top tier)` and
+  `(the Reviewer's - Claude rows share the agent file)` markers, the same column widths - because the
+  block labels are emitted outside the column padding rather than through it. The point is the empty
+  cell: a dash in a role's `passes` column, a dash on the fact-check row's `effort` and R1's
+  `0 / no auditor` are three different structural facts, and one stream could not say so. Nothing
+  about who audits what, or how `--set` and `--reset` address a row, changes. The self-check's
+  `--show` pins are rewritten to the new shape (header first, the four labels in order, every row
+  under its own block) and gain one of their own: BOTH non-configurable rows present, with a
+  two-leg control - the relocated pristine renderer must still satisfy the assertion, and a copy with
+  only the fact-check row removed must fail with exactly that one finding. `/pnp:roles`'s own
+  "How to read the table" sample shows the new format, with its data lines unchanged.
+- **`/pnp:work` and `/pnp:setup` print the audit table verbatim (HARD-008)** - both said "print the
+  audit table" while `/pnp:mission` and `/pnp:roles` already said the tool's literal output. A table
+  retold from memory is a table whose cells nobody verified, which is exactly how the two missing
+  rows above were observed.
+
+### Fixed
+
+- **The update report no longer claims a dialog-free apply that never happened (HARD-008)** - every
+  `CHANGES_*.md` carried the sentence "An unheld artifact you had not edited, whose payload render
+  changed, was applied without a dialog; edited ones were asked about; held ones were recorded, not
+  applied." unconditionally, including for a release whose migration renders nothing of yours. It is
+  a legend for managed-artifact renders, so `assembleChanges` now prints it only when the run really
+  carried one - a `rerender-managed-region` whose artifact this installation actually has - and the
+  wording for such a run is unchanged, word for word. The defect was visible first on this release's
+  own note-only migration; the update suite pins both directions, because a conditional with only
+  its true branch asserted is indistinguishable from a constant.
+
 ## [0.2.5] - 2026-09-14
 
 Live operator corrections and one consumer proof become payload rules, and they all land on the
@@ -687,6 +733,7 @@ that project (adopt mode, two Writer dispatches through the plugin-hosted loop, 
 - The `writer` template renders its template-contract comment and a mixed-slash overrides path
   into the project's `agents/writer.md` (cosmetic). (Fixed in 0.1.1.)
 
+[0.2.6]: https://github.com/divels-studio/promptandpray/releases/tag/v0.2.6
 [0.2.5]: https://github.com/divels-studio/promptandpray/releases/tag/v0.2.5
 [0.2.4]: https://github.com/divels-studio/promptandpray/releases/tag/v0.2.4
 [0.2.3]: https://github.com/divels-studio/promptandpray/releases/tag/v0.2.3

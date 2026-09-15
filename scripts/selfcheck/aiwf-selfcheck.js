@@ -59,6 +59,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const util = require('util');
+const { pathToFileURL } = require('url');
 
 // ---------------------------------------------------------------------------
 // CLI
@@ -2810,40 +2811,175 @@ function sectionRolesCommand(tmpRoot, pluginVersion) {
   };
 
   // --- --show ---------------------------------------------------------------
+  // `--show` prints ONE header and then FOUR labelled blocks, because its rows are four different
+  // kinds of thing and an empty cell means something different in each: a role has no pass count, the
+  // fact-check gate has no setting at all, and R1 has no auditor by definition. So the assertions
+  // below pin the SHAPE - header first, the four labels in order, every data line under the label it
+  // belongs to - and they are written as pure functions of stdout, so the control at the end of this
+  // group can run the very same assertion against a sabotaged copy of the renderer.
+  const SHOW_BLOCKS = [
+    '-- roles (who does the work) --',
+    '-- review classes (what gets audited, how many passes) --',
+    '-- always-on gate --',
+    '-- routes --',
+  ];
+  /** A data line's cells. The column separator is two-or-more spaces; a label's own spaces are single. */
+  const showCells = (line) => line.split(/\s{2,}/);
+  /** stdout -> { header, blocks:[{label,rows}], orphan } - `orphan` is a data line under no label. */
+  const parseShow = (stdout) => {
+    const lines = String(stdout).split(/\r?\n/).map((l) => l.replace(/\s+$/, ''));
+    while (lines.length && lines[lines.length - 1] === '') lines.pop();
+    const out = { header: lines[0] || '', blocks: [], orphan: null };
+    for (const line of lines.slice(1)) {
+      if (line === '') continue;
+      if (/^-- .+ --$/.test(line)) { out.blocks.push({ label: line, rows: [] }); continue; }
+      if (out.blocks.length === 0) { if (out.orphan === null) out.orphan = line; continue; }
+      out.blocks[out.blocks.length - 1].rows.push(line);
+    }
+    return out;
+  };
+  const showRow = (parsed, block, label) => (
+    (parsed.blocks.find((b) => b.label === block) || { rows: [] }).rows.find((l) => showCells(l)[0] === label) || ''
+  );
+  /** Every way the four-block shape can be wrong, reported as findings rather than one boolean. */
+  const showShapeFindings = (stdout, cap) => {
+    const t = parseShow(stdout);
+    const f = [];
+    if (!/^role\/class\s+host\s+model\s+effort\s+passes\s+notes$/.test(t.header)) f.push(`the first line is not the header: ${JSON.stringify(t.header)}`);
+    if (t.orphan !== null) f.push(`a data line sits under no block label: ${JSON.stringify(t.orphan)}`);
+    const seen = t.blocks.map((b) => b.label);
+    if (seen.join(' | ') !== SHOW_BLOCKS.join(' | ')) f.push(`block labels are ${JSON.stringify(seen)}`);
+    const want = [
+      [SHOW_BLOCKS[0], ['writer', 'reviewer', 'qa', 'qal']],
+      [SHOW_BLOCKS[1], ['plan', 'code (R2/R3)', 'docs (R2)']],
+      [SHOW_BLOCKS[2], ['fact-check']],
+      [SHOW_BLOCKS[3], ['R1']],
+    ];
+    for (const [label, expected] of want) {
+      const got = ((t.blocks.find((b) => b.label === label) || { rows: [] }).rows).map((l) => showCells(l)[0]);
+      if (got.join(',') !== expected.join(',')) f.push(`${label} holds ${JSON.stringify(got)}, wanted ${JSON.stringify(expected)}`);
+    }
+    if (showCells(showRow(t, SHOW_BLOCKS[1], 'plan'))[4] !== '2') f.push('the plan row does not show its 2 passes');
+    if (!showRow(t, SHOW_BLOCKS[1], 'code (R2/R3)').includes(`correction rounds cap ${cap}`)) f.push("the code row does not carry the project's correction-round cap");
+    return f;
+  };
+  /**
+   * The two rows nothing configures, pinned on their own. The live defect: a second consumer's
+   * session re-rendered this table with seven rows - `fact-check` and `R1` silently absent. No config
+   * file points at either of them, so nothing derived from configuration can cover them: they are
+   * pinned by hand or not at all.
+   */
+  const nonConfigurableRowFindings = (stdout) => {
+    const t = parseShow(stdout);
+    const rows = t.blocks.reduce((acc, b) => acc.concat(b.rows), []);
+    const f = [];
+    const gate = rows.find((l) => showCells(l)[0] === 'fact-check');
+    const r1 = rows.find((l) => showCells(l)[0] === 'R1');
+    if (!gate) f.push('the fact-check row is absent');
+    else if (showCells(gate)[4] !== 'always' || showCells(gate)[5] !== 'not configurable') f.push(`the fact-check row lost its cells: ${JSON.stringify(gate)}`);
+    if (!r1) f.push('the R1 row is absent');
+    else if (showCells(r1)[4] !== '0' || showCells(r1)[5] !== 'no auditor') f.push(`the R1 row lost its cells: ${JSON.stringify(r1)}`);
+    return f;
+  };
+
   {
     const root = fixture();
     const r = runRoles(root, ['--show']);
-    const lines = r.stdout.split('\n').map((l) => l.trim());
-    check('--show prints the whole picture (every role, the three classes, the fact-check gate and R1), exit 0',
-      r.status === 0
-      && /^role\/class\s+host\s+model\s+effort\s+passes\s+notes$/.test(lines[0] || '')
-      && lines.some((l) => l.startsWith('writer ')) && lines.some((l) => l.startsWith('qal '))
-      && lines.some((l) => l.startsWith('plan ') && l.includes(' 2 '))
-      && lines.some((l) => l.startsWith('code (R2/R3)') && l.includes(`correction rounds cap ${cfgOf(root).loop.correctionRoundsCap}`))
-      && lines.some((l) => l.startsWith('docs (R2)'))
-      && lines.some((l) => l.startsWith('fact-check ') && l.includes('not configurable'))
-      && lines.some((l) => l.startsWith('R1 ') && l.includes('no auditor')),
-      r.status === 0 ? `${lines.filter(Boolean).length} lines` : `exit ${r.status}: ${r.stderr.trim().slice(0, 120)}`);
+    const f = showShapeFindings(r.stdout, cfgOf(root).loop.correctionRoundsCap);
+    check('--show prints the header first, then the four labelled blocks with every row under its own kind, exit 0',
+      r.status === 0 && f.length === 0,
+      r.status === 0 ? (f.length ? f.join('; ') : `${SHOW_BLOCKS.length} blocks, 9 rows, header first`) : `exit ${r.status}: ${r.stderr.trim().slice(0, 120)}`);
   }
   {
-    // The two markers that make the table readable, each on the configuration that produces it.
+    // The live defect this exists against: seven rows came back where nine went out. Both rows below
+    // are structural, so they are pinned by name AND by the cells that say they take no setting.
+    const root = fixture();
+    const r = runRoles(root, ['--show']);
+    const f = nonConfigurableRowFindings(r.stdout);
+    check('--show always carries BOTH non-configurable rows: fact-check (always / not configurable) and R1 (0 / no auditor)',
+      r.status === 0 && f.length === 0, f.length ? f.join('; ') : 'both present, each with its own cells');
+  }
+  {
+    // The two markers that make the table readable, each on the configuration that produces it - and
+    // each read out of the block it belongs to rather than out of the whole stdout.
     const root = fixture(); // the fixture Reviewer is claude/opus - below the top tier
     const r = runRoles(root, ['--show']);
-    check('--show marks a Claude auditor below the top tier, and says a Claude row shares the reviewer agent\'s effort',
-      r.status === 0 && /reviewer\s+claude\s+opus \(below the top tier\)/.test(r.stdout)
-      && r.stdout.includes("(the Reviewer's - Claude rows share the agent file)"),
-      r.stdout.split('\n').filter((l) => l.startsWith('reviewer') || l.startsWith('plan')).join(' | '));
+    const t = parseShow(r.stdout);
+    const reviewer = showRow(t, SHOW_BLOCKS[0], 'reviewer');
+    const plan = showRow(t, SHOW_BLOCKS[1], 'plan');
+    check('--show marks a Claude auditor below the top tier (roles block), and says a Claude row shares the reviewer agent\'s effort (review-classes block)',
+      r.status === 0 && showCells(reviewer)[1] === 'claude' && showCells(reviewer)[2] === 'opus (below the top tier)'
+      && showCells(plan)[3] === "high (the Reviewer's - Claude rows share the agent file)",
+      `${reviewer} | ${plan}`);
   }
   {
     // QA is deliberately NOT marked: it compares artifacts against acceptance criteria, it does not
-    // audit decisions, so a mid-tier QA is an ordinary choice and not a finding.
+    // audit decisions, so a mid-tier QA is an ordinary choice and not a finding. It is also a ROLE,
+    // so it is read from the roles block - a qa row among the review classes would be a finding too.
     const root = fixture((r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
       c.roles.qa = { engine: 'claude', model: 'sonnet', effort: 'medium' };
     }));
     const r = runRoles(root, ['--show']);
-    const qaLine = r.stdout.split('\n').find((l) => l.startsWith('qa ')) || '';
+    const qaLine = showRow(parseShow(r.stdout), SHOW_BLOCKS[0], 'qa');
     check('--show does NOT mark a mid-tier claude QA (the top-tier rule is about auditing, not QA)',
-      r.status === 0 && qaLine.includes('sonnet') && !qaLine.includes('below the top tier'), qaLine.trim());
+      r.status === 0 && showCells(qaLine)[2] === 'sonnet' && !qaLine.includes('below the top tier'), qaLine);
+  }
+  {
+    // CONTROL for the non-configurable-rows assertion above, in TWO LEGS - because "some finding
+    // appeared" is not evidence that the sabotage is what produced it. `nonConfigurableRowFindings('')`
+    // also returns findings, so a relocated copy that printed nothing at all, or died before reaching
+    // the table, would satisfy a one-leg control while proving only that the MOVE broke something.
+    //   (a) the RELOCATED PRISTINE copy - same directory, same re-pointed imports, nothing else
+    //       touched - must return ZERO findings. That is what makes the relocation sound and shows
+    //       the assertion passing when it should.
+    //   (b) the same copy with ONLY the fact-check row removed must fail with EXACTLY
+    //       "the fact-check row is absent", while R1 and the rest of the shape stay intact - so the
+    //       finding names the row that was removed rather than any collapse of the output.
+    // The mechanism is the closest one this file already uses: SECTION 3c's config-schema control,
+    // which strips the assertions out of a COPY of a real entrypoint and requires the check to stop
+    // passing (a copy of the validator that returns no errors stops rejecting a bad config). This
+    // section has no sabotage machinery of its own - its fixtures mutate the PROJECT, while a dropped
+    // row lives in the PAYLOAD. The copy sits outside scripts/setup, so its relative imports are
+    // re-pointed at the real files by absolute file URL; and the edit is asserted to have CHANGED the
+    // source, because a sabotage that replaced nothing would leave a pristine copy and quietly prove
+    // the opposite of what it claims.
+    const root = fixture();
+    const cap = cfgOf(root).loop.correctionRoundsCap;
+    const dir = path.join(tmpRoot, 'roles-show-control');
+    fs.mkdirSync(dir, { recursive: true });
+    const relocated = String(readText(ROLES_CLI)).replace(
+      /from '(\.\.?\/[^']+)'/g,
+      (_m, spec) => `from '${pathToFileURL(path.resolve(path.dirname(ROLES_CLI), spec)).href}'`,
+    );
+    const sabotaged = relocated.replace(/const gateRows = \[\{[^\n]*\}\];/, 'const gateRows = [];');
+    const runCopy = (name, source) => {
+      const file = path.join(dir, name);
+      fs.writeFileSync(file, source);
+      return spawnSync(process.execPath, [
+        file, '--show', '--project-root', root, '--plugin-root', PLUGIN_ROOT, '--no-selfcheck',
+      ], { encoding: 'utf8' });
+    };
+
+    const clean = runCopy('aiwf-roles-relocated.mjs', relocated);
+    const cleanFindings = nonConfigurableRowFindings(clean.stdout || '');
+    check('CONTROL (a): the RELOCATED PRISTINE renderer still satisfies the non-configurable-rows assertion, so leg (b) measures the sabotage and not the move',
+      clean.status === 0 && cleanFindings.length === 0,
+      clean.status === 0
+        ? (cleanFindings.length ? `the relocation itself broke the output: ${cleanFindings.join('; ')}` : 'clean before any sabotage - 0 findings')
+        : `the relocated copy exited ${clean.status}: ${(clean.stderr || '').trim().slice(0, 120)}`);
+
+    const broken = runCopy('aiwf-roles-no-fact-check.mjs', sabotaged);
+    const brokenFindings = nonConfigurableRowFindings(broken.stdout || '').join('; ');
+    const brokenShape = showShapeFindings(broken.stdout || '', cap);
+    const shapeNamesOnlyTheGate = brokenShape.length === 1
+      && brokenShape[0].includes('fact-check') && !brokenShape.join(' ').includes('R1');
+    check('sabotage detected [show-non-configurable-rows]: the fact-check row removed from showLines()',
+      sabotaged !== relocated && broken.status === 0
+      && brokenFindings === 'the fact-check row is absent' && shapeNamesOnlyTheGate,
+      sabotaged === relocated ? 'the sabotage replaced nothing - the control proves nothing'
+        : (brokenFindings === 'the fact-check row is absent' && shapeNamesOnlyTheGate
+          ? `FAIL as required: "${brokenFindings}", and the shape reports only ${JSON.stringify(brokenShape[0])} - R1 untouched`
+          : `NOT the expected failure: exit ${broken.status}, findings [${brokenFindings || 'none'}], shape [${brokenShape.join('; ') || 'none'}]`));
   }
 
   // --- refusals, each proven to have written nothing -------------------------

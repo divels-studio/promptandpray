@@ -650,6 +650,41 @@ section('4 - the conflict matrix: no branch mutates the target, and every run re
     changes.split('\n').filter((l) => l.includes('rerender-managed-region')).join(' | '));
   check('labels: the operator content is what is on disk', (read(at(p, 'CLAUDE.md')) || '').includes('(mine)'));
 }
+{
+  // (e) The dialog legend is CONDITIONAL on the run having rendered a managed artifact. It used to be
+  // printed unconditionally, so a note-only release told its reader that an artifact of theirs "was
+  // applied without a dialog" when the run had applied nothing of theirs at all - false in exactly
+  // the releases that touch nothing, which is when a consumer most needs to trust the sentence. Both
+  // directions are pinned here, side by side: a conditional with only its true branch asserted is
+  // indistinguishable from a constant.
+  const LEGEND = 'An unheld artifact you had not edited, whose payload render changed, was applied '
+    + 'without a dialog; edited ones were asked about; held ones were recorded, not applied.';
+  const noteOnly = makePayload('note-only', {
+    version: '0.2.0',
+    migrations: [{ id: '0002_fixture', version: '0.2.0', ops: [FIXTURE_NOTE] }],
+  });
+  const p = project('changes-note-only');
+  install(p);
+  const r = update(p, ['--apply'], { payload: noteOnly });
+  check('note-only: a migration whose only operation is a note applies cleanly', r.status === 0, why(r));
+  const changes = read(at(p, 'CHANGES_0.1.0-to-0.2.0.md')) || '';
+  check('note-only: the report still carries the note and the applied section',
+    changes.includes('fixture-note') && changes.includes('### 0002_fixture'),
+    changes.split('\n').slice(0, 12).join(' | '));
+  check('note-only: and it does NOT say an artifact was applied without a dialog - this run rendered none',
+    !changes.includes('without a dialog'),
+    changes.split('\n').filter((l) => l.includes('without a dialog')).join(' | ') || 'the sentence is absent, as it must be');
+
+  // The other direction on a payload that really does render, so the conditional is proven to have
+  // a true branch and the wording of it is unchanged.
+  const q = project('changes-renders-legend');
+  install(q);
+  const r2 = update(q, ['--apply', '--resolution-file', resolutionFile('renders-legend', FULL_RESOLUTIONS)], { payload: P020 });
+  check('renders: the run that DOES render a managed artifact completes', r2.status === 0, why(r2));
+  const changes2 = read(at(q, 'CHANGES_0.1.0-to-0.2.0.md')) || '';
+  check('renders: and its report still carries the sentence, word for word',
+    changes2.includes(LEGEND), changes2.split('\n').slice(0, 8).join(' | '));
+}
 
 // ---------------------------------------------------------------------------
 section('5 - settings: ownership without takeover, and a shape the engine will not rewrite');
