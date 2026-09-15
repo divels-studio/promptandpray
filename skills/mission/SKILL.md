@@ -37,7 +37,9 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
    it works without the product's boundaries.
 2. **Identify the active mission.** List `{{config.paths.plansDir}}/active/PLAN_*.md` - plansDir is
    the PARENT of `active/` and `archive/`, and only `active/` holds candidates (an archived plan is
-   finished by definition). Pick the plan
+   finished by definition). A plan created under the current convention is named `PLAN_<ABBR>.md` and
+   every ticket in it carries the ref `<ABBR>-<NNN>`, so the ref names its own plan file; older names
+   are not renamed. Pick the plan
    matching the current git branch; if that is ambiguous (several plans, or the branch matches
    none), ask the operator which mission - that is the ONLY clarifying question this skill is
    allowed before reporting.

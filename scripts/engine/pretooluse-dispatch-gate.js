@@ -14,7 +14,9 @@
  *     marker line `Ticket: <REF>` is read out of `tool_input.prompt` and `<REF>` is looked up in
  *     `<plansDir>/active/PLAN_*.md`. Found -> passthrough, SILENTLY: dispatching the Writer inside an
  *     approved plan is exactly the COO's job. Missing marker line, a ref that is in no active PLAN,
- *     or a plans directory that cannot be read -> the dialog, naming the ref.
+ *     or a plans directory that cannot be read -> the dialog, naming the ref. The lookup is targeted
+ *     first (see `lookupTicketRef`), with the scan of the other plans as its fallback; which of the
+ *     two answered is invisible in the decision, by construction.
  *
  * In BOTH modes:
  *   - `tool_input.subagent_type !== "writer"` -> passthrough. Reviewer, QA, Explore, general-purpose
@@ -104,6 +106,111 @@ function plansDirOf(projectDir, config) {
   return path.join(projectDir, rel, 'active');
 }
 
+// WHOLE-IDENTIFIER match, case-sensitive. A plain substring test would be wrong ("ABC-2" would
+// match "ABC-21" and clear a ref that is in no PLAN), and so is `\b`: the ref alphabet admitted by
+// TICKET_LINE is [A-Za-z0-9_-], while `-` is NOT a regex word character, so `\bDEMO-1\b` finds a
+// boundary in the middle of "DEMO-1-EXTRA" and in "X-DEMO-1" and clears both. The boundaries below
+// are therefore stated over the COMPLETE identifier alphabet: the ref matches only where it is not
+// glued to another ref character on either side.
+function refRegex(ref) {
+  return new RegExp('(?<![A-Za-z0-9_-])' + escapeRe(ref) + '(?![A-Za-z0-9_-])');
+}
+
+// Is `<REF>` in an active PLAN? One prefix per plan (payload docs/WORKFLOW.md, "Durable development
+// history"): a plan file is `PLAN_<ABBR>.md` and every ticket in it is `<ABBR>-<NNN>`, so the ref
+// ADDRESSES its plan instead of merely describing the work - `ABC-007` is read out of `PLAN_ABC.md`
+// directly, with no other plan content-read. The full scan stays as the fallback, because the
+// convention is not retroactive: a plan created before it (`PLAN_LEGACY_NAME.md`, a ref whose prefix
+// is not its file's) must still be found.
+//
+// THE DECISION SURFACE IS UNCHANGED BY THIS ORDER. The only difference from the pure-scan version is
+// which files are READ, never what the gate decides: every dispatch that raised a dialog before
+// raises one now. Two things keep that true, and both exist for no other reason:
+//   - the targeted candidate must pass the SAME eligibility test as a scanned entry (`lstat().
+//     isFile()`, the Dirent semantics of the scan below), so a directory or a symlink bearing the
+//     name cannot clear a ref the scan would have skipped;
+//   - a targeted hit still PROBES the directory (names only, nothing read) before it clears the ref,
+//     because the old code enumerated first and therefore asked whenever the plans directory could
+//     not be read, even when the ref was findable.
+// A quieter gate is exactly the direction this hook may not drift in.
+//
+// Returns `{ found, filesRead, dirError }`:
+//   - `found`    - the ref appears as a whole identifier in some active PLAN;
+//   - `filesRead` - the names of the PLAN files whose CONTENT was read, in read order. The targeted
+//     path content-reads exactly one file, which is what makes "it read nothing else" observable in
+//     a test; the parity probe enumerates names and adds nothing here;
+//   - `dirError` - the error from reading `activeDir` as a directory, whether that happened in the
+//     probe or in the fallback. The caller judges it BEFORE `found`, exactly as the pure-scan
+//     version did: a lookup that could not look is not a "no", and it is not a "yes" either.
+function lookupTicketRef(activeDir, ref) {
+  const filesRead = [];
+  const refRe = refRegex(ref);
+
+  // `<ABBR>` is the ref's text before its FIRST `-`. No dash (or a leading one) -> no targeted
+  // candidate at all, and the scan below is the only path.
+  const dash = ref.indexOf('-');
+  const targetedName = dash > 0 ? `PLAN_${ref.slice(0, dash)}.md` : null;
+  if (targetedName !== null) {
+    const targetedPath = path.join(activeDir, targetedName);
+    // ELIGIBILITY FIRST, and with lstat. The scan below clears a ref only out of an entry whose
+    // `Dirent.isFile()` is true, and a Dirent reports the entry ITSELF - a symlink dirent is not a
+    // file there, a directory is not a file there. `stat` would follow the link and make the
+    // targeted path clear a ref the scan would have skipped; `lstat` reproduces the scan's own
+    // eligibility exactly. Anything that is not a regular file falls through to the scan, whose
+    // isFile() filter then skips it - the same decision the pure-scan version reached.
+    let eligible = false;
+    try {
+      eligible = fs.lstatSync(targetedPath).isFile();
+    } catch (e) {
+      eligible = false; // not there, or unstattable
+    }
+    let text = null;
+    if (eligible) {
+      try {
+        text = fs.readFileSync(targetedPath, 'utf8');
+      } catch (e) {
+        text = null; // unreadable -> fall through to the scan, never decide on it
+      }
+    }
+    if (text !== null) {
+      filesRead.push(targetedName);
+      if (refRe.test(text)) {
+        // The parity probe described above: names only, result discarded. A directory that opens a
+        // named file but refuses to be enumerated (a traverse-without-list ACL) asked before this
+        // change, so it asks after it too.
+        try {
+          fs.readdirSync(activeDir, { withFileTypes: true });
+        } catch (e) {
+          return { found: true, filesRead, dirError: e };
+        }
+        return { found: true, filesRead, dirError: null };
+      }
+    }
+  }
+
+  let entries;
+  try {
+    entries = fs.readdirSync(activeDir, { withFileTypes: true });
+  } catch (e) {
+    return { found: false, filesRead, dirError: e };
+  }
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    if (!/^PLAN_.*\.md$/.test(entry.name)) continue;
+    if (entry.name === targetedName && filesRead.includes(entry.name)) continue; // already read above, and it did not carry the ref
+    let text = '';
+    try {
+      text = fs.readFileSync(path.join(activeDir, entry.name), 'utf8');
+    } catch (e) {
+      continue; // one unreadable PLAN must not clear or block on its own; the others still decide.
+    }
+    filesRead.push(entry.name);
+    if (refRe.test(text)) return { found: true, filesRead, dirError: null };
+  }
+
+  return { found: false, filesRead, dirError: null };
+}
+
 // The off-plan branch: silent only when the brief names a ticket that really is in an active PLAN.
 function offPlanDecision(ti, projectDir, config) {
   const m = typeof ti.prompt === 'string' ? TICKET_LINE.exec(ti.prompt) : null;
@@ -117,34 +224,17 @@ function offPlanDecision(ti, projectDir, config) {
   const ref = m[1];
   const activeDir = plansDirOf(projectDir, config);
 
-  let entries = null;
-  try {
-    entries = fs.readdirSync(activeDir, { withFileTypes: true });
-  } catch (e) {
+  // dirError FIRST, then the hit: the pure-scan version could not clear a ref out of a directory it
+  // failed to read, and neither may this one.
+  const hit = lookupTicketRef(activeDir, ref);
+  if (hit.dirError) {
+    const e = hit.dirError;
     return lib.askPreTool(
       `Cannot verify ticket "${ref}": the active PLAN directory ${activeDir} is missing or unreadable ` +
       `(${e && e.message ? e.message : String(e)}). ${TAG}`
     );
   }
-
-  // WHOLE-IDENTIFIER match, case-sensitive. A plain substring test would be wrong ("ABC-2" would
-  // match "ABC-21" and clear a ref that is in no PLAN), and so is `\b`: the ref alphabet admitted by
-  // TICKET_LINE is [A-Za-z0-9_-], while `-` is NOT a regex word character, so `\bDEMO-1\b` finds a
-  // boundary in the middle of "DEMO-1-EXTRA" and in "X-DEMO-1" and clears both. The boundaries below
-  // are therefore stated over the COMPLETE identifier alphabet: the ref matches only where it is not
-  // glued to another ref character on either side.
-  const refRe = new RegExp('(?<![A-Za-z0-9_-])' + escapeRe(ref) + '(?![A-Za-z0-9_-])');
-  for (const entry of entries) {
-    if (!entry.isFile()) continue;
-    if (!/^PLAN_.*\.md$/.test(entry.name)) continue;
-    let text = '';
-    try {
-      text = fs.readFileSync(path.join(activeDir, entry.name), 'utf8');
-    } catch (e) {
-      continue; // one unreadable PLAN must not clear or block on its own; the others still decide.
-    }
-    if (refRe.test(text)) return lib.allowPassthrough(); // on plan -> silent, the common path
-  }
+  if (hit.found) return lib.allowPassthrough(); // on plan -> silent, the common path
 
   return lib.askPreTool(
     `Off-plan Writer dispatch: ticket "${ref}" appears in no active PLAN (searched PLAN_*.md in ` +
@@ -153,38 +243,42 @@ function offPlanDecision(ti, projectDir, config) {
   );
 }
 
-lib.runFailAsk(async () => {
-  const input = lib.parseInput(await lib.readStdin());
+if (require.main === module) {
+  lib.runFailAsk(async () => {
+    const input = lib.parseInput(await lib.readStdin());
 
-  // Non-object payload: we cannot read the dispatch at all, so we cannot clear it either -> ask.
-  if (!isPlainObject(input)) {
+    // Non-object payload: we cannot read the dispatch at all, so we cannot clear it either -> ask.
+    if (!isPlainObject(input)) {
+      return lib.askPreTool(
+        'Cannot verify this dispatch: hook input is not an object, so the target subagent is unreadable. ' +
+        'Approve only if you know what is being dispatched. [AIWF gate 2: Writer dispatch]'
+      );
+    }
+
+    // Defensive: the hooks.json matcher is the exact string "Agent", so this should be unreachable.
+    if (input.tool_name !== 'Agent') return lib.allowPassthrough();
+
+    const ti = input.tool_input;
+    if (!isPlainObject(ti)) {
+      return lib.askPreTool(
+        'Cannot verify this dispatch: tool_input is not an object, so the target subagent is unreadable. ' +
+        '[AIWF gate 2: Writer dispatch]'
+      );
+    }
+
+    // Only the Writer is gated - it is the only role that writes to the repo.
+    if (ti.subagent_type !== WRITER_AGENT_TYPE) return lib.allowPassthrough();
+
+    const projectDir = projectDirOf();
+    const config = readProjectConfig(projectDir);
+    if (dispatchGateMode(config) === OFF_PLAN) return offPlanDecision(ti, projectDir, config);
+
     return lib.askPreTool(
-      'Cannot verify this dispatch: hook input is not an object, so the target subagent is unreadable. ' +
-      'Approve only if you know what is being dispatched. [AIWF gate 2: Writer dispatch]'
+      `Writer dispatch: "${describe(ti)}". The Writer is the only role that writes implementation code, ` +
+      `so starting it is an operator decision. Approve to hand the ticket over. ` +
+      `[AIWF gate 2: Writer dispatch]`
     );
-  }
+  });
+}
 
-  // Defensive: the hooks.json matcher is the exact string "Agent", so this should be unreachable.
-  if (input.tool_name !== 'Agent') return lib.allowPassthrough();
-
-  const ti = input.tool_input;
-  if (!isPlainObject(ti)) {
-    return lib.askPreTool(
-      'Cannot verify this dispatch: tool_input is not an object, so the target subagent is unreadable. ' +
-      '[AIWF gate 2: Writer dispatch]'
-    );
-  }
-
-  // Only the Writer is gated - it is the only role that writes to the repo.
-  if (ti.subagent_type !== WRITER_AGENT_TYPE) return lib.allowPassthrough();
-
-  const projectDir = projectDirOf();
-  const config = readProjectConfig(projectDir);
-  if (dispatchGateMode(config) === OFF_PLAN) return offPlanDecision(ti, projectDir, config);
-
-  return lib.askPreTool(
-    `Writer dispatch: "${describe(ti)}". The Writer is the only role that writes implementation code, ` +
-    `so starting it is an operator decision. Approve to hand the ticket over. ` +
-    `[AIWF gate 2: Writer dispatch]`
-  );
-});
+module.exports = { lookupTicketRef, plansDirOf, TICKET_LINE };

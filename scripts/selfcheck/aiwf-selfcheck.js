@@ -714,6 +714,270 @@ function sectionGate2Mode(tmpRoot) {
 }
 
 // ---------------------------------------------------------------------------
+// SECTION 2b2 - one prefix per plan: the ref is a LOOKUP, not a description
+// ---------------------------------------------------------------------------
+// The convention (payload docs/WORKFLOW.md, "Durable development history"): a plan file is
+// `PLAN_<ABBR>.md` and every ticket in it is `<ABBR>-<NNN>`. Two things are asserted here, and they
+// are the two halves of what the convention is worth:
+//   1. Gate 2 really uses it as an ADDRESS - `AB-001` is read out of `PLAN_AB.md` directly, with no
+//      other plan content-read - while a plan named before the convention is still found by the
+//      fallback scan. The lookup helper is required from the gate itself, so this reads the
+//      production path rather than a copy of its logic. What the helper DOES still do on a targeted
+//      hit is enumerate the directory's NAMES and discard them, so that a directory it cannot read
+//      asks exactly as it did before the targeted path existed;
+//   2. a plan that ALREADY has the `PLAN_<ABBR>.md` shape carries no ticket heading with a foreign
+//      prefix. Deliberately not retroactive: a file whose name does not match the shape (a legacy
+//      `PLAN_TOPIC_NAME.md`, or a one-letter `PLAN_A.md` - the grammar is 2-8 uppercase letters) is
+//      outside the assertion by construction, and is REPORTED as excluded rather than silently
+//      dropped. The check says how many files and headings it really examined so an empty run cannot
+//      read as a green one, and an APPLICABLE plan it could not read is a finding, not a skip: a
+//      mixed directory must not pass while the one file that mattered went unchecked.
+const PLAN_FILE_RE = /^PLAN_.*\.md$/;               // what Gate 2 itself scans
+// The subset the naming rule binds. The grammar is the doctrine's own (payload docs/WORKFLOW.md,
+// "one prefix per plan": 2-8 uppercase letters, and a three-digit number) - prose and pattern have
+// to say the same thing, or one of them is decoration.
+const PLAN_ABBR_FILE_RE = /^PLAN_([A-Z]{2,8})\.md$/;
+// A ticket heading: any heading level from ## to ####, then `<PREFIX>-<NNN>` as the FIRST token.
+// `\S+` before the number so a prefix that itself contains a dash is read whole (`X-DEMO-001` is a
+// heading whose prefix is `X-DEMO`, not `X`), and `(?!\d)` so a four-digit tail is not a three-digit
+// ref. Anything after the number - a second name in parentheses, a route tag, a title - is free.
+const TICKET_HEADING_RE = /^#{2,4} +(\S+)-(\d{3})(?!\d)/;
+
+// Pure, and returns COUNTS next to the findings: "zero findings" is only a pass when something was
+// actually read, and the caller prints both. FAILS CLOSED on an applicable plan it cannot read - an
+// entry whose NAME says the rule binds it but whose content never reached the matcher is reported,
+// because "no mismatch found" in a file nobody could open is not a statement about that file.
+function planRefNamingFindings(activeDir) {
+  const out = { files: 0, headings: 0, findings: [], skipped: [], unreadable: [], dirError: null };
+  let entries;
+  try {
+    entries = fs.readdirSync(activeDir, { withFileTypes: true });
+  } catch (e) {
+    out.dirError = e && e.message ? e.message : String(e);
+    return out;
+  }
+  for (const entry of entries.slice().sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
+    if (!PLAN_FILE_RE.test(entry.name)) continue; // not a plan file name at all
+    const named = PLAN_ABBR_FILE_RE.exec(entry.name);
+    // Outside the grammar -> outside the rule, whatever the entry is. Recorded, never judged.
+    if (!named) { out.skipped.push(entry.name); continue; }
+    // Applicable by NAME. From here every exit is either a checked file or a finding.
+    if (!entry.isFile()) {
+      out.unreadable.push(entry.name);
+      out.findings.push(`${entry.name}: applicable by name but is not a regular file, so its ticket headings were never checked`);
+      continue;
+    }
+    const text = readText(path.join(activeDir, entry.name));
+    if (text === null) {
+      out.unreadable.push(entry.name);
+      out.findings.push(`${entry.name}: applicable by name but could not be read, so its ticket headings were never checked`);
+      continue;
+    }
+    out.files += 1;
+    const abbr = named[1];
+    const lines = text.split(/\r?\n/);
+    for (let i = 0; i < lines.length; i += 1) {
+      const h = TICKET_HEADING_RE.exec(lines[i]);
+      if (!h) continue;
+      out.headings += 1;
+      if (h[1] !== abbr) out.findings.push(`${entry.name}:${i + 1} ticket "${h[1]}-${h[2]}" in a plan whose abbreviation is ${abbr}`);
+    }
+  }
+  return out;
+}
+
+function sectionPlanRefNaming(tmpRoot, projectRoot) {
+  section('ONE PREFIX PER PLAN - the ref addresses its plan, and Gate 2 looks it up that way');
+  let gate = null;
+  try { gate = require(GATE2); } catch (e) { gate = null; }
+  if (!check('Gate 2 exports its ticket lookup (so these checks run the REAL helper, not a copy of it)',
+    gate != null && typeof gate.lookupTicketRef === 'function')) return;
+
+  let n = 0;
+  // A `null` text makes that name a DIRECTORY instead of a file - the portable stand-in for "an
+  // entry that bears a plan's name and is not a plan file" (the same device the Gate 2 MODE section
+  // uses, because Windows has no cheap symlinks and chmod is advisory here).
+  const mkDir = (name, files) => {
+    const dir = path.join(tmpRoot, `refnaming-${name}-${n += 1}`);
+    fs.mkdirSync(dir, { recursive: true });
+    for (const [file, text] of Object.entries(files)) {
+      if (text === null) fs.mkdirSync(path.join(dir, file), { recursive: true });
+      else fs.writeFileSync(path.join(dir, file), text, 'utf8');
+    }
+    return dir;
+  };
+  // The same fixture wrapped in a minimal off-plan PROJECT, so the same state can also be judged by
+  // the gate as a subprocess - the decision, not only the helper's return value.
+  const mkProject = (name, files) => {
+    const root = path.join(tmpRoot, `refnaming-project-${name}-${n += 1}`);
+    const activeDir = path.join(root, 'docs', 'backlogs', 'active');
+    fs.mkdirSync(path.join(root, '.claude', 'aiwf-native'), { recursive: true });
+    fs.mkdirSync(activeDir, { recursive: true });
+    fs.writeFileSync(path.join(root, '.claude', 'aiwf-native', 'aiwf.config.json'), JSON.stringify({
+      project: { name: 'RefNaming' }, enforcement: { routeWriteGuard: true, dispatchGate: 'off-plan' },
+    }), 'utf8');
+    for (const [file, text] of Object.entries(files)) {
+      if (text === null) fs.mkdirSync(path.join(activeDir, file), { recursive: true });
+      else fs.writeFileSync(path.join(activeDir, file), text, 'utf8');
+    }
+    return { root, activeDir };
+  };
+  const dispatch = (root, ref) => runHook(GATE2, {
+    session_id: '9a1c1a44-0000-4000-8000-000000000000', permission_mode: 'default',
+    hook_event_name: 'PreToolUse', tool_name: 'Agent',
+    tool_input: { description: 'Implement a ticket', prompt: `Ticket: ${ref}\n\nImplement the thing.`, subagent_type: 'writer' },
+    tool_use_id: 'toolu_02selfcheckRefNamingDispatch',
+  }, root);
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+  // --- 1. the targeted lookup, and a DECOY that sorts before it -------------------------------
+  // The decoy is what makes this non-vacuous: `PLAN_AA.md` carries the string `AB-001` and comes
+  // FIRST alphabetically, so a lookup that SCANNED the directory would have content-read it and said
+  // so. (`PLAN_ZZ.md` carries the ref too, from the other side of the sort order.)
+  const DECOY = '# PLAN AA\n\n## AA-001 - a ticket that MENTIONS AB-001 in its body\n\nBody.\n';
+  const targeted = mkDir('targeted', {
+    'PLAN_AA.md': DECOY,
+    'PLAN_AB.md': '# PLAN AB\n\n## AB-001 - the ticket this plan carries\n\nBody.\n',
+    'PLAN_ZZ.md': '# PLAN ZZ\n\n## ZZ-001 - this one also names AB-001 in its body\n\nBody.\n',
+  });
+  {
+    const r = gate.lookupTicketRef(targeted, 'AB-001');
+    check('AB-001 is found in PLAN_AB.md and NO other plan was content-read (the targeted path)',
+      r.found === true && eq(r.filesRead, ['PLAN_AB.md']) && r.dirError === null,
+      `found=${r.found} read=${JSON.stringify(r.filesRead)} dirError=${r.dirError === null ? 'null' : String(r.dirError.message)}`);
+  }
+  {
+    // The control for the line above: same directory, the targeted name removed from the equation by
+    // asking for a ref whose `PLAN_AA.md` really is the first file a SCAN would read. If the helper
+    // were scanning all along, the previous check would have produced this file list.
+    const scanOnly = mkDir('scan-decoy', { 'PLAN_AA.md': DECOY, 'PLAN_ZZ.md': '# PLAN ZZ\n\n## ZZ-001 - x\n\nBody.\n' });
+    const r = gate.lookupTicketRef(scanOnly, 'AB-001');
+    check('the control: with no PLAN_AB.md, the same ref is found by the SCAN - and PLAN_AA.md is what it reads first',
+      r.found === true && r.filesRead[0] === 'PLAN_AA.md', `found=${r.found} read=${JSON.stringify(r.filesRead)}`);
+  }
+  {
+    const r = gate.lookupTicketRef(targeted, 'NODASH');
+    check('a ref with no "-" has no targeted candidate at all -> the full scan, every plan read',
+      r.found === false && eq(r.filesRead, ['PLAN_AA.md', 'PLAN_AB.md', 'PLAN_ZZ.md']),
+      `found=${r.found} read=${JSON.stringify(r.filesRead)}`);
+  }
+  // The parity probe's FAILING branch needs a directory that opens a named file but refuses to be
+  // enumerated - a traverse-without-list ACL. It cannot be produced portably from here (the same
+  // limit the unreadable-PLAN pair in the Gate 2 MODE section runs into), so it is stated rather
+  // than claimed. Its SUCCESS branch is covered: the assertion above requires dirError === null,
+  // which is only true because the probe really ran and really succeeded.
+  note('the targeted hit\'s directory probe FAILING (a plans directory that cannot be enumerated)',
+    'producing a directory that permits opening a named file while denying enumeration needs an ACL this run cannot set portably; the ENOENT case reaches the same ask through the fallback, and the Gate 2 MODE section asserts it end to end');
+
+  // --- 1b. the targeted NAME still has to be a regular file ------------------------------------
+  // The scan clears a ref only out of an entry whose `Dirent.isFile()` is true, so the targeted path
+  // applies the same test (`lstat().isFile()`) before it reads. Without it, a directory - or a
+  // symlink, where Dirent and lstat agree and `stat` does not - bearing the name would clear a ref
+  // the pure-scan version skipped, which is a SILENT pass where the old gate asked. The pair below
+  // is the regression guard, decided on the helper AND on the gate as a subprocess.
+  {
+    const p = mkProject('targeted-not-a-file', { 'PLAN_AB.md': null });
+    const r = gate.lookupTicketRef(p.activeDir, 'AB-001');
+    check('a DIRECTORY named PLAN_AB.md does NOT clear AB-001 (the targeted path applies the scan\'s own isFile test)',
+      r.found === false && eq(r.filesRead, []) && r.dirError === null,
+      `found=${r.found} read=${JSON.stringify(r.filesRead)}`);
+    const hook = dispatch(p.root, 'AB-001');
+    check('and the gate ASKS on it, exactly as the pure-scan version did',
+      hook.decision === 'ask' && hook.exit === 0 && hook.reason.includes('AB-001'), `${hook.decision} - ${hook.reason.slice(0, 60)}`);
+  }
+  {
+    const p = mkProject('targeted-not-a-file-scan', {
+      'PLAN_AB.md': null,
+      'PLAN_ZZ.md': '# PLAN ZZ\n\n## ZZ-001 - a real plan that also carries AB-001\n\nAB-001 lives here.\n',
+    });
+    const r = gate.lookupTicketRef(p.activeDir, 'AB-001');
+    check('the control: with PLAN_AB.md a directory and the ref really in PLAN_ZZ.md, the SCAN finds it there',
+      r.found === true && eq(r.filesRead, ['PLAN_ZZ.md']), `found=${r.found} read=${JSON.stringify(r.filesRead)}`);
+    check('and that dispatch is SILENT (the ineligible entry blocks nothing either)',
+      dispatch(p.root, 'AB-001').decision === 'allow(passthrough)');
+  }
+
+  // --- 2. the fallback: a plan named before the convention is still found ----------------------
+  {
+    const p = mkProject('legacy-name', {
+      'PLAN_LEGACY_NAME.md': '# PLAN LEGACY NAME\n\n## LEG-007 - a ticket in a plan named before the convention\n\nBody.\n',
+    });
+    const r = gate.lookupTicketRef(p.activeDir, 'LEG-007');
+    check('a ref that lives only in a legacy-named PLAN_LEGACY_NAME.md is still found, by the fallback scan',
+      r.found === true && eq(r.filesRead, ['PLAN_LEGACY_NAME.md']), `found=${r.found} read=${JSON.stringify(r.filesRead)}`);
+    const hook = dispatch(p.root, 'LEG-007');
+    check('and the GATE itself is unchanged on that project: off-plan + a legacy plan name -> SILENT passthrough',
+      hook.decision === 'allow(passthrough)' && hook.exit === 0, `${hook.decision} ${hook.reason.slice(0, 50)}`);
+  }
+
+  // --- 3. the naming assertion, on synthetic fixtures, both legs -------------------------------
+  // `PLAN_A.md` is a ONE-letter name: outside the grammar (2-8 letters), therefore outside the rule -
+  // and it has to be visibly reported as excluded, or "no findings" would be hiding a file nobody
+  // judged behind a pattern nobody printed.
+  const CLEAN = {
+    'PLAN_AB.md': '# PLAN AB\n\n## AB-001 - the first ticket\n\nBody.\n\n#### AB-002 (SECOND-NAME) - a deeper heading with a second name\n\nBody.\n',
+    'PLAN_A.md': '# PLAN A\n\n## QQ-001 - a foreign prefix in a one-letter name the grammar excludes\n\nBody.\n',
+    'PLAN_LEGACY_NAME.md': '# PLAN LEGACY NAME\n\n## OTHER-001 - a foreign prefix in a file the rule does not bind\n\nBody.\n',
+  };
+  {
+    const dir = mkDir('naming-clean', CLEAN);
+    const f = planRefNamingFindings(dir);
+    check('a conforming active/ directory produces NO naming finding - and it really read something',
+      f.findings.length === 0 && f.files === 1 && f.headings === 2 && f.dirError === null,
+      `${f.files} file(s), ${f.headings} heading(s) checked, ${f.findings.length} finding(s)`);
+    check('and the names outside the grammar are excluded BY CONSTRUCTION and REPORTED, not silently dropped',
+      eq(f.skipped, ['PLAN_A.md', 'PLAN_LEGACY_NAME.md']), `skipped: ${f.skipped.join(', ') || '(none)'}`);
+  }
+  {
+    const dir = mkDir('naming-sabotaged', Object.assign({}, CLEAN, {
+      'PLAN_AB.md': CLEAN['PLAN_AB.md'] + '\n### ZZ-001 - a ticket carrying another plan\'s prefix\n\nBody.\n',
+    }));
+    const f = planRefNamingFindings(dir);
+    check('the control: a foreign prefix inside PLAN_AB.md is reported, naming both the ref and the abbreviation',
+      f.findings.length === 1 && f.findings[0].includes('ZZ-001') && f.findings[0].includes('AB'),
+      f.findings.length === 1 ? `FAIL as required - ${f.findings[0]}` : `${f.findings.length} finding(s): ${f.findings.join('; ')}`);
+  }
+  {
+    // The second control, on the other failure direction: an APPLICABLE plan that could not be read
+    // at all. Silently skipping it would let a mixed directory pass while the one file the rule
+    // binds went unchecked - a green that means "I did not look".
+    const dir = mkDir('naming-unreadable', Object.assign({}, CLEAN, { 'PLAN_XX.md': null }));
+    const f = planRefNamingFindings(dir);
+    check('the control: an applicable PLAN_XX.md that is not a regular file is a FINDING, not a skip',
+      f.findings.length === 1 && f.findings[0].includes('PLAN_XX.md') && eq(f.unreadable, ['PLAN_XX.md'])
+      && !f.skipped.includes('PLAN_XX.md') && f.files === 1,
+      f.findings.length === 1 ? `FAIL as required - ${f.findings[0]}` : `${f.findings.length} finding(s): ${f.findings.join('; ')}`);
+  }
+
+  // --- 4. the same assertion on the project this run was pointed at ----------------------------
+  {
+    const cfg = readJson(path.join(projectRoot, '.claude', 'aiwf-native', 'aiwf.config.json'));
+    const plansDir = (cfg && cfg.paths && typeof cfg.paths.plansDir === 'string' && cfg.paths.plansDir.trim() !== '')
+      ? cfg.paths.plansDir.trim() : 'docs/backlogs';
+    const activeDir = path.join(projectRoot, ...plansDir.split('/'), 'active');
+    const f = planRefNamingFindings(activeDir);
+    if (f.dirError !== null) {
+      note(`the active PLAN directory ${plansDir}/active could not be read`, f.dirError);
+    } else if (f.files === 0 && f.findings.length === 0) {
+      // Nothing the rule binds AND nothing it failed to read: the honest answer is "not exercised".
+      note('this project\'s active plans follow the PLAN_<ABBR>.md convention',
+        `no file matching PLAN_<ABBR>.md in ${plansDir}/active (${f.skipped.length} plan file(s) are outside the grammar), so there was nothing to judge`);
+    } else {
+      // One PASS condition for both failure directions: a foreign prefix in an applicable plan, and
+      // an applicable plan that was never read. A file that mattered and went unchecked cannot hide
+      // behind the count of the ones that did.
+      check(`this project's active plans carry only their own ticket prefix, and every applicable plan was read (${plansDir}/active)`,
+        f.findings.length === 0,
+        f.findings.length ? f.findings.slice(0, 4).join('; ') : `${f.files} plan file(s), ${f.headings} ticket heading(s) checked`);
+    }
+    if (f.skipped.length) {
+      observation('active plan files outside the PLAN_<ABBR>.md grammar are outside the naming assertion',
+        `${f.skipped.join(', ')} - named before the convention (2-8 uppercase letters), not renamed, and found by Gate 2's fallback scan`);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // SECTION 2c - Gate 4: ask-class git verbs on BOTH shell tools (matcher `Bash|PowerShell`)
 // ---------------------------------------------------------------------------
 // Two decisions on one recogniser, and the section is built as PAIRS so neither can pass by being
@@ -6426,6 +6690,7 @@ function main() {
     sectionGate1Identity(tmpRoot);
     sectionGate2(tmpRoot);
     sectionGate2Mode(tmpRoot);
+    sectionPlanRefNaming(tmpRoot, PROJECT);
     sectionGate4();
     sectionGate3(tmpRoot);
     sectionGate3Toggle(tmpRoot);
@@ -6486,7 +6751,13 @@ function main() {
   console.log('captured live payloads, the dispatch gate\'s ask/passthrough matrix in its factory mode AND its');
   console.log('enforcement.dispatchGate off-plan mode - where the only silent path is a Ticket: <REF> line whose');
   console.log('ref is really in an active PLAN, the configured paths.plansDir is proven to be read, and every');
-  console.log('non-"off-plan" state of the key asks anyway - and the route-state');
+  console.log('non-"off-plan" state of the key asks anyway; the gate\'s own ticket lookup is ALSO run in-process');
+  console.log('against fixtures, where the targeted read of PLAN_<ABBR>.md is proven to content-read no other plan');
+  console.log('(a decoy plan sorting before it carries the same ref) and a legacy plan name is proven still findable');
+  console.log('by the fallback scan,');
+  console.log('and the PLAN_<ABBR>.md / <ABBR>-<NNN> naming rule is asserted on this project\'s own active plans with');
+  console.log('a two-leg control (a clean fixture with headings really counted, a sabotaged copy that must fail)');
+  console.log('- and the route-state');
   console.log('guard across R2/R3/unusable/cleared/absent state, and its enforcement.routeWriteGuard toggle,');
   console.log('whose every failure mode leaves the guard ARMED - and the git-verb gate on BOTH shell tools');
   console.log('(matcher Bash|PowerShell, each command judged in its own tool\'s dialect), whose');

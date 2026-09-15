@@ -35,9 +35,10 @@ destructive or system-changing operations, and product/UX calls. Full text:
 payload `docs/WORKFLOW.md`.
 
 **A NEW ticket waits for its own word.** A ticket born after a standing operator word - one not in
-the PLAN's recorded execution order - is written into the PLAN, announced in ONE sentence, and
-STOPS: zero mutations on it until the operator's word for THAT ticket. A standing word covers the
-work it was given for, never the structure born after it (payload `docs/WORKFLOW.md` guard (b)).
+the PLAN's recorded execution order - is written into the PLAN, with the same abbreviation and the
+next number, announced in ONE sentence, and STOPS: zero mutations on it until the operator's word
+for THAT ticket. A standing word covers the work it was given for, never the structure born after
+it (payload `docs/WORKFLOW.md` guard (b)).
 
 How you execute is **route-conditional**:
 

@@ -27,21 +27,60 @@ somebody did not fill in.
   `/pnp:mission` and `/pnp:roles` already said. A retold table is a table whose cells nobody
   verified.
 
+**One prefix per plan, so a ref is a lookup and not a description.** The release's second change is
+the one this migration is named for: a plan file is `PLAN_<ABBR>.md`, where `<ABBR>` is 2 to 8
+uppercase letters, and every ticket in it carries the Ticket Ref `<ABBR>-<NNN>` - the SAME
+abbreviation plus a three-digit sequential number that is never reused. A ticket born while other
+work is in flight takes that same abbreviation and the next free number, and a candidate has no ref
+until it is written into a plan. That grammar is what the tooling reads, which is why it is written
+down to the letter.
+
+- **The ref addresses its plan.** From `ABC-007` the plan file is known without a search, which is
+  what the off-plan dispatch gate now does: it reads `PLAN_<ABBR>.md` directly and reads the other
+  plans in the active directory only when that file does not exist or does not carry the ref. The
+  decision the gate reaches is unchanged - every dispatch that raised a dialog before raises one now,
+  and every one that passed silently still does; only which files are read is different. That is why
+  a targeted hit still checks that the active directory itself can be listed before it clears the
+  ref: a directory the gate cannot read has always been a dialog, and a faster lookup is not a reason
+  for a quieter gate.
+- **Nothing is retroactive.** Plans and refs that predate the convention keep their names; the full
+  scan is the fallback that keeps them working, and the self-check's new naming assertion binds only
+  files that already have the `PLAN_<ABBR>.md` shape.
+- **One artifact of yours states it, and it is re-rendered here.** The `aiwf-core` region of your
+  `CLAUDE.md` carries the "a NEW ticket waits for its own word" paragraph; it now says with which
+  abbreviation and which number that ticket is written into the PLAN.
+
 The operations.
 
 | # | op | what it does here |
 |---|----|-------------------|
-| 0 | `note` | one paragraph in your `CHANGES_*.md`: what the new shape of the audit table is, that no value in it moved, and that the renderer itself ships with `/plugin update` rather than with this migration. |
+| 0 | `note` | one paragraph in your `CHANGES_*.md`: the new shape of the audit table and that no value in it moved, the renderer shipping with `/plugin update` rather than with this migration, and the plan/ref naming convention together with the artifact it re-renders. |
+| 1 | `rerender-managed-region` | re-renders the `aiwf-core` region of your `CLAUDE.md` from `templates/CLAUDE.md.tmpl#aiwf-core`, so the paragraph about a ticket born after a standing word names the abbreviation and the number. Unconditional: every installation has this region. Your text outside the region markers is untouched; if you edited inside it, the run asks; if you hold the artifact through an override, the new render is recorded as upstream and applied to nothing. |
+
+## If this migration is already applied where the region is not
+
+Taking 0.2.6 as a released version needs nothing from this section: `--apply` runs both operations
+of this migration in one go. It matters only for an installation that tracks the payload BETWEEN
+releases and had already applied `0010` while it carried only the note - `--apply` walks migrations
+that are not yet recorded as applied, so it will not run this one a second time, and the region
+would silently stay at the old render.
+
+Re-render that one artifact directly instead, with the resolve path that exists for exactly this -
+`--resolve "CLAUDE.md#aiwf-core"` plus a resolution file recording `take-new` for that address - and
+the region is brought to the current render with its bookkeeping updated (upstream == local) and no
+version bump involved. `--resolve` without a resolution file always stops to ask, which is what
+makes the file the thing that lets such a run be non-interactive.
 
 ## Why the renderer is not an operation
 
 `/pnp:roles --show` is payload - `scripts/setup/aiwf-roles.mjs` - and so are the skills that print
 its output. `/plugin update` replaces the payload wholesale, so the new table is on your screen the
 moment the plugin version changes, with no operation to apply and nothing of yours to re-render.
-The migration still exists, because the manifest's last entry has to name the payload version, or
-"no unapplied migrations" and "installed == payload version" would disagree with each other - and a
-`note` is the honest way to say what a release did to a screen you read rather than to a file of
-yours.
+The migration would exist for that half alone, because the manifest's last entry has to name the
+payload version, or "no unapplied migrations" and "installed == payload version" would disagree with
+each other - and a `note` is the honest way to say what a release did to a screen you read rather
+than to a file of yours. The `rerender-managed-region` above belongs to the release's other half,
+not to the table.
 
 ## What does NOT change
 

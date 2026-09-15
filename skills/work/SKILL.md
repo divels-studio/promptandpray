@@ -45,7 +45,9 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
    ticket in a plan under `{{config.paths.plansDir}}/active/` (plansDir is the PARENT of `active/`
    and `archive/`): author or extend a PLAN with the ticket brief
    (risk threshold + stop condition), state the routing as a decision with a one-line why, then STOP
-   and wait for the operator's word before dispatching.
+   and wait for the operator's word before dispatching. One prefix per plan: a new plan is
+   `PLAN_<ABBR>.md` and its tickets are `<ABBR>-<NNN>`, sequential and never reused, so the ref is
+   the address of its plan file rather than a description of the work.
    **A NEWLY BORN ticket - one that is not in the PLAN's recorded execution order - is written into
    the PLAN, announced in ONE sentence, and STOPS the same way.** No dispatch, no route state, no
    mutation on it until the operator's own word for THAT ticket: a standing word covers the work it

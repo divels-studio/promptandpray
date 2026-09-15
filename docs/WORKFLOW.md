@@ -195,9 +195,10 @@ change of COO model, and each of these was learned from an observed violation.
   After the word, the loop runs to the end without asking again. **A ticket born after a standing
   word waits for its own word.** When the work in flight produces a NEW ticket - one that is not
   already in the PLAN's recorded execution order - the COO does exactly three things: writes it
-  into the PLAN, announces it in ONE sentence ("opening ticket `<REF>` for `<what>` - waiting for
-  your word"), and STOPS. Zero mutations on that ticket until the operator answers: no Writer
-  dispatch, no route state, no code, no docs edit belonging to it. The earlier reading of this
+  into the PLAN, with the same abbreviation and the next number, announces it in ONE sentence
+  ("opening ticket `<REF>` for `<what>` - waiting for your word"), and STOPS. Zero mutations on
+  that ticket until the operator answers: no Writer dispatch, no route state, no code, no docs
+  edit belonging to it. The earlier reading of this
   rule - that the announcement is a *notification rather than a question*, so the dispatch may
   follow it in the same turn - is REVOKED: it was observed to let a ticket be born AND started
   without an operator word, which is exactly what (b) exists to prevent. The ticket's CONTENT
@@ -211,7 +212,7 @@ change of COO model, and each of these was learned from an observed violation.
   Read/check that the state already present does not cover it. A demand that one Read would have
   cancelled is a workflow defect.
 - **(e) An approved plan lands in the repo immediately.** At the moment of approval, in the same
-  session, unprompted: the plan is copied to `<plansDir>/active/PLAN_<name>.md` (the Git canon),
+  session, unprompted: the plan is copied to `<plansDir>/active/PLAN_<ABBR>.md` (the Git canon),
   and any plan-mode file outside the repo becomes a pointer to it. The principle "durable
   knowledge lives in Git" already existed; what had never been written down was the mechanical
   moment of approval.
@@ -558,7 +559,7 @@ tickets. Do not create a separate active BACKLOG file. The PLAN keeps:
 carries a closed status and its completion record, the COO moves the file from
 `<plansDir>/active/` to `<plansDir>/archive/` - in the same session, unprompted, as the last act
 of closing the final ticket, not as a step someone has to remember later. The archive has a
-naming convention the active directory does not: `<NNN>_PLAN_<TOPIC>_<YYYY-MM-DD>.md`, where
+naming convention the active directory does not: `<NNN>_PLAN_<ABBR>_<YYYY-MM-DD>.md`, where
 `NNN` is the next free sequence number and the date is the day of ARCHIVING, not of creation.
 `git mv` preserves the history; a bare copy of the active filename does not belong there.
 
@@ -576,7 +577,7 @@ PLAN. Preserve accepted engineering context, not runtime noise.
 Use the configured paths (`paths.plansDir`):
 
 ```text
-<plansDir>/active/PLAN_<TOPIC>.md
+<plansDir>/active/PLAN_<ABBR>.md
 <plansDir>/archive/
 ```
 
@@ -585,9 +586,25 @@ immediately, by the COO itself (docs class, per the write boundary above and gua
 production-code changes begin. Rough personal notes are inputs, never implementation authority.
 When a durable record is warranted:
 
-- assign stable Ticket Refs such as `ABC-001`;
-- choose a Ticket Ref whose prefix identifies the actual product/workstream; do not reuse an
-  unrelated migration or technology prefix merely because it is available;
+- **one prefix per plan.** A plan file is `PLAN_<ABBR>.md`, where `<ABBR>` is an abbreviation of the
+  plan's topic written as **2 to 8 uppercase letters `A-Z`**, and every ticket in that plan carries
+  the Ticket Ref `<ABBR>-<NNN>`: the SAME abbreviation as its plan file, plus `<NNN>`, a **three-
+  digit** sequential number that is never reused - not even for a ticket that was dropped.
+  `PLAN_ABC.md` holds `ABC-001`, `ABC-002`, and so on. That grammar is what the tooling reads: it
+  is the shape the dispatch gate turns into a filename and the shape the self-check holds a plan to.
+  The ref is a lookup key, not a description: from the ref alone the plan file is known without
+  searching for it;
+- **a ticket born in flight takes the same abbreviation and the next free number.** Whatever its
+  subject, it belongs to the plan it was born in; a different abbreviation means a different
+  plan, never a foreign ref inside an existing one;
+- **a candidate has no ref.** Work that is only proposed - a candidate, an idea, a note toward a
+  future plan - carries a title and nothing else. It earns its `<ABBR>-<NNN>` at the moment it is
+  written into a plan, and not before; a ref that resolves to no ticket section is a broken
+  lookup;
+- choose the abbreviation so it identifies the actual product/workstream; do not reuse an
+  unrelated migration or technology prefix merely because it is available. The convention is not
+  retroactive: plans and refs created before it keep their names, and the tools that read refs
+  fall back to a full scan for them;
 - the durable ledger is the living Mission PLAN itself - there is no separate runtime work-item
   store;
 - carry the Ticket Ref, PLAN path, and ticket-section anchor in the brief the COO hands the

@@ -13,9 +13,39 @@ undifferentiated stream, where a structural blank and an unset value look identi
 as four labelled blocks under the same header, with every value, marker and column width unchanged
 to the byte. The two rows nothing configures are pinned by the self-check with a control that
 removes one of them, because a session re-rendering the table came back with seven rows and the
-missing two had no setting anywhere to give them away. `0010_plan-prefix-legibility` carries the
-release note; the renderer and the skills that print it are payload, so this change arrives with
-`/plugin update` rather than as an operation on your files.
+missing two had no setting anywhere to give them away. The renderer and the skills that print it are
+payload, so that half of the release arrives with `/plugin update` and has no operation to apply.
+The other half does: the doctrine now states one prefix per plan, and
+`0010_plan-prefix-legibility` carries both the release note and a re-render of the `aiwf-core`
+region of your `CLAUDE.md`, where the rule about a ticket born after a standing word is written.
+
+### Added
+
+- **One prefix per plan: the ref is a lookup, not a description (HARD-009)** - a plan file is
+  `PLAN_<ABBR>.md` with `<ABBR>` written as 2 to 8 uppercase letters, every ticket in it carries the
+  Ticket Ref `<ABBR>-<NNN>` with the same abbreviation and a three-digit sequential number that is
+  never reused, a ticket born while other work is in
+  flight takes that same abbreviation and the next free number, and a candidate has no ref until it
+  is written into a plan. From `ABC-007` the plan file is known without a search, which is what
+  makes the ref worth having. The convention is not retroactive: existing plans and refs keep their
+  names.
+- **Gate 2 looks the ticket up by address, with the scan as a fallback (HARD-009)** - in `off-plan`
+  mode the dispatch gate derives `<ABBR>` from the ref and reads `PLAN_<ABBR>.md` directly; only
+  when that file does not exist, cannot be read, or does not carry the ref does it fall back to
+  reading every `PLAN_*.md` in the active directory - which is how a plan named before the
+  convention is still found. The ask/silent decision is unchanged in both directions; only which
+  files are read is. A targeted hit still lists the active directory before clearing the ref, and
+  still raises the old dialog when it cannot, because a directory the gate cannot read has never
+  been a silent pass.
+  The gate now exports that lookup, so the self-check exercises the production helper: with a decoy
+  plan that sorts FIRST and also mentions the ref, the targeted path must report having read exactly
+  one file.
+- **The self-check asserts the naming rule, with a two-leg control (HARD-009)** - for every
+  `PLAN_<ABBR>.md` in the project's active plans, each `<PREFIX>-<NNN>` ticket heading must carry
+  that plan's own abbreviation. The check prints how many files and headings it examined, so an
+  empty directory cannot read as a pass; a clean fixture must produce no finding and a sabotaged
+  copy carrying a foreign prefix must fail. Plan files whose names predate the convention are
+  excluded by construction and reported as an observation rather than silently passed.
 
 ### Changed
 
@@ -47,8 +77,8 @@ release note; the renderer and the skills that print it are payload, so this cha
   a legend for managed-artifact renders, so `assembleChanges` now prints it only when the run really
   carried one - a `rerender-managed-region` whose artifact this installation actually has - and the
   wording for such a run is unchanged, word for word. The defect was visible first on this release's
-  own note-only migration; the update suite pins both directions, because a conditional with only
-  its true branch asserted is indistinguishable from a constant.
+  migration while it still carried only a note; the update suite pins both directions, because a
+  conditional with only its true branch asserted is indistinguishable from a constant.
 
 ## [0.2.5] - 2026-09-14
 
