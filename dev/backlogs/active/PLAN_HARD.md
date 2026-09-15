@@ -200,6 +200,18 @@ rename (или става относителен веднъж, в HARD-001).
    приложен предварително); дъмп на плана за Одитора през `.aiwf/review-brief.txt`, wrapper във
    фон; двата example цикъла и `test-update` във фон (>600s), без паралелни редакции по време на
    example цикъл; docs commit отделен от кодовия; нула Claude trailers.
+10. **Одитна икономика (операторска дума 2026-09-15, до края на този план; измерено на
+    Furnissimo PROJ-001):** (а) **evidence pack** на всеки ПЪРВИ code-class review пас —
+    1 sonnet агент вади консуматори/съседни договори по диффа (`file:line`), review брифът носи
+    пакета + ИЗРИЧНО право и задължение за spot-check (пакетът е селекция от одитираната страна);
+    docs-class пасовете — без пакет. (б) **resume верификация** само за верификационен пас след
+    кодова корекция: `codex exec resume <session-id> -` (бриф по stdin; постурата през
+    `-c sandbox_mode="read-only" -c approval_policy="never" -c model="gpt-5.6-sol"
+    -c model_reasoning_effort="high"`; wrapper-ът няма resume — гола CLI инвокация, обявява се в
+    completion record-а); session id-то се записва от header-а на студения пас 1 ОЩЕ ТОГАВА.
+    Readiness пасовете остават студени. (в) **Гейт затегнат при ограничена квота: И ПАС 1 не се
+    диспачва без изрична операторска дума** — операторът първо проверява квотата, после дава
+    разрешение за одита; fact-check гейтът (sonnet) върви преди искането на думата.
 
 ## 0.2.3 — Security · tag `v0.2.3`
 
@@ -1175,6 +1187,61 @@ selfcheck exit 0 + naming assertion контролът; VERIFY 8/8; Cyrillic п�
 преименуване; фалшиво зелен assertion (без работещ контрол).
 **Stop condition:** VERIFY + acceptance зелени → стоп.
 **Review:** `Class: code` → Codex, fact-check преди; cap 2. **Assignee:** Колега. Branch `main`.
+
+#### HARD-009 — Completion record (2026-09-15)
+
+**Commit `82f702b0a7c322edc4c153cf96f52352b9e41378`** върху котвата `d69b42b` (branch `main`,
+локален, непушнат): 11 файла, 547+/84− (`git show --stat 82f702b`); едноредово съобщение, тяло
+празно (scratchpad probe, `%b` празно, байтово потвърдено през `git cat-file`), нула trailers
+(проектното правило бие harness reminder-а — обявено); дърво чисто след commit-а освен PLAN
+файла; трите codex `.ps1` не дрейфнаха. Изпълнено по обхвата (a)–(e): четирите операторски
+точки + граматиката (ABBR = 2–8 главни `A-Z`, NNN тризначен) в § Durable development history;
+archive конвенцията `<NNN>_PLAN_<ABBR>_<YYYY-MM-DD>.md`; placeholder унификация `PLAN_<ABBR>.md`
+(двете заварени изписвания); guard (b) „със същата абревиатура и следващия номер" + огледалото в
+`templates/CLAUDE.md.tmpl`; `0010` получи безусловен `rerender-managed-region CLAUDE.md#aiwf-core`
+op (БЕЗ нова миграция — Решения т.3; note op id-то остава стабилно при разширен текст: приложен
+op на реални инсталации); self-install re-apply през `--resolve` + resolution файл (take-new,
+bookkeeping upstream==local `e51e8f97…`, override false); Gate 2 рефакториран по Gate 4
+прецедента — `lookupTicketRef` изнесен, hook-ът под `require.main === module`, насочен прочит с
+`lstat().isFile()` eligibility + names-only парити probe, fallback пълният scan, нула промяна на
+ask/silent повърхността; selfcheck: нова секция ONE PREFIX PER PLAN (+15 проверки: targeted
+proof `read==['PLAN_AB.md']` с first-sorting decoy, directory контроли на двата пътя + жив
+subprocess, legacy fallback, naming findings fail-closed с двукрака контрола; реалният план — 23
+заглавия); skills/mission + skills/work конвенцията; CHANGELOG интрото поправено (носеше вече
+невярната „само note" претенция) + три Added bullet-а.
+
+**COO решения (вписани):** (1) строг паритет микро-рунд ПРЕДИ ревюто — първата резба на
+насочения път пропускаше readdir и обръщаше екзотичен вход (traverse-without-list ACL) от ask към
+silent; арбитрирано към probe, blocking формулировката на risk threshold-а печели; (2) ABC-001
+остава като илюстрация на формата (acceptance-ът го позволява изрично); (3) Writer-ското fixture
+подсилване прието — плановият fixture (ZZ след AB) не различаваше targeted от scan, decoy-ят
+PLAN_AA.md сортира първи.
+
+**Ревю (пълна история; първият тикет по Решения т.10 — одитната икономика):** evidence pack
+(1 sonnet, 7 секции + gaps) в review брифа с изричен spot-check дълг; fact-check пас 1 —
+0 находки. Codex `gpt-5.6-sol`/high, `Class: code`, пас 1 (изрична дума; старт/стоп
+100→95% 5ч / 88→87% седм.; **92,248 токена**): **`fail`, 2 блокера P2** — (B1) targeted път без
+isFile eligibility: symlink дава silent при стар ask (одиторска собствена read-only проба:
+old=ask/new=silent); (B2) naming assertion false-green: граматиката липсваше в прозата + нечетим
+applicable план се прескачаше тихо. И двата блокера от собствените проби на одитора, не от
+пакета — независимостта издържа и тук. Корекционен рунд 1: lstat eligibility + directory
+контроли; граматиката в прозата (и в CHANGELOG/NOTES — един ред надолу, същото правило);
+fail-closed находки + контроли. Делта fact-check — 0 находки. **Верификационен пас = codex exec
+resume** (сесия `01a0a5fc…fd60`, гола CLI извън wrapper-а — обявено; изрична дума): **`pass`,
+нула находки**, блокерите потвърдено затворени с одиторска собствена helper проба; клетката не
+пусна суитите (`mkdtemp` EPERM, известният лимит) — рънът на Колегата е източникът. **Икономика,
+измерено:** сесиен брояч 195,445 → инкремент **103,197 токена**, но квотна цена старт/стоп
+**71→68% 5ч (3 п.п.) / 83→83% седм. (0 п.п.)** срещу 5 п.п./1 п.п. за студения пас — кешираният
+вход тежи по-леко от нов студен контекст; операторска преценка: тактиката работи. Всяка цена е
+мерена като старт/стоп двойка на самия пас (между пасовете други сесии теглят от същата квота).
+
+**Верификация (точни кодове):** пълни 8/8 exit 0 на финалното дърво (една команда наведнъж) —
+validate-payload „10 migration(s) … 0.2.6"; test-setup 328/0; test-update 495/0; example cycles
+2×44/0; **selfcheck 1041/1041** (1026 преди тикета; контролите „FAIL as required"); spikes 318/0;
+plugin validate ✔; `aiwf-update --check` „up to date … 0.2.6"; acceptance дословно: ABC-001 grep
+→ 2 хита, двата формата (`docs/WORKFLOW.md:593,:612`); Cyrillic празно exit 1; насоченият lookup
+доказан на production helper-а с точния списък прочетени файлове. Останал дълг: няма. Tag/push
+на 0.2.6 — на HARD-011 по плана.
 
 ### HARD-010 (DOC-001) [R2 docs-class] — докс commit-ът е отделен от кодовия, записано
 
