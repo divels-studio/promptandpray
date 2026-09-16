@@ -110,14 +110,24 @@ or doctrine. The payload carries mechanisms; the machine carries the topology.
 
 ## D. Arbiter
 
-- **D18.** No standing paid role. An escalation-TARGET session with: four COUNTABLE yes/no
-  triggers — (1) the decision reverses a plan-recorded decision; (2) it touches access policy /
-  tenancy / security-definer surfaces; (3) its blast radius crosses the current ticket's
-  boundary; (4) two sessions/roles disagree in writing; — the rule "no ruling without an opened
-  file"; a durable ruling ledger (one line: question / ruling / evidence pointer) as a named
-  section OF the transfer-surface file, making the role resumable (succession, not a second
-  arbiter); metric = catches vs introduced defects (seed rows: the honest 3/2 tally).
-  "No Fable above Fable" recorded as an operator structural decision, not evidence.
+- **D18.** No standing paid role AND no standing second session (operator objection 2026-09-16
+  accepted: two active sessions on one mission is not acceptable). The arbiter is ON-DEMAND and
+  COLD-START — possible precisely because the durable ruling ledger carries its whole state:
+  opened ONLY when a trigger fires (measured rarity: ~6 escalations across the heaviest
+  mission; most tickets zero). Flow: the COO prepares the escalation brief (casus + file:line
+  evidence + WHICH countable trigger fired) and parks it; the operator's part is ONE action —
+  open a session with the arbiter skill (loads the role text + reads the ruling ledger + takes
+  the brief) or, where a suitable live session already exists, a word to route there. The
+  arbiter is READ-ONLY on the tree (it is a non-executing session under D7: zero writes, zero
+  DB, zero paid passes; "no ruling without an opened file" means it READS); the ruling returns
+  as a message and the EXECUTING session writes the one-line ledger entry. Triggers, four
+  countable yes/no: (1) the decision reverses a plan-recorded decision; (2) it touches access
+  policy / tenancy / security-definer surfaces; (3) its blast radius crosses the current
+  ticket's boundary; (4) two sessions/roles disagree in writing. Ledger: {question / ruling /
+  evidence pointer}, a named section of the transfer-surface file; metric = catches vs
+  introduced defects (seed: the honest 3/2 tally). Solo consumer: the escalation target is the
+  OPERATOR (genericity boundary). "No Fable above Fable" recorded as an operator structural
+  decision, not evidence.
 
 ## E. Pass economics (doctrine)
 
