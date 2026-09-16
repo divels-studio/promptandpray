@@ -9,6 +9,22 @@
 > (arbitration: "v2 is ready for the operator from my side"; Silerax: D15
 > endorsed-with-amendment, incorporated below).
 
+## Genericity boundary (operator counterpoint, 2026-09-16 — the plugin is PUBLIC and mass)
+
+What ships in the PAYLOAD must hold for a stranger with ONE project and NO sibling sessions.
+Under that test: the transfer surface (D1) is generic — every consumer, single-project included,
+accumulates plugin-adjacent local doctrine, and it is the interface the plugin lifecycle already
+needs (D4's CHANGES supersede-list has to point AT something; upstream feedback — an issue, a
+PR, a message — is cheap to file only when it is collected in one place). D2-D4, D6-D17,
+D19-D23, D25-D26 are generic as written. D5/D18 are generalized in one sentence: canon
+conflicts and trigger hits STOP the work; the escalation TARGET is a designated second-view
+session where one exists, and the OPERATOR where none does — a solo consumer loses nothing,
+because "stop and ask the operator" is standing doctrine. What does NOT ship in the payload:
+the N-projects-one-machine topology (cross-project consolidation sessions, a plugin-repo
+session as upstream hub, this consolidation's own three-way pattern) — that is an OPERATOR
+WORKING PATTERN, documented at most as an optional how-to, never baked into gates, templates
+or doctrine. The payload carries mechanisms; the machine carries the topology.
+
 ## A. Doctrine sync across consumers (the root problem; zero new gates)
 
 - **D1.** One transfer surface per consumer — a CANDIDATES-class FILE. The consumer READS the
