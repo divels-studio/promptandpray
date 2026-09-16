@@ -114,10 +114,13 @@ or doctrine. The payload carries mechanisms; the machine carries the topology.
   accepted: two active sessions on one mission is not acceptable). The arbiter is ON-DEMAND and
   COLD-START — possible precisely because the durable ruling ledger carries its whole state:
   opened ONLY when a trigger fires (measured rarity: ~6 escalations across the heaviest
-  mission; most tickets zero). Flow: the COO prepares the escalation brief (casus + file:line
-  evidence + WHICH countable trigger fired) and parks it; the operator's part is ONE action —
-  open a session with the arbiter skill (loads the role text + reads the ruling ledger + takes
-  the brief) or, where a suitable live session already exists, a word to route there. The
+  mission; most tickets zero). Flow: a fired trigger makes escalation MANDATORY, not
+  discretionary — no word gates it (a word would hand the judgment back to the party tempted to
+  skip it); the COO announces it to the operator in one line and prepares the brief (casus +
+  file:line evidence + WHICH countable trigger fired). If a suitable live session exists, the
+  COO sends the brief directly. If none exists, the operator's part is purely PHYSICAL — a
+  session cannot open another session — one command opens the arbiter skill, which loads the
+  role text, reads the ruling ledger and takes the parked brief; nothing is explained by hand. The
   arbiter is READ-ONLY on the tree (it is a non-executing session under D7: zero writes, zero
   DB, zero paid passes; "no ruling without an opened file" means it READS); the ruling returns
   as a message and the EXECUTING session writes the one-line ledger entry. Triggers, four
