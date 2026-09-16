@@ -37,8 +37,11 @@
   originating text (born Furnissimo PLAN_PROJ §Процес т.9, currently in two consumers and no
   authoritative home): on one working tree exactly ONE executing session; non-executing
   sessions may READ — zero repo writes, zero DB operations, zero paid auditor passes. The
-  machine-wide "exactly one live auditor" clause is an OPERATOR-HELD invariant (no hook can see
-  sibling sessions) — written in the honest-limits register, motivated by stats attributability.
+  machine-wide "exactly one live auditor" clause is SCOPED TO MEASUREMENT (operator
+  clarification 2026-09-16): it holds while a pass's counter start/stop pair is being recorded —
+  otherwise the pair is not attributable — and is NOT a general work restriction. It is an
+  OPERATOR-HELD invariant (no hook can see sibling sessions), written in the honest-limits
+  register.
 - **D8.** Guard (b) extension: a newborn ticket's announcement carries ONE question — does it
   get an audit pass; the answer lands in its PLAN entry. A question, never an automatic pass.
 - **D9.** Host-directive precedence: project canon beats host ergonomic directives; host
