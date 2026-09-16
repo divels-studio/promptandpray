@@ -131,6 +131,34 @@
   resume after the operator's decision; regulation v2 seeds the D12-D17 render and consumer
   local records gain D4 cleanup clauses.
 
+## G. COO tier routing (the operator's cost question; both witnesses converged)
+
+- **D25.** Tier-routing rule, countable — COO tier only (the Writer pin and the audit table are
+  UNTOUCHED by COO tier; that invariant is part of the rule). ANY "yes" → Fable COO; ALL "no" →
+  cheap COO (Opus today; Sonnet after D26): (1) the ticket writes migration / RLS / grants /
+  auth / permission-model code; (2) the contract leaves an architecture or concurrency decision
+  open — countable form: any worklist item without a file:line anchor OR any unresolved
+  decision marker in the plan section or (for un-planned R2) the brief; (3) the diff surface
+  greppably matches the D18 trigger classes; (4) a canon conflict or incident is open on the
+  ticket's path. DYNAMIC clause: a D18 trigger surfacing MID-ticket suspends the ticket exactly
+  like a canon conflict — escalation, not continuation. HARDENING principle: cheap COO is
+  coherent economics only DOWNSTREAM of expensive readiness — on an unhardened plan it merely
+  relocates the Fable cost into correction rounds. Why a weak model can hold these rails: the
+  protecting rules are FORM rules (source-per-claim, coverage line, ask-don't-promise,
+  verdict≠dispatch — mechanically checkable), and the single judgment demand is CONVERTED to
+  lookup by the countable escalation triggers. Mis-routing in the cheap direction was survived
+  twice already: its cost is quota and rounds, never the tree — the audit net catches.
+- **D26.** Rails proof, minimal: Stage 0 — one docs-class ticket under a regulated cheap COO
+  with the event ledger on (smoke-tests the instrumentation; costs nothing extra; a mid-mission
+  run is the operator's override to give). Stage 1 — ONE low-risk implement-literal plan under
+  a cheap COO with three ledger metrics: operator-triggered corrections (target ≈0 against the
+  8/11 baseline), unworded paid dispatches (target 0), messages/ticket median (diagnostic). A
+  mixed plan is the first live test of D25 itself via split routing. Existing data point:
+  the one session that ran Opus UNDER the codified regulation showed ZERO operator-triggered
+  corrections on the observable slice (n=1, stated as such). Sonnet-at-COO: zero data — only
+  after Opus passes Stage 1, docs-class first, never the first experiment. Hardened test beds
+  already exist on both consumers (their COOs named them; scheduling is the operator's).
+
 ## Implementation shape (for the operator's sequencing decision, not part of the draft)
 
 Payload work implied: WORKFLOW edits (D7-D11), review skill + fact-check clause (D14, D23),
