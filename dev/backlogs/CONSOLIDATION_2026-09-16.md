@@ -1,6 +1,27 @@
-# Consolidation decision draft v2 (2026-09-16)
+# Consolidation decision v2 (2026-09-16) — ACCEPTED
 
-> Design material for the OPERATOR'S decision — nothing here is adopted until his word.
+> **D1-D26 ACCEPTED by operator word, 2026-09-16** (point-by-point review + the formal word).
+> The cleanup word to both witnesses is given and relayed the same day: they delete their
+> consolidation-source records on their side and self-revise their memories against THIS file
+> (the stable version), read read-only from this repo.
+>
+> **CONTINUATION ORDER (recorded for the operator, to be handed back on request):**
+> 1. ~~Operator accepts D1-D26~~ DONE (2026-09-16). 2. ~~Cleanup word to witnesses~~ GIVEN.
+> 3. PNP unfreezes FIRST, on the operator's word "планирай": a NEW mission plan implements the
+>    D-set in the payload (WORKFLOW edits D7-D11; review skill + fact-check clause D14/D23;
+>    METRICS home D19/D22; rendered orchestrator role D12-D17; transfer-surface convention +
+>    CHANGES supersede-list D1-D4/D6; /pnp:arbiter skill D18; tier routing D25). HARD-013 joins
+>    this mission as a ticket (environment correctness). Versions 0.2.7+; normal readiness;
+>    paid passes still one word each.
+> 4. PLAN_HARD (HARD-010/011) stays FROZEN until the consolidation release ships — the README
+>    work must describe the new mechanisms, so the order is forced. Unfreezes on a word.
+> 5. Both consumers stay FROZEN for work until the release lands and they update (their local
+>    records then D4-clean via CHANGES). Their sessions remain available as read-only witnesses.
+> 6. After their update: Silerax runs the D26 pilot as its natural mission (PLAN_CAP split
+>    routing: CAP-001 → Fable; 002/003/005 → cheap COO under the rendered role; 004
+>    conditional); Furnissimo resumes PLAN_PROJ after; regulation v2 there is superseded by the
+>    rendered role. The chain is word → PNP plan → release → consumer updates → pilot; no
+>    dates, only order; every link starts on the operator's word.
 > Produced by the PNP master session from the three-way consolidation (PNP ↔ Furnissimo
 > arbitration session ↔ Silerax COO session), two evidence rounds + one adversarial pass each.
 > Every item survived attack-with-instances; the full coverage ledger and evidence pointers live
