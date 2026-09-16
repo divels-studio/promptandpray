@@ -25,9 +25,11 @@
 | HARD-007 | READY-001 | 0.2.5 + release |
 | HARD-008 | ROLES-001 | 0.2.6 |
 | HARD-009 | REF (един префикс на план) | 0.2.6 |
-| HARD-010 | DOC-001 | 0.2.6 |
-| HARD-011 | README-001 | 0.2.6 + release |
+| HARD-010 | DOC-001 | 0.2.8 (преместен, операторска дума 2026-09-16) |
+| HARD-011 | README-001 | 0.2.8 + release (преместен, същата дума) |
 | HARD-012 | — (вердикт-докладът, роден 2026-09-13) | 0.2.5 |
+| HARD-013 | — (bash по голо име, роден 2026-09-15) | 0.2.7 |
+| HARD-014 | — (тема: операторска, обявява се след release 0.2.6) | 0.2.7 + release |
 
 ## Context (discovery 2026-09-12: 4× Explore/sonnet + claude-code-guide; котви проверявани при диспач)
 
@@ -1243,6 +1245,8 @@ plugin validate ✔; `aiwf-update --check` „up to date … 0.2.6"; acceptance 
 доказан на production helper-а с точния списък прочетени файлове. Останал дълг: няма. Tag/push
 на 0.2.6 — на HARD-011 по плана.
 
+## 0.2.8 — Docs & README · tag `v0.2.8` (тикетите по-долу ПРЕМЕСТЕНИ от 0.2.6 с операторска дума 2026-09-16; изпълняват се СЛЕД 0.2.7 — файловият ред тук не е изпълнителният, той е в „Ред и гейтове". Първият тикет на изданието авторства миграцията/bump-а му по Решения т.3)
+
 ### HARD-010 (DOC-001) [R2 docs-class] — докс commit-ът е отделен от кодовия, записано
 
 **Outcome:** payload-ът казва явно това, което трите проекта правят по подражание: кодовият
@@ -1268,12 +1272,12 @@ own commit, so what was audited and what is a note after it stay distinguishable
 **Review:** `Class: docs` → Codex (`gpt-5.6-sol`/high, 1 пас), fact-check преди; cap 2.
 **Assignee:** Колега. Branch `main`.
 
-### HARD-011 (README-001) [R2 docs-class] — публичното repo се обяснява на студен посетител; release 0.2.6
+### HARD-011 (README-001) [R2 docs-class] — публичното repo се обяснява на студен посетител; release 0.2.8
 
 **Outcome:** непознат програмист, отворил repo-то в GitHub, получава в този ред: къде се
 намирам, какво прави плъгинът, как го прави, какви команди има и за какво е всяка — от root
 `README.md` надолу, без да му трябва предварително познаване на loop-а. Улегнал продукт:
-върви СЛЕД всичко останало в плана (операторско решение 2026-09-12). 0.2.6 е издадена.
+върви СЛЕД всичко останало в плана (операторско решение 2026-09-12). 0.2.8 е издадена.
 
 **Обхват:**
 1. Root `README.md` (245 реда; студеният вход е само `:1-17`): преработка по въпросите на
@@ -1292,8 +1296,9 @@ own commit, so what was audited and what is a note after it stay distinguishable
    (R1/R2/R3, engine-neutral и пр. се дефинират с препратка, не предполагат).
 4. `dev/README.md` НЕ е payload — извън обхвата на провenance правилата, пипа се само ако
    нещо в него е станало невярно.
-5. Release 0.2.6: CHANGELOG финализиран; tag `v0.2.6` (дума) → push (дума + диалог) → CI →
-   consumer proof (relay).
+5. Release 0.2.8: CHANGELOG финализиран; tag `v0.2.8` (дума) → push (дума + диалог) → CI →
+   consumer proof (relay). (Беше „release 0.2.6" — 0.2.6 се издаде самостоятелно след HARD-009
+   с операторска дума 2026-09-16.)
 **Извън обхват:** нова функционалност/команди; смяна на технически претенции (само формулиране
 за студен читател — фактите остават каквито selfcheck-ът ги пази); Cyrillic/origin
 имена/абсолютни пътища (provenance гейтът важи с пълна сила).
@@ -1303,7 +1308,7 @@ own commit, so what was audited and what is a note after it stay distinguishable
 "[\x{0400}-\x{04FF}]" -- docs skills templates scripts schema hooks migrations examples
 README.md` → празно; selfcheck exit 0 (README пинове, ако някой се пипа — `README.md:31` броят
 остава верен); дифф гардът от Risk threshold-а → exit 0;
-VERIFY 8/8; след release: `git ls-remote --tags origin v0.2.6` → hash; `origin/main...main` →
+VERIFY 8/8; след release: `git ls-remote --tags origin v0.2.8` → hash; `origin/main...main` →
 `0 0`.
 **Risk threshold:** блокира невярна претенция, вкарана в името на четимостта; какъвто и да е
 не-docs файл в диффа (изпълним артефакт → рекласификация към code loop по правилото). Дифф
@@ -1314,6 +1319,8 @@ VERIFY 8/8; след release: `git ls-remote --tags origin v0.2.6` → hash; `or
 **Stop condition:** acceptance зелен → стоп.
 **Review:** `Class: docs` → Codex (1 пас), fact-check преди; cap 2.
 **Assignee:** Колега. Branch `main`.
+
+## 0.2.7 — Environment correctness · tag `v0.2.7` (операторска дума 2026-09-16: HARD-013 + HARD-014; HARD-014 се вписва, когато операторът обяви темата — след release 0.2.6. Изпълнява се ПРЕДИ 0.2.8. ОТВОРЕНО: HARD-014 може да излезе в самостоятелна версия — операторско решение после, не се предрешава тук)
 
 ### HARD-013 [R2 code-class] — self-check-ът хваща кой да е `bash` от PATH; на WSL bash пада 52 пъти и `--apply` връща 1 въпреки приложените миграции (роден 2026-09-15 от консуматорски рън, ЧАКА ОПЕРАТОРСКА ДУМА)
 
@@ -1358,7 +1365,9 @@ re-apply, naming assertion). Одиторът е Codex на всички → „
 Изпълнителен ред: HARD-001 → HARD-002 (+release 0.2.3) → HARD-003 → HARD-004 (+release 0.2.4)
 → **HARD-012 (пръв в 0.2.5 — операторска дума 2026-09-14: коригиращият доктрината тикет не чака
 козметиката)** → HARD-005 → HARD-006 → HARD-007 (+release 0.2.5) → HARD-008 → HARD-009 →
-HARD-010 → HARD-011 (+release 0.2.6). Вторите имена — в таблицата под header-а.
+**release 0.2.6 (самостоятелен, операторска дума 2026-09-16 — HARD-010/011 излязоха от
+изданието)** → HARD-013 → HARD-014 (+release 0.2.7; темата — операторска, обявява се след
+0.2.6) → HARD-010 → HARD-011 (+release 0.2.8). Вторите имена — в таблицата под header-а.
 
 Гейтове: всеки тикет — собствена дума за диспач; commit — клик (стейдж по изрични пътища,
 едноредово съобщение, нула trailers, PLAN файлът и трите EOL-дрейфащи `.ps1` извън кодовия
@@ -1381,10 +1390,11 @@ acceptance command exists and can fail") → Codex pass 1 (`Class: plan`, `gpt-5
 ## Verification (края на мисията)
 
 - VERIFY 8/8 exit 0 на `main` @ closeout hash; Cyrillic grep празно; `claude plugin validate .`.
-- `git ls-remote --tags origin` носи v0.2.3/v0.2.4/v0.2.5/v0.2.6 на кодовите им commit-и;
-  `origin/main...main` = `0 0`; CI: windows+ubuntu зелени (macos advisory).
-- `node scripts/update/aiwf-update.mjs --check --project-root .` → „up to date … 0.2.6";
-  `validate-payload` → `10 migration(s)`; fixture `0011_example-bump`.
+- `git ls-remote --tags origin` носи v0.2.3/v0.2.4/v0.2.5/v0.2.6/v0.2.7/v0.2.8 на кодовите им
+  commit-и; `origin/main...main` = `0 0`; CI: windows+ubuntu зелени (macos advisory).
+- `node scripts/update/aiwf-update.mjs --check --project-root .` → „up to date …" на финалната
+  версия (0.2.8); `validate-payload`: последният манифестен запис == финалната версия; fixture —
+  поредният `_example-bump` на финалното издание.
 - Consumer proof записан per издание в completion record-ите (вкл. ръчния пас на втория
   консуматор за 0.2.3).
 - Архивиране: `git mv` към `dev/backlogs/archive/<NNN>_PLAN_HARD_<YYYY-MM-DD>.md` (датата на
