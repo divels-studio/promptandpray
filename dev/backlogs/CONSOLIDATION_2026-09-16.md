@@ -183,8 +183,10 @@ or doctrine. The payload carries mechanisms; the machine carries the topology.
 
 ## G. COO tier routing (the operator's cost question; both witnesses converged)
 
-- **D25.** Tier-routing rule, countable — COO tier only (the Writer pin and the audit table are
-  UNTOUCHED by COO tier; that invariant is part of the rule). ANY "yes" → Fable COO; ALL "no" →
+- **D25.** COO-routing rule, countable (naming amended by operator delegation 2026-09-16:
+  the doctrine term is "COO routing" — "tier" collides with the established scan-tier/top-tier
+  vocabulary) — the routing changes the COO only (the Writer pin and the audit table are
+  UNTOUCHED by it; that invariant is part of the rule). ANY "yes" → Fable COO; ALL "no" →
   cheap COO (Opus today; Sonnet after D26): (1) the ticket writes migration / RLS / grants /
   auth / permission-model code; (2) the contract leaves an architecture or concurrency decision
   open — countable form: any worklist item without a file:line anchor OR any unresolved
