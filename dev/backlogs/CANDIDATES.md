@@ -670,3 +670,37 @@ HARD-002 (0.2.3) шипна „present but not owned" отчета в update-а 
 операционна работа на консуматора. (б) „Ревизия на payload-съседната доктрина извън плъгина" —
 завършена тяхна локална работа; генерализируемата ѝ стойност живее в доктрина-запис гейта и в
 word-гейт предупреждението по-горе.
+
+---
+
+# Transfer surface секции (D1/D16/D18/D22 — създадени при одобрението на PLAN_CONS, 2026-09-16; операторска дума. Този файл Е трансферната повърхност на това repo: paths.transferSurface ще го посочи в CONS-001)
+
+## Ruling ledger (D18: | въпрос | решение | указател |)
+
+| Кой тикет на кой COO модел (тристранката) | 4-те броими проверки на D25; ANY yes → Fable | CONSOLIDATION_2026-09-16.md §G |
+| Табло: managed или seed? | Unbookkept one-time seed; rerender би трил консуматорско съдържание | PLAN_CONS Решение 4; migrate.mjs:536-563 proof |
+| Арбитър: standing или on-demand? | On-demand cold-start; ledger-ът носи състоянието | CONSOLIDATION D18, e56fe7b |
+
+## Pass statistics (D22 формат: пас | клас | формат | токени | старт→стоп | минути | вердикт)
+
+| PLAN_CONS readiness p1 | plan | студен | 122,199 | 100/67→91/65 | — | NEEDS-FIX |
+| PLAN_CONS readiness p2 | plan | resume | 38,981 инкр. | 91/65→86/65 | — | NEEDS-FIX |
+| PLAN_CONS readiness p3-A | plan | студен | 168,135 | 86/65→74/63 | — | NEEDS-FIX |
+| PLAN_CONS readiness p3-B (A/B близнак) | plan | resume | 57,254 инкр. | 74/63→66/61 | — | NEEDS-FIX |
+| PLAN_CONS readiness p4-A | plan | студен | 145,289 | 66/61→56/60 | — | NEEDS-FIX |
+| PLAN_CONS readiness p4-B (A/B, след компакт) | plan | resume | 137,129 инкр. | 56/60→44/58 | — | NEEDS-FIX |
+
+Методологични бележки от цикъла: resume икономията се разпада след компакт на сесията
+(−5→−8→−12пп крива; retire-при-компакт); двата A/B: форматите комплементарни на суров план,
+схождащи се на зрял; пп/turn ~стабилно срещу пп/токен ±50% (гросс-обемният модел).
+
+## Event ledger (D16 формат: | дата | правило | violation|catch|operator-correction | указател |)
+
+| 2026-09-16 | статистика старт/стоп двойки | operator-correction | pass 2 диспачнат без поискана старт двойка; операторът я даде постфактум |
+| 2026-09-16 | D11 инструментът-пада-нарочно | catch | Edit tool разгъна ` escape до гол backtick; хванато от делта fact-check, не от автора |
+| 2026-09-16 | D11 / PS quoting | catch | студен p4 хвана backtick изяждане в double-quoted PowerShell grep |
+| 2026-09-16 | компакт хоризонтът на resume | catch (операторски) | операторът предположи 200K+компакт; rollout-ът показа compacted събитие (ред 387) |
+
+## D2 pointer rows
+
+| 2026-09-16 | PLAN_CONS одобрен — пълните решения/фрази живеят в dev/backlogs/active/PLAN_CONS.md; дизайн авторитетът в dev/backlogs/CONSOLIDATION_2026-09-16.md |
