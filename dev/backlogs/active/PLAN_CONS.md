@@ -4,7 +4,10 @@
 `main`, чисто дърво, `origin/main...main` = `0 13` (dev commits вкл. D25 поправката 3334100 — возят се с push-а на 0.2.7);
 `v0.2.6` @ `82f702b`; манифест последен `0010` → 0.2.6; fixture `0011_example-bump`.
 PLAN_HARD замразен (HARD-011 → 0.2.9). Дефиниции, реферирани по име от тикетите:
-- **VERIFY** = осемте команди от `aiwf.config.json verify.commands`, една наведнъж, точни кодове:
+- **VERIFY** = осемте команди от `aiwf.config.json verify.commands`, точни кодове. **[SUPERSEDED
+  2026-09-17, операторска дума: „една наведнъж" отпада — всичките ОСЕМ ПАРАЛЕЛНО** (Start-Process
+  с редиректнати логове ИЗВЪН repo-то, реалните exit кодове от Process обектите; RAM е грижа на
+  оператора). Измерено: 10.4 мин чист тест; 589.1 s / 545.3 s живите batch-ове на CONS-001.]
   `node scripts/update/validate-payload.mjs --plugin-root .`; `node scripts/setup/test-setup.mjs`;
   `node scripts/update/test-update.mjs`; `node scripts/ci/run-example-cycle.mjs`;
   `node scripts/ci/run-example-cycle.mjs --answers examples/example-project/answers-linux.json`;
@@ -16,6 +19,18 @@ PLAN_HARD замразен (HARD-011 → 0.2.9). Дефиниции, рефер�
 - **INTERLOCK** = `node scripts/update/aiwf-update.mjs --check --project-root .`.
 - **ANCHOR** = литералният `git rev-parse HEAD` в момента на диспач, вписан в брифа — единствената
   доктринно-санкционирана диспач-времева стойност в команди (§ Ticket brief contract).
+
+## Pre-dispatch checklist (всеки одиторски пас, до кацането на релсите в CONS-005/008; после
+се пенсионира по нормалния supersede път) — [операторска дума през мастър сесията, 2026-09-17;
+заменя отменената свидетелска стража]
+
+- D21 evidence pack + ИЗРИЧНОТО изречение, даващо на одитора ПРАВО И ДЪЛГ да проверява дървото
+  отвъд пакета (пакетът е селекция на одитираната страна).
+- D13 chain редовете на тикета, обновени към ИМПЛЕМЕНТИРАНАТА file:line реалност.
+- D23 previous-blockers блок само от pass 2 нататък (дословният списък; на pass 1 отсъства).
+- Class / risk threshold / stop condition дословно от тикета; `Class:` на свой ред.
+- Session id уловен от plain header-а на студения рън (ръчно до CONS-003).
+- Брояч старт двойка ОТ оператора ПРЕДИ диспача; stats ред на таблото след вердикта.
 
 ## Решения (COO, финални)
 
@@ -209,6 +224,28 @@ self-initiated dispatch" -- migrations` → ≥1 (P-D6 в op текста); `git
 Risk threshold: блокира bookkeeping/managed/RESOLVABLE за таблото; op за таблото; семантична
 промяна на 4-те op-а; containment пробив; VERIFY≠0. Stop: acceptance зелен.
 Review: Class code, pack + fact-check преди. Assignee: Колега.
+
+**ЗАПИС ЗА ИЗПЪЛНЕНИЕ (затворен 2026-09-17): commit `f21b2b0`** (родител = ANCHOR `10c370a`),
+21 файла, 889+/19− (`git diff --cached --shortstat` преди commit-а). Изпълнено по договора —
+всичките 9 обхватни точки; acceptance зелен изцяло. Одитният цикъл: pass 1 студен **fail**
+(2 P1, и двата от собствените проби на одитора — колизия с setup-owned дестинации; лексикален
+containment), корекционен рунд 1, resume верификация **fail** (блокер 1 остава — йерархични
+колизии), корекционен рунд 2 (капът), resume верификация 2 **pass** (нула находки; одиторът с
+собствени проби потвърди петте конфликтни случая блокират с нула действия). Материални решения
+отвъд плана, наложени от одита: destination guard с ТРИ клона (exact / таблото-предшественик /
+таблото-в-owned-файл), слизане в owned ДИРЕКТОРИЯ нарочно позволено (default-ът живее в
+plansDir); `canonicalPath()` през най-близкия съществуващ предшественик (сродство с
+run-example-cycle.mjs:178-191); `samePath` case-fold само win32; `..`-префиксът segment-aware.
+Проверка: VERIFY 8/8 exit 0 — ПАРАЛЕЛЕН batch (финален wall 545.3 s; команди от
+`verify.commands`); setup-suite 356→446 checks, update-suite 518, selfcheck 1044/1044;
+негативните грепове exit 1/празно през spawn-and-read-status (харнесът не показва код при
+празен изход). Fact-check преди pass 1: NO FALSE CLAIMS; двата делта fact-check-а хванаха
+дрейфнали line цитати в handback-ите (кодът верен; коригирани преди платените пасове).
+Остатъчен дълг → кандидат на таблото, без ref: junction дупката в заварения лексикален
+containment за scratchDir/plansDir/overridesDoc — нарочно неландната (би отказала работещи
+инсталации); таблото е защитено през canonical проверката на резолвнатия път (доказано от
+junctioned-plansDir тестовото лице). Статистика: трите паса в Pass statistics на таблото;
+Codex сесията `01a0ae26-bdc3-7700-ae7c-20b9ba0f14e3` остава resume-ваема.
 
 ### CONS-002 [R2 code] — HARD-013 (D24)
 
