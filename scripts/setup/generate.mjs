@@ -803,6 +803,74 @@ function regionOf(rendered) {
 }
 
 /**
+ * CANONICAL PATH - the nearest EXISTING ancestor resolved to its real location, with the segments
+ * that do not exist yet re-joined onto it.
+ *
+ * A lexical containment test ("does this string stay under the project root") is not enough, and a
+ * junction is why: `<project>/notes` can be a junction whose target is outside the project, and
+ * `<project>/notes/CANDIDATES.md` then reads as contained while the write lands somewhere else
+ * entirely. `fs.realpathSync` alone cannot answer it either - the file does not exist yet, which is
+ * the whole point of seeding it - so the walk climbs until something really is on disk.
+ *
+ * Same technique and same reason as the work-directory guard in scripts/ci/run-example-cycle.mjs.
+ */
+function canonicalPath(p) {
+  let cursor = path.resolve(p);
+  const tail = [];
+  for (;;) {
+    try {
+      return path.join(fs.realpathSync.native(cursor), ...tail);
+    } catch {
+      const parent = path.dirname(cursor);
+      if (parent === cursor) return path.join(cursor, ...tail); // reached the root: nothing exists
+      tail.unshift(path.basename(cursor));
+      cursor = parent;
+    }
+  }
+}
+
+/**
+ * STRICT descendant: equal paths are NOT inside. That is deliberate - it is what makes "the surface
+ * may not BE the project root" fall out of the containment test instead of needing its own branch.
+ *
+ * The climb-out test is SEGMENT-AWARE, not a prefix match. `rel.startsWith('..')` also rejects
+ * perfectly ordinary in-project names that merely begin with two dots - `..notes/file.md` relativizes
+ * to `..notes\file.md` - and refusing those would be a false positive in a guard whose whole value is
+ * that a refusal means something.
+ */
+function isInsideDir(parent, child) {
+  const rel = path.relative(parent, child);
+  if (rel === '' || path.isAbsolute(rel)) return false;
+  return rel !== '..' && !rel.startsWith('..' + path.sep);
+}
+
+/**
+ * Path equality as THIS filesystem means it. `realpathSync.native` already returns the on-disk
+ * casing for the parts that exist, so the only way two spellings of one destination can differ is in
+ * a tail that does not exist yet - which is exactly the fresh-install case the collision guard below
+ * is for. On win32 that tail is still the same file, so it is compared case-insensitively there.
+ */
+const samePath = (a, b) => (process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b);
+
+/**
+ * THE TRANSFER SURFACE'S PATH, in one place because the resolution is a RULE rather than a value.
+ * `paths.transferSurface` has no schema default on purpose - a default would put the key into every
+ * fresh config and invite the managed-artifact treatment this file must never get - so "where is it"
+ * is answered here and quoted by the doctrine in the same words: the configured
+ * `paths.transferSurface`, or `<plansDir>/PNP_CANDIDATES.md` when absent.
+ *
+ * Returns a project-relative POSIX path. The caller supplies the whole `paths` block, so a config
+ * that carries neither key resolves against the schema's own plansDir default having already been
+ * merged in - this function does not invent one.
+ */
+export const TRANSFER_SURFACE_BASENAME = 'PNP_CANDIDATES.md';
+export function resolveTransferSurface(paths) {
+  const configured = paths && paths.transferSurface;
+  if (typeof configured === 'string' && configured.trim() !== '') return toPosix(configured);
+  return toPosix(path.join(String((paths && paths.plansDir) || ''), TRANSFER_SURFACE_BASENAME));
+}
+
+/**
  * THE TWO WARNINGS SETUP OWES A PROJECT THAT WAS NOT EMPTY, in one place because two spellings of
  * the same sentence would eventually disagree - and the interview and the generator each say them
  * on their own path (the interview at the question, the generator in its plan/report).
@@ -921,10 +989,119 @@ export function planInstall({
   // Configured paths are PROJECT-RELATIVE by contract. An absolute path, or one that climbs out of
   // the project, would make this engine write outside the repository it was pointed at - checked
   // here rather than trusted, because the check is one line and the failure is not recoverable.
-  for (const key of ['scratchDir', 'plansDir', 'overridesDoc']) {
+  // `transferSurface` is OPTIONAL (no schema default), so it is checked only when the project really
+  // configured one - but it is checked on exactly the same terms as the required three, because a
+  // configured surface is a path this engine WRITES to, and "outside the project" would mean writing
+  // outside the repository it was pointed at.
+  for (const key of ['scratchDir', 'plansDir', 'overridesDoc', 'transferSurface']) {
     const value = merged.paths[key];
+    if (typeof value !== 'string' || value === '') continue; // absent optional key: nothing configured, nothing to contain
     const outside = path.isAbsolute(value) || path.relative(projectRoot, path.resolve(projectRoot, value)).split(/[\\/]/)[0] === '..';
     if (outside) blockers.push(`paths.${key} ("${value}") is not inside the project - configured paths are project-relative.`);
+  }
+
+  // THE TRANSFER SURFACE'S DESTINATION, judged HERE - before a single write is planned, and always,
+  // whether the path was configured or defaulted. Three ways the seed can go wrong, and all three end
+  // in a REFUSAL rather than an adoption: the surface is UNMANAGED, so there is no bookkeeping entry
+  // to record a decision in, and "write it anyway and remember what we did" - the answer available to
+  // every managed artifact - does not exist for this file.
+  //   (a) IT LEAVES THE PROJECT through a symlink or junction on one of its parents. The lexical loop
+  //       above cannot see that: the string is project-relative and the write still lands outside.
+  //   (b) IT COLLIDES with a destination setup owns exclusively. Measured, not theorised: a probe
+  //       pointing the surface at `.claude/agents/writer.md` produced no blockers, planned BOTH the
+  //       managed render and the surface write, and recorded that file in `managedRegions` - the one
+  //       thing that must never happen to it. Against the config or settings path the later write
+  //       simply wins and the promised page is never there at all.
+  //   (c) IT IS NOT A REGULAR FILE. An existing directory reads as "the surface already exists and is
+  //       yours", so setup reports the page as the operator's and never creates it.
+  const transferSurfaceRel = resolveTransferSurface(merged.paths);
+  const transferSurfaceFile = abs(transferSurfaceRel);
+  {
+    const configured = typeof merged.paths.transferSurface === 'string' && merged.paths.transferSurface.trim() !== '';
+    const where = configured
+      ? `paths.transferSurface ("${merged.paths.transferSurface}")`
+      : `the default transfer surface "${transferSurfaceRel}" (<plansDir>/${TRANSFER_SURFACE_BASENAME}, because paths.transferSurface is not set)`;
+    const realRoot = canonicalPath(projectRoot);
+    const realSurface = canonicalPath(transferSurfaceFile);
+    if (!isInsideDir(realRoot, realSurface)) {
+      blockers.push(
+        `${where} really resolves to "${toPosix(realSurface)}", which is not inside the project `
+        + `("${toPosix(realRoot)}") - a path can look project-relative and still leave the project `
+        + 'through a symlink or junction on one of its parent directories.',
+      );
+    } else {
+      // Every destination setup writes or creates on its own, each tagged with what it IS - because
+      // the conflict rules differ by kind (see below). The agent files are ALL reserved rather than
+      // only the ones this configuration renders: a codex-hosted role's agent file is a path setup
+      // still inspects and may delete.
+      const ownedDestinations = [
+        { rel: CONFIG_REL, kind: 'file', label: 'the pnp config' },
+        { rel: ROLES_REL, kind: 'file', label: 'the rendered roles.json' },
+        { rel: SETTINGS_REL, kind: 'file', label: 'the permission settings' },
+        { rel: 'CLAUDE.md', kind: 'file', label: 'the file carrying the managed region' },
+        { rel: merged.paths.overridesDoc, kind: 'file', label: 'the overrides document' },
+        { rel: path.join(AGENTS_DIR, 'writer.md'), kind: 'file', label: 'the Writer agent' },
+        { rel: path.join(AGENTS_DIR, 'reviewer.md'), kind: 'file', label: 'the Reviewer agent' },
+        { rel: path.join(AGENTS_DIR, 'qa.md'), kind: 'file', label: 'the QA agent' },
+        { rel: merged.paths.scratchDir, kind: 'dir', label: 'the scratch directory' },
+        { rel: path.join(merged.paths.plansDir, 'active'), kind: 'dir', label: 'the active plans directory' },
+        { rel: path.join(merged.paths.plansDir, 'archive'), kind: 'dir', label: 'the plan archive' },
+        { rel: path.dirname(CONFIG_REL), kind: 'dir', label: 'the directory the pnp config lives in' },
+        { rel: AGENTS_DIR, kind: 'dir', label: 'the agents directory' },
+        { rel: path.dirname(merged.paths.overridesDoc), kind: 'dir', label: 'the directory the overrides document lives in' },
+      ];
+      // THREE conflicts, not one. Exact equality alone let a whole class through, because a filesystem
+      // has a hierarchy: `docs/backlogs` is not EQUAL to `docs/backlogs/active`, and pointing the
+      // surface at it still cannot work. `applyPlan` creates directories before it writes files, so
+      // the run got as far as a partial installation and then died on EISDIR - a half-installed
+      // project is a worse outcome than a refusal, which is why all three are judged here.
+      //
+      // Descending INTO an owned directory is deliberately NOT one of them: the default surface lives
+      // inside `<plansDir>`, and a page beside the agents is the operator's business.
+      for (const { rel, kind, label } of ownedDestinations) {
+        // `path.dirname` of a root-level file is ".", which canonicalizes to the project root itself.
+        // Reserving that would refuse every surface anywhere in the repository.
+        if (typeof rel !== 'string' || rel === '' || rel === '.') continue;
+        const owned = canonicalPath(abs(rel));
+        const what = `${label} ("${toPosix(rel)}")`;
+        if (samePath(owned, realSurface)) {
+          blockers.push(
+            `${where} is the same destination setup writes as ${what}. The transfer surface is seeded `
+            + 'once and then never touched again, so it cannot share a path with an artifact this '
+            + 'engine keeps up to date - one of the two writes would silently lose. Pick another '
+            + 'paths.transferSurface.',
+          );
+        } else if (isInsideDir(realSurface, owned)) {
+          // The surface is an ANCESTOR of something setup must create beneath it. The surface is a
+          // FILE; a file cannot contain anything.
+          blockers.push(
+            `${where} is a directory setup has to create things inside - ${what} sits beneath it. The `
+            + 'transfer surface is a single file, so it cannot also be the folder holding an artifact '
+            + 'this engine writes. Pick another paths.transferSurface.',
+          );
+        } else if (kind === 'file' && isInsideDir(owned, realSurface)) {
+          // The inverse: the surface is BENEATH an owned file, which would require that file to be a
+          // directory. It is not, and setup is about to write it as a file.
+          blockers.push(
+            `${where} is placed INSIDE ${what}, which setup writes as a file - holding the surface `
+            + `would require "${toPosix(rel)}" to be a directory instead. Pick another `
+            + 'paths.transferSurface.',
+          );
+        }
+      }
+      // `statSync` FOLLOWS, on purpose: a symlink to a regular file inside the project is the
+      // operator's own arrangement and is left alone like any other existing surface, while a symlink
+      // that leaves the project was already refused by the containment test above.
+      let surfaceStat = null;
+      try { surfaceStat = fs.statSync(transferSurfaceFile); } catch { surfaceStat = null; }
+      if (surfaceStat && !surfaceStat.isFile()) {
+        blockers.push(
+          `${where} already exists and is not a regular file (found a ${surfaceStat.isDirectory() ? 'directory' : 'special file'}). `
+          + 'Setup never rewrites an existing surface, so it would report this as your page and the '
+          + 'file the skeleton belongs in would never be created.',
+        );
+      }
+    }
   }
   if (blockers.length) return stopped();
 
@@ -1180,6 +1357,28 @@ export function planInstall({
     actions.push({
       kind: 'write', file: overridesFile, rel: overridesRel, why: 'seeded once; never rewritten',
       content: renderTemplate(readTemplate(pluginRoot, 'PROJECT_OVERRIDES.md.tmpl'), context),
+    });
+  }
+
+  // ---- 5b. the transfer surface: written ONCE, and never bookkept ----------
+  // The same one-time mechanism as the overrides document above, and deliberately NOTHING else: no
+  // `addArtifact`, so no managed-region record, no resolvable address, and no migration operation may
+  // ever address it. That is the whole design - the surface is where the operator collects
+  // candidates, rulings, pass statistics and events, and an update that could re-render it would be
+  // an update rewriting the operator's own notes. Absent -> seed the skeleton; present -> leave it
+  // exactly as it is, byte for byte.
+  //
+  // `transferSurfaceRel` / `transferSurfaceFile` were resolved and JUDGED in step 1 - containment
+  // through the real filesystem, no collision with a destination setup owns, and not an existing
+  // non-file. Anything that reaches here has already survived all three, so `existsSync` below can
+  // only be answering about a regular file.
+  if (fs.existsSync(transferSurfaceFile)) {
+    notes.push(`${transferSurfaceRel} already exists and is yours - setup never rewrites the transfer surface.`);
+  } else {
+    actions.push({
+      kind: 'write', file: transferSurfaceFile, rel: transferSurfaceRel,
+      why: 'transfer surface seeded once; unmanaged, never rewritten',
+      content: renderTemplate(readTemplate(pluginRoot, 'PNP_CANDIDATES.md.tmpl'), context),
     });
   }
 

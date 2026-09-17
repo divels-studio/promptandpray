@@ -137,8 +137,13 @@ export const OP_SPECS = {
     types: { ruleset: 'string' },
   },
   note: {
+    // `supersedes` is a list of ids this release's note RETIRES - rules, seeds or notes an
+    // installation may still be carrying from an earlier version. The ids are generic by contract
+    // (a consumer maps them onto whatever it calls those records locally), the field is optional
+    // because most releases retire nothing, and it applies NOTHING: like the rest of a note, it is
+    // text in the CHANGES report telling the operator what to go and remove.
     required: ['op', 'id', 'text', 'docRefs'],
-    optional: [],
+    optional: ['supersedes'],
     conditional: () => [],
     types: { id: 'string', text: 'string' },
   },
@@ -364,6 +369,13 @@ export function validateOp(op, at, pluginRoot) {
     if (has(op, 'docRefs')) {
       if (!Array.isArray(op.docRefs)) errors.push(`${at} (note) "docRefs" must be an array (an empty one is fine).`);
       else if (op.docRefs.some((r) => typeof r !== 'string' || r.trim() === '')) errors.push(`${at} (note) every docRefs entry must be a non-empty string.`);
+    }
+    // Same shape rule as docRefs above, and for the same reason: a `supersedes` that is a bare string
+    // would be iterated character by character into the report, and an empty entry names nothing an
+    // operator can act on.
+    if (has(op, 'supersedes')) {
+      if (!Array.isArray(op.supersedes)) errors.push(`${at} (note) "supersedes" must be an array (omit it when the release retires nothing).`);
+      else if (op.supersedes.some((r) => typeof r !== 'string' || r.trim() === '')) errors.push(`${at} (note) every supersedes entry must be a non-empty string.`);
     }
     if (has(op, 'id') && typeof op.id === 'string' && op.id.trim() === '') errors.push(`${at} (note) "id" must not be empty.`);
   }

@@ -616,6 +616,40 @@ Do not update Markdown for assignee changes, review rounds, or other live events
 relevant ticket section once after that ticket is accepted, then update the Mission closeout once
 and archive the PLAN.
 
+### The transfer surface
+
+Beside the plans an installation keeps one operator-owned page, the **transfer surface**, at the
+configured `paths.transferSurface` - or at `<plansDir>/PNP_CANDIDATES.md` when that key is absent;
+`/pnp:setup` seeds it once from `templates/PNP_CANDIDATES.md.tmpl` and never writes it again, and an
+installation older than the key creates it by hand from exactly this skeleton:
+
+```markdown
+# Transfer surface
+
+Seeded once and then yours. Nothing in the plugin records this file, hashes it, or rewrites it: it
+carries no bookkeeping entry, no resolvable address and no migration operation, so an update can
+never touch what you put here. Append to it; do not expect anything to prune it for you.
+
+Four sections, and each row is one line with a pointer rather than a retelling:
+
+- **Candidates** - work that is only proposed. A candidate carries a title and nothing else; it
+  earns its `<ABBR>-<NNN>` at the moment it is written into a plan, and not before.
+- **Ruling ledger** - one row per ruling that settled a conflict: what was ruled, and where the
+  decision landed.
+- **Pass statistics** - one row per auditor pass: which pass it was, the start/stop pair the
+  operator read off the host, and what the pass cost.
+- **Event ledger** - one row per rule-class event: a violation, a catch, or an operator correction,
+  each with the pointer that lets a later reader check it.
+
+## Candidates
+
+## Ruling ledger
+
+## Pass statistics
+
+## Event ledger
+```
+
 ## Routes
 
 ### R1 - routine

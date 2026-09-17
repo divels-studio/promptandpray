@@ -3841,6 +3841,30 @@ function projectLayerFindings(projectRoot, pluginRoot, opts) {
   add('scratch-is-aiwf', 'paths.scratchDir is ".aiwf" (the route-state guard resolves that path literally in v0.1)',
     paths.scratchDir === '.aiwf', String(paths.scratchDir));
 
+  // --- the transfer surface is OUTSIDE the managed set ------------------------------------------
+  // Setup seeds it ONCE and then it is the operator's: no bookkeeping record, no `--resolve` address,
+  // no migration operation - ever. A record here is not a cosmetic surplus; it is what would let the
+  // next `/pnp:update` re-render the page the operator collects candidates, rulings, pass statistics
+  // and events on. Deliberately NOT an existence check: the file is optional, and an installation
+  // older than the key legitimately has none.
+  // BOTH spellings are refused rather than only the resolved one - the configured path and the
+  // `<plansDir>/PNP_CANDIDATES.md` default - because a config that gains or loses the key must not be
+  // able to move a managed record out of sight.
+  {
+    const surfaceKeys = new Set();
+    if (typeof paths.transferSurface === 'string' && paths.transferSurface.trim() !== '') {
+      surfaceKeys.add(paths.transferSurface.split('\\').join('/'));
+    }
+    if (typeof paths.plansDir === 'string' && paths.plansDir.trim() !== '') {
+      surfaceKeys.add(`${paths.plansDir.split('\\').join('/').replace(/\/+$/, '')}/PNP_CANDIDATES.md`);
+    }
+    const recorded = isPlainObject(bk.managedRegions) ? Object.keys(bk.managedRegions) : [];
+    const managed = recorded.filter((k) => surfaceKeys.has(k.split('#')[0]));
+    add('transfer-surface-unmanaged', 'the transfer surface carries NO bookkeeping record (it is seeded once and then the operator\'s)',
+      managed.length === 0,
+      managed.length ? `recorded as managed: ${JSON.stringify(managed)}` : `${[...surfaceKeys].join(', ') || 'no path resolvable'} - unmanaged`);
+  }
+
   // --- the config satisfies the shipped schema --------------------------------------------------
   // Run at the validator's real CLI entrypoint (the same one setup uses), against the payload schema
   // - so an installation cannot carry a config shape the generator would refuse to produce.
@@ -6584,6 +6608,17 @@ const NEGATIVE_CONTROLS = [
   { id: 'managed-regions-cover', label: 'a managed artifact with no bookkeeping entry at all',
     apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
       delete c._aiwf.managedRegions['.claude/agents/writer.md'];
+    }) },
+  // BOTH arms of the transfer-surface rule, because the check reads two spellings and a control for
+  // one of them would leave the other able to pass while recording nothing.
+  { id: 'transfer-surface-unmanaged', label: 'a managedRegions record for the transfer surface at the DEFAULT path',
+    apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
+      c._aiwf.managedRegions[`${c.paths.plansDir}/PNP_CANDIDATES.md`] = { upstream: '0'.repeat(64), local: '0'.repeat(64), override: false };
+    }) },
+  { id: 'transfer-surface-unmanaged', label: 'a managedRegions record for a CONFIGURED transfer surface',
+    apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
+      c.paths.transferSurface = 'docs/backlogs/OWN_SURFACE.md';
+      c._aiwf.managedRegions['docs/backlogs/OWN_SURFACE.md'] = { upstream: '0'.repeat(64), local: '0'.repeat(64), override: false };
     }) },
   { id: 'config-schema-valid', label: 'a config that violates the schema (an OS channel that does not exist)',
     apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => { c.os = 'solaris'; }) },

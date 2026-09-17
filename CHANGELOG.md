@@ -4,6 +4,39 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.2.7] - 2026-09-17
+
+An installation gets one operator-owned page, and a release note gets a way to say what it retires.
+The transfer surface is where the four things that outlive a plan are collected - work that is only
+proposed, the ruling that settled a conflict, what an auditor pass cost, and a rule-class event
+worth a pointer - and its whole design is what does NOT happen to it: seeded once by `/pnp:setup`,
+then no bookkeeping record, no resolvable address and no migration operation, ever. The self-check
+holds that boundary with a control that injects a record for it and is required to fail. Beside it,
+a `note` operation may now declare `supersedes`, so a release can name the ids it retires and the
+`CHANGES` report prints them under the note that explains why - applying nothing, because a note
+never writes a file of the operator's.
+
+### Added
+
+- **The transfer surface, seeded once and never managed (CONS-001)** - `/pnp:setup` writes the
+  four-section skeleton (Candidates, Ruling ledger, Pass statistics, Event ledger) from
+  `templates/PNP_CANDIDATES.md.tmpl` at the configured `paths.transferSurface`, or at
+  `<plansDir>/PNP_CANDIDATES.md` when that optional key is absent. A file already at that path is
+  left byte for byte as it is. The key has no schema default on purpose: a default would put it into
+  every fresh config and invite the managed-artifact treatment this file must never get. Setup reads
+  the key for the seed location and validates it stays inside the project root; the update engine and
+  the hooks never read it. An installation older than the key creates the file by hand from the
+  skeleton written out verbatim in `docs/WORKFLOW.md`.
+- **`supersedes` on a `note` operation (CONS-001)** - an optional array of non-empty strings, checked
+  on the same terms as `docRefs`, printed in `CHANGES_<from>-to-<to>.md` as one `Supersedes: <id>`
+  line under its note. It is a fifth FIELD on one operation, not a fifth operation type, and it
+  applies nothing.
+- **The word-gate line travels in the note text (CONS-001)** - a migration whose release introduces a
+  word-gate carries "If this release introduces a word-gate: check your local rules for
+  self-initiated dispatch or remediation - a rule written before this gate may contradict it."
+  verbatim in its note, because the note text is the only thing that reaches the operator's `CHANGES`
+  report. The convention is written down in `migrations/README.md`.
+
 ## [0.2.6] - 2026-09-15
 
 The audit table stops reading like a list of settings and starts reading like what it is. The one

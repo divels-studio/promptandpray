@@ -346,6 +346,12 @@
           "minLength": 1,
           "default": "docs/ai/PROJECT_OVERRIDES.md",
           "description": "Project-relative path of the overrides document: this project's identity and hard rules. Every role reads it before starting work."
+        },
+        "transferSurface": {
+          "type": "string",
+          "minLength": 1,
+          "$comment": "DELIBERATELY WITHOUT A `default`: the file is seeded ONCE and then belongs to the operator, so it carries no bookkeeping record, no RESOLVABLE address and no migration operation - ever. A schema default would put the key into every fresh config and invite exactly the managed-artifact treatment the surface must never get. Resolution is therefore a rule, not a value: read the key when it is there, fall back when it is not.",
+          "description": "Project-relative path of the transfer surface - the operator-owned page where candidates, rulings, pass statistics and the event ledger are collected. Resolution rule: the configured paths.transferSurface, or <plansDir>/PNP_CANDIDATES.md when absent. Setup seeds the skeleton there once and never rewrites it; an installation that predates the key creates it by hand from the skeleton in docs/WORKFLOW.md."
         }
       }
     },

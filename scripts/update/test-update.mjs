@@ -904,6 +904,11 @@ section('7 - a malformed payload blocks the runner AND a fresh setup, with zero 
     ['the last entry not matching the payload version', (dir) => { const m = readJson(at(dir, 'migrations/index.json')); m[1].targetPluginVersion = '0.1.5'; writeJson(at(dir, 'migrations/index.json'), m); patchOps(dir, '0002_fixture', (o) => { o.targetPluginVersion = '0.1.5'; }); }],
     ['an unknown op type', (dir) => patchOps(dir, '0002_fixture', (o) => { o.operations = [{ op: 'delete-everything', file: 'x' }]; })],
     ['an unknown op FIELD', (dir) => patchOps(dir, '0002_fixture', (o) => { o.operations = [{ ...FIXTURE_NOTE, extra: true }]; })],
+    // `supersedes` is a LIST of ids. A bare string is legal JSON and would be printed into the
+    // CHANGES report one character per line, which is exactly the kind of defect that only shows up
+    // on the consumer's screen - so the validator refuses the shape rather than the rendering.
+    ['a supersedes that is not an array', (dir) => patchOps(dir, '0002_fixture', (o) => { o.operations = [{ ...FIXTURE_NOTE, supersedes: 'one-id' }]; })],
+    ['a supersedes entry that is an empty string', (dir) => patchOps(dir, '0002_fixture', (o) => { o.operations = [{ ...FIXTURE_NOTE, supersedes: ['fine', '  '] }]; })],
     ['an orphan migration directory', (dir) => { fs.mkdirSync(at(dir, 'migrations/0009_orphan'), { recursive: true }); writeJson(at(dir, 'migrations/0009_orphan/ops.json'), { migration: '0009_orphan', targetPluginVersion: '0.9.0', operations: [] }); fs.writeFileSync(at(dir, 'migrations/0009_orphan/NOTES.md'), '# orphan\n'); }],
     ['a file path that escapes the project', (dir) => patchOps(dir, '0002_fixture', (o) => { o.operations = [{ op: 'rerender-managed-region', file: '../outside.md', region: null, template: 'templates/roles.json.tmpl' }]; })],
     ['an absolute file path', (dir) => patchOps(dir, '0002_fixture', (o) => { o.operations = [{ op: 'rerender-managed-region', file: 'C:/Windows/system.ini', region: null, template: 'templates/roles.json.tmpl' }]; })],
@@ -1896,6 +1901,90 @@ section('13 - the audit table migration: three silent config keys, two quiet re-
       roles.review.code.passes === 1 && roles.review.docs.passes === 1, JSON.stringify(roles.review));
     check('with the bookkeeping clean again',
       bookkeeping(p).managedRegions['.claude/aiwf-native/roles.json'].override === false);
+  }
+}
+
+// ---------------------------------------------------------------------------
+section('14 - supersedes: the ids a release retires reach the CHANGES report, and the word-gate line with them');
+{
+  // The REAL note operation of the shipped 0011, replayed as a fixture migration - the same move
+  // section 13 makes with 0004, and for the same reason: a suite that restated the note would be
+  // asserting its own copy. The word-gate sentence below is the authority's wording; this file is
+  // where the SHIPPED text is held to it.
+  const WORD_GATE_LINE = 'If this release introduces a word-gate: check your local rules for '
+    + 'self-initiated dispatch or remediation - a rule written before this gate may contradict it.';
+  const RETIRED = [
+    'orchestrator-regulation-v2-seed',
+    'local-multisession-invariant',
+    'local-resume-economics',
+    'local-chain-trace-duty',
+    'local-stats-methodology',
+  ];
+  const shipped = readJson(path.join(PLUGIN_ROOT, 'migrations', '0011_transfer-surface', 'ops.json'));
+  const shippedNote = shipped && (shipped.operations || []).find((o) => o.op === 'note');
+  check('the shipped 0011 is readable and carries a note operation', !!shippedNote,
+    shipped ? `${(shipped.operations || []).length} ops` : 'unreadable');
+  check('and that note declares exactly the five generic ids this release retires',
+    !!shippedNote && Array.isArray(shippedNote.supersedes)
+    && JSON.stringify(shippedNote.supersedes) === JSON.stringify(RETIRED),
+    JSON.stringify(shippedNote && shippedNote.supersedes));
+  // The line is asserted on the SHIPPED op here and on the GENERATED file below. Both are needed:
+  // this one catches a payload that never carried it, the one below catches an assembler that
+  // carries it nowhere.
+  check('and its text carries the word-gate line verbatim',
+    !!shippedNote && typeof shippedNote.text === 'string' && shippedNote.text.includes(WORD_GATE_LINE),
+    shippedNote ? `${String(shippedNote.text).length} chars` : 'no note');
+
+  if (shippedNote) {
+    // --- declared: every id is printed, under its own note ------------------
+    const withIds = makePayload('supersedes-yes', {
+      version: '0.2.0', migrations: [{ id: '0002_supersedes', version: '0.2.0', ops: [shippedNote] }],
+    });
+    const p = project('supersedes-yes');
+    check('install exits 0', install(p).status === 0);
+    const artifactsBefore = Object.keys(bookkeeping(p).managedRegions).sort().join(',');
+    const a = update(p, ['--apply'], { payload: withIds });
+    check('--apply of a note-only migration exits 0', a.status === 0, why(a));
+    const changes = read(at(p, 'CHANGES_0.1.0-to-0.2.0.md')) || '';
+    check('the CHANGES report was written', changes.length > 0);
+    const missing = RETIRED.filter((id) => !changes.includes(`  - Supersedes: ${id}`));
+    check('it prints one "Supersedes: <id>" line per declared id, indented under the note',
+      missing.length === 0, missing.length ? `missing ${JSON.stringify(missing)}` : `${RETIRED.length} ids`);
+    check('the lines sit under the note that carries them, in the "Review these sections" block',
+      changes.indexOf('## Review these sections') !== -1
+      && changes.indexOf('## Review these sections') < changes.indexOf('Supersedes: ' + RETIRED[0])
+      && changes.indexOf(shippedNote.id) < changes.indexOf('Supersedes: ' + RETIRED[0]),
+      `block@${changes.indexOf('## Review these sections')} note@${changes.indexOf(shippedNote.id)} first-id@${changes.indexOf('Supersedes: ' + RETIRED[0])}`);
+    // The word-gate line, asserted against the file the engine really generated - not against the
+    // op it was assembled from. This is the only surface a consumer reads it on.
+    check('and the GENERATED report carries the word-gate line verbatim',
+      changes.includes(WORD_GATE_LINE),
+      changes.split('\n').filter((l) => l.includes('word-gate')).join(' | ').slice(0, 160) || 'not present');
+    check('the note applied nothing: the managed set is untouched, only the version stamps moved',
+      Object.keys(bookkeeping(p).managedRegions).sort().join(',') === artifactsBefore
+      && bookkeeping(p).installedPluginVersion === '0.2.0',
+      `${Object.keys(bookkeeping(p).managedRegions).sort().join(',')} / ${bookkeeping(p).installedPluginVersion}`);
+
+    // --- NOT declared: the flip. The same note without the field prints no line at all ----------
+    const bare = { ...shippedNote };
+    delete bare.supersedes;
+    const withoutIds = makePayload('supersedes-no', {
+      version: '0.2.0', migrations: [{ id: '0002_supersedes', version: '0.2.0', ops: [bare] }],
+    });
+    const p2 = project('supersedes-no');
+    check('install exits 0 (flip side)', install(p2).status === 0);
+    const a2 = update(p2, ['--apply'], { payload: withoutIds });
+    check('--apply exits 0 without the field', a2.status === 0, why(a2));
+    const changes2 = read(at(p2, 'CHANGES_0.1.0-to-0.2.0.md')) || '';
+    check('the same note without supersedes still reaches the report', changes2.includes(bare.id));
+    // The LINE form, not the substring: the note's own text explains what a `Supersedes:` line is,
+    // so a bare `includes` would match the prose that describes the feature and this flip would fail
+    // for the one reason that proves nothing.
+    const supersedesLines = (text) => text.split('\n').filter((l) => /^\s*- Supersedes: /.test(l));
+    check('and prints NO Supersedes line at all (the field is optional, not defaulted)',
+      supersedesLines(changes2).length === 0, supersedesLines(changes2).join(' | ').slice(0, 160) || 'none');
+    check('the control on that predicate: the declared run DID produce exactly five such lines',
+      supersedesLines(changes).length === RETIRED.length, `${supersedesLines(changes).length} lines`);
   }
 }
 

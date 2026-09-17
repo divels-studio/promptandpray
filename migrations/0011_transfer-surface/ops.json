@@ -1,0 +1,19 @@
+{
+  "migration": "0011_transfer-surface",
+  "targetPluginVersion": "0.2.7",
+  "operations": [
+    {
+      "op": "note",
+      "id": "transfer-surface-and-superseded-rules",
+      "text": "0.2.7 gives an installation one operator-owned page and gives a release note a way to say what it retires. THE TRANSFER SURFACE: a fresh install now seeds a skeleton at the configured `paths.transferSurface`, or at `<plansDir>/PNP_CANDIDATES.md` when that optional key is absent - four sections (Candidates, Ruling ledger, Pass statistics, Event ledger) for the work that is only proposed, the rulings that settled a conflict, what each auditor pass cost, and the rule-class events worth a pointer. It is seeded ONCE and then it is yours: no bookkeeping entry, no resolvable address, and no migration operation may ever address it, which is why this migration does not create it on your project. If you are updating rather than installing fresh, create it by hand - the skeleton is written out verbatim in `docs/WORKFLOW.md` under the transfer-surface heading, and setting `paths.transferSurface` in your `aiwf.config.json` is optional (without it the doctrine and the skills read the default path above). Nothing reads the key in the update engine or in the hooks, so adding it changes no behaviour you already have. SUPERSEDED IDS: a `note` operation may now carry an optional `supersedes` list, and the CHANGES report prints each entry as a `Supersedes: <id>` line under the note that retires it. It applies nothing - a note never writes a file of yours - so the ids are a list to read and act on, in whatever your own installation calls those records. This release retires five: `orchestrator-regulation-v2-seed`, `local-multisession-invariant`, `local-resume-economics`, `local-chain-trace-duty` and `local-stats-methodology`. If this release introduces a word-gate: check your local rules for self-initiated dispatch or remediation - a rule written before this gate may contradict it.",
+      "docRefs": ["CHANGELOG.md", "docs/WORKFLOW.md", "migrations/README.md"],
+      "supersedes": [
+        "orchestrator-regulation-v2-seed",
+        "local-multisession-invariant",
+        "local-resume-economics",
+        "local-chain-trace-duty",
+        "local-stats-methodology"
+      ]
+    }
+  ]
+}

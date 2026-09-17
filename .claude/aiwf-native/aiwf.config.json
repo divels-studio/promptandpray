@@ -1,8 +1,8 @@
 {
   "$schema": "D:/promptandpray/schema/aiwf.config.schema.json",
   "_aiwf": {
-    "installedPluginVersion": "0.2.6",
-    "lastMigrationApplied": "0010_plan-prefix-legibility",
+    "installedPluginVersion": "0.2.7",
+    "lastMigrationApplied": "0011_transfer-surface",
     "migrationJournal": null,
     "managedRegions": {
       ".claude/aiwf-native/roles.json": {
@@ -232,7 +232,8 @@
   "paths": {
     "scratchDir": ".aiwf",
     "plansDir": "dev/backlogs",
-    "overridesDoc": "dev/PROJECT_OVERRIDES.md"
+    "overridesDoc": "dev/PROJECT_OVERRIDES.md",
+    "transferSurface": "dev/backlogs/CANDIDATES.md"
   },
   "review": {
     "productBoundaryChecks": [

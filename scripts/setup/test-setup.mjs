@@ -1510,6 +1510,299 @@ section('23 - an entrypoint reached through a symlinked payload still recognizes
 }
 
 // ---------------------------------------------------------------------------
+section('24 - the transfer surface: seeded once at the resolved path, never managed, never rewritten');
+{
+  const SURFACE_TMPL = path.join(PLUGIN_ROOT, 'templates', 'PNP_CANDIDATES.md.tmpl');
+  const lf = (t) => String(t).replace(/\r\n/g, '\n');
+  const SKELETON = lf(read(SURFACE_TMPL) || '');
+  // A template that stopped existing would make every assertion below vacuous in the "seeded" half
+  // and trivially true in the "untouched" half.
+  check('the payload ships templates/PNP_CANDIDATES.md.tmpl', SKELETON.length > 0, SURFACE_TMPL);
+  check('and the skeleton carries all four sections', ['# Transfer surface', '## Candidates',
+    '## Ruling ledger', '## Pass statistics', '## Event ledger'].every((h) => SKELETON.includes(h)),
+  `${SKELETON.split('\n').length} lines`);
+
+  // --- the DEFAULT path: no transferSurface key at all ----------------------
+  {
+    const p = project('surface-default');
+    const r = install(p, baseAnswers());
+    check('install with no transferSurface key exits 0', r.status === 0, why(r));
+    const DEFAULT_REL = 'docs/backlogs/PNP_CANDIDATES.md';
+    check(`the surface was seeded at <plansDir>/PNP_CANDIDATES.md (${DEFAULT_REL})`, exists(at(p, DEFAULT_REL)));
+    check('with exactly the payload skeleton', lf(read(at(p, DEFAULT_REL))) === SKELETON,
+      `${String(lf(read(at(p, DEFAULT_REL)))).length} vs ${SKELETON.length} bytes`);
+    // THE RISK THRESHOLD OF THE TICKET THAT INTRODUCED IT, asserted on the setup side: a record here
+    // would make the file a managed artifact, and the next /pnp:update could re-render the
+    // operator's own notes.
+    const regions = ((readJson(at(p, CONFIG_REL)) || {})._aiwf || {}).managedRegions || {};
+    check('and NO bookkeeping record was written for it (it is unmanaged by design)',
+      !Object.prototype.hasOwnProperty.call(regions, DEFAULT_REL), Object.keys(regions).join(', '));
+    check('the config carries no transferSurface key either (nothing is defaulted into it)',
+      !Object.prototype.hasOwnProperty.call((readJson(at(p, CONFIG_REL)) || {}).paths || {}, 'transferSurface'),
+      JSON.stringify((readJson(at(p, CONFIG_REL)) || {}).paths));
+
+    // --- a repeated run is a ZERO diff ------------------------------------
+    const before = snapshot(p);
+    const again = install(p, baseAnswers());
+    check('a second install over the same project exits 0', again.status === 0, why(again));
+    check('and says the surface is already the operator\'s', again.out.includes(DEFAULT_REL)
+      && again.out.includes('never rewrites the transfer surface'),
+    again.out.split('\n').filter((l) => l.includes('PNP_CANDIDATES')).join(' | ').slice(0, 200));
+    check('the repeated run is a ZERO diff over the whole project', diffSnapshots(before, snapshot(p)).length === 0,
+      diffSnapshots(before, snapshot(p)).join(', '));
+  }
+
+  // --- a CONFIGURED path ----------------------------------------------------
+  {
+    const p = project('surface-configured');
+    const CONFIGURED_REL = 'dev/notes/SURFACE.md';
+    const r = install(p, baseAnswers({
+      paths: { scratchDir: '.aiwf', plansDir: 'docs/backlogs', overridesDoc: 'docs/ai/PROJECT_OVERRIDES.md', transferSurface: CONFIGURED_REL },
+    }));
+    check('install with a configured transferSurface exits 0', r.status === 0, why(r));
+    check(`the surface was seeded at the CONFIGURED path (${CONFIGURED_REL}), directory created`,
+      exists(at(p, CONFIGURED_REL)));
+    check('with exactly the payload skeleton', lf(read(at(p, CONFIGURED_REL))) === SKELETON);
+    check('and nothing was seeded at the default path instead',
+      !exists(at(p, 'docs/backlogs/PNP_CANDIDATES.md')));
+    check('the key survived into the written config', ((readJson(at(p, CONFIG_REL)) || {}).paths || {}).transferSurface === CONFIGURED_REL,
+      JSON.stringify((readJson(at(p, CONFIG_REL)) || {}).paths));
+  }
+
+  // --- an EXISTING file is left byte for byte -------------------------------
+  {
+    const p = project('surface-existing');
+    const MINE = '# My own candidates page\n\nNothing here came from the plugin.\n';
+    fs.mkdirSync(at(p, 'docs/backlogs'), { recursive: true });
+    fs.writeFileSync(at(p, 'docs/backlogs/PNP_CANDIDATES.md'), MINE, 'utf8');
+    const r = install(p, baseAnswers());
+    check('install over an existing surface exits 0', r.status === 0, why(r));
+    check('the operator\'s file is untouched, byte for byte',
+      read(at(p, 'docs/backlogs/PNP_CANDIDATES.md')) === MINE,
+      JSON.stringify(String(read(at(p, 'docs/backlogs/PNP_CANDIDATES.md'))).slice(0, 60)));
+    check('and the run SAYS so rather than adopting it in silence',
+      r.out.includes('never rewrites the transfer surface'),
+      r.out.split('\n').filter((l) => l.includes('PNP_CANDIDATES')).join(' | ').slice(0, 200));
+  }
+
+  // --- containment: a configured path that escapes the project --------------
+  // The same rule the required three paths have had since 0.1: a configured path this engine WRITES
+  // to must be inside the project, or setup is writing outside the repository it was pointed at.
+  // The absolute form is BUILT at run time from this machine's filesystem root, never written as a
+  // literal: a drive-letter path spelled out in a payload file is itself a provenance finding, and
+  // the self-check is right to say so.
+  const ABSOLUTE_OUTSIDE = path.join(path.parse(tmpRoot).root, 'pnp-not-a-project', 'CANDIDATES.md');
+  for (const [label, value] of [
+    ['a path that climbs out with ..', '../outside/CANDIDATES.md'],
+    ['an absolute path', ABSOLUTE_OUTSIDE.split(path.sep).join('/')],
+  ]) {
+    const p = project(`surface-outside-${label.replace(/[^a-z]+/gi, '-')}`);
+    const answers = baseAnswers({
+      paths: { scratchDir: '.aiwf', plansDir: 'docs/backlogs', overridesDoc: 'docs/ai/PROJECT_OVERRIDES.md', transferSurface: value },
+    });
+    const r = install(p, answers);
+    check(`setup REFUSES a transferSurface outside the project (${label}), exit 1`, r.status === 1, why(r, true));
+    check(`and names paths.transferSurface in the refusal (${label})`, r.out.includes('paths.transferSurface'),
+      r.out.trim().split('\n').slice(-3).join(' | ').slice(0, 200));
+    check(`and wrote NOTHING (${label})`, Object.keys(snapshot(p)).length === 0, Object.keys(snapshot(p)).join(', '));
+    // The OTHER entrypoint: a guard proven only through interview.mjs says nothing about the
+    // generator a script can call directly.
+    const p2 = project(`surface-outside-gen-${label.replace(/[^a-z]+/gi, '-')}`);
+    const g = generateInstall(p2, answers);
+    check(`the direct generator refuses it too (${label}), exit 1`, g.status === 1, why(g, true));
+    check(`and that project is still empty (${label})`, Object.keys(snapshot(p2)).length === 0);
+  }
+
+  // --- the surface may not share a destination setup owns --------------------
+  // The first row is a measured defect, not a hypothesis: pointing the surface at a managed artifact
+  // produced no blockers, planned BOTH the managed render and the surface write, and recorded that
+  // file in `managedRegions` - the one thing the ticket forbids outright. Against the config or the
+  // settings path the later write simply won and the promised page was never created at all.
+  const pathsWith = (surface) => ({
+    scratchDir: '.aiwf', plansDir: 'docs/backlogs', overridesDoc: 'docs/ai/PROJECT_OVERRIDES.md', transferSurface: surface,
+  });
+  const slug = (s) => s.replace(/[^a-z0-9]+/gi, '-').slice(0, 40);
+  {
+    const COLLISIONS = [
+      ['a managed agent render', '.claude/agents/writer.md'],
+      ['an agent render this configuration does not even produce', '.claude/agents/qa.md'],
+      ['the pnp config', '.claude/aiwf-native/aiwf.config.json'],
+      ['the rendered roles.json', '.claude/aiwf-native/roles.json'],
+      ['the permission settings', '.claude/settings.json'],
+      ['the file carrying the managed region', 'CLAUDE.md'],
+      ['the overrides document', 'docs/ai/PROJECT_OVERRIDES.md'],
+      ['the scratch directory', '.aiwf'],
+      ['the active plans directory', 'docs/backlogs/active'],
+      ['the agents directory', '.claude/agents'],
+    ];
+    // Every row through the DIRECT GENERATOR - the engine itself, and the entrypoint a script can
+    // call without the interview in front of it.
+    for (const [label, value] of COLLISIONS) {
+      const p = project(`surface-collide-gen-${slug(value)}`);
+      const g = generateInstall(p, baseAnswers({ paths: pathsWith(value) }));
+      check(`the generator REFUSES a surface that is ${label} ("${value}"), exit 1`, g.status === 1, why(g, true));
+      check(`and it names the collision (${value})`,
+        g.out.includes('is the same destination setup writes as') && g.out.includes(value),
+        g.out.trim().split('\n').slice(-3).join(' | ').slice(0, 220));
+      check(`and wrote NOTHING (${value})`, Object.keys(snapshot(p)).length === 0, Object.keys(snapshot(p)).join(', '));
+    }
+    // And the three the blocker named, through the INTERVIEW entrypoint as well: a guard proven on
+    // one entrypoint says nothing about the other.
+    for (const value of ['.claude/agents/writer.md', '.claude/aiwf-native/aiwf.config.json', '.claude/settings.json']) {
+      const p = project(`surface-collide-iv-${slug(value)}`);
+      const r = install(p, baseAnswers({ paths: pathsWith(value) }));
+      check(`the interview entrypoint refuses it too ("${value}"), exit 1`, r.status === 1, why(r, true));
+      check(`and that project is still empty ("${value}")`, Object.keys(snapshot(p)).length === 0);
+    }
+    // HIERARCHY, not just equality. A filesystem has one, and exact-match alone let a whole class
+    // through: `docs/backlogs` is not EQUAL to `docs/backlogs/active`, and pointing the surface at it
+    // still cannot work. `applyPlan` creates directories BEFORE it writes files, so these got as far
+    // as a partial installation and then died on EISDIR - worse than a refusal, which is the point.
+    const HIERARCHY = [
+      ['an ANCESTOR of the plan directories', 'docs/backlogs', 'docs/backlogs/active'],
+      ['an ANCESTOR of everything under .claude', '.claude', '.claude'],
+      ['an ANCESTOR of the overrides and plan directories', 'docs', 'docs'],
+      ['INSIDE a file setup writes (the inverse conflict)', 'CLAUDE.md/surface.md', 'CLAUDE.md'],
+      ['INSIDE the config file', '.claude/aiwf-native/aiwf.config.json/surface.md', '.claude/aiwf-native/aiwf.config.json'],
+    ];
+    for (const [label, value, named] of HIERARCHY) {
+      // BOTH entrypoints for every row: the hierarchy bug was in the engine, and the engine is
+      // reachable without the interview in front of it.
+      for (const [entry, run] of [['generator', generateInstall], ['interview', install]]) {
+        const p = project(`surface-hier-${entry}-${slug(value)}`);
+        const r = run(p, baseAnswers({ paths: pathsWith(value) }));
+        check(`${entry}: REFUSES a surface that is ${label} ("${value}"), exit 1`, r.status === 1, why(r, true));
+        check(`${entry}: and it names the owned destination in the way ("${named}")`,
+          r.out.includes(named) && (r.out.includes('sits beneath it') || r.out.includes('which setup writes as a file')),
+          r.out.trim().split('\n').slice(-3).join(' | ').slice(0, 240));
+        // The whole reason this is a blocker and not a runtime error: a refusal leaves NOTHING behind,
+        // where the partial install left a directory tree and a dead run.
+        check(`${entry}: and wrote NOTHING - no partial installation ("${value}")`,
+          Object.keys(snapshot(p)).length === 0, Object.keys(snapshot(p)).join(', '));
+      }
+    }
+
+    // THE POSITIVE CONTROL for the whole collision guard: a path that is merely NEAR the reserved set
+    // still installs. Without this, a guard that refused everything would pass every row above.
+    {
+      const p = project('surface-collide-control');
+      const OK_REL = '.claude/agents/NOT-AN-AGENT.md';
+      const r = install(p, baseAnswers({ paths: pathsWith(OK_REL) }));
+      check('control: a surface merely NEXT TO the reserved destinations still installs, exit 0', r.status === 0, why(r));
+      check('and it really was seeded there', exists(at(p, OK_REL)) && lf(read(at(p, OK_REL))) === SKELETON);
+      check('and it is still unmanaged',
+        !Object.prototype.hasOwnProperty.call(((readJson(at(p, CONFIG_REL)) || {})._aiwf || {}).managedRegions || {}, OK_REL));
+    }
+    // A NAME THAT MERELY BEGINS WITH TWO DOTS IS NOT A CLIMB OUT. `..notes/CANDIDATES.md` relativizes
+    // to `..notes\CANDIDATES.md`, which a `startsWith('..')` containment test reads as escaping the
+    // project - a false positive in the one guard whose value depends on a refusal meaning something.
+    // The directory really is created here, so this face proves the acceptance rather than asserting
+    // it: on a host where such a name is impossible the install would fail and so would this row.
+    {
+      const p = project('surface-dotdot-name');
+      const DOTDOT_REL = '..notes/CANDIDATES.md';
+      const r = install(p, baseAnswers({ paths: pathsWith(DOTDOT_REL) }));
+      check('a path whose first segment merely STARTS with ".." is accepted, exit 0', r.status === 0, why(r, true));
+      check('and the surface really landed inside the project at that name',
+        exists(at(p, DOTDOT_REL)) && lf(read(at(p, DOTDOT_REL))) === SKELETON,
+        String(exists(at(p, DOTDOT_REL))));
+      check('control: a REAL climb-out with the same two dots is still refused',
+        install(project('surface-dotdot-control'), baseAnswers({ paths: pathsWith('../notes/CANDIDATES.md') })).status === 1);
+    }
+    // Windows folds case, so two spellings of one destination are one file there. Run only on win32:
+    // on a case-sensitive filesystem these really are two different paths and refusing would be wrong.
+    if (process.platform === 'win32') {
+      const p = project('surface-collide-case');
+      const g = generateInstall(p, baseAnswers({ paths: pathsWith('.claude/agents/WRITER.md') }));
+      check('win32: a differently-CASED spelling of a managed artifact is the same file, and is refused',
+        g.status === 1 && g.out.includes('is the same destination setup writes as'), why(g, true));
+      check('and wrote nothing', Object.keys(snapshot(p)).length === 0);
+    }
+  }
+
+  // --- the resolved surface is an existing DIRECTORY -------------------------
+  {
+    const p = project('surface-is-a-directory');
+    fs.mkdirSync(at(p, 'docs/backlogs/PNP_CANDIDATES.md'), { recursive: true });
+    const before = snapshot(p); // snapshot records FILES, so an empty directory reads as {}
+    const r = install(p, baseAnswers());
+    check('setup REFUSES when the resolved surface is an existing directory, exit 1', r.status === 1, why(r, true));
+    check('and says what it found rather than reporting the page as yours',
+      r.out.includes('is not a regular file') && r.out.includes('directory'),
+      r.out.trim().split('\n').slice(-3).join(' | ').slice(0, 220));
+    check('and wrote NOTHING', diffSnapshots(before, snapshot(p)).length === 0, diffSnapshots(before, snapshot(p)).join(', '));
+    check('the operator\'s directory is still there, untouched',
+      fs.statSync(at(p, 'docs/backlogs/PNP_CANDIDATES.md')).isDirectory());
+  }
+
+  // --- containment through the REAL filesystem, not the string ---------------
+  // A junction inside the project whose target is outside it: `linked/CANDIDATES.md` is
+  // project-relative as a STRING and the write lands outside the project. Junctions rather than
+  // symlinks on purpose - they need no administrator rights, so this face really runs here.
+  {
+    const makeEscape = (name) => {
+      const target = project(`${name}-target`); // a sibling of the project, i.e. OUTSIDE it
+      const p = project(name);
+      let made = true;
+      try { fs.symlinkSync(target, at(p, 'linked'), 'junction'); } catch { made = false; }
+      return { target, p, made };
+    };
+
+    const esc = makeEscape('surface-escape');
+    check('fixture: a junction inside the project, pointing OUT of it, could be created', esc.made,
+      esc.made ? '' : 'junction creation failed on this host');
+    if (esc.made) {
+      // The control for the fixture itself: the junction really does lead out of the project, and the
+      // old LEXICAL test really would have passed this path. Without both, a green row below could
+      // mean the junction never worked.
+      check('control: the junction really resolves outside the project',
+        fs.realpathSync.native(at(esc.p, 'linked')) === fs.realpathSync.native(esc.target),
+        fs.realpathSync.native(at(esc.p, 'linked')));
+      check('control: the configured value is lexically innocent (the old check would have passed it)',
+        !path.isAbsolute('linked/CANDIDATES.md')
+        && path.relative(esc.p, path.resolve(esc.p, 'linked/CANDIDATES.md')).split(/[\\/]/)[0] !== '..');
+
+      const r = install(esc.p, baseAnswers({ paths: pathsWith('linked/CANDIDATES.md') }));
+      check('setup REFUSES a surface that leaves the project through a junction, exit 1', r.status === 1, why(r, true));
+      check('and names the REAL location it resolved to',
+        r.out.includes('really resolves to') && r.out.includes('not inside the project'),
+        r.out.trim().split('\n').slice(-3).join(' | ').slice(0, 240));
+      check('and NOTHING was created on the far side of the junction',
+        fs.readdirSync(esc.target).length === 0, fs.readdirSync(esc.target).join(', '));
+      // `snapshot()` cannot be used on this project: it walks with `withFileTypes`, where a junction
+      // is a SYMLINK dirent rather than a directory, and it would try to read the junction as a file.
+      // The top level is the whole statement anyway - the junction is all that should be there.
+      check('and nothing was written inside the project either',
+        fs.readdirSync(esc.p).join(',') === 'linked', fs.readdirSync(esc.p).join(', '));
+
+      // The same escape through the DIRECT GENERATOR.
+      const escGen = makeEscape('surface-escape-gen');
+      if (escGen.made) {
+        const g = generateInstall(escGen.p, baseAnswers({ paths: pathsWith('linked/CANDIDATES.md') }));
+        check('the direct generator refuses the junction escape too, exit 1', g.status === 1, why(g, true));
+        check('with nothing on the far side', fs.readdirSync(escGen.target).length === 0);
+      }
+
+      // AND THE DEFAULT PATH, which is the half a configured-surface test cannot reach: with
+      // `plansDir` itself a junction, `<plansDir>/PNP_CANDIDATES.md` escapes without anyone
+      // configuring a surface at all.
+      const escDefault = makeEscape('surface-escape-default');
+      if (escDefault.made) {
+        const d = install(escDefault.p, baseAnswers({
+          paths: { scratchDir: '.aiwf', plansDir: 'linked', overridesDoc: 'docs/ai/PROJECT_OVERRIDES.md' },
+        }));
+        check('setup refuses the DEFAULT surface when plansDir itself is a junction out of the project, exit 1',
+          d.status === 1, why(d, true));
+        check('and the message says it is the default rather than a configured path',
+          d.out.includes('the default transfer surface'), d.out.trim().split('\n').slice(-3).join(' | ').slice(0, 240));
+        check('and not even the plans directories were created outside the project',
+          fs.readdirSync(escDefault.target).length === 0, fs.readdirSync(escDefault.target).join(', '));
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 try { fs.rmSync(tmpRoot, { recursive: true, force: true, maxRetries: 3 }); } catch { /* best-effort */ }
 console.log(`\nchecks: ${checks}, failures: ${failures}`);
 console.log(`fixtures left behind: ${fs.existsSync(tmpRoot) ? tmpRoot : 'none'}`);

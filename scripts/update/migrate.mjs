@@ -1166,6 +1166,11 @@ export function assembleChanges({ from, to, pending, migrations, managedRegions,
     for (const note of notes) {
       lines.push(`- **${note.id}** - ${note.text}`);
       for (const ref of note.docRefs || []) lines.push(`  - ${ref}`);
+      // What this release RETIRES, one id per line. It applies nothing - no record of the operator's
+      // is touched by a note - so the only way an installation loses a superseded rule is by reading
+      // this list and acting on it. Printed under the note it belongs to, never aggregated, because
+      // the text above is what explains why the id is here at all.
+      for (const id of note.supersedes || []) lines.push(`  - Supersedes: ${id}`);
     }
     lines.push('');
   }
