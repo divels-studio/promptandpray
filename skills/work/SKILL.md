@@ -51,7 +51,9 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
    **A NEWLY BORN ticket - one that is not in the PLAN's recorded execution order - is written into
    the PLAN, announced in ONE sentence, and STOPS the same way.** No dispatch, no route state, no
    mutation on it until the operator's own word for THAT ticket: a standing word covers the work it
-   was given for, never a ticket born after it.
+   was given for, never a ticket born after it. The stop is not the whole of it: the announcement
+   carries ONE question - does this ticket get an audit pass - and the answer lands in the ticket's
+   PLAN entry; a question, never an automatic pass.
 
 ## Rules in force (summary - the doctrine text is authoritative)
 

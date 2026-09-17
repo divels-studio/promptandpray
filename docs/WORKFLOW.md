@@ -82,8 +82,8 @@ WHAT to change is the symptom of a defective brief, not of diligence. A single W
 been observed spending on the order of a full session's context budget on discovery that a
 pre-brief scan pass would have delivered at scan-tier cost.
 
-**Three countable tripwires.** The rule above states categories, and categories do not stop
-mid-work inertia; these three moments do. (1) **Anything outside the repository is agent work per
+**Four countable tripwires.** The rule above states categories, and categories do not stop
+mid-work inertia; these four moments do. (1) **Anything outside the repository is agent work per
 se**: downloading or sweeping upstream source, tarballs, external documentation - zero own steps,
 dispatch immediately; reading the repository's own canon stays the COO's. (2) **An open question
 that has already cost two lookups (Read/Grep) without an answer -> stop and dispatch.**
@@ -93,9 +93,16 @@ find/replace, a verify cycle over a fixed list, debugging a helper the COO wrote
 the job is counting) with exact inputs (paths, the mapping, the expected numbers, the verify
 commands) and an output contract. The COO decides, briefs, reads the result and commits; the SECOND
 inline fix of the same helper in one session is the countable moment - the first was the slide, the
-second is the pattern. All three exist because the category was known and the stopping moment was
-not: a COO can read this section in its own preflight, classify correctly, and still slide across
-the boundary by inertia.
+second is the pattern. (4) **An enumeration is closed by a grep, not by a feeling.** When a change
+touches a set - every call site of a symbol, every statement of a count, every pointer to a moved
+document - enumeration ends when the closing grep - for the symbol itself, for the phrase or count
+the change invalidates, and for the bare pointer form - returns zero outside the list; the grep must
+first HIT the known list. Every new or changed evidentiary instrument is
+made to fail on purpose before it is trusted; retro-proofing existing instruments is a deliberate
+ticket, never an ambient duty. A grep that matches nothing proves nothing, and the instrument nobody
+has seen go red is a belief rather than a check. All four exist because the category was known and
+the stopping moment was not: a COO can read this section in its own preflight, classify correctly,
+and still slide across the boundary by inertia.
 
 **Model policy for ad-hoc subagents:** always pass an explicit `model` to the Agent tool - never
 inherit the session model silently. `haiku` for purely mechanical scans (existence/counts, grep
@@ -182,7 +189,7 @@ Deciding well is not enough; the report has to land.
 
 ## Operator-interaction guards
 
-Five rules, promoted into Git so they travel with the repo: doctrine in prose did not survive a
+Eight rules, promoted into Git so they travel with the repo: doctrine in prose did not survive a
 change of COO model, and each of these was learned from an observed violation.
 
 - **(a) Stop semantics.** An operator stop/interrupt freezes every mutating action. The response
@@ -196,7 +203,9 @@ change of COO model, and each of these was learned from an observed violation.
   word waits for its own word.** When the work in flight produces a NEW ticket - one that is not
   already in the PLAN's recorded execution order - the COO does exactly three things: writes it
   into the PLAN, with the same abbreviation and the next number, announces it in ONE sentence
-  ("opening ticket `<REF>` for `<what>` - waiting for your word"), and STOPS. Zero mutations on
+  ("opening ticket `<REF>` for `<what>` - waiting for your word"), and STOPS. The stop is not the
+  whole of it: the announcement carries ONE question - does this ticket get an audit pass - and the
+  answer lands in the ticket's PLAN entry; a question, never an automatic pass. Zero mutations on
   that ticket until the operator answers: no Writer dispatch, no route state, no code, no docs
   edit belonging to it. The earlier reading of this
   rule - that the announcement is a *notification rather than a question*, so the dispatch may
@@ -216,6 +225,30 @@ change of COO model, and each of these was learned from an observed violation.
   and any plan-mode file outside the repo becomes a pointer to it. The principle "durable
   knowledge lives in Git" already existed; what had never been written down was the mechanical
   moment of approval.
+- **(f) Host-directive precedence.** A host - the CLI, an editor integration, a wrapper around the
+  session - injects directives of its own about HOW to work: which tool to prefer, how to phrase a
+  shell call, what to do by default. Where such a directive meets this project's written rules,
+  project canon wins over the host's ergonomic directives; the host's safety and permission rules
+  are never overridden. The line runs along what the directive protects: ergonomics are the host's
+  convenience and yield to the canon that was agreed, while the permission system and the safety
+  rules are not the session's to reinterpret in either direction. Observed three times across two
+  projects, each one a session quietly dropping a written project rule because its environment
+  suggested a more comfortable habit.
+- **(g) The doctrine-write gate.** Recording a RULE is a different act from recording a fact:
+  a rule-bearing write - memory or file - is shown to the operator and lands only on approval;
+  purely factual statuses are exempt. Status - where the work stands, what the tree holds, which
+  ticket is next - needs no ceremony; a sentence read later as authority does, because a COO that
+  writes rules as it goes accumulates private doctrine nobody agreed to and the next session reads
+  it as canon.
+- **(h) Doctrine born in another home.** A rule is not always born where the canon lives: it appears
+  in a plan's process section, in an agent's memory, in the operator-owned zone of a CLAUDE.md. So
+  doctrine born in any other home gets a same-moment one-line pointer row on the transfer surface,
+  shown and approved together with the text; when the multi-session window is closed, it queues with
+  the approved text frozen and lands right after the executing ticket's commit. It rides guard (g)'s
+  gate rather than adding a second one - text and pointer row are one approval - and the queue is
+  what keeps it from becoming a write by a session that is not the executing one (§ Branch policy).
+  Without the row the rule stays discoverable only by whoever was in that session, which is the same
+  as not having written it down.
 
 ## Verifying failure claims
 
@@ -539,6 +572,10 @@ tickets. Do not create a separate active BACKLOG file. The PLAN keeps:
    decisions/deviations, verification results, Reviewer/QA conclusion, commit hash, and remaining
    debt. The COO writes this record **immediately after the ticket's commit, in the same session,
    unprompted** - a ticket is not closed without it, and tracking it is never the operator's job.
+   That record does not ride along with the work it describes -
+   the docs commit is separate from the code commit: the code commit carries only the ticket's
+   work, and the record about it lands in its own commit, so what was audited and what is a note
+   after it stay distinguishable.
    **A number describing the state of the system is measured or it is not stated:** anything a
    reader may rely on as a current fact and regress against - tests passed or skipped, timings,
    sizes, coverage, benchmark results - carries the command that produced it or does not go in at
@@ -561,7 +598,14 @@ carries a closed status and its completion record, the COO moves the file from
 of closing the final ticket, not as a step someone has to remember later. The archive has a
 naming convention the active directory does not: `<NNN>_PLAN_<ABBR>_<YYYY-MM-DD>.md`, where
 `NNN` is the next free sequence number and the date is the day of ARCHIVING, not of creation.
-`git mv` preserves the history; a bare copy of the active filename does not belong there.
+`git mv` preserves the history; a bare copy of the active filename does not belong there. And
+archiving CHECKS as well as moves - the step is not only a `git mv` but a last look at the plan:
+archiving greps the plan's process sections for rule-class points without a pointer row -
+fail-capable, with a positive control, which here means running the grep once over a plan known to
+carry such a point and watching it report, because a grep nobody has seen hit is not evidence of
+anything. It is the backstop under guard (h): a rule that was born inside the plan and never reached
+the transfer surface is caught while someone is still reading the plan, rather than leaving the
+active set with it.
 
 This is the mirror image of guard (e) above: (e) fixes the mechanical moment a plan ENTERS the
 repo, this fixes the moment it LEAVES the active set. Both had to be asked for, and for the same
@@ -725,6 +769,15 @@ loop has. The `-C` forms ask by construction on both shell tools: the ruleset sp
 other `git -C <path> <verb>`, because a hook that reads no project directory cannot tell one path
 from another. The dialog is the backstop, not the rule; the rule is that the word comes first.
 
+**A working tree carries one executing session.** Several sessions may be open at once - that is
+normal on a machine with more than one window - and the invariant that keeps them from writing over
+each other is this: on one working tree exactly ONE executing session; non-executing sessions may
+READ - zero repo writes, zero DB operations, zero paid auditor passes. The machine-wide "exactly one
+live auditor" clause is SCOPED TO MEASUREMENT (operator clarification 2026-09-16): it holds while a
+pass's counter start/stop pair is being recorded - otherwise the pair is not attributable - and is
+NOT a general work restriction. It is an OPERATOR-HELD invariant (no hook can see sibling sessions),
+written in the honest-limits register.
+
 ## Fail aggregation
 
 Reviewer and QA must return ALL visible material problems in a single round - not one problem per
@@ -764,7 +817,10 @@ them:
   approves. The approval is a native Claude Code visual Yes/No dialog - `Bash(git commit:*)` and
   its `PowerShell(git commit:*)` mirror are `ask` rules in the project's `.claude/settings.json`;
   the operator clicks **Yes** and types
-  nothing (no approval token, no state file). No automatic commits.
+  nothing (no approval token, no state file). No automatic commits. One click buys one commit of one
+  kind - the docs commit is separate from the code commit: the code commit carries only the ticket's
+  work, and the record about it lands in its own commit, so what was audited and what is a note after
+  it stay distinguishable.
   **The click approves the invocation, not the final tree content:** on a project carrying commit
   automation - a `post-commit` hook that amends, a `pre-commit` formatter, a version stamper - the
   approved tree and the tree that lands diverge silently (measured on a real consumer: an unstaged

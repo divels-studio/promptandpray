@@ -5406,8 +5406,8 @@ const DOCTRINE_TABLE_SURFACES = [
     what: 'WORKFLOW requires the COO\'s own readiness pass before any auditor is dispatched' },
   { id: 'doctrine-table-workflow-tripwires',
     file: 'docs/WORKFLOW.md',
-    phrase: '**Three countable tripwires.**',
-    what: 'WORKFLOW carries the third tripwire (a mechanical procedure is agent work)' },
+    phrase: '**Four countable tripwires.**',
+    what: 'WORKFLOW carries the fourth tripwire (an enumeration is closed by a grep)' },
   { id: 'doctrine-table-loop',
     file: 'docs/LOOP.md',
     phrase: 'The review ENGINE and the pass count come from the ticket\'s class',
@@ -5434,8 +5434,8 @@ const DOCTRINE_TABLE_SURFACES = [
     what: 'the managed CLAUDE.md region sends the orchestrator to the table' },
   { id: 'doctrine-table-claude-template-tripwires',
     file: 'templates/CLAUDE.md.tmpl',
-    phrase: 'Three countable tripwires, because categories do not stop mid-work',
-    what: 'the managed CLAUDE.md region carries the third tripwire too' },
+    phrase: 'Four countable tripwires, because categories do not stop mid-work',
+    what: 'the managed CLAUDE.md region carries the fourth tripwire too' },
   { id: 'doctrine-table-work-skill',
     file: 'skills/work/SKILL.md',
     phrase: 'that row of the audit table - not a rule in a document - decides the host and the pass count',
@@ -5609,6 +5609,146 @@ const DOCTRINE_PLAN_PRECISION_SURFACES = [
     what: 'the brief-authoring failures include the adjacent contract that rides with the change' },
 ];
 
+// ---------------------------------------------------------------------------
+// THE CONSOLIDATED DOCTRINE - eight rules that had no authoritative home until they were adopted
+// ---------------------------------------------------------------------------
+// These were live in one or another consumer's local notes, where a rule survives exactly as long as
+// the session that wrote it. Adopting them into the payload is what makes them checkable at all, and
+// what each one is worth is visible in its REPLACEMENT: not a nonsense string and not a generic
+// rewording, but the weaker rule that was in force BEFORE it - the sentence a well-meaning edit
+// lands on, which still reads perfectly true and quietly returns the old behaviour.
+//   - One executing session per tree, and the "one live auditor" clause SCOPED to measurement. The
+//     unscoped reading of that clause is a general work ban nobody can keep, and the scoped one is
+//     the only version that is both true and enforceable by the operator who holds it.
+//   - A newborn ticket's announcement carries ONE question. The regression is an announcement that
+//     ANSWERS it - the ticket is told it has a pass, and the operator pays for a pass they were
+//     never asked about. Stated in all four places a session reads before dispatching.
+//   - Host directives yield to project canon; host safety and permission rules never do.
+//   - Rule-bearing writes are shown before they land; factual statuses are not. The regression is a
+//     COO that records rules as it goes and reports them afterwards.
+//   - Doctrine born in another home leaves a pointer row at the same moment. "Somebody will carry it
+//     over later" is exactly how the rules above got lost in the first place.
+//   - Archiving CHECKS for rule-class points without a pointer row; the regression is archiving as a
+//     bare `git mv`.
+//   - Enumeration ends on a closing grep that first HITS the known list, and a new instrument is
+//     made to fail on purpose before it is trusted. "It looks complete" is the weaker rule.
+//   - The record about a ticket is its own commit, so what was audited stays distinguishable from
+//     the note written after it.
+const DOCTRINE_CONS_ONE_EXECUTING_SESSION =
+  'on one working tree exactly ONE executing session; non-executing sessions may READ - zero repo '
+  + 'writes, zero DB operations, zero paid auditor passes.';
+const DOCTRINE_CONS_AUDITOR_SCOPED =
+  'The machine-wide "exactly one live auditor" clause is SCOPED TO MEASUREMENT (operator '
+  + 'clarification 2026-09-16): it holds while a pass\'s counter start/stop pair is being recorded - '
+  + 'otherwise the pair is not attributable - and is NOT a general work restriction. It is an '
+  + 'OPERATOR-HELD invariant (no hook can see sibling sessions), written in the honest-limits '
+  + 'register.';
+const DOCTRINE_CONS_AUDIT_PASS_QUESTION =
+  'the announcement carries ONE question - does this ticket get an audit pass - and the answer lands '
+  + 'in the ticket\'s PLAN entry; a question, never an automatic pass';
+const DOCTRINE_CONS_AUDIT_PASS_ANSWERED =
+  'the announcement states which audit pass the ticket is getting';
+const DOCTRINE_CONS_HOST_PRECEDENCE =
+  'project canon wins over the host\'s ergonomic directives; the host\'s safety and permission rules '
+  + 'are never overridden';
+const DOCTRINE_CONS_DOCTRINE_WRITE_GATE =
+  'a rule-bearing write - memory or file - is shown to the operator and lands only on approval; '
+  + 'purely factual statuses are exempt';
+const DOCTRINE_CONS_OTHER_HOME =
+  'doctrine born in any other home gets a same-moment one-line pointer row on the transfer surface, '
+  + 'shown and approved together with the text; when the multi-session window is closed, it queues '
+  + 'with the approved text frozen and lands right after the executing ticket\'s commit';
+const DOCTRINE_CONS_ARCHIVE_GREP =
+  'archiving greps the plan\'s process sections for rule-class points without a pointer row - '
+  + 'fail-capable, with a positive control';
+const DOCTRINE_CONS_CLOSING_GREP =
+  'enumeration ends when the closing grep - for the symbol itself, for the phrase or count the '
+  + 'change invalidates, and for the bare pointer form - returns zero outside the list; the grep '
+  + 'must first HIT the known list. Every new or changed evidentiary instrument is made to fail on '
+  + 'purpose before it is trusted; retro-proofing existing instruments is a deliberate ticket, '
+  + 'never an ambient duty.';
+const DOCTRINE_CONS_DOCS_COMMIT =
+  'the docs commit is separate from the code commit: the code commit carries only the ticket\'s '
+  + 'work, and the record about it lands in its own commit, so what was audited and what is a note '
+  + 'after it stay distinguishable';
+const DOCTRINE_CONSOLIDATION_SURFACES = [
+  { id: 'doctrine-cons-one-executing-session',
+    file: 'docs/WORKFLOW.md',
+    phrase: DOCTRINE_CONS_ONE_EXECUTING_SESSION,
+    replacement: 'several sessions may share a working tree as long as they stay out of each other\'s files',
+    what: '§ Branch policy states the one-executing-session invariant (the others read only)' },
+  { id: 'doctrine-cons-auditor-scoped',
+    file: 'docs/WORKFLOW.md',
+    phrase: DOCTRINE_CONS_AUDITOR_SCOPED,
+    replacement: 'Exactly one auditor pass may be live on the machine at any time, always.',
+    what: '§ Branch policy scopes the one-live-auditor clause to measurement, as an operator-held invariant' },
+  { id: 'doctrine-cons-audit-pass-question-workflow',
+    file: 'docs/WORKFLOW.md',
+    phrase: DOCTRINE_CONS_AUDIT_PASS_QUESTION,
+    replacement: DOCTRINE_CONS_AUDIT_PASS_ANSWERED,
+    what: 'guard (b): a newborn ticket\'s announcement ASKS whether it gets an audit pass' },
+  { id: 'doctrine-cons-audit-pass-question-claude-template',
+    file: 'templates/CLAUDE.md.tmpl',
+    phrase: DOCTRINE_CONS_AUDIT_PASS_QUESTION,
+    replacement: DOCTRINE_CONS_AUDIT_PASS_ANSWERED,
+    what: 'the managed CLAUDE.md region carries the audit-pass question in its newborn-ticket paragraph' },
+  { id: 'doctrine-cons-audit-pass-question-mission',
+    file: 'skills/mission/SKILL.md',
+    phrase: DOCTRINE_CONS_AUDIT_PASS_QUESTION,
+    replacement: DOCTRINE_CONS_AUDIT_PASS_ANSWERED,
+    what: '/pnp:mission carries it beside the newborn-ticket rule it already states' },
+  { id: 'doctrine-cons-audit-pass-question-work',
+    file: 'skills/work/SKILL.md',
+    phrase: DOCTRINE_CONS_AUDIT_PASS_QUESTION,
+    replacement: DOCTRINE_CONS_AUDIT_PASS_ANSWERED,
+    what: '/pnp:work carries the same question beside the same rule' },
+  { id: 'doctrine-cons-host-precedence',
+    file: 'docs/WORKFLOW.md',
+    phrase: DOCTRINE_CONS_HOST_PRECEDENCE,
+    replacement: 'the host\'s own directives about how to work take precedence in the session they run in',
+    what: 'guard (f): project canon beats the host\'s ergonomic directives, never its safety rules' },
+  { id: 'doctrine-cons-doctrine-write-gate',
+    file: 'docs/WORKFLOW.md',
+    phrase: DOCTRINE_CONS_DOCTRINE_WRITE_GATE,
+    replacement: 'the COO records a rule as it goes and reports it to the operator afterwards',
+    what: 'guard (g): a rule-bearing write is shown before it lands; a factual status is not' },
+  { id: 'doctrine-cons-other-home',
+    file: 'docs/WORKFLOW.md',
+    phrase: DOCTRINE_CONS_OTHER_HOME,
+    replacement: 'doctrine born elsewhere is carried over the next time somebody opens the transfer surface',
+    what: 'guard (h): doctrine born in another home leaves its pointer row at the same moment' },
+  { id: 'doctrine-cons-archive-grep',
+    file: 'docs/WORKFLOW.md',
+    phrase: DOCTRINE_CONS_ARCHIVE_GREP,
+    replacement: 'archiving is the `git mv` once every ticket carries its completion record',
+    what: '§ Durable development history: archiving CHECKS for rule-class points without a pointer row' },
+  { id: 'doctrine-cons-closing-grep',
+    file: 'docs/WORKFLOW.md',
+    phrase: DOCTRINE_CONS_CLOSING_GREP,
+    replacement: 'enumeration ends when the list looks complete',
+    what: 'the fourth tripwire: the closing grep, and an instrument made to fail before it is trusted' },
+  { id: 'doctrine-cons-docs-commit',
+    file: 'docs/WORKFLOW.md',
+    phrase: DOCTRINE_CONS_DOCS_COMMIT,
+    replacement: 'the completion record is committed together with the work it describes',
+    what: 'the docs commit stands apart from the code commit (both homes lose it here)' },
+];
+
+// The count is the assertion for the rule above that lives in TWO places inside ONE file - the
+// completion record and Commit & Push Authority. The generic loop cannot express that: it is a
+// substring test, so a second entry with the same file and phrase would pass on one occurrence and
+// prove nothing about the other. Counting runs on the whitespace-collapsed text, the same
+// projection the loop uses, so a re-wrap is still not a missing rule.
+const countPhrase = (text, phrase) => {
+  const flat = collapseWs(text || '');
+  const needle = collapseWs(phrase);
+  if (!needle) return 0;
+  let n = 0;
+  let i = flat.indexOf(needle);
+  while (i >= 0) { n += 1; i = flat.indexOf(needle, i + needle.length); }
+  return n;
+};
+
 // THE FACT-CHECK QUALIFIER, asserted per site. The gate is stated in more than one document, and
 // an unqualified statement of it is not a paraphrase - it is a DIFFERENT rule. "Before every pass"
 // reads as unconditional; the rule is "before every pass ABOVE THE SCAN TIER", with exactly one
@@ -5672,6 +5812,7 @@ const DOCTRINE_RETIRED_PATTERNS = [
   'pre-pass',
   'whatever `roles\\.reviewer\\.engine` says',
   'Two countable tripwires',
+  'Three countable',
   'two full passes',
   'two full read-only passes',
   'two-pass',
@@ -5806,6 +5947,23 @@ function payloadDoctrineFindings(pluginRoot) {
     add(s.id, `${s.file}: ${s.what}`, present,
       text == null ? 'the file is missing' : (present ? `"${collapseWs(s.phrase)}"` : `the sentence is missing or reworded: "${collapseWs(s.phrase)}"`));
   }
+
+  for (const s of DOCTRINE_CONSOLIDATION_SURFACES) {
+    const text = readText(path.join(pluginRoot, ...s.file.split('/')));
+    const present = text != null && collapseWs(text).includes(collapseWs(s.phrase));
+    add(s.id, `${s.file}: ${s.what}`, present,
+      text == null ? 'the file is missing' : (present ? `"${collapseWs(s.phrase)}"` : `the sentence is missing or reworded: "${collapseWs(s.phrase)}"`));
+  }
+
+  // The one rule of that family stated TWICE in one file, asserted by COUNT rather than by presence:
+  // the record's own commit belongs both where the completion record is defined and where the commit
+  // rule itself lives, and a substring test would be satisfied by either one alone.
+  const workflowText = readText(path.join(pluginRoot, 'docs', 'WORKFLOW.md'));
+  const docsCommitHomes = countPhrase(workflowText, DOCTRINE_CONS_DOCS_COMMIT);
+  add('doctrine-cons-docs-commit-two-homes',
+    'docs/WORKFLOW.md: the separate docs commit stands in BOTH of its homes - the completion record (§ Durable development history) and § Commit & Push Authority',
+    docsCommitHomes === 2,
+    workflowText == null ? 'the file is missing' : `${docsCommitHomes} occurrence(s), 2 required`);
 
   const notesFiles = doctrineNotesFiles(pluginRoot);
   const bareNotes = notesFiles
@@ -5975,6 +6133,29 @@ const DOCTRINE_CONTROLS = [
     label: `${s.file}: the plan-precision rule weakened back ("${collapseWs(s.phrase).slice(0, 60)}" -> "${s.replacement}")`,
     apply: (r) => doctrinePhrase(r, s.file, s.phrase, s.replacement),
   })),
+  // One control per consolidated-doctrine surface, sabotaged with the rule that was in force BEFORE
+  // the adoption: a shared tree with no executing session, an unscoped "one live auditor, always", an
+  // announcement that ANSWERS the audit-pass question instead of asking it, a host whose ergonomic
+  // directives outrank the canon, a COO that records rules as it goes, doctrine carried over "later",
+  // archiving as a bare `git mv`, an enumeration that ends when the list looks complete, and a
+  // completion record riding in the commit of the work it describes.
+  ...DOCTRINE_CONSOLIDATION_SURFACES.map((s) => ({
+    id: s.id,
+    label: `${s.file}: the adopted rule reverted ("${collapseWs(s.phrase).slice(0, 60)}" -> "${s.replacement}")`,
+    apply: (r) => doctrinePhrase(r, s.file, s.phrase, s.replacement),
+  })),
+  // The count check needs a control the generic one cannot give it: the spread above replaces EVERY
+  // occurrence (the sabotage regex is global), which takes both homes at once and would prove only
+  // that zero is not two. This one drops exactly ONE home - the first - so the count falls to 1 with
+  // the rule still perfectly present in the file, which is the regression this check exists for: a
+  // consolidation that keeps the sentence where it reads best and quietly loses the other home.
+  { id: 'doctrine-cons-docs-commit-two-homes',
+    label: 'docs/WORKFLOW.md: the separate docs commit kept in ONE home only (the completion record loses it)',
+    apply: (r) => doctrineFile(r, 'docs/WORKFLOW.md', (t) => {
+      const first = new RegExp(phraseRe(DOCTRINE_CONS_DOCS_COMMIT).source);
+      if (!first.test(t)) throw new Error('the two-homes phrase is not in docs/WORKFLOW.md');
+      return t.replace(first, 'the record lands with the work it describes');
+    }) },
   // One control per fact-check site, and it is the regression itself rather than a generic rewording:
   // it replaces the qualified sentence with the UNQUALIFIED one, which is what a well-meaning edit
   // actually produces.

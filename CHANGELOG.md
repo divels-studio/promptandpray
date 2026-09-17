@@ -31,6 +31,34 @@ never writes a file of the operator's.
   on the same terms as `docRefs`, printed in `CHANGES_<from>-to-<to>.md` as one `Supersedes: <id>`
   line under its note. It is a fifth FIELD on one operation, not a fifth operation type, and it
   applies nothing.
+- **Eight doctrine rules adopted into `docs/WORKFLOW.md` (CONS-004)** - rules that had been living in
+  one or another installation's local notes now have an authoritative home. § Branch policy states
+  the multi-session invariant: one working tree carries exactly ONE executing session, the others may
+  read, and the "one live auditor" clause is scoped to measurement rather than being a general work
+  ban. § Operator-interaction guards grows from five rules to eight: **(f)** project canon beats the
+  host's ergonomic directives while its safety and permission rules are never overridden, **(g)** a
+  rule-bearing write is shown to the operator and lands only on approval (a purely factual status is
+  exempt), **(h)** doctrine born in any other home leaves a same-moment pointer row on the transfer
+  surface. Guard (b) gains the question a newborn ticket's announcement carries - does this ticket get
+  an audit pass - mirrored in the managed `CLAUDE.md` region, `/pnp:mission` and `/pnp:work`.
+  Archiving now checks as well as moves: it greps a plan's process sections for rule-class points
+  without a pointer row. And the completion record is its own commit, stated both where the record is
+  defined and in § Commit & Push Authority. Each sentence is pinned by the self-check with a negative
+  control that reverts it to the weaker rule it replaced.
+- **A fourth countable tripwire (CONS-004)** - an enumeration ends on the closing grep (for the
+  symbol, for the phrase or count the change invalidates, and for the bare pointer form) that first
+  HITS the known list and then returns zero outside it, and every new or changed evidentiary
+  instrument is made to fail on purpose before it is trusted; retro-proofing existing instruments is a
+  deliberate ticket, never an ambient duty. `docs/WORKFLOW.md` and the managed `CLAUDE.md` region move
+  in lockstep to "Four countable tripwires", and "Three countable" joins the retired patterns the
+  doctrine sweep refuses to find anywhere in `docs/`, `skills/`, `templates/` or `README.md`.
+- **`0011_transfer-surface` re-renders the managed `CLAUDE.md` region (CONS-004)** - the two doctrine
+  sentences above that live inside the `aiwf-core` markers - the audit-pass question and the fourth
+  tripwire - reach an existing installation through a `rerender-managed-region` operation on this
+  release's own migration. Text outside the markers is untouched, and an artifact held through an
+  override is recorded as upstream and reported rather than applied. The transfer surface itself is
+  unaffected and stays what it was: no record, no address, no operation, in this release or a later
+  one.
 - **The word-gate line travels in the note text (CONS-001)** - a migration whose release introduces a
   word-gate carries "If this release introduces a word-gate: check your local rules for
   self-initiated dispatch or remediation - a rule written before this gate may contradict it."

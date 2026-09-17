@@ -16,8 +16,8 @@
         "override": false
       },
       "CLAUDE.md#aiwf-core": {
-        "upstream": "e51e8f978a3f193bff97ed761c0d0805ba1b3aeb97ff1e6616e93e8063b24133",
-        "local": "e51e8f978a3f193bff97ed761c0d0805ba1b3aeb97ff1e6616e93e8063b24133",
+        "upstream": "65988bb2bda74125ad87ae2a68c251a154b8fd07db353000502dc02c30e77f5f",
+        "local": "65988bb2bda74125ad87ae2a68c251a154b8fd07db353000502dc02c30e77f5f",
         "override": false
       }
     },

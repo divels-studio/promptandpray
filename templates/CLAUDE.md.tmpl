@@ -37,8 +37,10 @@ payload `docs/WORKFLOW.md`.
 **A NEW ticket waits for its own word.** A ticket born after a standing operator word - one not in
 the PLAN's recorded execution order - is written into the PLAN, with the same abbreviation and the
 next number, announced in ONE sentence, and STOPS: zero mutations on it until the operator's word
-for THAT ticket. A standing word covers the work it was given for, never the structure born after
-it (payload `docs/WORKFLOW.md` guard (b)).
+for THAT ticket. The stop is not the whole of it: the announcement carries ONE question -
+does this ticket get an audit pass - and the answer lands in the ticket's PLAN entry; a question,
+never an automatic pass. A standing word covers the work it was given for, never the structure born
+after it (payload `docs/WORKFLOW.md` guard (b)).
 
 How you execute is **route-conditional**:
 
@@ -100,13 +102,16 @@ for the full model.
 - **Discovery precedes dispatch, and the COO owns broad scans.** When the delegation triggers are
   met (3+ independent files, 2+ verify tracks, a docs/code/test cross-check), run the cheap-agent
   discovery BEFORE authoring the brief; the brief then carries a worklist with `file:line` pointers,
-  not reading assignments. Three countable tripwires, because categories do not stop mid-work
+  not reading assignments. Four countable tripwires, because categories do not stop mid-work
   inertia: (1) anything OUTSIDE this repository (upstream source, tarballs, external docs) is agent
   work per se - zero own steps; (2) an open question that has already cost you two lookups without
   an answer - stop and dispatch; (3) running a mechanical procedure (helper script, bulk replace,
   verify cycle, debugging your own helper) is a `general-purpose` subagent's job with exact inputs
-  and an output contract - a second inline fix of the same helper in one session is one too many.
-  Full text: payload `docs/WORKFLOW.md` § "COO owns broad scans".
+  and an output contract - a second inline fix of the same helper in one session is one too many;
+  (4) an enumeration ends on a closing grep - for the symbol, for the phrase or count the change
+  invalidates, and for the bare pointer form - that first HITS the known list and then returns zero
+  outside it, and every new or changed evidentiary instrument is made to fail on purpose before it
+  is trusted. Full text: payload `docs/WORKFLOW.md` § "COO owns broad scans".
 - **Model policy for ad-hoc subagents.** Always pass an explicit `model` to the Agent tool - never
   silently inherit the session model. `haiku` for purely mechanical scans; `sonnet` for evidence
   gathering with judgment (the default scan tier). The top tier is never delegated for scans. The

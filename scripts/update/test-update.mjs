@@ -1693,8 +1693,8 @@ section('13 - the audit table migration: three silent config keys, two quiet re-
   // "already current" - which proves nothing about the path a real consumer takes. Ageing the
   // region back to its previous wording is what makes the replay honest: RECORDED and byte-equal
   // to its own stamp (so the operator has NOT edited it), yet different from the payload render.
-  const REGION_NOW = 'Three countable tripwires';
-  const REGION_WAS = 'Two countable tripwires';
+  const REGION_NOW = 'Four countable tripwires';
+  const REGION_WAS = 'Three countable tripwires';
 
   /**
    * A project as 0.1.2 left it: no review rows in the config, no review block in roles.json, and
