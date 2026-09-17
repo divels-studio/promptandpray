@@ -704,3 +704,19 @@ word-гейт предупреждението по-горе.
 ## D2 pointer rows
 
 | 2026-09-16 | PLAN_CONS одобрен — пълните решения/фрази живеят в dev/backlogs/active/PLAN_CONS.md; дизайн авторитетът в dev/backlogs/CONSOLIDATION_2026-09-16.md |
+
+## Witness sessions (тристранката — държат се ЖИВИ/възобновими по време на изпълнението на PLAN_CONS; read-only свидетели)
+
+| Роля | Сесия (име в ListAgents) | Session id |
+|---|---|---|
+| PNP консолидационен мастър (тази) | PNP HARD-009 | claude.ai: session_018oTVCKXLkuu7rCg8S8xq2Q; локално: 65ca22df-3a8f-46b5-8478-5ca82118862a |
+| Furnissimo арбитраж (регламент v2, статистиката, анализите) | Projects Arbitrary 001 Done | d33d642e-76dc-4449-82f7-c62233b41a1a |
+| Silerax COO (chain-trace, CAP материалът, D26 пилот леглото) | Silerax CAP Deal | c7a0c612-5bf1-4368-8311-6b8e020fb863 |
+
+Доказателствени транскрипти (Furnissimo, при нужда — read-only, cheap агенти):
+Claude под C:\Users\dyosi\.claude\projects\D--Furnissimo\ — PROJ-002 COO 34b1f39d-c36b-4a3c-b688-44fffd7567c7;
+PROJ-003 COO 6d24fc5b-adc6-4576-b783-9aadcbdc4ec1; PROJ-004 COO 259cc5ef-6a2e-40a6-af3f-72ea8b8f7a1e.
+Codex rollouts под C:\Users\dyosi\.codex\sessions\2026\09\ — уби́тият пас 01a0a56c-1561-7312-b86b-643df701be5c;
+PROJ-001 одитор 01a0a50d-2b91-7070-9357-6d4cd1c23d44; PROJ-004 одитор 01a0aaab-b0b2-7791-8b80-6024eddf95c6;
+PLAN_CONS readiness одитор (студен p1/p2 + топлите) 01a0ab89-9017-7242-b9bc-e8512b3a7f86;
+студен p3 01a0abb4-5800-7611-b547-571770d800b8.
