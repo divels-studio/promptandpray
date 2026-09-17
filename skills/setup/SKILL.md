@@ -149,7 +149,9 @@ self-check itself** as its last action, against the project it just wrote, and r
 `self-check: PASS` with the child's own summary line.
 
 - a **red** self-check makes the install exit **1** and says plainly that the files WERE written and
-  nothing was rolled back - the writes stand, the verdict is that the result is not consistent;
+  nothing was rolled back - the writes stand, and the verdict is EITHER that the result is not
+  consistent OR that this run **could not prove part of the contract in this environment** (a host
+  the checks need was missing or unusable); the detail above the verdict says which;
 - a self-check that could not be started at all is **also** exit 1: "could not check" is never
   reported as "checked";
 - `--no-selfcheck` skips it, and says so on one line.

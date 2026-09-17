@@ -104,7 +104,9 @@ wrote, and report `self-check: PASS` with the child's own summary line. `--check
 "already current" run write nothing, so there is nothing for it to judge and it does not run.
 
 - a **red** self-check makes the update exit **1** and says plainly that the migrations WERE applied
-  and nothing was rolled back - the writes stand, the verdict is that the result is not consistent;
+  and nothing was rolled back - the writes stand, and the verdict is EITHER that the result is not
+  consistent OR that this run **could not prove part of the contract in this environment** (a host
+  the checks need was missing or unusable); the detail above the verdict says which;
 - a self-check that could not be started at all is **also** exit 1: "could not check" is never
   reported as "checked";
 - `--no-selfcheck` skips it, and says so on one line.

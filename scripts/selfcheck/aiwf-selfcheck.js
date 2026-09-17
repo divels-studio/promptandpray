@@ -232,18 +232,58 @@ function resolveRole(role, rolesPath, klass) {
 // ---------------------------------------------------------------------------
 // Deliberately the SAME posture as the PowerShell host above, because the two channels carry the
 // same contract: a host that cannot be found is not an exemption - the section below FAILS and says
-// the contract is unproven in this run. On Windows the two Git-for-Windows locations are tried
-// after PATH, which is where a bash lives on a machine that has git but no `bash` on PATH.
-function findBash() {
-  const candidates = ['bash'];
-  const pf = [process.env['ProgramFiles'], process.env['ProgramW6432'], process.env['ProgramFiles(x86)']].filter(Boolean);
+// the contract is unproven in this run.
+//
+// WHICH bash, and why that question is not academic. A Windows machine can carry several programs
+// called `bash`, and they are not interchangeable: a Git-for-Windows bash resolves the Windows
+// absolute paths this file hands it, while a Linux-subsystem bash lives in a filesystem of its own,
+// cannot see those paths, and strips their separators on the way. Which one answers the bare name
+// `bash` depends on PATH order, which varies between sessions of the same machine. Three measured
+// instances on one development machine, all of them the host and none of them the payload:
+//   2026-09-15  52 FAIL, caused by the bash host rather than by anything under check.
+//   2026-09-16  1026/1026 PASS, in the session where the Git-for-Windows bash was the one picked.
+//   2026-09-16  992 PASS / 52 FAIL, exit 127 and a "/bin/bash: <a Windows absolute path with its
+//               separators stripped>" message from the other host.
+// So two things below, and neither alone is enough. ORDER: the Git-for-Windows locations are tried
+// FIRST and the bare name LAST, so PATH order decides only what is left. PROBE: a candidate is
+// accepted only when it FUNCTIONALLY resolves a Windows absolute path that certainly exists - the
+// old `bash -c 'exit 0'` test is passed by every one of those hosts, including the one that cannot
+// see the paths, which is exactly how the failures above got in.
+const BASH_PROBE_PATH = __filename; // an absolute path on this platform that certainly exists
+
+// The path travels as an argv ATOM (read back as $1), never interpolated into the -c string: that
+// removes every quoting question a backslash separator would otherwise raise.
+function bashProbeArgv(probePath) { return ['-c', 'test -f "$1"', 'aiwf-bash-probe', probePath]; }
+
+// No platform branch on purpose: off Windows the ProgramFiles* variables are absent, so the list is
+// exactly ['bash'] and this channel behaves as it always did.
+function bashCandidates(env) {
+  const out = [];
+  const pf = [env['ProgramFiles'], env['ProgramW6432'], env['ProgramFiles(x86)']].filter(Boolean);
   for (const base of pf) {
-    candidates.push(path.join(base, 'Git', 'bin', 'bash.exe'));
-    candidates.push(path.join(base, 'Git', 'usr', 'bin', 'bash.exe'));
+    out.push(path.join(base, 'Git', 'bin', 'bash.exe'));
+    out.push(path.join(base, 'Git', 'usr', 'bin', 'bash.exe'));
   }
-  for (const exe of candidates) {
-    const r = spawnSync(exe, ['-c', 'exit 0'], { encoding: 'utf8' });
-    if (!r.error && r.status === 0) return exe;
+  out.push('bash');
+  return out;
+}
+
+function bashProbe(exe, probePath, spawn) {
+  const r = spawn(exe, bashProbeArgv(probePath), { encoding: 'utf8' });
+  return !r.error && r.status === 0;
+}
+
+// `env`, `candidates`, `probe` and `spawn` are injectable so the BASH HOST section can assert the
+// selection in-process: this runs at module load, so the real PATH cannot be rearranged from inside
+// the run. The production call below passes nothing and keeps every default.
+function findBash(opts) {
+  const o = opts || {};
+  const env = o.env || process.env;
+  const probePath = o.probePath || BASH_PROBE_PATH;
+  const probe = o.probe || bashProbe;
+  const spawn = o.spawn || spawnSync;
+  for (const exe of (o.candidates || bashCandidates(env))) {
+    if (probe(exe, probePath, spawn)) return exe;
   }
   return null;
 }
@@ -258,6 +298,205 @@ function resolveRoleSh(role, rolesPath, klass) {
   let json = null;
   try { json = r.stdout && r.stdout.trim() ? JSON.parse(r.stdout) : null; } catch (e) { json = null; }
   return { status: r.status, stdout: r.stdout, stderr: r.stderr, json };
+}
+
+// ---------------------------------------------------------------------------
+// SECTION 0 - which bash this run selected, and why that selection is trustworthy
+// ---------------------------------------------------------------------------
+// The selection above is the only thing standing between this run and a report about the host
+// masquerading as a report about the payload, so it is asserted rather than assumed.
+//
+// NOTHING HERE MAY DERIVE ITS EXPECTATION FROM THE CODE IT POLICES. The expected probe argv is
+// written out BY HAND below as EXPECTED_PROBE_ARGV and the section uses only that: faces that ask
+// "is this host path-blind" spawn it directly, and the spawn double recognises the probe by it. The
+// earlier shape of this section asked bashProbeArgv() what the argv was and asked bashProbe() which
+// hosts were blind, so weakening either one moved the expectation with it - the faces could only
+// fail if the probe was DELETED, not if it was made permissive, which is the regression that
+// actually happens. The production argv is instead PINNED by face 1, on its own.
+//
+// Eight faces: two pure (1 pins the argv, 4 the candidate order), two against the binaries really
+// present on this machine (2, and 3 which is the only machine-dependent face - it reports a NOTE
+// where no path-blind host is reachable), and four in-process against a spawn double (5, 6 and the
+// two controls 7 and 8). The controls flip different things: FACE 7 restores the pre-fix shape - the
+// old `-c 'exit 0'` check - and requires it to select the path-blind host, while FACE 8 keeps the
+// PRODUCTION probe and requires it to yield no host at all rather than a broken one.
+//
+// Faces 5 to 8 need a double at all because findBash() runs at module load - the real PATH cannot be
+// rearranged from in here - and a stub executable is not a reliable subject on Windows (an
+// extension-less script is not run by the loader and Node refuses a .cmd/.bat without a shell). WHAT
+// each of them substitutes differs, and the difference is the point:
+//   FACE 5 doubles the ENVIRONMENT only (`env` + `spawn`), so bashCandidates and bashProbe both
+//     really run; and because both of its hosts answer that probe, the ORDER is the only thing left
+//     that can decide the answer. It is the one face that proves the candidate construction.
+//   FACES 6 and 8 inject the candidate LIST (+ `spawn`), so the production probe is exercised over a
+//     list chosen here rather than over the one bashCandidates builds.
+//   FACE 7 injects the list AND the probe, because restoring the pre-fix shape is the whole point of
+//     that control: neither production function runs inside it.
+const BASH_PROBE_TIMEOUT_MS = 15000;
+
+// Every bash reachable from this process: the PATH entries and the Git-for-Windows locations. Used
+// only to find a subject for face 3 - the selection itself never consults this list.
+function reachableBashHosts(env) {
+  const out = [];
+  const seen = new Set();
+  const add = (p) => {
+    const key = p.toLowerCase();
+    if (seen.has(key)) return;
+    try { if (!fs.statSync(p).isFile()) return; } catch (e) { return; }
+    seen.add(key);
+    out.push(p);
+  };
+  for (const dir of String(env.PATH || env.Path || '').split(path.delimiter).filter(Boolean)) {
+    for (const name of ['bash.exe', 'bash']) add(path.join(dir, name));
+  }
+  for (const cand of bashCandidates(env)) if (cand !== 'bash') add(cand);
+  return out;
+}
+
+// The bare name as PATH really resolves it. A selected host may be the literal `bash`, and comparing
+// that string with the absolute paths the enumeration above returns can never match - a comparison
+// that cannot match is a face that cannot fail. A name that already carries a separator is its own
+// answer; an unresolvable name is returned unchanged, so the comparison stays conservative.
+function resolveBashOnPath(exe, env) {
+  if (!exe) return null;
+  if (exe.includes('\\') || exe.includes('/')) return exe;
+  for (const dir of String(env.PATH || env.Path || '').split(path.delimiter).filter(Boolean)) {
+    for (const name of [exe, `${exe}.exe`]) {
+      const p = path.join(dir, name);
+      try { if (fs.statSync(p).isFile()) return p; } catch (e) { /* keep looking */ }
+    }
+  }
+  return exe;
+}
+
+function sectionBashHost() {
+  section('BASH HOST - chosen by a functional probe and by order, never by PATH order alone');
+  // The row that says which binary every bash-channel finding below was produced by. An
+  // observation, not an assertion: the two gates that FAIL on a missing host are elsewhere.
+  observation('bash host selected for this run',
+    BASH ? `${BASH} - accepted by the functional probe` : 'no bash host passed the functional probe in this run');
+
+  // THE INDEPENDENT EXPECTATION. Written out here by hand, never read back from bashProbeArgv():
+  // every face below spells the probe this way, so a production argv that stops proving path
+  // visibility makes faces go RED instead of quietly moving with it.
+  const EXPECTED_PROBE_ARGV = ['-c', 'test -f "$1"', 'aiwf-bash-probe', BASH_PROBE_PATH];
+
+  // A spawn with a ceiling, for the real-binary faces: a host that never answers must not hang the
+  // run.
+  const timedSpawn = (exe, argv, opts) => spawnSync(exe, argv, Object.assign({ timeout: BASH_PROBE_TIMEOUT_MS }, opts || {}));
+  // "Can this binary resolve an absolute path handed to it as an argv atom?", asked WITHOUT the
+  // production probe, so a permissive bashProbe cannot decide the answer.
+  const directProbe = (exe) => {
+    const r = timedSpawn(exe, EXPECTED_PROBE_ARGV, { encoding: 'utf8' });
+    return !r.error && r.status === 0;
+  };
+
+  // FACE 1 - the production argv IS the argv this section expects, atom for atom. Pure, no spawn.
+  // This is the pin: every other face may speak about EXPECTED_PROBE_ARGV only because this one
+  // holds the production code to it.
+  const producedArgv = bashProbeArgv(BASH_PROBE_PATH);
+  check('the production probe argv is exactly the functional probe this section expects, atom for atom',
+    JSON.stringify(producedArgv) === JSON.stringify(EXPECTED_PROBE_ARGV),
+    `produced ${JSON.stringify(producedArgv.slice(0, 3))} + the probe path`);
+
+  // FACE 2 - the host that WAS selected answers that probe, against a real absolute path, for real.
+  check('the selected host resolves a real absolute path handed to it as an argv atom (real spawn)',
+    !!BASH && directProbe(BASH),
+    BASH ? `${BASH} resolved the probe path` : 'no bash host was selected at all, so nothing could be probed');
+
+  // FACE 3 - the machine-dependent one: a real binary here that the PRE-FIX check would have
+  // accepted and that cannot resolve the path. Blindness is decided by directProbe, so this face
+  // keeps its subject even if the production probe is made permissive. Where the machine carries no
+  // such host, that is said out loud rather than dressed up as a pass.
+  const pathBlind = [];
+  for (const exe of reachableBashHosts(process.env)) {
+    const legacy = timedSpawn(exe, ['-c', 'exit 0'], { encoding: 'utf8' });
+    if (legacy.error || legacy.status !== 0) continue;
+    if (!directProbe(exe)) pathBlind.push(exe);
+  }
+  if (pathBlind.length) {
+    // The selected host resolved the way PATH resolves it: comparing a bare name with an absolute
+    // path would be a comparison that can never match, and a face that cannot fail.
+    const selected = String(resolveBashOnPath(BASH, process.env) || '').toLowerCase();
+    check('a host the pre-fix check accepts but which cannot see an absolute path is not the one selected (real spawn)',
+      selected !== '' && !pathBlind.some((exe) => exe.toLowerCase() === selected),
+      `${pathBlind.length} such host(s) reachable here; selected ${selected || '(none)'}`);
+  } else {
+    note('a path-blind bash host is not the one selected',
+      'no bash reachable on this machine passes the pre-fix `-c \'exit 0\'` check and then fails the functional probe, so there was nothing to reject here');
+  }
+
+  // FACE 4 - the order, pure: no spawn, a synthetic base, assertions on INDICES rather than on mere
+  // membership. The bare name is last because PATH order is the thing being defended against.
+  const synthBase = path.join(os.tmpdir(), 'pnp-bash-candidate-fixture');
+  const synthGitBin = path.join(synthBase, 'Git', 'bin', 'bash.exe');
+  const synthGitUsr = path.join(synthBase, 'Git', 'usr', 'bin', 'bash.exe');
+  const ordered = bashCandidates({ ProgramFiles: synthBase });
+  const iGitBin = ordered.indexOf(synthGitBin);
+  const iGitUsr = ordered.indexOf(synthGitUsr);
+  const iBare = ordered.indexOf('bash');
+  check('the Git-for-Windows candidates come BEFORE the bare name, which is last',
+    iGitBin === 0 && iGitUsr === 1 && iBare === ordered.length - 1 && ordered.length === 3,
+    `indices: git/bin=${iGitBin} git/usr=${iGitUsr} bare=${iBare} of ${ordered.length}`);
+
+  // The two measured hosts as a spawn double, for faces 6 to 8: SEEING answers both checks, BLIND
+  // answers the pre-fix one and fails the functional probe, and the bare name is mapped to BLIND -
+  // the session that produced the 52 failures. FACE 5 does not use this map; it has one of its own,
+  // where both hosts see, because its subject is the order rather than the probe.
+  const SEEING = '<a host that resolves absolute paths>';
+  const BLIND = '<a host that cannot see absolute paths>';
+  // A null-prototype map on purpose: a lookup by an arbitrary host name must not find something on
+  // Object.prototype and read as a behaviour this double never defined.
+  const BEHAVIOUR = Object.assign(Object.create(null), { [SEEING]: 'seeing', [BLIND]: 'blind', bash: 'blind' });
+  const EXPECTED_PROBE_ARGV_JSON = JSON.stringify(EXPECTED_PROBE_ARGV);
+  const fakeSpawn = (exe, argv) => {
+    const behaviour = BEHAVIOUR[exe];
+    if (!behaviour) return { error: new Error('no such host'), status: null };
+    // Recognised by the INDEPENDENT argv: hand this double anything else and the blind host answers
+    // 0, exactly as the real one does for a check that is not the functional probe.
+    const isProbe = JSON.stringify(argv) === EXPECTED_PROBE_ARGV_JSON;
+    return { status: behaviour === 'seeing' || !isProbe ? 0 : 1, stdout: '', stderr: '' };
+  };
+  // The pre-fix probe, restated here as the control's subject rather than kept in production code.
+  const legacyProbe = (exe, probePath, spawn) => {
+    const r = spawn(exe, ['-c', 'exit 0'], { encoding: 'utf8' });
+    return !r.error && r.status === 0;
+  };
+
+  // FACE 5 - THE WHOLE SELECTION, through the PRODUCTION candidate list. Only `env` and `spawn` are
+  // injected, so findBash builds its candidates with bashCandidates itself and probes with the
+  // production bashProbe; no candidate list is handed to it.
+  //
+  // Both hosts answer the probe here, and that is the point: when both work, the ONLY thing that can
+  // decide the answer is the ORDER bashCandidates builds. A probe strong enough to reject the blind
+  // host would otherwise hide a reverted order - the bare name would be skipped for being blind
+  // rather than for being last - and the order half would go unproven through production selection.
+  const bothSeeing = Object.assign(Object.create(null), { [synthGitBin]: true, bash: true });
+  const fakeSpawnBothSeeing = (exe) => (bothSeeing[exe]
+    ? { status: 0, stdout: '', stderr: '' }
+    : { error: new Error('no such host'), status: null });
+  const viaDefaults = findBash({ env: { ProgramFiles: synthBase }, spawn: fakeSpawnBothSeeing });
+  check('findBash with no candidates injected builds them itself and takes the Git host over an equally working bare name',
+    viaDefaults === synthGitBin && viaDefaults !== 'bash',
+    `selected ${viaDefaults === synthGitBin ? 'the generated Git path' : JSON.stringify(viaDefaults)}`);
+
+  // FACE 6 - the fix, stated positively: the bad host is skipped even when it is tried FIRST.
+  const skipped = findBash({ candidates: [BLIND, SEEING], spawn: fakeSpawn });
+  check('selection skips a path-blind candidate even when it comes first, and takes the working one',
+    skipped === SEEING, `selected ${JSON.stringify(skipped)}`);
+
+  // FACE 7 - CONTROL, flipping the PROBE: the pre-fix exit-0 shape, same double, picks the bad host.
+  const preFix = findBash({ candidates: ['bash'], probe: legacyProbe, spawn: fakeSpawn });
+  check('CONTROL: with the pre-fix exit-0 check the bare name selects the path-blind host',
+    preFix === 'bash' && BEHAVIOUR[preFix] === 'blind',
+    `the pre-fix shape returned ${JSON.stringify(preFix)}, whose behaviour here is ${BEHAVIOUR[preFix] || '(unknown)'}`);
+
+  // FACE 8 - CONTROL, flipping the CANDIDATE LIST and keeping the production probe: with only the
+  // bad host available the selection returns NO host rather than a broken one. Fail-closed, exactly
+  // like the two gates that then report the contract as unproven.
+  const onlyBlind = findBash({ candidates: [BLIND], spawn: fakeSpawn });
+  check('CONTROL: with only the path-blind host available the production probe yields no host at all',
+    onlyBlind === null, `selected ${JSON.stringify(onlyBlind)}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -6722,6 +6961,8 @@ function main() {
 
   let crashed = false;
   try {
+    // First, because every bash-channel finding after it is only as trustworthy as this selection.
+    sectionBashHost();
     sectionGate1Identity(tmpRoot);
     sectionGate2(tmpRoot);
     sectionGate2Mode(tmpRoot);
@@ -6782,6 +7023,17 @@ function main() {
     console.log('as a failure, so neither the tally nor the exit code can read as a pass.');
   }
   console.log('\n---- COVERAGE (honest) ----');
+  console.log('BASH HOST: the binary this run chose is selected by ORDER (the Git-for-Windows locations before');
+  console.log('the bare name) and by a FUNCTIONAL probe - the candidate must resolve a real absolute path handed');
+  console.log('to it as an argv atom - never by `bash -c \'exit 0\'`, which every candidate on such a machine');
+  console.log('passes. The choice is printed as a [NOTE] row. The expected probe argv is written out by hand in');
+  console.log('that section and the production one is PINNED to it, so a probe made permissive cannot move the');
+  console.log('expectation with it; blindness of a real binary is decided by that hand-written argv, never by the');
+  console.log('code under test. ONE face drives selection through findBash\'s OWN candidate construction, with two');
+  console.log('equally working hosts, so only the ORDER can decide its answer; the other three hand it a chosen');
+  console.log('candidate list, two of them over the production probe and one - the pre-fix control - replacing');
+  console.log('that probe too. The control must then select the path-blind host, while the production probe, over');
+  console.log('a list holding only that host, must yield no host at all rather than a broken one.');
   console.log('EXECUTED: all three enforcement hooks, run as the harness runs them (identity matrix, the two');
   console.log('captured live payloads, the dispatch gate\'s ask/passthrough matrix in its factory mode AND its');
   console.log('enforcement.dispatchGate off-plan mode - where the only silent path is a Ticket: <REF> line whose');

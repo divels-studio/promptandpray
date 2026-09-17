@@ -749,6 +749,45 @@ section('17 - the self-check is the install\'s own last step, and "could not che
   check('which is true: the project layer really is on disk',
     exists(at(p23, CONFIG_REL)) && exists(at(p23, ROLES_REL)) && exists(at(p23, 'CLAUDE.md')));
 }
+{
+  // The other branch: a self-check that RAN and came back RED. What is under test here is the
+  // caller's VERDICT, not the engine's report - and specifically the distinction the operator acts
+  // on, because the two meanings call for opposite responses: either the project really is
+  // inconsistent, or this run could not PROVE part of the contract in this environment. The second
+  // is not hypothetical - a bash host that could not resolve the paths handed to it turned 52
+  // assertions red at once, about the machine rather than about the project.
+  //
+  // The child is a payload copy whose self-check exits non-zero with a report on stdout. Doubling
+  // the CHILD is the same move the fail-closed case above makes by removing it: the production path
+  // under test is interview.mjs -> finishWithSelfCheck's red branch. The real engine's own red
+  // report is exercised end to end by the update suite (`sc-red`), and running it again here would
+  // cost this suite a measured ~105 s - `node scripts/selfcheck/aiwf-selfcheck.js --plugin-root .
+  // --project-fixture .`, timed on the machine this was written on - to re-prove someone else's
+  // contract.
+  const payload = path.join(tmpRoot, 'payload-red-selfcheck');
+  copyTree(PLUGIN_ROOT, payload);
+  fs.writeFileSync(path.join(payload, ...SELFCHECK_REL.split('/')), [
+    "'use strict';",
+    "console.log('  [FAIL] a bash host is available to run the sh resolver - the contract is UNPROVEN in this run');",
+    "console.log('==== 991/992 assertions passed ====');",
+    "console.log('FAILURES:');",
+    "console.log('  - [ROLE RESOLVER (bash channel)] a bash host is available to run the sh resolver');",
+    'process.exitCode = 1;',
+    '',
+  ].join('\n'));
+  const p24 = project('selfcheck-red');
+  const r = install(p24, baseAnswers(), ['--no-seeds'], { payload, selfcheck: true });
+  check('a self-check that RAN and came back RED makes the install exit 1, not 0', r.status === 1, why(r, true).slice(0, 200));
+  check('the child\'s own report reached the operator verbatim',
+    r.out.includes('FAILURES:') && r.out.includes('991/992 assertions passed'), why(r, true).slice(0, 200));
+  check('the verdict still says the files WERE written and nothing was rolled back',
+    r.out.includes('WERE written') && r.out.includes('nothing was rolled back'), why(r, true).slice(0, 200));
+  check('and it distinguishes an inconsistent project from a contract this run could not prove here',
+    r.out.includes('could not prove part of the contract in this environment')
+    && r.out.includes('a host the checks need was missing or unusable'), why(r, true).slice(0, 200));
+  check('which is true: the project layer really is on disk',
+    exists(at(p24, CONFIG_REL)) && exists(at(p24, ROLES_REL)) && exists(at(p24, 'CLAUDE.md')));
+}
 
 // ---------------------------------------------------------------------------
 // ADOPT MODE. Every case below installs into a project that ALREADY carries an AIWF surface, which

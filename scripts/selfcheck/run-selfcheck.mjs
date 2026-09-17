@@ -18,6 +18,11 @@
  *   4. Child exit non-zero -> the child's stdout and stderr are printed verbatim and the CLI exits 1
  *      with a one-line verdict that says plainly that the files WERE written and nothing was rolled
  *      back. A red self-check behind exit 0 would be the worst false green this payload can produce.
+ *      That verdict also names the two DIFFERENT things a red child can mean, because they call for
+ *      opposite responses: either the subject really is inconsistent, or this run could not prove
+ *      part of the contract in this environment - a host the checks need (a bash, a PowerShell) was
+ *      missing or unusable, and dozens of assertions then go red about the machine rather than about
+ *      the project. The exit code is 1 in both cases; only the detail above the verdict says which.
  *   5. The child cannot be spawned at all (missing script, spawn error, no exit status) -> exit 1
  *      naming what could not run. Fail-closed: "could not check" is never reported as "checked".
  *   6. `--no-selfcheck` skips it and says so on one line. Silence is not an option in either branch,
@@ -94,7 +99,9 @@ export function finishWithSelfCheck({
   if (result.stderr) process.stderr.write(result.stderr.endsWith('\n') ? result.stderr : `${result.stderr}\n`);
   err(
     `self-check: FAIL (exit ${result.status}). The files WERE written and nothing was rolled back - a red self-check ` +
-    `reports that ${subject} is inconsistent, not that the write failed. Run \`/pnp:selfcheck\` for the detail printed above.`,
+    `never reports that the write failed: it reports EITHER that ${subject} is inconsistent, OR that this run ` +
+    'could not prove part of the contract in this environment (a host the checks need was missing or unusable). ' +
+    'The detail printed above says which, and `/pnp:selfcheck` re-runs it.',
   );
   return 1;
 }
