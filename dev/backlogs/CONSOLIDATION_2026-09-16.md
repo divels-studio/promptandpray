@@ -169,10 +169,24 @@ or doctrine. The payload carries mechanisms; the machine carries the topology.
 - **D21.** Evidence pack as payload practice: pack on every first code-class pass + explicit
   spot-check right and duty; the claim is qualitative (moves the pass from rediscovery to
   judgment), never cost.
-- **D22.** Stats methodology: normative text in ONE payload home (a short METRICS section);
-  the TABLE lives on the project's never-archiving transfer-surface file (one per project —
-  cross-plan comparability is what made the counter test possible); the active PLAN's process
-  section carries only the D2 pointer row. No memory seeds, no rendered artifact.
+- **D22.** [AMENDED 2026-09-17 by arbitration ruling on `.aiwf/arbiter-brief.txt`, operator word
+  the same day; the amendment is the AUTHOR's own correction, ruled against its own rendering.]
+  The original text put the normative half in "ONE payload home (a short METRICS section)". That
+  violated this document's own genericity boundary: what ships must hold for a stranger with ONE
+  project, and a stranger may never run codex at all or may hold an incomparable quota. Measurement
+  was never payload subject matter — the counter, the window and the pairs are the CAMPAIGN
+  discipline of D1–D26, the instrument by which we decided the resume policy and the formats.
+  So: the methodology (counter start/stop pairs, window comparability, the duration column,
+  one-auditor-while-measuring, tokens-as-diagnostic) lives dev-side, as a preamble to the Pass
+  statistics section of the transfer-surface file — where the TABLE already lives, one per project,
+  never archived, which is what makes passes comparable across plans. The PAYLOAD carries only the
+  resume/cold POLICY, and it carries it inside `skills/review/SKILL.md` and `skills/qa/SKILL.md`,
+  where the resume MECHANICS already are — policy beside mechanism, so there is no drift boundary
+  between two homes. The no-token-promises rule survives wherever honest-limits prose already
+  states it; it needs no home of its own. The active PLAN's process section still carries only the
+  D2 pointer row. No memory seeds, no rendered artifact, and no `docs/METRICS.md`.
+  [Executed as: CONS-006 closed on the invalidated premise; the policy passage absorbed into
+  CONS-005's scope.]
 - **D23.** The review skill's plan-readiness brief template gains the literal block
   "PREVIOUS PASS BLOCKERS (verbatim; absent or empty on pass ≥2 is a contract violation the
   Reviewer reports separately)" — omission becomes visible in the fixed-path brief artifact.
