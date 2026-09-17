@@ -231,6 +231,50 @@ call is capped at 10 minutes; an external engine at `effort: high` routinely exc
 killed mid-run (exit 143), which spends the operator's paid quota and returns no verdict. Same
 rule, same reasoning, as `/pnp:review` Step 3.
 
+**A verification pass after a correction round may RESUME the previous session instead of paying for
+a cold one.** It is the same block with one flag added, so the command text stays in the same small
+fixed set a permission rule can match:
+
+**os `windows`:**
+
+```powershell
+Get-Content '<root>/{{config.paths.scratchDir}}/qa-brief.txt' -Raw | `
+  & "${CLAUDE_PLUGIN_ROOT}/scripts/native/ps/codex-qa.ps1" -ProjectRoot '<root>' -Resume
+```
+
+**os `linux` / `macos`:**
+
+```bash
+cat '<root>/{{config.paths.scratchDir}}/qa-brief.txt' \
+  | bash "${CLAUDE_PLUGIN_ROOT}/scripts/native/sh/codex-qa.sh" --project-root '<root>' --resume
+```
+
+With no id after it, the flag replays the session the wrapper recorded on its OWN last run - QA's
+own state file, `<root>/{{config.paths.scratchDir}}/last-qa-session.txt`, which a Reviewer run never
+touches - and sends the new brief into that same context. With an explicit id (`-ResumeId <id>` on
+PowerShell, `--resume <id>` or `--resume-id <id>` on bash) it resumes exactly that session instead;
+an explicitly EMPTY id is refused (exit 2) rather than quietly falling back to the recorded one.
+With no recorded session and no id the wrapper refuses (exit 2) rather than quietly running a cold
+pass, because a silent cold pass spends the operator's quota on the very thing the resume was
+avoiding. The resume form carries no `-C` and no `--sandbox`: `codex exec resume` has neither, so
+the read-only posture travels as `-c sandbox_mode=read-only` plus `-c approval_policy=never` and the
+wrapper makes the project root its cwd itself. Resuming is for a **verification** pass over the same
+ticket and the same evidence set; a new ticket, or a pass whose artifacts the previous session never
+saw, is a cold run.
+
+**How the id gets recorded, and when it does not.** The wrapper does **not** read the engine's
+output - it touches neither stdout nor stderr, so what you see is the engine's own bytes. A
+**resumed** run records the id it resumed with (which also repairs the state file after an explicit
+`-ResumeId`). A **cold** run identifies its session in Codex's own store (`$CODEX_HOME`, default
+`~/.codex`) by mtime plus a fingerprint of this run's brief, and records the id only when exactly
+one session matches. If it cannot tell - nothing matched, two sessions did, or the brief was too
+short to leave a fingerprint - the state file is CLEARED and the wrapper says so on stderr, so the
+next `-Resume` refuses instead of replaying a stale session. Two lines on stderr are worth reading
+when they appear: `no session id is recorded now` (the next pass must be cold or explicit) and,
+far worse,
+`ERROR: ... could NOT be removed` - a stale id survived the clear, so do not resume from it at all.
+A `-Resume` against a state file the wrapper cannot write is refused (exit 2) for the same reason.
+
 The block of this project's OS channel is the **only canonical wrapper path** - PowerShell on os
 `windows`, bash on os `linux`/`macos` (same foreign-shell caveat as `/pnp:review`, and the same
 rule: the channels are mirrors, never alternatives). `{{config.paths.scratchDir}}` is gitignored, so

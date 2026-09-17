@@ -81,6 +81,82 @@ Hard requirements (do not change without re-proving the read-only posture):
   and returns no verdict. Never retry a timed-out pass in the foreground: a full `high` pass on a
   multi-file diff has been observed killed at the cap with nothing returned.
 
+### Resuming a session (both wrappers, both channels)
+
+A correction round does not have to pay for a second cold read of the whole repository. Every run of
+`codex-review.*` and `codex-qa.*` - cold or resumed - records this run's session id into a state
+file, and a later pass can replay that session with the new brief.
+
+- **THE WRAPPERS DO NOT TOUCH EITHER OUTPUT STREAM, and the id does not come from the output at
+  all.** Codex prints its configuration banner - the part carrying `session id:` - on **stderr**,
+  reserves **stdout** for the final message, and decides what to render by whether those streams are
+  a terminal. A wrapper that tees, pipes or redirects either stream therefore changes what the
+  caller sees *and* what Codex prints; on PowerShell it cannot preserve bytes either, as the shell
+  decodes a native command's stdout line by line and re-terminates the last one. Both were measured,
+  not assumed. So the invocation is the plain one and the id is looked up **after** the run.
+- **A RESUMED run records the id it resumed with**, without consulting the store at all:
+  `codex exec resume <id>` continues *that* conversation (branching into a new one is the separate
+  `codex exec fork` subcommand, which these wrappers never use), and the store could not answer for
+  it anyway - a resumed session's rollout has grown past the window the lookup reads, so the new
+  brief sits beyond it. This is also what repairs the state file after an explicit
+  `-ResumeId <id>` / `--resume <id>`, the one case where the file was not written by the pair.
+- **For a COLD run the id is read from Codex's own session store.** `$CODEX_HOME` (default
+  `~/.codex`), the same store `codex exec resume --last` resolves against, holds one
+  `rollout-*.jsonl` per session whose first line is a `session_meta` record carrying `session_id`.
+  Identification is POSITIVE, never "the newest file": a candidate must have been written **during
+  this run** (mtime at or after a marker taken just before the invocation) **and contain this run's
+  brief**. Exactly one survivor is recorded; zero or several record **nothing**, so a second Codex
+  session running in the same repository can never be mistaken for this one.
+- **A brief that leaves no fingerprint identifies nothing.** The fingerprint is the longest run of
+  printable ASCII in the head of the brief that JSON does not escape, and it must be at least 24
+  characters. A shorter or non-ASCII brief produces none - and then the lookup records **nothing**
+  rather than matching every fresh rollout, which would hand the next bare resume an unrelated
+  session.
+- **An unidentified COLD run CLEARS the state file** instead of leaving the previous run's id in it:
+  a bare resume that silently replays a *stale* session is the failure the state file exists to
+  prevent. The clear is a **delete first, truncate second**, then **verified by re-reading** -
+  a read-only file refuses truncation but is still removable while its directory is writable, both
+  measured. If the id survives both, the wrapper prints an **ERROR naming the surviving id** and
+  never claims success.
+- **A bare resume refuses a state file it cannot write** (exit 2, naming the file). A file this
+  wrapper cannot clear is one a previous run may have failed to clear, so its content cannot be
+  trusted to be current; the escape hatch is an explicit id.
+- **The state file is PER ROLE.** `codex-review.ps1` / `codex-review.sh` read and write
+  `<scratchDir>/last-review-session.txt`; `codex-qa.ps1` / `codex-qa.sh` read and write
+  `<scratchDir>/last-qa-session.txt`. Neither names the other's file anywhere, so a QA run can never
+  hijack a Reviewer resume. `<scratchDir>` is `paths.scratchDir` from the project's
+  `.claude/aiwf-native/aiwf.config.json`, falling back to `.aiwf` when the config is missing,
+  unreadable or carries no key.
+- **The surface.** On `linux`/`macos`: `--resume [<id>]` - the argument is OPTIONAL, and a following
+  token starting with `-` is the next flag, never an id - plus `--resume-id <id>` as the explicit
+  spelling. On `windows`: `-Resume` (a switch) plus `-ResumeId <id>`, because PowerShell cannot
+  express an option with an optional argument - a parameter that takes a value makes bare
+  `-Resume` a parse error. Passing an id implies a resume on both channels.
+- **Refusals, so a resume never silently becomes a paid cold pass.** No recorded session and no id,
+  or an empty state file: exit 2 with the path in the message. An explicitly EMPTY id
+  (`-ResumeId ''` / `--resume-id ''`): exit 2, never a fall-through to the recorded session.
+- **The resume command is a different command, not the cold one with a flag added**, and its form is
+  frozen:
+
+```
+"<prompt>" | codex exec resume <id> -c sandbox_mode=read-only -c approval_policy=never -c model=<model> -c model_reasoning_effort=<effort> -
+```
+
+  `codex exec resume` has **no `-C` and no `--sandbox`** - they do not exist on the subcommand - so
+  the read-only posture travels as the `-c sandbox_mode=read-only` + `-c approval_policy=never`
+  pair, and the wrapper makes `<projectRoot>` its own cwd before the call. `-m` **does** exist on
+  the subcommand and is deliberately unused: one uniform `-c` posture carries all four values, and
+  effort has no flag of its own anyway. The trailing `-` is part of the form - the atom that says
+  the prompt arrives on stdin, the same stdin-only delivery the cold form uses. The resolved model
+  and effort stay ONE argv atom each.
+
+Both forms - cold and resume - are pinned by the self-check on both channels, with a negative
+control per pin. The EXECUTED probes go further than reading source: against a stub that puts the
+session id **only on stderr**, exactly as Codex does, they compare the argv Codex really receives
+atom for atom, compare the caller's stdout and stderr **in hex** (a payload with a CR and no
+trailing newline, so a line-oriented pass-through is caught), and assert that the id still lands in
+the right per-role file - which it can only do by having come from the session store.
+
 ### Option-injection regression probe (must stay green)
 
 `codex-qa.ps1 -ProjectRoot <root> -Prompt '--help'` must treat `--help` as a **prompt**, not a flag:

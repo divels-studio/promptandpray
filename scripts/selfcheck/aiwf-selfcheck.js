@@ -2425,6 +2425,41 @@ function sectionWrappers(tmpRoot) {
     check('qal pins the \'-c\',"model_reasoning_effort=$($role.effort)" pair', EFFORT_PAIR.test(args));
   }
 
+  // The RESUME posture, with controls. Everything above this line in the PowerShell channel is a
+  // bare `check` with no negative control - stated as such in the bash section's header. The resume
+  // findings do NOT inherit that: they carry stable ids and a sabotage each, because the pins that
+  // hold a read-only posture together are exactly the ones that rot into a regex matching nothing.
+  section('WRAPPERS (PowerShell channel) - the frozen resume posture and the per-role session state');
+  for (const f of psResumeFindings(PLUGIN_ROOT, { execProbes: true, tmpDir: tmpRoot })) check(f.name, f.ok, f.detail);
+
+  section('WRAPPERS (PowerShell channel) RESUME CONTROLS - each of those assertions is proven able to FAIL');
+  const psBase = path.join(tmpRoot, 'ps-base');
+  copyPsChannel(PLUGIN_ROOT, psBase);
+  const psPristine = psResumeFindings(psBase, { execProbes: true, tmpDir: tmpRoot }).filter((f) => !f.ok);
+  check('the control copy is clean before any sabotage', psPristine.length === 0,
+    psPristine.length ? psPristine.map((f) => f.id).join(', ') : 'all resume findings green');
+  let psI = 0;
+  const psCovered = new Set();
+  for (const m of psResumeControls()) {
+    const broken = path.join(tmpRoot, `ps-neg-${psI += 1}`);
+    copyPsChannel(psBase, broken);
+    try { m.apply(broken); } catch (e) { check(`control could be applied: ${m.label}`, false, String(e.message)); continue; }
+    // Only the probe this control targets is executed - a PowerShell host start is expensive, and a
+    // source-level control has no reason to pay for one.
+    const target = psResumeFindings(broken,
+      { execProbes: PS_EXEC_IDS.has(m.id) ? new Set([m.id]) : false, tmpDir: tmpRoot }).find((f) => f.id === m.id);
+    if (!target) { check(`control "${m.label}" targets a live check (id "${m.id}")`, false, 'no check with that id was produced'); continue; }
+    psCovered.add(m.id);
+    check(`sabotage detected [${m.id}]: ${m.label}`, target.ok === false,
+      target.ok ? 'still PASS - the check is vacuous' : 'FAIL as required');
+    try { fs.rmSync(broken, { recursive: true, force: true }); } catch (e) { /* best-effort */ }
+  }
+  for (const id of psResumeFindings(PLUGIN_ROOT, { execProbes: true, tmpDir: tmpRoot })
+    .filter((f) => !psCovered.has(f.id)).map((f) => f.id)) {
+    note(`no negative control for PowerShell resume check "${id}"`, 'no control defined - add one or state why it cannot fail');
+  }
+
+  section('WRAPPERS - locked flags (continued): the role resolver entrypoint');
   if (check('aiwf-roles.ps1 exists', resolverSrc != null)) {
     check('resolver reads the config EXACTLY once (single Get-Content)',
       (resolverSrc.match(/Get-Content\b/g) || []).length === 1);
@@ -2441,6 +2476,312 @@ function sectionWrappers(tmpRoot) {
 }
 
 // ---------------------------------------------------------------------------
+// SECTION 5a - the PowerShell resume posture (findings with ids, so controls can flip them)
+// ---------------------------------------------------------------------------
+// The frozen resume form as the PowerShell channel must spell it. `codex exec resume` has no -C and
+// no --sandbox (they do not exist on the subcommand) and -m, which does exist, is deliberately
+// unused: one uniform -c posture carries model, effort, sandbox_mode and approval_policy. The
+// trailing '-' is part of the form - it is the atom that says the prompt arrives on stdin.
+const PS_RESUME_FROZEN = ["'exec'", "'resume'", '$ResumeId',
+  "'-c'", "'sandbox_mode=read-only'", "'-c'", "'approval_policy=never'",
+  "'-c'", '"model=$($role.model)"', "'-c'", '"model_reasoning_effort=$($role.effort)"', "'-'"];
+const psRel = (file) => ['scripts', 'native', 'ps', file];
+
+/** A control copies ONLY the PowerShell wrappers - the findings below read nothing else. */
+function copyPsChannel(from, to) {
+  const src = path.join(from, 'scripts', 'native', 'ps');
+  const dst = path.join(to, 'scripts', 'native', 'ps');
+  fs.mkdirSync(dst, { recursive: true });
+  for (const name of fs.readdirSync(src)) fs.copyFileSync(path.join(src, name), path.join(dst, name));
+}
+
+function psResumeFindings(root, { execProbes = false, tmpDir = null } = {}) {
+  const out = [];
+  const add = (id, name, ok, detail) => { out.push({ id, name, ok: !!ok, detail: detail || '' }); return !!ok; };
+  const wantsExec = (...ids) => execProbes === true
+    || (execProbes instanceof Set && ids.some((i) => execProbes.has(i)));
+  const PS = path.join(root, 'scripts', 'native', 'ps');
+  // The resume argv lives in its own array, so the cold block keeps being matched by the same regex
+  // it always was: nothing here can move the cold form.
+  const resumeBlock = (s) => { const m = s ? /\$resumeArgs\s*=\s*@\(([\s\S]*?)[\r\n]+\)/.exec(s) : null; return m ? m[1] : ''; };
+  const blockAtoms = (block) => block.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
+    .join(' ').split(',').map((a) => a.trim()).filter(Boolean);
+  // The "own file" and --json clauses are asserted over the EXECUTABLE text: the capture comment
+  // names --json precisely to say it is never used, and a state file that appears only in a comment
+  // is not a state file. The "never the OTHER role's file" half is asserted over the WHOLE text -
+  // comments and help block included - so the crossed-state question stays answerable by a grep.
+  const codeOnly = (s) => (s || '').replace(/<#[\s\S]*?#>/g, '')
+    .split('\n').filter((l) => !l.trim().startsWith('#')).join('\n');
+
+  for (const [file, short] of [['codex-review.ps1', 'review'], ['codex-qa.ps1', 'qa']]) {
+    const s = readText(path.join(PS, file));
+    if (!add(`ps-${short}-resume-exists`, `${file} exists`, s != null)) continue;
+    const block = resumeBlock(s);
+    const atoms = blockAtoms(block);
+    const body = codeOnly(s);
+    const own = SESSION_FILES[short];
+    const other = OTHER_SESSION_FILE[short];
+    // PowerShell cannot express an option with an OPTIONAL argument - a parameter that takes a value
+    // makes bare -Resume a parse error - so the bash `--resume [<id>]` is spelled here as the switch
+    // plus an explicit id parameter, and BOTH must be declared or one of the two forms is missing.
+    add(`ps-${short}-resume-param`,
+      `${file} declares -Resume (switch) and -ResumeId (explicit id), the two halves of the bash --resume [<id>], and branches on whether -ResumeId was SUPPLIED rather than on its value`,
+      /\[switch\]\s*\$Resume\b/.test(s) && /\[string\]\s*\$ResumeId\b/.test(s)
+      && /\$IsResume\s*=\s*\$Resume\.IsPresent\s*-or/.test(s)
+      && /\$PSBoundParameters\.ContainsKey\('ResumeId'\)/.test(s));
+    add(`ps-${short}-resume-argv`, `${file} builds the FROZEN resume argv, atom for atom`,
+      JSON.stringify(atoms) === JSON.stringify(PS_RESUME_FROZEN), atoms.join(' ') || '(no $resumeArgs block)');
+    add(`ps-${short}-resume-posture`,
+      `${file} resume argv carries NO -C, NO --sandbox and NO -m (the first two do not exist on resume, the third is deliberately unused), and the resume form REPLACES the cold argv rather than extending it`,
+      !/'-C'/.test(block) && !/--sandbox/.test(block) && !/'-m'/.test(block)
+      && /\$codexArgs\s*=\s*\$resumeArgs/.test(s));
+    add(`ps-${short}-resume-cwd`, `${file} sets the cwd to the project root before a resume (the form has no -C to carry it)`,
+      /Set-Location\s+-LiteralPath\s+\$ProjectRoot/.test(s));
+    add(`ps-${short}-session-state`,
+      `${file} reads and writes ONLY <scratchDir>\\${own} - and never names ${other} ANYWHERE, comments and help block included, so the crossed-state question is answerable by a plain grep - with scratchDir taken from the project's aiwf.config.json and falling back to .aiwf`,
+      body.includes(own) && !s.includes(other) && /\$cfg\.paths\.scratchDir/.test(s)
+      && /\$scratchRel\s*=\s*'\.aiwf'/.test(s), `own file in the code ${body.includes(own)}, other file anywhere ${s.includes(other)}`);
+    // THE STREAMS BELONG TO THE CALLER, and on this channel that rule has teeth of its own:
+    // PowerShell decodes a native command's stdout line by line and re-emits it, so a ForEach-Object
+    // or Tee-Object pass-through cannot preserve bytes even when it means to.
+    add(`ps-${short}-stream-purity`,
+      `${file} attaches NOTHING to codex's stdout or stderr - the invocation is the bare stdin pipe, with no ForEach-Object, no Tee-Object and no redirect (PowerShell re-encodes what it passes through)`,
+      /\n\$Prompt \| & codex @codexArgs\r?\n/.test(s)
+      && !/& codex @codexArgs[^\r\n]*(?:\||[12]?>)/.test(s)
+      && !/Tee-Object/.test(body) && !/--json/.test(body));
+    add(`ps-${short}-session-store`,
+      `${file} takes the id from codex's OWN session store ($CODEX_HOME/sessions), identified POSITIVELY - written during this run AND carrying this run's brief - and records nothing at all unless exactly one file survives`,
+      /\$env:CODEX_HOME/.test(s) && /Join-Path \$codexHome 'sessions'/.test(s)
+      && /\$CaptureSince = \(Get-Date\)\.AddSeconds\(-2\)/.test(s)
+      && /\$_\.LastWriteTime -ge \$Since/.test(s) && /\$text\.Contains\(\$fingerprint\)/.test(s)
+      && /if \(\$mine\.Count -eq 1\)/.test(s) && /"session_id"/.test(s));
+    // A brief that leaves no verbatim trace identifies NOTHING. The alternative - accepting every
+    // fresh rollout when there is no fingerprint - records an unrelated session, and the next bare
+    // resume then enters someone else's conversation.
+    add(`ps-${short}-session-fingerprint`,
+      `${file} treats a brief with NO fingerprint as unidentifiable (it never widens the candidate set to every fresh rollout)`,
+      /if \(\$fingerprint -and \(Test-Path -LiteralPath \$sessionsDir\)\)/.test(s)
+      && /if \(\$text\.Contains\(\$fingerprint\)\)/.test(s)
+      && !/-not \$fingerprint/.test(s));
+    add(`ps-${short}-session-stale`,
+      `${file} CLEARS the state file when a cold run could not be identified, so the next -Resume refuses out loud instead of replaying a stale session`,
+      /function Clear-CodexSessionState/.test(s) && /Remove-Item -LiteralPath \$StateFile -Force/.test(s)
+      && /Clear-CodexSessionState -StateFile \$StateFile/.test(s));
+    // Clearing that is only ATTEMPTED is not a defence: Set-Content on a read-only state file throws
+    // and keeps its id. So the clear is delete-then-truncate and is then VERIFIED by re-reading, and
+    // a survivor is an ERROR that names the id - never a "cleared" message.
+    add(`ps-${short}-session-clear-verified`,
+      `${file} VERIFIES the clear by re-reading the file and reports a surviving stale id as an ERROR naming it, never as success`,
+      /\$left = \(\(Get-Content -LiteralPath \$StateFile -Raw -ErrorAction Stop\) -replace '\\s', ''\)/.test(s)
+      && /if \(\$left\) \{/.test(s)
+      && /Write-Error "this run could not be identified[^\n]*could NOT be removed/.test(s));
+    add(`ps-${short}-resume-known-id`,
+      `${file} records the id a RESUMED run already knows instead of searching the store for it (the store cannot answer for a resumed session, and this also repairs the file after an explicit -ResumeId <id>)`,
+      /if \(\$Resumed\) \{/.test(s) && /\$sessionId = \$KnownId/.test(s)
+      && /-KnownId \$ResumeId/.test(s));
+    add(`ps-${short}-resume-writable`,
+      `${file} refuses a BARE -Resume when the state file is not writable - a file this wrapper cannot clear may still hold the stale id it failed to clear`,
+      /\[System\.IO\.File\]::Open\(\$SessionState, 'Open', 'Write'\)/.test(s)
+      && /if \(-not \$writable\)/.test(s)
+      && /Write-Error "the recorded session file is not writable/.test(s));
+
+    // ---- the same two claims, EXECUTED on this channel ----
+    // Source text cannot prove that PowerShell left the bytes alone: the defect this replaces looked
+    // perfectly reasonable and still re-terminated the last line. So the wrapper is RUN against a
+    // stub that puts the session id ONLY on stderr - as codex does - and writes a rollout into its
+    // own $CODEX_HOME, and what is asserted is the hex the caller received and the id that landed.
+    const psExecIds = [`ps-exec-${short}-bytes`, `ps-exec-${short}-session-capture`,
+      `ps-exec-${short}-session-fingerprint`, `ps-exec-${short}-resume-writable`];
+    if (wantsExec(...psExecIds)) {
+      if (!PWSH) {
+        add(`ps-exec-${short}-bytes`, `${file} EXECUTED: a PowerShell host is available to run the wrapper`, false,
+          'neither `pwsh` nor `powershell` could be executed - the PowerShell stream contract is UNPROVEN in this run');
+      } else if (!tmpDir) {
+        add(`ps-exec-${short}-bytes`, `${file} EXECUTED: a scratch directory is available`, false, 'no temp dir was passed');
+      } else {
+        if (wantsExec(`ps-exec-${short}-bytes`, `ps-exec-${short}-session-capture`)) {
+          const probe = runPsWrapperWithStub(root, file, tmpDir);
+          add(`ps-exec-${short}-bytes`,
+            `${file} EXECUTED: the caller's stdout is the engine's own bytes, unchanged (hex-compared, CR included, no re-terminated last line)`,
+            probe.stdoutHex === STUB_STDOUT_HEX,
+            `stdout ${probe.stdoutHex || '(none)'} (expected ${STUB_STDOUT_HEX}); exit ${probe.status}`);
+          add(`ps-exec-${short}-session-capture`,
+            `${file} EXECUTED: with the session id ONLY on stderr (never on stdout), the id still lands in ${own} - it came from the session store`,
+            probe.state(own) === STUB_SESSION_ID && probe.state(other) === null,
+            `${own}=${JSON.stringify(probe.state(own))}, ${other}=${JSON.stringify(probe.state(other))}`);
+        }
+        // THE REVIEWER'S CASE on this channel too: a brief too short to leave a fingerprint, no
+        // rollout of our own, and ONE unrelated fresh session in the store.
+        if (wantsExec(`ps-exec-${short}-session-fingerprint`)) {
+          const probe = runPsWrapperWithStub(root, file, tmpDir, {
+            brief: SHORT_BRIEF, writeRollout: false, foreignRollout: true, seedState: SEEDED_IDS,
+          });
+          add(`ps-exec-${short}-session-fingerprint`,
+            `${file} EXECUTED: a brief with no fingerprint records NOTHING even though one unrelated fresh session exists - the state is cleared, never populated with a stranger's id`,
+            cleared(probe.state(own)),
+            `${own}=${JSON.stringify(probe.state(own))} (the unrelated session was ${STUB_OTHER_ID})`);
+        }
+        if (wantsExec(`ps-exec-${short}-resume-writable`)) {
+          const probe = runPsWrapperWithStub(root, file, tmpDir, {
+            seedState: SEEDED_IDS, readOnlyState: own, extraArgs: '-Resume',
+          });
+          add(`ps-exec-${short}-resume-writable`,
+            `${file} EXECUTED: a bare -Resume against an UNWRITABLE state file exits 2, so a stale id nobody could clear cannot be replayed`,
+            probe.status === 2 && /not writable/.test(probe.stderrText),
+            `exit ${probe.status}: ${firstLine(probe.stderrText.replace(/\[[0-9;]*m/g, ''))}`);
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Runs one PowerShell wrapper for real against a recording `codex` stub, and returns the bytes the
+ * caller received plus the session state the wrapper wrote. The brief is piped IN-PROCESS, the way
+ * /pnp:review's own block does it - a `-File` invocation would not bind the pipeline parameter at
+ * all, and the run would die on "No prompt provided" while looking like a wrapper defect.
+ */
+function runPsWrapperWithStub(root, wrapper, tmpDir,
+  { brief = STUB_BRIEF, writeRollout = true, foreignRollout = false, seedState = null, readOnlyState = null, extraArgs = '' } = {}) {
+  const home = fs.mkdtempSync(path.join(tmpDir, 'ps-exec-run-'));
+  const bin = path.join(home, 'bin');
+  const projectRoot = path.join(home, 'project');
+  const codexHome = path.join(home, 'codex-home');
+  fs.mkdirSync(bin, { recursive: true });
+  fs.mkdirSync(path.join(projectRoot, '.claude', 'aiwf-native'), { recursive: true });
+  const record = { engine: 'codex', model: HOSTILE_MODEL, effort: HOSTILE_EFFORT };
+  fs.writeFileSync(path.join(projectRoot, '.claude', 'aiwf-native', 'roles.json'),
+    JSON.stringify({
+      reviewer: record,
+      qa: record,
+      qal: Object.assign({ enabled: true }, record),
+      review: {
+        plan: { passes: 2, engine: 'codex', model: ROW_MODEL, effort: ROW_EFFORT },
+        code: { passes: 1, engine: 'codex', model: ROW_MODEL, effort: ROW_EFFORT },
+        docs: { passes: 1, engine: 'codex', model: ROW_MODEL, effort: ROW_EFFORT },
+      },
+    }));
+
+  if (seedState) {
+    fs.mkdirSync(path.join(projectRoot, '.aiwf'), { recursive: true });
+    for (const [file, id] of Object.entries(seedState)) {
+      fs.writeFileSync(path.join(projectRoot, '.aiwf', file), `${id}\n`);
+    }
+  }
+  if (readOnlyState) fs.chmodSync(path.join(projectRoot, '.aiwf', readOnlyState), 0o444);
+
+  // The stub is node, not a shell script: it must write EXACT bytes (a CR, no trailing newline) on
+  // both streams, and node is the one interpreter this payload already requires everywhere.
+  const stubJs = path.join(bin, 'pnp-codex-stub.js');
+  fs.writeFileSync(stubJs, [
+    'const fs = require("fs");',
+    'const path = require("path");',
+    'let brief = "";',
+    'try { brief = fs.readFileSync(0, "utf8"); } catch (e) { brief = ""; }',
+    `process.stderr.write("session id: ${STUB_SESSION_ID}\\n");`,
+    'const dir = path.join(process.env.CODEX_HOME, "sessions", "2026", "09", "17");',
+    'fs.mkdirSync(dir, { recursive: true });',
+    ...(writeRollout ? [
+      `fs.writeFileSync(path.join(dir, "rollout-2026-09-17T18-00-00-${STUB_SESSION_ID}.jsonl"),`,
+      `  '{"type":"session_meta","payload":{"session_id":"${STUB_SESSION_ID}"}}\\n'`,
+      '  + JSON.stringify({ type: "response_item", payload: { text: brief } }) + "\\n");',
+    ] : []),
+    // A session of somebody else's, written during this run and NOT carrying this brief.
+    ...(foreignRollout ? [
+      `fs.writeFileSync(path.join(dir, "rollout-2026-09-17T18-30-00-${STUB_OTHER_ID}.jsonl"),`,
+      `  '{"type":"session_meta","payload":{"session_id":"${STUB_OTHER_ID}"}}\\nan unrelated session\\n');`,
+    ] : []),
+    `process.stdout.write(Buffer.from(${JSON.stringify(Array.from(Buffer.from(STUB_STDOUT, 'utf8')))}));`,
+    `process.stderr.write(Buffer.from(${JSON.stringify(Array.from(Buffer.from(STUB_STDERR, 'utf8')))}));`,
+    `process.exit(${STUB_EXIT});`,
+    '',
+  ].join('\n'));
+  // Both spellings, so the probe works wherever a PowerShell host does: PATHEXT finds the .cmd on
+  // Windows, the execute bit finds the extensionless one everywhere else.
+  fs.writeFileSync(path.join(bin, 'codex.cmd'), `@echo off\r\nnode "%~dp0pnp-codex-stub.js"\r\nexit /b %ERRORLEVEL%\r\n`);
+  const posixStub = path.join(bin, 'codex');
+  fs.writeFileSync(posixStub, `#!/usr/bin/env node\n${fs.readFileSync(stubJs, 'utf8')}`);
+  try { fs.chmodSync(posixStub, 0o755); } catch (e) { /* best-effort on filesystems without modes */ }
+
+  const briefFile = path.join(home, 'brief.txt');
+  fs.writeFileSync(briefFile, brief);
+  const sep = process.platform === 'win32' ? ';' : ':';
+  const env = Object.assign({}, process.env, {
+    PATH: bin + sep + process.env.PATH,
+    CODEX_HOME: codexHome,
+  });
+  const classArg = wrapper === 'codex-review.ps1' ? ' -Class code' : '';
+  const cmd = `Get-Content -LiteralPath '${briefFile}' -Raw | `
+    + `& '${path.join(root, 'scripts', 'native', 'ps', wrapper)}' -ProjectRoot '${projectRoot}'${classArg} ${extraArgs}; `
+    + 'exit $LASTEXITCODE';
+  const r = spawnSync(PWSH, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', cmd], { env });
+  return {
+    status: r.status,
+    stdoutHex: (r.stdout || Buffer.alloc(0)).toString('hex'),
+    stderrHex: (r.stderr || Buffer.alloc(0)).toString('hex'),
+    stderrText: (r.stderr || Buffer.alloc(0)).toString('utf8'),
+    state: (file) => { const t = readText(path.join(projectRoot, '.aiwf', file)); return t === null ? null : t.trim(); },
+  };
+}
+
+/** One sabotage per resume finding, built at call time so the helpers above are already defined. */
+function psResumeControls() {
+  const out = [];
+  for (const [file, short] of [['codex-review.ps1', 'review'], ['codex-qa.ps1', 'qa']]) {
+    const at = psRel(file);
+    out.push(
+      { id: `ps-${short}-resume-exists`, label: `${file}: the wrapper deleted`, apply: (r) => fs.rmSync(path.join(r, ...at)) },
+      { id: `ps-${short}-resume-param`, label: `${file}: -Resume renamed, so the no-id form is gone`,
+        apply: (r) => patchText(r, at, /\[switch\] \$Resume,/, '[switch] $ResumeLater,') },
+      { id: `ps-${short}-resume-argv`, label: `${file}: the sandbox_mode pin dropped from the frozen resume argv`,
+        apply: (r) => patchText(r, at, /\r?\n\s*'-c', 'sandbox_mode=read-only',/, '') },
+      { id: `ps-${short}-resume-posture`, label: `${file}: -m smuggled back into the resume argv`,
+        apply: (r) => patchText(r, at, /'resume', \$ResumeId,/, "'resume', $ResumeId,\n  '-m', $role.model,") },
+      { id: `ps-${short}-resume-cwd`, label: `${file}: the resume runs from the caller's location (and has no -C to make up for it)`,
+        apply: (r) => patchText(r, at, /\r?\n\s*Set-Location -LiteralPath \$ProjectRoot/, '') },
+      { id: `ps-${short}-session-state`, label: `${file}: the state file crossed to the other role's`,
+        apply: (r) => patchText(r, at, new RegExp(`'${SESSION_FILES[short]}'`), `'${OTHER_SESSION_FILE[short]}'`) },
+      { id: `ps-${short}-stream-purity`, label: `${file}: the ForEach-Object pass-through over the caller's stdout brought back`,
+        apply: (r) => patchText(r, at, /\$Prompt \| & codex @codexArgs/, '$Prompt | & codex @codexArgs | ForEach-Object { $_ }') },
+      { id: `ps-${short}-session-store`, label: `${file}: the "exactly one candidate" rule relaxed to "take the first"`,
+        apply: (r) => patchText(r, at, /if \(\$mine\.Count -eq 1\)/, 'if ($mine.Count -ge 1)') },
+      { id: `ps-${short}-session-stale`, label: `${file}: an unidentified cold run leaves the previous id in place`,
+        apply: (r) => patchText(r, at, /\r?\n *Clear-CodexSessionState -StateFile \$StateFile\r?\n/, '\n  $null = $StateFile\n') },
+      { id: `ps-${short}-session-fingerprint`, label: `${file}: a brief with no fingerprint matches EVERY fresh rollout again`,
+        apply: (r) => patchText(r, at, /if \(\$fingerprint -and \(Test-Path -LiteralPath \$sessionsDir\)\)/, 'if (Test-Path -LiteralPath $sessionsDir)') },
+      { id: `ps-${short}-session-clear-verified`, label: `${file}: the clear is claimed without re-reading the file`,
+        apply: (r) => patchText(r, at, /if \(\$left\) \{/, 'if ($false) {') },
+      { id: `ps-${short}-resume-known-id`, label: `${file}: a resumed run searches the store instead of recording the id it already knows`,
+        apply: (r) => patchText(r, at, /\$sessionId = \$KnownId/, '$sessionId = $null') },
+      { id: `ps-${short}-resume-writable`, label: `${file}: the writability guard dropped from the bare-resume path`,
+        apply: (r) => patchText(r, at, /if \(-not \$writable\) \{/, 'if ($false) {') },
+      // The executed pair. The bytes control is the reviewer's own probe turned into a pin: the
+      // pass-through re-terminates the last line, so `A CRLF B` comes back as `A CRLF B CRLF`.
+      { id: `ps-exec-${short}-bytes`, label: `${file}: the caller's stdout pushed through PowerShell's line-by-line pass-through (executed)`,
+        apply: (r) => patchText(r, at, /\$Prompt \| & codex @codexArgs/, '$Prompt | & codex @codexArgs | ForEach-Object { $_ }') },
+      { id: `ps-exec-${short}-session-capture`, label: `${file}: the id looked for in the wrapper's own output instead of the session store (executed)`,
+        apply: (r) => patchText(r, at, /\$fresh = @\(Get-ChildItem[\s\S]*?\)\r?\n/, '$fresh = @()\n') },
+      { id: `ps-exec-${short}-session-fingerprint`, label: `${file}: a brief with no fingerprint matches every fresh rollout, so a stranger's id is recorded (executed)`,
+        apply: (r) => patchText(r, at, /if \(\$fingerprint -and \(Test-Path -LiteralPath \$sessionsDir\)\)/, 'if (Test-Path -LiteralPath $sessionsDir)') },
+      { id: `ps-exec-${short}-resume-writable`, label: `${file}: a bare -Resume accepts a state file nobody could have cleared (executed)`,
+        apply: (r) => patchText(r, at, /if \(-not \$writable\) \{/, 'if ($false) {') },
+    );
+  }
+  return out;
+}
+
+// The executed PowerShell probes cost a host start each, so - exactly as on the bash channel - they
+// run for the real payload, for the pristine control copy, and then only for the controls that
+// target one of them.
+const PS_EXEC_IDS = new Set([
+  'ps-exec-review-bytes', 'ps-exec-review-session-capture',
+  'ps-exec-qa-bytes', 'ps-exec-qa-session-capture',
+  'ps-exec-review-session-fingerprint', 'ps-exec-qa-session-fingerprint',
+  'ps-exec-review-resume-writable', 'ps-exec-qa-resume-writable',
+]);
+
+// ---------------------------------------------------------------------------
 // SECTION 5b - the bash wrapper channel (static source checks + their controls)
 // ---------------------------------------------------------------------------
 // The same contract as the PowerShell channel, asserted separately rather than through a shared
@@ -2452,10 +2793,11 @@ function sectionWrappers(tmpRoot) {
 // doctrine states out loud: a text-level `grep -c` for a carriage return once reported 0 on a file
 // holding 283 of them.
 //
-// Unlike the PowerShell section above, every finding here carries a stable `id` and a negative
-// control that must flip it. A static source check is exactly the kind that rots into a regex
-// matching nothing, so the controls sabotage a throwaway copy of the channel one way per assertion
-// and require the named check to FAIL.
+// Every finding here carries a stable `id` and a negative control that must flip it. A static source
+// check is exactly the kind that rots into a regex matching nothing, so the controls sabotage a
+// throwaway copy of the channel one way per assertion and require the named check to FAIL. The
+// PowerShell section above is controlled only for its resume findings; its older flag-lock checks
+// are still bare `check` calls, and that gap is stated rather than papered over.
 function shWrapperFindings(root, { execProbes = true, tmpDir = null } = {}) {
   const out = [];
   const add = (id, name, ok, detail) => { out.push({ id, name, ok: !!ok, detail: detail || '' }); return !!ok; };
@@ -2471,6 +2813,17 @@ function shWrapperFindings(root, { execProbes = true, tmpDir = null } = {}) {
   // headers cite the forbidden flags by name, so checking the whole file would false-match those.
   // Close on the array's REAL terminator (a `)` at the start of a line).
   const argBlock = (s) => { const m = s ? /CODEX_ARGS=\(([\s\S]*?)[\r\n]+\)/.exec(s) : null; return m ? m[1] : ''; };
+  // The RESUME argv lives in its own array, so the cold block above keeps being matched by the same
+  // regex it always was - the cold form is not touched by any of this - and the frozen form can be
+  // asserted atom for atom rather than by the presence of a few words.
+  const resumeBlock = (s) => { const m = s ? /RESUME_ARGS=\(([\s\S]*?)[\r\n]+\)/.exec(s) : null; return m ? m[1] : ''; };
+  const blockAtoms = (block) => block.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
+    .join(' ').split(/\s+/).filter(Boolean);
+  // The "own file" and --json clauses are asserted over the EXECUTABLE text: the capture comment
+  // names --json precisely to say it is never used, and a state file that appears only in a comment
+  // is not a state file. The "never the OTHER role's file" half is asserted over the WHOLE text -
+  // comments included - so the crossed-state question stays answerable by a grep.
+  const codeOnly = (s) => (s || '').split('\n').filter((l) => !l.trim().startsWith('#')).join('\n');
   // Every flag assertion is an EXACT ARGV PAIR, never a bare word: a bare-word check passes on the
   // word wherever it appears - including a stale comment inside the block - so a wrapper could be
   // switched to workspace-write while a leftover `# ... read-only ...` line kept the check green.
@@ -2553,6 +2906,70 @@ function shWrapperFindings(root, { execProbes = true, tmpDir = null } = {}) {
     add(id('exit-code'), `${name} propagates codex's exit code`, /\|\|\s*status=\$\?/.test(s) && /^exit "\$status"$/m.test(s));
     add(id('transport'), `${name} carries the resolved fields NUL-delimited through a redirect (never a line-delimited variable)`,
       NUL_JOIN.test(s) && NUL_READ.test(s) && PROC_SUB.test(s) && !VARIABLE_TRANSPORT.test(s));
+
+    // ---- the resume posture and the per-role session state ----
+    const rBlock = resumeBlock(s);
+    const rAtoms = blockAtoms(rBlock);
+    const own = SESSION_FILES[short];
+    const other = OTHER_SESSION_FILE[short];
+    const body = codeOnly(s);
+    add(id('resume-flag'),
+      `${name} takes --resume with an OPTIONAL id (and --resume-id as the explicit spelling), and refuses an explicitly EMPTY id instead of falling through to the recorded session`,
+      /--resume\)/.test(s) && /--resume-id\)/.test(s) && /RESUME=1/.test(s)
+      && /\[ "\$\{2#-\}" = "\$2" \]/.test(s) && /\[ -n "\$2" \] \|\| fail/.test(s));
+    add(id('resume-argv'), `${name} builds the FROZEN resume argv, atom for atom`,
+      JSON.stringify(rAtoms) === JSON.stringify(SH_RESUME_FROZEN), rAtoms.join(' ') || '(no RESUME_ARGS block)');
+    add(id('resume-posture'),
+      `${name} resume argv carries NO -C, NO --sandbox and NO -m (the first two do not exist on resume, the third is deliberately unused), and the resume form REPLACES the cold argv rather than extending it`,
+      !/(^|\s)-C(\s|$)/.test(rBlock) && !/--sandbox/.test(rBlock) && !/(^|\s)-m(\s|$)/.test(rBlock)
+      && /CODEX_ARGS=\("\$\{RESUME_ARGS\[@\]\}"\)/.test(s));
+    add(id('resume-cwd'), `${name} sets the cwd to the project root before a resume (the form has no -C to carry it)`,
+      /cd "\$PROJECT_ROOT" \|\| fail/.test(s));
+    add(id('session-state'),
+      `${name} reads and writes ONLY <scratchDir>/${own} - and never names ${other} ANYWHERE, comments included, so the crossed-state question is answerable by a plain grep - with scratchDir taken from the project's aiwf.config.json and falling back to .aiwf`,
+      body.includes(own) && !s.includes(other) && /cfg\.paths\.scratchDir/.test(s)
+      && /SCRATCH_REL='\.aiwf'/.test(s), `own file in the code ${body.includes(own)}, other file anywhere ${s.includes(other)}`);
+    // THE STREAMS BELONG TO THE CALLER. codex writes its banner - the part carrying the session id -
+    // on STDERR, reserves STDOUT for the final message, and renders by whether those streams are a
+    // terminal, so anything this wrapper attaches to either stream changes what the caller sees AND
+    // what codex prints. The invocation must therefore be the plain stdin pipe with nothing after it.
+    add(id('stream-purity'),
+      `${name} attaches NOTHING to codex's stdout or stderr - no tee, no pipe, no redirect (the streams are the caller's, and codex renders by whether they are a terminal)`,
+      /\n *printf '%s\\n' "\$PROMPT" \| codex "\$\{CODEX_ARGS\[@\]\}" \|\| status=\$\?\n/.test(s)
+      && !/codex "\$\{CODEX_ARGS\[@\]\}"[^\n]*(?:\| *tee|[12]?> *[^&\s]|&>|>&2|>\()/.test(s)
+      && !/\| tee /.test(body) && !/--json/.test(body));
+    add(id('session-store'),
+      `${name} takes the id from codex's OWN session store ($CODEX_HOME/sessions), identified POSITIVELY - written during this run AND carrying this run's brief - and records nothing at all unless exactly one file survives`,
+      /SESSIONS_DIR="\$\{CODEX_HOME:-\$HOME\/\.codex\}\/sessions"/.test(s)
+      && /CAPTURE_SINCE_MS=/.test(s) && /st\.mtimeMs >= since/.test(s)
+      && /PNP_BRIEF="\$PROMPT"/.test(s) && /head\(p\)\.indexOf\(fp\) !== -1/.test(s)
+      && /if \(mine\.length !== 1\) process\.exit\(0\);/.test(s)
+      && /"session_id"/.test(s));
+    // A brief that leaves no verbatim trace identifies NOTHING. The alternative - accepting every
+    // fresh rollout when there is no fingerprint - records an unrelated session, and the next bare
+    // resume then enters someone else's conversation.
+    add(id('session-fingerprint'),
+      `${name} treats a brief with NO fingerprint as unidentifiable (it never widens the candidate set to every fresh rollout)`,
+      /if \(!fp\) process\.exit\(0\);/.test(s)
+      && /const mine = hits\.filter\(\(p\) => head\(p\)\.indexOf\(fp\) !== -1\);/.test(s)
+      && !/fp \?/.test(s));
+    add(id('session-stale'),
+      `${name} CLEARS the state file when a cold run could not be identified, so the next --resume refuses out loud instead of replaying a stale session`,
+      /clear_session_state\(\) \{/.test(s) && /record_session_id[\s\S]*clear_session_state\n/.test(s)
+      && /rm -f "\$SESSION_STATE"/.test(s));
+    // Clearing that is only ATTEMPTED is not a defence: a read-only state file refuses truncation and
+    // keeps its id. So the clear is delete-then-truncate and is then VERIFIED by re-reading, and a
+    // survivor is an ERROR that names the id - never a "cleared" message.
+    add(id('session-clear-verified'),
+      `${name} VERIFIES the clear by re-reading the file and reports a surviving stale id as an ERROR naming it, never as success`,
+      /left="\$\(tr -d ' \\t\\r\\n' < "\$SESSION_STATE" 2>\/dev\/null \|\| true\)"/.test(s)
+      && /if \[ -n "\$left" \]; then/.test(s) && /ERROR: this run could not be identified[^\n]*could NOT be removed/.test(s));
+    add(id('resume-known-id'),
+      `${name} records the id a RESUMED run already knows instead of searching the store for it (the store cannot answer for a resumed session, and this also repairs the file after an explicit --resume <id>)`,
+      /if \[ "\$1" -eq 1 \]; then\n(?:[^\n]*\n)*?\s*id="\$RESUME_ID"/.test(s));
+    add(id('resume-writable'),
+      `${name} refuses a BARE --resume when the state file is not writable - a file this wrapper cannot clear may still hold the stale id it failed to clear`,
+      /\[ -w "\$SESSION_STATE" \] \|\| fail "the recorded session file is not writable/.test(s));
   }
 
   // The review wrapper is CLASS-AWARE (the mirror of the PowerShell assertion): /pnp:review passes
@@ -2633,6 +3050,13 @@ function shWrapperFindings(root, { execProbes = true, tmpDir = null } = {}) {
   // transport silently mangles - with a recording `codex` stub first on PATH. What is asserted is
   // the argv the engine would really have received, atom for atom, plus the stdin it would have
   // read and the exit code it would have returned.
+  //
+  // `execProbes` is `true` (run every probe - the real payload and the pristine control copy) or a
+  // SET of the finding ids a control targets: a control that sabotages one executed assertion has no
+  // reason to pay for the other eleven wrapper runs, and the gating keeps this section's cost flat
+  // as the number of executed findings grows.
+  const wantsExec = (...ids) => execProbes === true
+    || (execProbes instanceof Set && ids.some((i) => execProbes.has(i)));
   if (execProbes && tmpDir) {
     // Missing-host posture, identical to the role-resolver section's: a host that cannot be found
     // is a FAILURE saying the contract is unproven, never a silent skip. Nothing is printed when
@@ -2642,6 +3066,8 @@ function shWrapperFindings(root, { execProbes = true, tmpDir = null } = {}) {
         'neither `bash` on PATH nor a Git-for-Windows bash could be executed - the wrapper transport is UNPROVEN in this run');
     } else {
       for (const [wrapper, short] of [['codex-review.sh', 'review'], ['codex-qa.sh', 'qa']]) {
+        if (!wantsExec(`sh-exec-${short}-argv`, `sh-exec-${short}-stdin`, `sh-exec-${short}-exit`,
+          `sh-exec-${short}-session-capture`, `sh-exec-${short}-bytes`)) continue;
         const probe = runWrapperWithStub(root, wrapper, tmpDir);
         const expected = [
           'exec', '-C', probe.projectRoot, '-m', HOSTILE_MODEL,
@@ -2651,18 +3077,119 @@ function shWrapperFindings(root, { execProbes = true, tmpDir = null } = {}) {
           `${wrapper} EXECUTED: the argv codex really receives is the locked flag set, with the resolved model and effort intact as ONE atom each (space and newline included)`,
           JSON.stringify(probe.atoms) === JSON.stringify(expected),
           probe.atoms === null ? `the wrapper did not reach codex (exit ${probe.status}): ${firstLine(probe.stderr)}`
-            : `${probe.atoms.length} atoms; -m atom ${JSON.stringify(String(probe.atoms[4]).slice(0, 40))}`);
+            : JSON.stringify(probe.atoms));
         add(`sh-exec-${short}-stdin`, `${wrapper} EXECUTED: the brief reached codex on stdin, byte for byte, and never on argv`,
           probe.stdin === STUB_BRIEF && !(probe.atoms || []).some((a) => a.includes(STUB_BRIEF.trim())),
           probe.stdin === null ? 'nothing was recorded' : JSON.stringify(String(probe.stdin).slice(0, 40)));
         add(`sh-exec-${short}-exit`, `${wrapper} EXECUTED: codex's exit code is propagated unchanged`,
           probe.status === STUB_EXIT, `exit ${probe.status} (the stub exits ${STUB_EXIT})`);
+        // THE CAPTURE, EXECUTED, AGAINST A STREAM-REALISTIC STUB. The stub put the session id ONLY
+        // on stderr, as codex really does, and wrote a rollout into its own $CODEX_HOME. So this
+        // finding proves the id was taken from the STORE - a wrapper that reads its own output
+        // captures nothing here, exactly as it captured nothing on the real engine. The other
+        // role's file must not exist at all: a crossed write would let a QA run hand a Reviewer
+        // resume the wrong context.
+        add(`sh-exec-${short}-session-capture`,
+          `${wrapper} EXECUTED: with the session id ONLY on stderr (never on stdout), the id still lands in ${SESSION_FILES[short]} - it came from the session store - and the other role's file is never written`,
+          probe.state(SESSION_FILES[short]) === STUB_SESSION_ID && probe.state(OTHER_SESSION_FILE[short]) === null,
+          `${SESSION_FILES[short]}=${JSON.stringify(probe.state(SESSION_FILES[short]))}, ${OTHER_SESSION_FILE[short]}=${JSON.stringify(probe.state(OTHER_SESSION_FILE[short]))}`);
+        // BYTE PRESERVATION, EXECUTED. Both payloads carry a CR and end WITHOUT a newline, so a
+        // pass-through that re-terminates the last line is caught - the hex is compared, not the text.
+        add(`sh-exec-${short}-bytes`,
+          `${wrapper} EXECUTED: the caller's stdout and stderr are the engine's own bytes, unchanged (hex-compared, CR included, no re-terminated last line)`,
+          probe.stdoutHex === STUB_STDOUT_HEX && probe.stderrHex.endsWith(STUB_STDERR_HEX),
+          `stdout ${probe.stdoutHex} (expected ${STUB_STDOUT_HEX}); stderr ends with the payload: ${probe.stderrHex.endsWith(STUB_STDERR_HEX)}`);
+      }
+      // THE RESUME FORM, EXECUTED. Source text cannot prove what argv a shell really builds, and the
+      // resume form is the one where a stray -C or --sandbox would not merely be wrong but rejected
+      // by the engine after the operator has already paid for the pass. Both runs are asserted atom
+      // for atom against the frozen form, with the hostile model and effort intact as ONE atom each.
+      for (const [wrapper, short] of [['codex-review.sh', 'review'], ['codex-qa.sh', 'qa']]) {
+        if (wantsExec(`sh-exec-${short}-resume-argv`, `sh-exec-${short}-resume-cwd`,
+          `sh-exec-${short}-resume-records-id`)) {
+          const probe = runWrapperWithStub(root, wrapper, tmpDir, ['--resume', STUB_EXPLICIT_ID]);
+          const expected = resumeArgvFor(STUB_EXPLICIT_ID, HOSTILE_MODEL, HOSTILE_EFFORT);
+          add(`sh-exec-${short}-resume-argv`,
+            `${wrapper} --resume <id> EXECUTED: the argv codex really receives is the frozen resume form`,
+            JSON.stringify(probe.atoms) === JSON.stringify(expected),
+            probe.atoms === null ? `the wrapper did not reach codex (exit ${probe.status}): ${firstLine(probe.stderr)}`
+              : JSON.stringify(probe.atoms));
+          // The resume form has no -C, so the project root has to be the CWD - proven by the marker
+          // file that exists only there, not by comparing two path notations.
+          add(`sh-exec-${short}-resume-cwd`,
+            `${wrapper} --resume EXECUTED: codex runs WITH the project root as its cwd (the resume form carries no -C)`,
+            probe.cwdMark === 'marker', `the cwd probe saw ${JSON.stringify(probe.cwdMark)}`);
+          // Same run, no extra host start: a resumed run RECORDS the id it resumed with. That is
+          // what repairs the state file after an explicit --resume <id>, and it is why a resumed run
+          // never reports itself unidentifiable - the store could not answer for it anyway.
+          add(`sh-exec-${short}-resume-records-id`,
+            `${wrapper} --resume <id> EXECUTED: the state file ends up holding the id that was resumed`,
+            probe.state(SESSION_FILES[short]) === STUB_EXPLICIT_ID,
+            `${SESSION_FILES[short]}=${JSON.stringify(probe.state(SESSION_FILES[short]))}`);
+        }
+        // A SILENT STORE, EXECUTED: the run happened but no session of ours can be identified. The
+        // previously recorded id must NOT survive - a bare --resume replaying a stale session is the
+        // failure the state file exists to prevent, and an empty file makes the next one refuse.
+        if (wantsExec(`sh-exec-${short}-session-stale`)) {
+          const probe = runWrapperWithStub(root, wrapper, tmpDir, [],
+            { seedState: SEEDED_IDS, writeRollout: false });
+          add(`sh-exec-${short}-session-stale`,
+            `${wrapper} EXECUTED: a cold run the session store cannot account for CLEARS ${SESSION_FILES[short]} instead of leaving the previous id in it`,
+            cleared(probe.state(SESSION_FILES[short])),
+            `${SESSION_FILES[short]}=${JSON.stringify(probe.state(SESSION_FILES[short]))} (the seeded id was ${SEEDED_IDS[SESSION_FILES[short]]})`);
+        }
+        // THE REVIEWER'S CASE: a brief too short to leave a fingerprint, no rollout of our own, and
+        // ONE unrelated fresh session in the store. The unrelated id must NOT be recorded - a bare
+        // resume would otherwise enter a conversation this ticket never had.
+        if (wantsExec(`sh-exec-${short}-session-fingerprint`)) {
+          const probe = runWrapperWithStub(root, wrapper, tmpDir, [], {
+            seedState: SEEDED_IDS,
+            writeRollout: false,
+            secondRollout: { id: STUB_OTHER_ID, carriesBrief: false },
+            brief: SHORT_BRIEF,
+          });
+          add(`sh-exec-${short}-session-fingerprint`,
+            `${wrapper} EXECUTED: a brief with no fingerprint records NOTHING even though one unrelated fresh session exists - the state is cleared, never populated with a stranger's id`,
+            cleared(probe.state(SESSION_FILES[short])),
+            `${SESSION_FILES[short]}=${JSON.stringify(probe.state(SESSION_FILES[short]))} (the unrelated session was ${STUB_OTHER_ID})`);
+        }
+        // AN UNWRITABLE STALE STATE MUST BE UNUSABLE. This is the case where a previous run could not
+        // clear the file, so its id may be stale; the bare resume refuses instead of replaying it,
+        // and the proof is that codex was never invoked at all.
+        if (wantsExec(`sh-exec-${short}-resume-writable`)) {
+          const probe = runWrapperWithStub(root, wrapper, tmpDir, ['--resume'],
+            { seedState: SEEDED_IDS, readOnlyState: SESSION_FILES[short] });
+          add(`sh-exec-${short}-resume-writable`,
+            `${wrapper} EXECUTED: a bare --resume against an UNWRITABLE state file exits 2 and never invokes codex, so a stale id nobody could clear cannot be replayed`,
+            probe.status === 2 && probe.atoms === null,
+            `exit ${probe.status}; ${probe.atoms === null ? 'codex was not invoked' : `codex WAS invoked with ${probe.atoms.length} atoms`}`);
+        }
+        // TWO fresh sessions, both carrying this brief: identification is ambiguous, so NOTHING may
+        // be recorded. This is the concurrent-codex case a "newest file wins" rule would get wrong.
+        if (wantsExec(`sh-exec-${short}-session-ambiguous`)) {
+          const probe = runWrapperWithStub(root, wrapper, tmpDir, [],
+            { seedState: SEEDED_IDS, secondRollout: { id: STUB_OTHER_ID, carriesBrief: true } });
+          add(`sh-exec-${short}-session-ambiguous`,
+            `${wrapper} EXECUTED: when TWO sessions written during this run carry this run's brief, neither id is recorded (a second codex session is never mistaken for this one)`,
+            cleared(probe.state(SESSION_FILES[short])),
+            `${SESSION_FILES[short]}=${JSON.stringify(probe.state(SESSION_FILES[short]))}`);
+        }
+        if (wantsExec(`sh-exec-${short}-resume-state`)) {
+          // Both role files are seeded with DIFFERENT ids, so this run answers which one was read.
+          const probe = runWrapperWithStub(root, wrapper, tmpDir, ['--resume'], { seedState: SEEDED_IDS });
+          const expected = resumeArgvFor(SEEDED_IDS[SESSION_FILES[short]], HOSTILE_MODEL, HOSTILE_EFFORT);
+          add(`sh-exec-${short}-resume-state`,
+            `${wrapper} --resume with NO id EXECUTED: the id comes from ${SESSION_FILES[short]}, with the other role's file sitting there carrying a different id`,
+            JSON.stringify(probe.atoms) === JSON.stringify(expected),
+            probe.atoms === null ? `the wrapper did not reach codex (exit ${probe.status}): ${firstLine(probe.stderr)}`
+              : `resumed ${JSON.stringify((probe.atoms || [])[2])}`);
+        }
       }
       // THE CLASS BRANCH, EXECUTED. Everything above runs the classless path; source text cannot
       // prove that --class reaches the resolver and that the ROW's host is what codex is handed, so
       // both are asserted on the argv the stub really received. The fixture's row carries a
       // different model and effort from the role on purpose.
-      {
+      if (wantsExec('sh-exec-review-class-argv')) {
         const probe = runWrapperWithStub(root, 'codex-review.sh', tmpDir, ['--class', 'docs']);
         const expected = [
           'exec', '-C', probe.projectRoot, '-m', ROW_MODEL,
@@ -2674,7 +3201,7 @@ function shWrapperFindings(root, { execProbes = true, tmpDir = null } = {}) {
           probe.atoms === null ? `the wrapper did not reach codex (exit ${probe.status}): ${firstLine(probe.stderr)}`
             : `-m ${JSON.stringify(String(probe.atoms[4]))} effort atom ${JSON.stringify(String(probe.atoms[10]))}`);
       }
-      {
+      if (wantsExec('sh-exec-review-class-empty')) {
         // An explicitly EMPTY class must refuse, never degrade into the classless contract - the
         // proof being that codex was not invoked at all (no recording) and the exit is 2.
         const probe = runWrapperWithStub(root, 'codex-review.sh', tmpDir, ['--class', '']);
@@ -2700,6 +3227,46 @@ const ROW_MODEL = 'row-atom-3';
 const ROW_EFFORT = 'medium';
 const STUB_BRIEF = 'the brief for the transport probe\n';
 const STUB_EXIT = 7;
+// The id the stub prints in its header line, and the two ids a resume probe finds already recorded.
+// They differ per role on purpose: "the wrapper resumed its OWN session" is a claim about WHICH of
+// two files it read, and two equal ids would make a crossed read indistinguishable from a correct one.
+const STUB_SESSION_ID = '019be9f2-0000-4000-8000-0000000000ab';
+const STUB_EXPLICIT_ID = 'deadbeef-0000-4000-8000-000000000111';
+// A second session written during the same run - the concurrent-codex case. When it carries this
+// run's brief the identification is AMBIGUOUS and nothing may be recorded; when it does not, it is
+// someone else's session and must simply be ignored.
+const STUB_OTHER_ID = 'c0ffee11-0000-4000-8000-000000000222';
+// The byte payloads. A bare CR inside and NO trailing newline: a line-oriented pass-through
+// re-terminates the last line, which is exactly the corruption a text comparison cannot see.
+const STUB_STDOUT = 'A\r\nB';
+const STUB_STDERR = 'E1\r\nE2';
+// A brief the fingerprint rule cannot use: no run of 24+ printable ASCII characters. The wrappers
+// still accept it (it is neither empty nor whitespace), which is exactly why it must identify
+// nothing rather than match everything.
+const SHORT_BRIEF = 'short\n';
+/** "Cleared" is either gone or empty: the clear deletes first and only truncates if that failed. */
+const cleared = (v) => v === null || v === '';
+const STUB_STDOUT_HEX = Buffer.from(STUB_STDOUT, 'utf8').toString('hex');
+const STUB_STDERR_HEX = Buffer.from(STUB_STDERR, 'utf8').toString('hex');
+/** The same bytes as a `printf '%b'` argument - the CR must reach the stub as an escape, not raw. */
+const shBytes = (s) => s.replace(/\\/g, '\\\\').replace(/\r/g, '\\r').replace(/\n/g, '\\n');
+const SEEDED_IDS = {
+  'last-review-session.txt': 'aaaa1111-0000-4000-8000-000000000001',
+  'last-qa-session.txt': 'bbbb2222-0000-4000-8000-000000000002',
+};
+const SESSION_FILES = { review: 'last-review-session.txt', qa: 'last-qa-session.txt' };
+const OTHER_SESSION_FILE = { review: 'last-qa-session.txt', qa: 'last-review-session.txt' };
+// The FROZEN resume argv, as the wrapper source must spell it. `codex exec resume` has no -C and no
+// --sandbox (they do not exist on the subcommand) and -m, which does exist, is deliberately unused:
+// one uniform -c posture carries model, effort, sandbox_mode and approval_policy. The trailing `-`
+// is part of the form.
+const SH_RESUME_FROZEN = ['exec', 'resume', '"$RESUME_ID"',
+  '-c', 'sandbox_mode=read-only', '-c', 'approval_policy=never',
+  '-c', '"model=$ROLE_MODEL"', '-c', '"model_reasoning_effort=$ROLE_EFFORT"', '-'];
+/** The resume argv codex really receives, given a session id and the resolved model/effort. */
+const resumeArgvFor = (id, model, effort) => ['exec', 'resume', id,
+  '-c', 'sandbox_mode=read-only', '-c', 'approval_policy=never',
+  '-c', `model=${model}`, '-c', `model_reasoning_effort=${effort}`, '-'];
 const NUL_BYTE = String.fromCharCode(0);
 
 /**
@@ -2708,12 +3275,30 @@ const NUL_BYTE = String.fromCharCode(0);
  * newline), the stdin bytes, and the wrapper's own exit code. The stub exits with a distinctive
  * code so exit-propagation is proven by the same run.
  */
-function runWrapperWithStub(root, wrapper, tmpDir, extraArgs = []) {
+function runWrapperWithStub(root, wrapper, tmpDir, extraArgs = [],
+  { seedState = null, writeRollout = true, secondRollout = null, brief = STUB_BRIEF, readOnlyState = null } = {}) {
   const home = fs.mkdtempSync(path.join(tmpDir, 'sh-exec-'));
   const bin = path.join(home, 'bin');
   const projectRoot = path.join(home, 'project');
   fs.mkdirSync(bin, { recursive: true });
   fs.mkdirSync(path.join(projectRoot, '.claude', 'aiwf-native'), { recursive: true });
+  // The CWD probe, without comparing path strings. The resume form has no -C, so the project root
+  // must be the process cwd instead - and a Windows bash reports that cwd in its own notation
+  // (a leading /c/ for the drive), not the one node handed the wrapper, which would make a textual
+  // comparison fail for the wrong reason. A marker file that exists ONLY in the project root answers
+  // the same question in whatever notation the shell happens to use.
+  fs.writeFileSync(path.join(projectRoot, 'pnp-cwd-marker.txt'), 'marker\n');
+  // Both role files are seeded, never just one: "the wrapper read its own" is only proven when the
+  // other role's file was sitting there carrying a different id and was NOT taken.
+  if (seedState) {
+    fs.mkdirSync(path.join(projectRoot, '.aiwf'), { recursive: true });
+    for (const [file, id] of Object.entries(seedState)) {
+      fs.writeFileSync(path.join(projectRoot, '.aiwf', file), `${id}\n`);
+    }
+  }
+  // A state file the wrapper cannot write is the "a previous run failed to clear it" case: its
+  // content is exactly the stale id a bare resume must refuse to replay.
+  if (readOnlyState) fs.chmodSync(path.join(projectRoot, '.aiwf', readOnlyState), 0o444);
   const record = { engine: 'codex', model: HOSTILE_MODEL, effort: HOSTILE_EFFORT };
   // The ROW deliberately carries a DIFFERENT model and effort from the role. That asymmetry is the
   // whole proof: with --class the argv must show the row's values, so a wrapper that accepted the
@@ -2732,12 +3317,34 @@ function runWrapperWithStub(root, wrapper, tmpDir, extraArgs = []) {
 
   const argvOut = path.join(home, 'argv.bin');
   const stdinOut = path.join(home, 'stdin.bin');
+  const cwdOut = path.join(home, 'cwd.txt');
+  const codexHome = path.join(home, 'codex-home');
   const stub = path.join(bin, 'codex');
+  // THE STUB IS STREAM-REALISTIC, and that is the whole point of it. codex 0.154 prints its
+  // configuration banner - the line carrying the session id - on STDERR and reserves STDOUT for the
+  // final message, so the stub does exactly that: nothing on stdout ever carries the id. A wrapper
+  // that reads the id out of its own output therefore captures nothing here, which is what a real
+  // run does too. The stub also writes a rollout file into its own $CODEX_HOME, because that store
+  // is where the id really comes from, and it emits a byte payload with a CR in it on BOTH streams
+  // so the caller-visible bytes can be compared for equality, not merely for content.
+  const rollout = (id, text) => 'D="$CODEX_HOME/sessions/2026/09/17"\n'
+    + 'mkdir -p "$D"\n'
+    + `printf '{"type":"session_meta","payload":{"session_id":"${id}"}}\\n' > "$D/rollout-2026-09-17T18-00-00-${id}.jsonl"\n`
+    + `printf '%s\\n' "${text}" >> "$D/rollout-2026-09-17T18-00-00-${id}.jsonl"\n`;
   fs.writeFileSync(stub,
     '#!/usr/bin/env bash\n'
     + ': > "$PNP_ARGV_OUT"\n'
     + 'for a in "$@"; do printf \'%s\\0\' "$a" >> "$PNP_ARGV_OUT"; done\n'
+    + 'if [ -f ./pnp-cwd-marker.txt ]; then printf \'marker\' > "$PNP_CWD_OUT"; else printf \'no-marker\' > "$PNP_CWD_OUT"; fi\n'
+    // The brief is written to the recording FIRST and read back from it: a `$(cat)` capture would
+    // eat the trailing newline, and "byte for byte on stdin" is one of the things being asserted.
     + 'cat > "$PNP_STDIN_OUT"\n'
+    + 'BRIEF="$(cat "$PNP_STDIN_OUT")"\n'
+    + `printf 'session id: %s\\n' '${STUB_SESSION_ID}' >&2\n`
+    + (writeRollout ? rollout(STUB_SESSION_ID, '$BRIEF') : '')
+    + (secondRollout ? rollout(secondRollout.id, secondRollout.carriesBrief ? '$BRIEF' : 'a different session') : '')
+    + `printf '%b' '${shBytes(STUB_STDOUT)}'\n`
+    + `printf '%b' '${shBytes(STUB_STDERR)}' >&2\n`
     + `exit ${STUB_EXIT}\n`);
   fs.chmodSync(stub, 0o755);
 
@@ -2746,17 +3353,27 @@ function runWrapperWithStub(root, wrapper, tmpDir, extraArgs = []) {
     PATH: bin + sep + process.env.PATH,
     PNP_ARGV_OUT: argvOut,
     PNP_STDIN_OUT: stdinOut,
+    PNP_CWD_OUT: cwdOut,
+    CODEX_HOME: codexHome,
   });
   const r = spawnSync(BASH, [path.join(root, 'scripts', 'native', 'sh', wrapper), '--project-root', projectRoot, ...extraArgs],
-    { input: STUB_BRIEF, encoding: 'utf8', env });
+    { input: Buffer.from(brief, 'utf8'), env });
   const recorded = readText(argvOut);
+  const text = (buf) => (buf === null || buf === undefined ? '' : buf.toString('utf8'));
   return {
     projectRoot,
     status: r.status,
-    stderr: r.stderr || '',
+    stderr: text(r.stderr),
+    // Raw bytes, because "the caller's output is unchanged" is a claim about bytes: a line-oriented
+    // pass-through that re-terminates the last line looks identical in any text comparison.
+    stdoutHex: (r.stdout || Buffer.alloc(0)).toString('hex'),
+    stderrHex: (r.stderr || Buffer.alloc(0)).toString('hex'),
     // The recording ends with a trailing NUL, so the last split element is always the empty string.
     atoms: recorded === null ? null : recorded.split(NUL_BYTE).slice(0, -1),
     stdin: readText(stdinOut),
+    cwdMark: readText(cwdOut),
+    // null when the wrapper never wrote that role's state file - which is itself an assertion.
+    state: (file) => { const t = readText(path.join(projectRoot, '.aiwf', file)); return t === null ? null : t.trim(); },
   };
 }
 
@@ -2805,6 +3422,62 @@ function readOnlyWrapperControls(file, short) {
       apply: (r) => patchText(r, at, /printf '%s\\n' "\$PROMPT" \| codex/, 'codex') },
     { id: `sh-exec-${short}-exit`, label: `${file}: codex's exit code swallowed (executed)`,
       apply: (r) => patchText(r, at, /exit "\$status"/, 'exit 0') },
+    // The resume posture and the per-role state file: one sabotage per assertion, each of them a way
+    // the resume could be wrong in production - the flag gone, the frozen argv altered, a flag that
+    // does not exist on the subcommand smuggled in, a resume that never enters the project root, a
+    // state file crossed between the two roles, and the output taken away from the human reading it.
+    { id: `sh-${short}-resume-flag`, label: `${file}: the --resume case dropped from the argument loop`,
+      apply: (r) => patchText(r, at, /--resume\)/, '--resume-not-here)') },
+    { id: `sh-${short}-resume-argv`, label: `${file}: the sandbox_mode pin dropped from the frozen resume argv`,
+      apply: (r) => patchText(r, at, /\n {2}-c sandbox_mode=read-only\n/, '\n') },
+    { id: `sh-${short}-resume-posture`, label: `${file}: -m smuggled back into the resume argv`,
+      apply: (r) => patchText(r, at, /\n {2}resume "\$RESUME_ID"\n/, '\n  resume "$RESUME_ID"\n  -m "$ROLE_MODEL"\n') },
+    { id: `sh-${short}-resume-cwd`, label: `${file}: the resume no longer enters the project root (and has no -C to make up for it)`,
+      apply: (r) => patchText(r, at, /\n *cd "\$PROJECT_ROOT" \|\| fail[^\n]*\n/, '\n') },
+    { id: `sh-${short}-session-state`, label: `${file}: the state file crossed to the other role's`,
+      apply: (r) => patchText(r, at, new RegExp(`/${SESSION_FILES[short]}"`), `/${OTHER_SESSION_FILE[short]}"`) },
+    { id: `sh-${short}-stream-purity`, label: `${file}: the caller's stdout teed into a file again`,
+      apply: (r) => patchText(r, at, /codex "\$\{CODEX_ARGS\[@\]\}" \|\| status=\$\?/, 'codex "${CODEX_ARGS[@]}" | tee /tmp/aiwf-out.log || status=$?') },
+    { id: `sh-${short}-session-store`, label: `${file}: the "exactly one candidate" rule relaxed to "take the first"`,
+      apply: (r) => patchText(r, at, /if \(mine\.length !== 1\) process\.exit\(0\);/, 'if (mine.length === 0) process.exit(0);') },
+    { id: `sh-${short}-session-stale`, label: `${file}: an unidentified cold run leaves the previous id in place`,
+      apply: (r) => patchText(r, at, /\n *clear_session_state\n\}/, '\n  true\n}') },
+    { id: `sh-${short}-session-fingerprint`, label: `${file}: a brief with no fingerprint matches EVERY fresh rollout again`,
+      apply: (r) => patchText(r, at, /if \(!fp\) process\.exit\(0\);/, 'if (false) process.exit(0);') },
+    { id: `sh-${short}-session-clear-verified`, label: `${file}: the clear is claimed without re-reading the file`,
+      apply: (r) => patchText(r, at, /if \[ -n "\$left" \]; then/, 'if [ -n "" ]; then') },
+    { id: `sh-${short}-resume-known-id`, label: `${file}: a resumed run searches the store instead of recording the id it already knows`,
+      apply: (r) => patchText(r, at, /\n *id="\$RESUME_ID"\n/, '\n    id=""\n') },
+    { id: `sh-${short}-resume-writable`, label: `${file}: the writability guard dropped from the bare-resume path`,
+      apply: (r) => patchText(r, at, /\[ -w "\$SESSION_STATE" \] \|\| fail/, 'true || fail') },
+    // The executed halves. The state-file cross is listed twice on purpose - once against the check
+    // that reads the source and once against the run that proves which file was really read - because
+    // the two would rot apart: a source check can keep passing on a name that nothing opens.
+    { id: `sh-exec-${short}-resume-argv`, label: `${file}: the sandbox_mode pin dropped from the resume argv (executed)`,
+      apply: (r) => patchText(r, at, /\n {2}-c sandbox_mode=read-only\n/, '\n') },
+    { id: `sh-exec-${short}-resume-cwd`, label: `${file}: the resume runs from the caller's cwd (executed)`,
+      apply: (r) => patchText(r, at, /\n *cd "\$PROJECT_ROOT" \|\| fail[^\n]*\n/, '\n') },
+    { id: `sh-exec-${short}-resume-state`, label: `${file}: --resume reads the OTHER role's state file (executed)`,
+      apply: (r) => patchText(r, at, new RegExp(`/${SESSION_FILES[short]}"`), `/${OTHER_SESSION_FILE[short]}"`) },
+    // The executed capture control is the REAL regression: reading the id out of the wrapper's own
+    // output. The stub puts the banner on stderr only, exactly as codex does, so a wrapper that
+    // parses its own stdout records nothing - which is precisely what happened on the live engine.
+    { id: `sh-exec-${short}-session-capture`, label: `${file}: the id parsed from the wrapper's own stdout again instead of the session store (executed)`,
+      apply: (r) => patchText(r, at, /id="\$\(PNP_SESSIONS=[^\n]*\n/,
+        'id="$(printf \'%s\' "$PNP_STDOUT_COPY" | sed -n \'s/.*session id: \\([0-9a-f-]*\\).*/\\1/p\' || true)"\n') },
+    { id: `sh-exec-${short}-bytes`, label: `${file}: the caller's stdout pushed through a line-oriented shell loop (executed)`,
+      apply: (r) => patchText(r, at, /codex "\$\{CODEX_ARGS\[@\]\}" \|\| status=\$\?/,
+        'codex "${CODEX_ARGS[@]}" | while IFS= read -r pnp_line; do printf \'%s\\n\' "$pnp_line"; done || status=$?') },
+    { id: `sh-exec-${short}-session-stale`, label: `${file}: an unidentified cold run leaves the previous id in place (executed)`,
+      apply: (r) => patchText(r, at, /\n *clear_session_state\n\}/, '\n  true\n}') },
+    { id: `sh-exec-${short}-session-fingerprint`, label: `${file}: a brief with no fingerprint matches every fresh rollout, so a stranger's id is recorded (executed)`,
+      apply: (r) => patchText(r, at, /if \(!fp\) process\.exit\(0\);/, 'if (false) process.exit(0);') },
+    { id: `sh-exec-${short}-resume-writable`, label: `${file}: a bare --resume accepts a state file nobody could have cleared (executed)`,
+      apply: (r) => patchText(r, at, /\[ -w "\$SESSION_STATE" \] \|\| fail/, 'true || fail') },
+    { id: `sh-exec-${short}-resume-records-id`, label: `${file}: a resumed run records nothing, leaving the previous id in the state file (executed)`,
+      apply: (r) => patchText(r, at, /\n *id="\$RESUME_ID"\n/, '\n    id=""\n') },
+    { id: `sh-exec-${short}-session-ambiguous`, label: `${file}: "exactly one candidate" relaxed to "take the first", so a concurrent session can be recorded (executed)`,
+      apply: (r) => patchText(r, at, /if \(mine\.length !== 1\) process\.exit\(0\);/, 'if (mine.length === 0) process.exit(0);\nmine.length = 1;') },
   ];
 }
 
@@ -2901,7 +3574,16 @@ const SH_CONTROLS = [
 const SH_EXEC_IDS = new Set(['sh-exec-host',
   'sh-exec-review-argv', 'sh-exec-review-stdin', 'sh-exec-review-exit',
   'sh-exec-qa-argv', 'sh-exec-qa-stdin', 'sh-exec-qa-exit',
-  'sh-exec-review-class-argv', 'sh-exec-review-class-empty']);
+  'sh-exec-review-class-argv', 'sh-exec-review-class-empty',
+  'sh-exec-review-session-capture', 'sh-exec-qa-session-capture',
+  'sh-exec-review-bytes', 'sh-exec-qa-bytes',
+  'sh-exec-review-session-stale', 'sh-exec-qa-session-stale',
+  'sh-exec-review-session-ambiguous', 'sh-exec-qa-session-ambiguous',
+  'sh-exec-review-session-fingerprint', 'sh-exec-qa-session-fingerprint',
+  'sh-exec-review-resume-writable', 'sh-exec-qa-resume-writable',
+  'sh-exec-review-resume-records-id', 'sh-exec-qa-resume-records-id',
+  'sh-exec-review-resume-argv', 'sh-exec-review-resume-cwd', 'sh-exec-review-resume-state',
+  'sh-exec-qa-resume-argv', 'sh-exec-qa-resume-cwd', 'sh-exec-qa-resume-state']);
 
 function sectionShWrappers(tmpRoot) {
   section('WRAPPERS (bash channel) - locked flags, stdin-only delivery, LF + ASCII bytes, executed transport');
@@ -2921,7 +3603,11 @@ function sectionShWrappers(tmpRoot) {
     const broken = path.join(tmpRoot, `sh-neg-${i += 1}`);
     copyShChannel(base, broken);
     try { m.apply(broken); } catch (e) { check(`control could be applied: ${m.label}`, false, String(e.message)); continue; }
-    const target = shWrapperFindings(broken, { execProbes: SH_EXEC_IDS.has(m.id), tmpDir: tmpRoot }).find((f) => f.id === m.id);
+    // Only the probe GROUP that produces this control's finding is run (a Set, not a boolean): the
+    // executed section grew to twelve wrapper runs, and re-running all of them per control would
+    // multiply the cost of every future executed assertion by the number of controls.
+    const target = shWrapperFindings(broken,
+      { execProbes: SH_EXEC_IDS.has(m.id) ? new Set([m.id]) : false, tmpDir: tmpRoot }).find((f) => f.id === m.id);
     if (!target) {
       check(`control "${m.label}" targets a live check (id "${m.id}")`, false, 'no check with that id was produced');
       continue;
