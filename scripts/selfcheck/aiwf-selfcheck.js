@@ -5734,6 +5734,189 @@ const DOCTRINE_CONSOLIDATION_SURFACES = [
     what: 'the docs commit stands apart from the code commit (both homes lose it here)' },
 ];
 
+// ---------------------------------------------------------------------------
+// THE CONDUCT OF A PASS - thirteen rules about what a pass is HANDED and when it may RESUME
+// ---------------------------------------------------------------------------
+// A family of its own rather than an addition to the tables above, for two reasons. By subject:
+// those tables answer WHO audits (the audit table), what SURROUNDS a pass (its verdict report, the
+// word that buys the next one), which contracts are stated in more than one document, how a PLAN is
+// made precise, and which loose rules were adopted from a consumer's notes - none of them is about
+// the inputs a pass is given or the session it runs in. By construction: each of those headers
+// enumerates its exact members ("Two rules", "THREE CONTRACTS", "eight rules"), so appending here
+// would leave a comment that no longer describes its own array, which is the quiet kind of rot this
+// whole section exists against.
+// What the thirteen share is one failure mode: each states how a pass is CONDUCTED, and each
+// replaces a looser practice that still reads perfectly true - which is why every replacement below
+// is that practice, not a nonsense string. A rule stated in two files gets one entry per FILE, which
+// the generic loop expresses exactly: a sabotage of one home leaves the other standing.
+//
+// (a) WHAT A PASS IS HANDED - five rules
+//   - The readiness fact-check carries the chain-table line - in the skill that dispatches the gate
+//     and in the doctrine that describes it. Without it the gate verifies claims one at a time and
+//     nobody checks that the chains are a complete, resolving structure.
+//   - The brief hands the previous pass's blockers over VERBATIM, and their absence from pass 2 on
+//     is a reportable contract violation. "Add them if you still have them" is the practice that
+//     makes the carry mechanism (§ Fail aggregation) optional again. The literal lives in the
+//     plan-readiness brief shape, which is the contract's one home; the diff template points at it.
+//   - A first code-class pass CARRIES an evidence pack, and the claim for it is qualitative - never
+//     that it makes a pass cheaper. Two separate regressions, so two entries: a pack that becomes
+//     optional, and a cost promise nobody measured.
+//   - The pack is a selection made by the AUDITED side, so the Reviewer keeps the right and the duty
+//     to look past it. The regression is the pack read as the scope of the pass - the audited side
+//     choosing what its own audit sees.
+//
+// (b) WHEN A PASS MAY RESUME - eight rules, and the reason they are pinned one clause at a time is
+//     that each clause is independently deletable while the passage still reads whole.
+//   - A plan-readiness pass 1 is always cold. Pinned as TWO entries because the headline and its
+//     rationale are separately loseable and markdown puts a bold marker between them: the rule, and
+//     the argument from INDEPENDENCE rather than economy (a budget-shaped rewrite of the second
+//     keeps the first and turns the guarantee that pass buys into a saving).
+//   - A verification pass after a correction round resumes by default.
+//   - A round that RE-ARCHITECTED reverts that verification to cold or to the operator's call.
+//   - A readiness pass after the first resumes only with its compensations AND the operator's word.
+//   - A warm session is retired at its first compaction.
+//   - Resume/cold is decided by the QUESTION being asked, not by whether a session happens to still
+//     be around - the sentence stands in both skills that carry the resume mechanics.
+//   - An interrupted pass is recovered by a bare resume plus a short continuation prompt. The weaker
+//     rule is the fatalism that a killed pass is simply spent, which pays for the same reading twice.
+//     Its other half is an ABSENCE and is instrumented as one: the retired wording is in
+//     DOCTRINE_RETIRED_PATTERNS below, so the sweep refuses it if it ever creeps back.
+const DOCTRINE_PASS_CHAIN_TABLE =
+  'verify the chain table - every Outcome sentence has a row, every link resolves at its file:line, '
+  + 'endpoints are source or render-or-DB-write surfaces, chains start at the entry point';
+const DOCTRINE_PASS_PREVIOUS_BLOCKERS =
+  'PREVIOUS PASS BLOCKERS (verbatim; absent or empty on pass \u22652 is a contract violation the '
+  + 'Reviewer reports separately)';
+const DOCTRINE_PASS_EVIDENCE_PACK =
+  'the pack is a SELECTION MADE BY THE AUDITED SIDE, so the Reviewer keeps the right and the duty '
+  + 'to read the tree beyond it, to run its own probes, and to raise what the pack does not mention '
+  + '- a pack that turns out to be incomplete is itself a finding';
+const DOCTRINE_PASS_PACK_MANDATE =
+  'A first `code`-class pass carries an evidence pack: the `file:line` evidence the COO already '
+  + 'holds from authoring the ticket';
+const DOCTRINE_PASS_PACK_NO_COST =
+  'That claim is qualitative and it stops there: the pack is not a cost promise, and nothing here '
+  + 'says a pass that carries one is cheaper or shorter than a pass that does not.';
+const DOCTRINE_PASS_READINESS_COLD = 'A plan-readiness pass 1 is ALWAYS cold';
+const DOCTRINE_PASS_READINESS_WHY =
+  'The argument is INDEPENDENCE, not economy: the independent full reading IS the guarantee that '
+  + 'pass buys, and a warm auditor defends the verdict it already gave instead of deriving it again.';
+const DOCTRINE_PASS_VERIFICATION_DEFAULT =
+  'A verification pass after a correction round resumes by default';
+const DOCTRINE_PASS_REARCHITECTED =
+  'A correction round that RE-ARCHITECTED rather than closed the blockers re-poses the whole '
+  + 'question, so its verification reverts to cold or to the operator\'s call';
+const DOCTRINE_PASS_COMPENSATIONS =
+  'A readiness pass after the first may resume only with its compensations, and only on the '
+  + 'operator\'s word';
+const DOCTRINE_PASS_COMPACTION = 'Retire a warm session at its first compaction.';
+const DOCTRINE_PASS_DELTA_WHOLE =
+  'resume answers "is the DELTA sound"; cold answers "is the WHOLE still sound"';
+const DOCTRINE_PASS_INTERRUPTION =
+  'the DEFAULT recovery is a bare resume plus a SHORT continuation prompt - "continue - you already '
+  + 'have the brief and your progress; produce the verdict" - never a fresh dispatch carrying the '
+  + 'full brief again';
+// The index line of skills/, pinned outside the conduct family (see its assertion for why).
+const DOCTRINE_SHIPPED_COMMANDS =
+  'Shipped: loop, review, qa, qal, brief, mission, work, roles, setup, update, selfcheck.';
+const DOCTRINE_PASS_CONDUCT_SURFACES = [
+  { id: 'doctrine-pass-chain-table',
+    file: 'skills/review/SKILL.md',
+    phrase: DOCTRINE_PASS_CHAIN_TABLE,
+    replacement: 'the fact-check gate reads each claim, which covers the chain table too',
+    what: 'Step 2b gives a readiness fact-check the chain-table line beside the acceptance-command one' },
+  { id: 'doctrine-pass-chain-table-workflow',
+    file: 'docs/WORKFLOW.md',
+    phrase: DOCTRINE_PASS_CHAIN_TABLE,
+    replacement: 'the fact-check gate reads each claim, which covers the chain table too',
+    what: '§ Plan readiness review names the chain-table instruction beside the acceptance-command one' },
+  { id: 'doctrine-pass-previous-blockers',
+    file: 'skills/review/SKILL.md',
+    phrase: DOCTRINE_PASS_PREVIOUS_BLOCKERS,
+    replacement: 'PREVIOUS PASS BLOCKERS (optional; add the earlier pass\'s findings if you still have them)',
+    what: 'the plan-readiness brief shape carries the previous pass\'s blockers verbatim, and says what their absence is' },
+  { id: 'doctrine-pass-pack-mandate',
+    file: 'skills/review/SKILL.md',
+    phrase: DOCTRINE_PASS_PACK_MANDATE,
+    replacement: 'A pass gets whatever evidence the COO happened to paste into the brief',
+    what: 'a first code-class pass CARRIES an evidence pack - it is not whatever the brief happened to include' },
+  { id: 'doctrine-pass-pack-no-cost',
+    file: 'skills/review/SKILL.md',
+    phrase: DOCTRINE_PASS_PACK_NO_COST,
+    replacement: 'That is what makes the pass cheaper.',
+    what: 'the claim for the pack is qualitative - the skill refuses to promise a cheaper pass' },
+  { id: 'doctrine-pass-evidence-pack',
+    file: 'skills/review/SKILL.md',
+    phrase: DOCTRINE_PASS_EVIDENCE_PACK,
+    replacement: 'the pack is the evidence this pass needs, so the Reviewer can start from it',
+    what: 'the evidence pack is the audited side\'s selection - the Reviewer still reads past it' },
+  { id: 'doctrine-pass-readiness-cold',
+    file: 'skills/review/SKILL.md',
+    phrase: DOCTRINE_PASS_READINESS_COLD,
+    replacement: 'a readiness pass may resume like any other when the budget is tight',
+    what: 'a plan-readiness pass 1 is cold at any budget' },
+  { id: 'doctrine-pass-readiness-cold-why',
+    file: 'skills/review/SKILL.md',
+    phrase: DOCTRINE_PASS_READINESS_WHY,
+    replacement: 'The argument is economy: a cold pass costs more, so spend one where the budget allows it.',
+    what: 'and it is cold for INDEPENDENCE rather than for economy - the rationale is the rule\'s other half' },
+  { id: 'doctrine-pass-verification-default-review',
+    file: 'skills/review/SKILL.md',
+    phrase: DOCTRINE_PASS_VERIFICATION_DEFAULT,
+    replacement: 'Every verification pass is a fresh cold read',
+    what: '/pnp:review resumes a verification pass after a correction round by default' },
+  { id: 'doctrine-pass-verification-default-qa',
+    file: 'skills/qa/SKILL.md',
+    phrase: DOCTRINE_PASS_VERIFICATION_DEFAULT,
+    replacement: 'Every verification pass is a fresh cold read',
+    what: '/pnp:qa states the same default beside its own resume mechanics' },
+  { id: 'doctrine-pass-rearchitected-review',
+    file: 'skills/review/SKILL.md',
+    phrase: DOCTRINE_PASS_REARCHITECTED,
+    replacement: 'A verification pass resumes whatever the correction round did to the design',
+    what: '/pnp:review reverts the verification of a re-architecting round to cold or to the operator' },
+  { id: 'doctrine-pass-rearchitected-qa',
+    file: 'skills/qa/SKILL.md',
+    phrase: DOCTRINE_PASS_REARCHITECTED,
+    replacement: 'A verification pass resumes whatever the correction round did to the design',
+    what: '/pnp:qa carries the same exception' },
+  { id: 'doctrine-pass-compensations',
+    file: 'skills/review/SKILL.md',
+    phrase: DOCTRINE_PASS_COMPENSATIONS,
+    replacement: 'A readiness pass after the first resumes like any other',
+    what: 'a later readiness pass resumes only with its compensations AND the operator\'s word' },
+  { id: 'doctrine-pass-compaction-review',
+    file: 'skills/review/SKILL.md',
+    phrase: DOCTRINE_PASS_COMPACTION,
+    replacement: 'Keep a warm session for as long as the wrapper will still resume it.',
+    what: '/pnp:review retires a warm session at its first compaction' },
+  { id: 'doctrine-pass-compaction-qa',
+    file: 'skills/qa/SKILL.md',
+    phrase: DOCTRINE_PASS_COMPACTION,
+    replacement: 'Keep a warm session for as long as the wrapper will still resume it.',
+    what: '/pnp:qa retires a warm session at the same moment' },
+  { id: 'doctrine-pass-delta-whole-review',
+    file: 'skills/review/SKILL.md',
+    phrase: DOCTRINE_PASS_DELTA_WHOLE,
+    replacement: 'resume whenever the previous session is still there, and run cold when it is not',
+    what: '/pnp:review decides resume vs cold by the question the pass asks' },
+  { id: 'doctrine-pass-delta-whole-qa',
+    file: 'skills/qa/SKILL.md',
+    phrase: DOCTRINE_PASS_DELTA_WHOLE,
+    replacement: 'resume whenever the previous session is still there, and run cold when it is not',
+    what: '/pnp:qa states the same rule beside its own resume mechanics' },
+  { id: 'doctrine-pass-interruption-review',
+    file: 'skills/review/SKILL.md',
+    phrase: DOCTRINE_PASS_INTERRUPTION,
+    replacement: 'a killed pass is spent - dispatch a fresh one carrying the full brief again',
+    what: '/pnp:review recovers an interrupted pass by a bare resume plus a short continuation prompt' },
+  { id: 'doctrine-pass-interruption-qa',
+    file: 'skills/qa/SKILL.md',
+    phrase: DOCTRINE_PASS_INTERRUPTION,
+    replacement: 'a killed pass is spent - dispatch a fresh one carrying the full brief again',
+    what: '/pnp:qa carries the same recovery, off its own state file' },
+];
+
 // The count is the assertion for the rule above that lives in TWO places inside ONE file - the
 // completion record and Commit & Push Authority. The generic loop cannot express that: it is a
 // substring test, so a second entry with the same file and phrase would pass on one occurrence and
@@ -5803,7 +5986,16 @@ function doctrineNotesFiles(root) {
 // The other half of the same guarantee. The assertions above prove the NEW sentences are present;
 // this proves the OLD ones are gone - a doctrine can carry both and contradict itself in silence.
 // Every pattern here is a phrase that stated as a rule something the audit table now decides, or
-// pinned a model, or named the fact-check gate's skip clause by the engine instead of by the cost.
+// pinned a model, or named the fact-check gate's skip clause by the engine instead of by the cost -
+// plus, since the interruption rule landed, the FATALISM it replaced. That one is a removal rather
+// than a rewrite, so an assertion that some new sentence is present could never catch its return;
+// the honest instrument for "this must not come back" is the sweep. Two patterns, because the three
+// background-run paragraphs did not word it identically: the review skill and the Codex recipe both
+// said a killed pass is "lost *and already paid for*", while /pnp:qa said it "spends the operator's
+// paid quota and returns no verdict". Neither matches any current payload text - the recipe's
+// surviving "spends the operator's budget and returns no verdict" is a different string, and
+// /pnp:qal's "spending the operator's paid quota for nothing" is a DIFFERENT and still-true claim,
+// because the QAL wrapper has no resume surface to recover through.
 // Paths are deliberate: `scripts/` is excluded because a selfcheck fixture legitimately contains a
 // pinned model, `CHANGELOG.md` because history is not edited, `examples/` because the committed
 // example project is data, not doctrine.
@@ -5827,6 +6019,8 @@ const DOCTRINE_RETIRED_PATTERNS = [
   'Five brief-authoring',
   'no paid pass to protect',
   'paid external engine \\(the codex branch\\)',
+  'lost \\*and already paid for\\*',
+  'paid quota and returns no verdict',
 ];
 const DOCTRINE_SWEEP_DIRS = ['docs', 'skills', 'templates'];
 const DOCTRINE_SWEEP_FILES = ['README.md'];
@@ -5954,6 +6148,27 @@ function payloadDoctrineFindings(pluginRoot) {
     add(s.id, `${s.file}: ${s.what}`, present,
       text == null ? 'the file is missing' : (present ? `"${collapseWs(s.phrase)}"` : `the sentence is missing or reworded: "${collapseWs(s.phrase)}"`));
   }
+
+  for (const s of DOCTRINE_PASS_CONDUCT_SURFACES) {
+    const text = readText(path.join(pluginRoot, ...s.file.split('/')));
+    const present = text != null && collapseWs(text).includes(collapseWs(s.phrase));
+    add(s.id, `${s.file}: ${s.what}`, present,
+      text == null ? 'the file is missing' : (present ? `"${collapseWs(s.phrase)}"` : `the sentence is missing or reworded: "${collapseWs(s.phrase)}"`));
+  }
+
+  // Deliberately NOT an entry of the conduct array above: that family is about how a PASS is
+  // conducted, and this is an index line - a header that no longer describes its own array is the
+  // rot this whole section exists against, and the same applies to a family that quietly acquires a
+  // member it does not describe. It is pinned all the same, because the line is contract text: the
+  // directory's own index disagreeing with the directory is how a command ships and stays invisible.
+  const skillsIndex = readText(path.join(pluginRoot, 'skills', 'README.md'));
+  const indexPresent = skillsIndex != null
+    && collapseWs(skillsIndex).includes(collapseWs(DOCTRINE_SHIPPED_COMMANDS));
+  add('doctrine-shipped-commands-line',
+    'skills/README.md: the index line names every shipped command, in the authoritative wording',
+    indexPresent,
+    skillsIndex == null ? 'the file is missing'
+      : (indexPresent ? `"${DOCTRINE_SHIPPED_COMMANDS}"` : `the line is missing or reworded: "${DOCTRINE_SHIPPED_COMMANDS}"`));
 
   // The one rule of that family stated TWICE in one file, asserted by COUNT rather than by presence:
   // the record's own commit belongs both where the completion record is defined and where the commit
@@ -6144,6 +6359,27 @@ const DOCTRINE_CONTROLS = [
     label: `${s.file}: the adopted rule reverted ("${collapseWs(s.phrase).slice(0, 60)}" -> "${s.replacement}")`,
     apply: (r) => doctrinePhrase(r, s.file, s.phrase, s.replacement),
   })),
+  // One control per pass-conduct surface, sabotaged with the looser practice each rule replaced: the
+  // chain table folded back into the per-claim fact-check, the carried blocker list made optional,
+  // the evidence pack read as the scope of the pass, a readiness pass 1 resumed to save budget,
+  // resume decided by whether a session survived rather than by the question being asked, and a
+  // killed pass written off as spent, a pack that is optional and then sold as a saving, a
+  // verification that is always cold, a re-architecting round resumed anyway, a later readiness pass
+  // that resumes like any other, and a warm session kept until the wrapper refuses it. Six of the
+  // thirteen stand in TWO FILES, and there the generic loop says it exactly right - two entries, two
+  // files, so a sabotage of one leaves the other standing.
+  ...DOCTRINE_PASS_CONDUCT_SURFACES.map((s) => ({
+    id: s.id,
+    label: `${s.file}: the conduct rule loosened back ("${collapseWs(s.phrase).slice(0, 60)}" -> "${s.replacement}")`,
+    apply: (r) => doctrinePhrase(r, s.file, s.phrase, s.replacement),
+  })),
+  // The index line's control is the regression itself: the line as it stood before `/pnp:roles` was
+  // added to it - ten names, backticked, perfectly well-formed, and one command short of the
+  // directory it indexes.
+  { id: 'doctrine-shipped-commands-line',
+    label: 'skills/README.md: the index line reverts to the ten-name list that omits `roles`',
+    apply: (r) => doctrinePhrase(r, 'skills/README.md', DOCTRINE_SHIPPED_COMMANDS,
+      'Shipped: `loop`, `review`, `qa`, `qal`, `brief`, `mission`, `work`, `setup`, `update`, `selfcheck`.') },
   // The count check needs a control the generic one cannot give it: the spread above replaces EVERY
   // occurrence (the sabotage regex is global), which takes both homes at once and would prove only
   // that zero is not two. This one drops exactly ONE home - the first - so the count falls to 1 with

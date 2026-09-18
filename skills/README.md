@@ -3,7 +3,7 @@
 The operator-facing commands ship here, one directory per command, each holding a
 `SKILL.md` with an explicit `name:` frontmatter that yields `/pnp:<name>`.
 
-Shipped: `loop`, `review`, `qa`, `qal`, `brief`, `mission`, `work`, `setup`, `update`, `selfcheck`.
+Shipped: loop, review, qa, qal, brief, mission, work, roles, setup, update, selfcheck.
 Every one of them opens with the same Step 0 contract - resolve the project root, read
 `.claude/aiwf-native/aiwf.config.json`, stop toward `/pnp:setup` when it is missing, and run the
 version interlock (`scripts/update/aiwf-update.mjs --check`) - because a skill in a plugin has no

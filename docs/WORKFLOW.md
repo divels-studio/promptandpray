@@ -371,8 +371,10 @@ the cheapest one proves.
 "finished", the COO re-reads it in a SEPARATE turn against the six readiness checks below, before
 any auditor is dispatched: every `file:line` opened, every command executable on the OS channel the
 plan records, not one "if the Writer finds ...", every promise of a guarantee checked against the
-code that gives it. The fact-check agent is dispatched with one extra instruction alongside its
-standing task - "every acceptance command exists and can fail". This is not ceremony: on the plan
+code that gives it. The fact-check agent is dispatched with two extra instructions alongside its
+standing task - "every acceptance command exists and can fail", and "verify the chain table -
+every Outcome sentence has a row, every link resolves at its file:line, endpoints are source or
+render-or-DB-write surfaces, chains start at the entry point". This is not ceremony: on the plan
 that introduced the audit table, the first readiness pass returned 10 blockers of which 8 were the
 author's own (shortcuts, a decision left open, code not read), and the pass after it returned 14, of
 which 11 had been visible in the first. A paid pass verifies decisions; precision is paid for on the

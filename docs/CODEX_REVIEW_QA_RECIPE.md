@@ -76,10 +76,12 @@ Hard requirements (do not change without re-proving the read-only posture):
   on both, before a paid pass is spent.
 - **Every wrapper runs in the BACKGROUND by default** (`run_in_background: true`). A foreground shell
   call is capped at 10 minutes, while an external engine at `effort: high` on a real diff routinely
-  runs longer and is killed mid-reasoning (exit 143). The pass is then lost *and already paid for* -
-  passes on a paid engine are an operator quota gate, so a timeout kill spends the operator's budget
-  and returns no verdict. Never retry a timed-out pass in the foreground: a full `high` pass on a
-  multi-file diff has been observed killed at the cap with nothing returned.
+  runs longer and is killed mid-reasoning (exit 143). The run ends there and the verdict does not
+  arrive - passes on a paid engine are an operator quota gate, so a timeout kill spends the
+  operator's budget and returns no verdict. What the run had already read is recoverable - see
+  "Resuming a session" below - and that changes nothing about this rule: recovery costs a further
+  dispatch and the operator's attention. Never retry a timed-out pass in the foreground: a full
+  `high` pass on a multi-file diff has been observed killed at the cap with nothing returned.
 
 ### Resuming a session (both wrappers, both channels)
 

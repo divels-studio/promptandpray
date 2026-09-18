@@ -64,6 +64,47 @@ never writes a file of the operator's.
   self-initiated dispatch or remediation - a rule written before this gate may contradict it."
   verbatim in its note, because the note text is the only thing that reaches the operator's `CHANGES`
   report. The convention is written down in `migrations/README.md`.
+- **Three contract clauses for a review pass (CONS-005)** - `/pnp:review` now says what a pass is
+  handed. A readiness fact-check carries the chain-table line beside the acceptance-command one
+  (every Outcome sentence has a row, every link resolves at its `file:line`, endpoints are source or
+  render-or-DB-write surfaces, chains start at the entry point); `docs/WORKFLOW.md` § Plan readiness
+  review moves with it and names the same two instructions. The plan-readiness brief shape - the
+  brief a readiness pass is actually written from - carries the previous pass's blockers as a fixed
+  field, verbatim, and states that their absence from pass 2 on is a contract violation the Reviewer
+  reports separately; that is the input side of the carry mechanism `docs/WORKFLOW.md` § Fail
+  aggregation already required, and the implementation-diff template keeps the field but points at
+  the rule rather than restating it, so the contract has one home. And a first `code`-class pass
+  carries an evidence pack: the `file:line` evidence the COO already holds, handed over so the pass
+  is spent on judgment rather than on rediscovery - with the limit that keeps it honest written
+  beside it, that the pack is the audited side's own selection, so the Reviewer keeps the right and
+  the duty to read past it and an incomplete pack is itself a finding. The claim for the pack is
+  qualitative and stays that way: it is not a promise of a cheaper pass.
+- **When a pass may resume, beside the mechanics that already said how (CONS-005)** - `/pnp:review`
+  and `/pnp:qa` document the resume flag, the per-role state file and the refusals; each now also
+  states the policy, in the same place, so the two cannot drift apart. One question decides it -
+  resume answers "is the DELTA sound", cold answers "is the WHOLE still sound" - and from it: a
+  plan-readiness pass 1 is always cold, for independence rather than for economy; a verification
+  pass after a correction round resumes by default; a round that re-architected rather than closed
+  the blockers reverts to cold or to the operator's call; a readiness pass after the first resumes
+  only with its compensations and only on the operator's word; and a warm session is retired at its
+  first compaction. With them, the recovery an interruption gets: a killed pass ends a process, not
+  the work, so the default is a bare resume plus a short continuation prompt rather than a fresh
+  dispatch of the whole brief. All three background-run paragraphs - both skills and
+  `docs/CODEX_REVIEW_QA_RECIPE.md`, which had been declaring a pass lost two lines above the section
+  documenting its recovery - stop calling such a pass lost: the run ends and no verdict arrives,
+  which is unchanged, but what it had already read is recoverable. The case against running a pass in
+  the foreground is left exactly as strong, because recovery costs a further dispatch and the
+  operator's attention. Every rule above is pinned by the self-check with a negative control that
+  loosens it back to the practice it replaced - one entry per file for a rule that stands in two -
+  and the wording the fatalism is gone from is pinned the only way a removal can be: as an absence,
+  in the retired-phrase sweep that refuses to find it anywhere in `docs/`, `skills/`, `templates/`
+  or `README.md`.
+
+### Fixed
+
+- **`skills/README.md` lists every shipped command (CONS-005)** - the index line named ten of them
+  and omitted `roles`, so the directory's own index disagreed with the directory. The corrected line
+  is pinned, with a control that reverts it to the ten-name list.
 
 ## [0.2.6] - 2026-09-15
 

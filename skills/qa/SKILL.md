@@ -228,8 +228,11 @@ allowlisted. Do not inline the brief, and do not make the path unique per sessio
 
 **Run the wrapper in the BACKGROUND - `run_in_background: true`, by default.** A foreground shell
 call is capped at 10 minutes; an external engine at `effort: high` routinely exceeds it and is
-killed mid-run (exit 143), which spends the operator's paid quota and returns no verdict. Same
-rule, same reasoning, as `/pnp:review` Step 3.
+killed mid-run (exit 143), by which point the operator's paid quota is spent and no verdict has
+arrived. What the run had already read is recoverable (the interruption rule below), and that
+changes nothing about this rule: recovery costs a further dispatch and the operator's attention, so a
+pass that never needed recovering is still the better outcome. Same rule, same reasoning, as
+`/pnp:review` Step 3.
 
 **A verification pass after a correction round may RESUME the previous session instead of paying for
 a cold one.** It is the same block with one flag added, so the command text stays in the same small
@@ -261,6 +264,34 @@ the read-only posture travels as `-c sandbox_mode=read-only` plus `-c approval_p
 wrapper makes the project root its cwd itself. Resuming is for a **verification** pass over the same
 ticket and the same evidence set; a new ticket, or a pass whose artifacts the previous session never
 saw, is a cold run.
+
+**Which passes that last sentence lets resume - and which it does not.** The flag and its refusals
+are the mechanics above; this is the policy that decides when to reach for them, and it lives here
+rather than in a document of its own so the two cannot drift apart. One question settles every case
+below: **resume answers "is the DELTA sound"; cold answers "is the WHOLE still sound"**. The
+precondition `BLOCKED` is the plainest instance of the cold-run clause the paragraph above ends on -
+a run that judged nothing leaves no delta behind it, and the artifacts that arrive afterwards are an
+evidence set that session never saw. QA has no plan-readiness pass of its own, so the readiness
+rules `/pnp:review` carries have no counterpart here.
+
+- **A verification pass after a correction round resumes by default** - the case the paragraph above
+  describes, and the one where the delta really is what the previous session was judging: the same
+  ticket, the same acceptance criteria, a re-run of the same suite on top of the evidence it already
+  read.
+- **A correction round that RE-ARCHITECTED rather than closed the blockers re-poses the whole
+  question, so its verification reverts to cold or to the operator's call** - the delta is no longer
+  a delta against the behavior that was judged.
+- **Retire a warm session at its first compaction.** What a resume saves shrinks as the resumed
+  session accumulates context of its own, and is gone once that session has been compacted: what
+  would be resumed is then no longer the reading that was paid for.
+
+**An interrupted paid pass is NOT lost work.** A kill or an interruption ends the CLI process, while
+the session and the work already done survive in the engine's own session store - so the DEFAULT
+recovery is a bare resume plus a SHORT continuation prompt - "continue - you already have the brief
+and your progress; produce the verdict" - never a fresh dispatch carrying the full brief again. Bare
+means bare: `-Resume` / `--resume` with no id, off QA's own state file above; write the continuation
+prompt into the same `qa-brief.txt` and re-invoke the block, which keeps the command text in the
+fixed set a permission rule matches.
 
 **How the id gets recorded, and when it does not.** The wrapper does **not** read the engine's
 output - it touches neither stdout nor stderr, so what you see is the engine's own bytes. A

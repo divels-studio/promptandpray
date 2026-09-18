@@ -150,6 +150,16 @@ SCOPE / DIFF:
   - claude branch: you MUST paste the FULL diff here - the Claude reviewer has only Read/Grep/Glob
     and cannot run git, so the "name the git command" shortcut is codex-branch-only.
 
+PREVIOUS PASS BLOCKERS
+<pass N's blocker list, quoted exactly as it was returned - or `none - this is pass 1`. A
+verification pass after a correction round is a pass 2 and fills this in. The contract this field
+carries is stated ONCE, in the plan-readiness brief shape below and in `docs/WORKFLOW.md`
+§ Fail aggregation; it is not restated here.>
+
+EVIDENCE PACK (a first `code`-class pass carries one; see below for what it is and is not):
+<the file:line evidence the COO already holds - the worklist pointers and the anchors the ticket
+was authored against>
+
 RISK THRESHOLD: <which defect severity blocks - e.g. "block on correctness/security/data-loss;
 note-only for style">
 STOP CONDITION: <when you have enough evidence and must stop - e.g. "stop once every changed
@@ -173,6 +183,16 @@ raise a blocker that was already visible):
 
 Substitute the checklist path when you write the brief: the Reviewer runs outside this session and
 cannot expand `${CLAUDE_PLUGIN_ROOT}` itself, so paste the resolved absolute path.
+
+**The evidence pack, and the one thing it is not.** A first `code`-class pass carries an evidence
+pack: the `file:line` evidence the COO already holds from authoring the ticket - the worklist
+pointers, the anchors, the surfaces it read first-hand - handed over so the pass is spent on
+JUDGMENT instead of on rediscovering where the change lives. That claim is qualitative and it stops
+there: the pack is not a cost promise, and nothing here says a pass that carries one is cheaper or
+shorter than a pass that does not. In the same breath, the pack is a SELECTION MADE BY THE AUDITED
+SIDE, so the Reviewer keeps the right and the duty to read the tree beyond it, to run its own
+probes, and to raise what the pack does not mention - a pack that turns out to be incomplete is
+itself a finding.
 
 ## Step 2b - Fact-check gate before every pass above the scan tier
 
@@ -200,8 +220,10 @@ DIFF:
 
 **Over a plan, this is the same gate with the plan document in place of the diff** - one rule, not
 two: fact-check before every pass above the scan tier, over a diff or over a plan. There is no
-second, plan-only variant of this step, and for a readiness pass the task carries one extra line -
-`every acceptance command exists and can fail`.
+second, plan-only variant of this step, and for a readiness pass the task carries two extra lines -
+`every acceptance command exists and can fail`, and `verify the chain table -
+every Outcome sentence has a row, every link resolves at its file:line, endpoints are source
+or render-or-DB-write surfaces, chains start at the entry point`.
 
 Then: the COO fixes every returned claim, and **only then** dispatches the pass, over the
 corrected tree. The gate may be skipped only when the reviewer itself runs on a scan-tier model
@@ -229,7 +251,15 @@ implementation, not a code diff - the contract is different:
 - **Step 1 scope** is the whole plan + repo prerequisites, not a diff.
 - **Brief:** name the plan file + branch, still carry the ticket **risk threshold** and **stop
   condition** (and the BUDGET TARGET line), and set the OUTPUT CONTRACT verdict to
-  `PASS` / `NEEDS-FIX`.
+  `PASS` / `NEEDS-FIX`. The readiness brief carries one more field than the diff template above, and
+  it is a fixed artifact rather than a reminder - write it into every brief of the cycle, filled in:
+
+      PREVIOUS PASS BLOCKERS (verbatim; absent or empty on pass ≥2 is a contract violation the
+      Reviewer reports separately)
+      <pass N's blocker list, quoted exactly as it was returned - or `none - this is pass 1`>
+
+  This is the field the carry contract below is about: the rule is stated once, here and in
+  `docs/WORKFLOW.md` § Fail aggregation, and the diff template points at it instead of repeating it.
 - **One invocation = ONE pass.** The next pass is a **separate** `/pnp:review` invocation *after the
   COO revises the plan*.
 
@@ -310,9 +340,12 @@ an accepted, visible failure mode: a re-dispatch, not a silent wrong verdict.
 
 **Run the wrapper in the BACKGROUND - `run_in_background: true`. This is the default, not an
 optimisation.** A foreground shell call is capped at 10 minutes; an external review engine at
-`effort: high` on a real diff routinely runs longer and is killed mid-reasoning (exit 143). The
-pass is then lost *and already paid for* - passes on a paid external engine are an **operator quota
-gate**, so a timeout kill spends the operator's budget and returns no verdict. Background runs carry
+`effort: high` on a real diff routinely runs longer and is killed mid-reasoning (exit 143). The run
+ends there and the verdict does not arrive - passes on a paid external engine are an **operator
+quota gate**, so a timeout kill has already spent the operator's budget and hands you nothing to
+report. What the run had already read is recoverable (the interruption rule below), and that changes
+nothing about this rule: recovery costs a further dispatch and the operator's attention, so a pass
+that never needed recovering is still the better outcome. Background runs carry
 no such cap and the harness notifies you on completion. Never re-run a timed-out pass in the
 foreground hoping it will fit this time.
 
@@ -345,6 +378,35 @@ avoiding. The resume form carries no `-C` and no `--sandbox`: `codex exec resume
 the read-only posture travels as `-c sandbox_mode=read-only` plus `-c approval_policy=never` and the
 wrapper makes the project root its cwd itself. Resuming is for a **verification** pass over the same
 ticket; a new ticket, or a pass whose context the previous session never saw, is a cold run.
+
+**Which passes that last sentence lets resume - and which it does not.** The flag and its refusals
+are the mechanics above; this is the policy that decides when to reach for them, and it lives here
+rather than in a document of its own so the two cannot drift apart. One question settles every case
+below: **resume answers "is the DELTA sound"; cold answers "is the WHOLE still sound"**.
+
+- **A plan-readiness pass 1 is ALWAYS cold**, at any budget. The argument is INDEPENDENCE, not
+  economy: the independent full reading IS the guarantee that pass buys, and a warm auditor defends
+  the verdict it already gave instead of deriving it again.
+- **A verification pass after a correction round resumes by default** - the case the paragraph above
+  describes, and the one where the delta really is what the previous session was reading.
+- **A correction round that RE-ARCHITECTED rather than closed the blockers re-poses the whole
+  question, so its verification reverts to cold or to the operator's call** - the delta is no longer
+  a delta against the design that was audited.
+- **A readiness pass after the first may resume only with its compensations, and only on the
+  operator's word** - the carried blocker list (`docs/WORKFLOW.md` § Fail aggregation), a re-read
+  from disk rather than from the session's memory of the file, and an independent search for
+  consumers.
+- **Retire a warm session at its first compaction.** What a resume saves shrinks as the resumed
+  session accumulates context of its own, and is gone once that session has been compacted: what
+  would be resumed is then no longer the reading that was paid for.
+
+**An interrupted paid pass is NOT lost work.** A kill or an interruption ends the CLI process, while
+the session and the work already done survive in the engine's own session store - so the DEFAULT
+recovery is a bare resume plus a SHORT continuation prompt - "continue - you already have the brief
+and your progress; produce the verdict" - never a fresh dispatch carrying the full brief again. Bare
+means bare: `-Resume` / `--resume` with no id, off the Reviewer's own state file above; write the
+continuation prompt into the same `review-brief.txt` and re-invoke the block, which keeps the
+command text in the fixed set a permission rule matches.
 
 **How the id gets recorded, and when it does not.** The wrapper does **not** read the engine's
 output - it touches neither stdout nor stderr, so what you see is the engine's own bytes. A
