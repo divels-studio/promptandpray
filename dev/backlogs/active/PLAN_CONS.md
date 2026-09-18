@@ -1,4 +1,4 @@
-# PromptAndPray Consolidation implementation — 0.2.7 → 0.2.8 (PLAN_CONS) — r8 (финален; сляти корекции от двата pass 4 одита)
+# PromptAndPray Consolidation implementation — 0.2.7 → 0.2.8 (PLAN_CONS) — r10 (арбитраж 2026-09-18: CONS-011 пренаписан по доказателства, Решение 17 отменено изцяло, A-2 без placeholder; r10 = пас-5 блокерите затворени)
 
 ## Контекст (git, 2026-09-16; проверен от двата паса)
 `main`, чисто дърво, `origin/main...main` = `0 13` (dev commits вкл. D25 поправката 3334100 — возят се с push-а на 0.2.7);
@@ -89,9 +89,15 @@ PLAN_HARD замразен (HARD-011 → 0.2.9). Дефиниции, рефер�
     push → CI → consumer proofs) с НУЛА worktree дифф; фаза Б „записи" — release записът в
     PLAN_CONS + памет, allowlist само dev/** и памет, отделен docs commit. Двете фази в един
     тикет, границата изрична.
-17. **[r6] Изпълнителният ред мести CONS-006 ПРЕДИ CONS-005** (пиновете на METRICS фразите
-    искат файла да съществува); последният КОДОВ commit на изданието е CONS-005 → тагът на
-    0.2.7 е върху него.
+17. **[r9 — ОТМЕНЕНО ИЗЦЯЛО 2026-09-18, арбитраж (readiness пас 4 блокер 3).]** Първоначалният
+    текст („CONS-006 ПРЕДИ CONS-005; последният кодов commit на изданието е CONS-005 → тагът върху
+    него") не важи в нито една от двете си половини: CONS-006 отпадна по арбитраж (предпоставката
+    му беше невалидна) и не предхожда нищо — изпълнителният ред го показва задраскан; CONS-011 се
+    роди СЛЕД CONS-005 и носи поправка, без която изданието е счупено на POSIX. **Валидното
+    твърдение:** последният КОДОВ commit на 0.2.7 е този на CONS-011 и тагът `v0.2.7` отива върху
+    него. Тагът, сложен на 2026-09-18 върху `a445cbf` (кодовия commit на CONS-005), сочи издание
+    БЕЗ поправката и се мести по стратегия (A) — избрана от оператора (дума 2026-09-18) — по реда
+    А-2 в CONS-007, СЛЕД зелен `ubuntu`, с отделните думи на стъпка 5.
 19. **[r8] Обвързване + реконсилация, РАЗЦЕПЕНИ по клас (пас 4 x2: config-ът е ИЗПЪЛНИМ
     артефакт и schema ключът още не съществува — approval binding би счупил interlock-а,
     доказано на живо от двата одита):** (а) config обвързването на ТОЗИ repo
@@ -117,8 +123,14 @@ PLAN_HARD замразен (HARD-011 → 0.2.9). Дефиниции, рефер�
     a rule written before this gate may contradict it."
 
 ## Изпълнителен ред
-CONS-001 → 002 → 003 → 004 → **006** → **005** → 007 (+release 0.2.7) → 008 → 009 → 010
-(+release 0.2.8) → [PLAN_HARD: HARD-011 → 0.2.9]. D26 пилот: Silerax след ъпдейта им.
+**[ОБНОВЕН 2026-09-18, readiness пас 3 блокер 3]**
+CONS-001 → 002 → 003 → 004 → ~~006~~ (отпаднал по арбитраж) → 005 → **011** → 007 (+release 0.2.7)
+→ 008 → 009 → 010 (+release 0.2.8) → [PLAN_HARD: HARD-011 → 0.2.9].
+**CONS-011 стои МЕЖДУ 005 и 007** и е предпоставка за 007: фаза А на 007 иска зелени блокиращи
+крака, а `ubuntu` е червен точно заради дефекта, който 011 поправя. Предишният ред слагаше 007
+веднага след 005 и изобщо не познаваше 011 — това беше противоречие с всичко останало по-долу.
+**CONS-012 е ПАРКИРАН извън реда** — собствен readiness цикъл след отпушването на 0.2.7; не е
+предпоставка за нищо. D26 пилот: след ъпдейта на консуматорите.
 
 ## COO routing по D25 (операторска дума 2026-09-17; моделът на сесията, която операторът
 отваря за тикета — Writer пинът и одитната таблица НЕ мърдат)
@@ -619,11 +631,246 @@ CONS-009 бездруго пипа този ред и там е естестве
 94/50→89/49 = 5пп — по-скромна икономия от предишните тикети, записана както е измерена).
 Codex сесията `01a0b2bb-d568-72a3-9f38-a9e362672d29` остава resume-ваема.
 
+### CONS-011 [R2 code] — POSIX-005: изходът на self-check-а се къса на POSIX (роден 2026-09-18 от червен CI на 0.2.7) — r9, пренаписан по арбитраж
+
+> **ЧАКА ОПЕРАТОРСКА ДУМА ЗА СТАРТ.** Роден след стояща дума, извън записания изпълнителен ред —
+> нула мутации по него до собствената му дума (guard (b)). **Одит: ДА** (операторска дума
+> 2026-09-18, P-D8): readiness цикъл преди старта, code пас след изпълнението.
+> **Readiness до тук:** пасове 1–5, всичките NEEDS-FIX (редовете са на transfer surface). Пас 4 беше
+> над тавана `passes + 1 = 3`; **операторско решение 2026-09-18 (арбитраж):** всеки пас над
+> контракта е операторска дума, по една на пас, без промяна на конфига — тоест пас 4 е легитимен
+> по думата, а не нарушение, и всеки следващ върви на същата база. Записано и в event ledger-а.
+> Пас 5 (върху r9) затвори трите блокера на пас 4 и върна 5 нови, всичките в acceptance
+> механиката на r9 — затворени в r10 (self-validating WSL команди, без `rm`, литерална guard
+> мутация, chain ред 12 от entry point-а). Пас 6 (върху r10) затвори четири от тях и остави ЕДИН
+> остатък — chain ред 12 да тръгва от литералните CLI entry point-ове; anchor-ите на Одитора са
+> проверени срещу дървото и редът е пренаписан. **COO решение (арбитраж):** без пас 7 — единственият
+> остатък беше документационен anchor, не решение; code пасът след изпълнението одитира истинския
+> диф. **Следваща стъпка:** думата за СТАРТ.
+
+**Контекст (измерено, не предположено).** CI на `v0.2.7` (`35316398052`, на `a445cbf`) и на `main`
+(`35316388955`, на `8959be9`): `ubuntu` failure, `macos` failure (съвещателен, `ci.yml:126`),
+`windows` success. И на двата POSIX крака пада ЕДНО И СЪЩО единствено твърдение:
+`test-update.mjs:1583-1584` — „the self-check's own output reached the operator verbatim"
+(`r.out.includes('roles.json') && r.out.includes('FAILURES:')`). Редовете `[FAIL] roles.json ...
+low` в лога НЕ са дефект: `test-update.mjs:1580` ги произвежда нарочно (сценарият sc-red).
+Липсва ОПАШКАТА на уловения изход: в CI лога уловеният stdout свършва на
+`...the shipped manifest and every ops.json are accepted, an` и веднага следва
+`self-check: FAIL (exit 1)...` — това е stderr вердикта, слепен от `test-update.mjs:178`
+(`out = stdout + stderr`). Не е race между два потока; е отрязан stdout + цял stderr.
+
+**История (`gh run list --branch main`, 14 рънa общо):** `macos` е червен на ВСИЧКИТЕ 14, от
+0.2.0 насам. `ubuntu` е зелен от 0.2.1 (2026-09-03) до 2026-09-16 и става червен с push-а от
+2026-09-18, който носи CONS-001…005 наведнъж. macOS е показвал същия клас дефект от самото
+начало; Linux се присъедини, когато изходът на self-check-а порасна (`aiwf-selfcheck.js`
+6893 → 8283 реда през CONS-001…005; проверимо от git). Нито един от петте тикета не носи
+логическа грешка.
+
+**ПРИЧИНАТА — ДОКАЗАНА (арбитражна сесия 2026-09-18; discovery, НЕ изпълнение — артефактите са в
+scratchpad-а на сесията, не в дървото; изпълнението ги произвежда наново със същите команди).**
+
+1. *Документиран механизъм* (nodejs.org/api/process.html, „A note on process I/O", дословно):
+   „Pipes (and sockets): synchronous on Windows, asynchronous on POSIX" и „Calling process.exit()
+   will force the process to exit as quickly as possible even if there are still asynchronous
+   operations pending ... including I/O operations to process.stdout and process.stderr."
+2. *Микротест, WSL Ubuntu (Node v22.23.2; числата са от изхода на агентния рън, БЕЗ запазен
+   лог — възпроизвеждат се с командите тук):* `node -e "process.stdout.write('x'.repeat(1<<22));
+   process.exit(0)" | wc -c` → 1 048 576 (от 4 194 304); същото с `process.exitCode=0` → 4 194 304;
+   вложено през `spawnSync` с `encoding:'utf8'` (производствената форма): дете с `process.exit(1)`
+   след 1 MiB запис → уловени 146 176 байта, маркерът в края липсва; с `process.exitCode=1` →
+   цяло. На Windows и четирите варианта са цели. (Вложеният вариант е наблюдение от агентния
+   рън без запазен инструмент — число, на което нищо тук не стъпва; двата директни pipe реда са
+   литерални и се възпроизвеждат за 1 секунда.)
+3. *Контрола / интервенция върху самия suite* (WSL, копие от `git archive HEAD`, tmpfs):
+   контрола → `checks: 518, failures: 5`, твърдението `[FAIL]`; интервенция = ЕДИН ред,
+   `aiwf-update.mjs:220` `process.exit(main())` → `process.exitCode = main()` → `checks: 518,
+   failures: 4`, СЪЩОТО твърдение `[PASS]`. Детерминистично: 3 контролни и 2 интервенционни
+   рънa, байт-еднакъв FAIL набор във всяко рамо.
+4. *Остатъчните 4 провала в WSL НЕ са в CI и НЕ са дефект:* като root всичките са „a bare
+   -Resume against an UNWRITABLE state file exits 2" (root пише в chmod-нат файл; GitHub runner-ът
+   е non-root); като `nobody` те изчезват, но snap `pwsh` не тръгва без home (stderr на агентния
+   рън, незапазен: `cannot create snap home dir: mkdir /nonexistent`) и self-check-ът отчита
+   `powershell host : (none found)` (в запазения лог, 2 пъти). Оттам прекондицията по-долу —
+   ИЗПЪЛНЕНА 2026-09-18 от оператора: `useradd -m -s /bin/bash pnp` → uid 1000; под `pnp`
+   `pwsh -NoProfile -Command 'Write-Output ok'` → `ok`.
+
+**Поправени твърдения от по-ранните версии на този тикет** (всяко проверено срещу лог или дърво):
+мястото на сплайса не е „EMPTY value. A" (то е `[PASS]` ред); `pwsh` СЪЩЕСТВУВА в WSL
+(`/snap/bin/pwsh`) и 4-те локални провала бяха от root, не от липсващ pwsh; `CHANGELOG.md:521-530`
+(записът на POSIX-005 в 0.2.1) ВЕЧЕ назовава верния механизъм — „buffered stdout being dropped
+when a process ends while its stdout pipe is asynchronous" — и честно казва, че мястото е
+„unpinned"; `spawnSync` без `maxBuffer` е споменат там като контекст, не като причина. Онзи
+запис е история на 0.2.1 и НЕ се пренаписва; новият запис в блока на 0.2.7 заковава мястото.
+
+**Мястото:** детето е коректно (`aiwf-selfcheck.js:8280` завършва с `process.exitCode`).
+`run-selfcheck.mjs:98-99` пише уловения stdout на детето в СВОЯ `process.stdout` (async pipe на
+POSIX) и връща код; ЧЕТИРИМАТА викащи го превръщат в `process.exit(...)` и убиват недоизточения
+запис. Множеството е затворено с ЛИТЕРАЛНИЯ grep `grep -rn "finishWithSelfCheck(" scripts
+--include=*.mjs` → 5 попадения: дефиницията `run-selfcheck.mjs:74` + четирите call site-а
+`aiwf-update.mjs:159` (обвит в `finish`, консумиран от `main()`), `generate.mjs:1700`,
+`interview.mjs:324`, `aiwf-roles.mjs:723`; голият символ дава 10 (+4 import реда и прозата в
+`test-setup.mjs:762`), затова скобата е част от grep-а. Местата на ИЗЛИЗАНЕТО, които се сменят:
+`scripts/update/aiwf-update.mjs:220`, `scripts/setup/generate.mjs:1700`,
+`scripts/setup/interview.mjs:336`, `scripts/setup/aiwf-roles.mjs:734`.
+
+**Прекондиция (машина на оператора, еднократна, system-changing → операторска дума, ПРЕДИ
+диспача):** non-root потребител в WSL с home, под който snap `pwsh` работи. Предложена форма:
+`wsl.exe -e sh -lc "useradd -m -s /bin/bash pnp"`. Проверка от COO преди диспача (fail-capable):
+`wsl.exe -u pnp -e sh -lc "id -u; pwsh -NoProfile -Command 'Write-Output ok'"` → uid ≠ 0 и `ok`.
+Без нея POSIX acceptance-ът долу не може да бъде зелен и тикетът не тръгва.
+**Квотинг капан, важи за всяка команда, която носи `$?`:** в double quotes той се разгъва от
+ВЪНШНИЯ shell на Bash tool-а преди да стигне WSL (наблюдавано: `suite_exit=0` при реален exit 1).
+Затова acceptance командите с `$?` са в single quotes; команди без `$?` (като двете по-горе) могат
+да са в double quotes.
+
+Outcome: изходът на червен self-check стига до викащия ЦЯЛ през цялата вложена верига, на POSIX и
+на Windows, по ВСИЧКИТЕ четири пътя, и регресия на този клас гърми в suite-а.
+Обхват:
+(1) четиримата викащи излизат през `process.exitCode = <код>` вместо `process.exit(<код>)` —
+    същите кодове, нищо друго не мърда; `run-selfcheck.mjs` header (точка 4 на договора) казва
+    защо: викащият връща кода през `process.exitCode`, никога през `process.exit()`, който на
+    POSIX изхвърля недоизточения pipe запис;
+(2) СТРУКТУРЕН guard в `scripts/setup/test-setup.mjs` (решено: това е suite-ът, който вече
+    покрива interview → finishWithSelfCheck червения клон, `:762`, и върви на всеки CI крак),
+    с ТОЧНОТО име `every caller of finishWithSelfCheck returns its code through process.exitCode,
+    never process.exit()`: статично твърдение, че във всеки файл под `scripts/`, който импортира
+    `finishWithSelfCheck` от `run-selfcheck.mjs` (четирите по-горе; списъкът е изписан в теста, не
+    открит), редът/изразът, който консумира резултата му, не съдържа `process.exit(`; затварящият
+    grep първо ХВАЩА четиримата известни, после връща нула извън списъка (P-D11); guard-ът се
+    показва червен в мутация по литералната команда в Acceptance;
+(3) `CHANGELOG.md`, блокът на 0.2.7, `### Fixed`: `- **The self-check's output no longer
+    truncates on POSIX (CONS-011)** - ...` — заковава мястото (четиримата викащи, `process.exit`
+    след async pipe запис), казва, че 0.2.1-ият запис на POSIX-005 сочеше улавянето, а мястото
+    беше излизането на викащите, и че macOS показваше същия дефект от 0.2.0 (CI доказателството
+    за macOS идва с CONS-007, не се обещава тук).
+Извън обхвата: смаляване на изхода; промяна на самите проверки; семантиката на exit кода на
+червен self-check (HARD-013/CONS-002 я закова — кодовете остават байт за байт); другите
+`process.exit(` в тези файлове, които НЕ консумират `finishWithSelfCheck` (грешкови пътища с
+кратък изход); блокът на 0.2.1 в CHANGELOG; каквото и да е в WSL (прекондицията е операторска);
+migration/version bump (няма managed артефакт в диффa).
+
+Acceptance (литерално, fail-capable; **всяка WSL команда е self-validating — exit кодът на
+`wsl.exe` Е доказателството**, без `; echo X=$?` суфикси (правилото на CLAUDE.md); Bash tool,
+single quotes към WSL; НИЩО не се трие — `mktemp -d` дава нова директория, пътят ѝ ляга в
+`/tmp/pnp-011.dir` и всяка следваща команда го чете оттам; tmpfs се чисти сам при рестарт на WSL):
+- Windows: VERIFY 8/8 (командите от `aiwf.config.json`) → exit 0 всяка; CYR grep празен.
+- Подготовка (root; control = HEAD без поправката, fix и mut = работното дърво С поправката и
+  guard-а):
+  `wsl.exe -e sh -lc 'D=$(mktemp -d /tmp/pnp-011.XXXXXX) && echo "$D" > /tmp/pnp-011.dir && chmod 644 /tmp/pnp-011.dir && mkdir "$D/control" "$D/fix" "$D/mut" && cd /mnt/d/promptandpray && git archive HEAD | tar -x -C "$D/control" && tar --exclude=.git -cf - . | tar -x -C "$D/fix" && tar --exclude=.git -cf - . | tar -x -C "$D/mut" && chown -R pnp:pnp "$D" && echo "$D"'`
+  → exit 0, печата пътя.
+- Контрола (очаквано: suite exit 1 И твърдението `[FAIL]` точно веднъж; `.` в pattern-а стои на
+  мястото на апострофа в `self-check's`):
+  `wsl.exe -u pnp -e sh -lc 'D=$(cat /tmp/pnp-011.dir) && cd "$D/control" && node scripts/update/test-update.mjs > "$D/control.log" 2>&1; [ $? -eq 1 ] && [ "$(grep -c "^  \[FAIL\] the self-check.s own output reached the operator verbatim" "$D/control.log")" -eq 1 ]'`
+  → exit 0 (контролата възпроизвежда дефекта). Exit ≠ 0 = контролата НЕ възпроизвежда → стоп,
+  средата се установява преди всичко друго.
+- Интервенция (очаквано: suite exit 0, tally `failures: 0`, твърдението `[PASS]` точно веднъж):
+  `wsl.exe -u pnp -e sh -lc 'D=$(cat /tmp/pnp-011.dir) && cd "$D/fix" && node scripts/update/test-update.mjs > "$D/fix.log" 2>&1 && grep -q "checks: [0-9]*, failures: 0" "$D/fix.log" && [ "$(grep -c "^  \[PASS\] the self-check.s own output reached the operator verbatim" "$D/fix.log")" -eq 1 ]'`
+  → exit 0.
+- Setup suite-ът под pnp (домът на guard-а и на interview викащия, `test-setup.mjs:762`); guard-ът
+  се казва ТОЧНО `every caller of finishWithSelfCheck returns its code through process.exitCode,
+  never process.exit()`:
+  `wsl.exe -u pnp -e sh -lc 'D=$(cat /tmp/pnp-011.dir) && cd "$D/fix" && node scripts/setup/test-setup.mjs > "$D/setup.log" 2>&1 && grep -q "\[PASS\] every caller of finishWithSelfCheck returns its code through process.exitCode, never process.exit()" "$D/setup.log"'`
+  → exit 0.
+- Guard-ът пада нарочно (в `mut` копието един викащ е върнат на `process.exit`; очаквано: suite
+  exit 1 И точно този guard `[FAIL]`):
+  `wsl.exe -u pnp -e sh -lc 'D=$(cat /tmp/pnp-011.dir) && cd "$D/mut" && sed -i "s/process.exitCode = main()/process.exit(main())/" scripts/update/aiwf-update.mjs && grep -q "process.exit(main())" scripts/update/aiwf-update.mjs && node scripts/setup/test-setup.mjs > "$D/mut.log" 2>&1; [ $? -eq 1 ] && grep -q "\[FAIL\] every caller of finishWithSelfCheck returns its code through process.exitCode, never process.exit()" "$D/mut.log"'`
+  → exit 0 (guard-ът е червен точно на мутацията).
+- Числата от discovery-то по-горе са ИСТОРИЯ на тикета (наблюдения, всяко с командата си), не
+  acceptance и не се „възпроизвеждат": условията са други (root срещу `pnp`, един ред срещу пълната
+  поправка + guard). Acceptance-ът произвежда СВОИТЕ числа — контрола exit 1 + `[FAIL]`×1,
+  интервенция `failures: 0` + `[PASS]`×1, guard червен ×1 — и те лягат в completion record-а с
+  командата си.
+Risk threshold: поправка, доказана само на Windows; по-малко от четиримата викащи; промяна в exit
+кодовете; смаляване на изхода вместо поправка; редакция на блока на 0.2.1; guard, който никой не е
+видял червен.
+**Stop: локалното POSIX доказателство е налице** — контрола червена / интервенция зелена под
+non-root WSL, guard-ът показан червен в мутация, 8/8 на Windows, CHANGELOG редът в блока на 0.2.7.
+**Зеленият `ubuntu` НЕ е stop на този тикет** — той е acceptance на CONS-007 (тикет не може да
+иска доказателство, което идва след собственото му затваряне). Ако CI падне въпреки зелен локален
+рън, това е нов тикет, не пре-отворен.
+Review: Class code. Assignee: Колега. **Блокира CONS-007 фаза А** и с това 0.2.7.
+
+### CONS-012 [ПАРКИРАН — собствен readiness цикъл, не в текущия] — VERIFY порасва с POSIX крак
+
+> **ПАРКИРАН 2026-09-18 след readiness пас 2.** Не е в обхвата на текущия readiness цикъл и НЕ
+> тръгва с CONS-011. Изважда се, защото три от петте блокера на пас 2 бяха негови вътрешни
+> противоречия, а той не блокира релийза — да виси над спряно издание само вдига цената на всяка
+> грешка в него. Получава СОБСТВЕН readiness цикъл, когато 0.2.7 е отпушена.
+> **Текстът по-долу е КОНСТАТАЦИЯ и суровина, НЕ договор.** Предишната му версия носеше избрана
+> архитектура редом със стари, противоречащи ѝ редове (клас „решава се в readiness" срещу
+> „code/Колега"; „Acceptance draft" срещу изписан acceptance). Тези редове са премахнати изцяло,
+> вместо да бъдат оставени да си противоречат — точно дефектът, който пас 2 хвана.
+
+**Констатацията (измерена, остава вярна независимо от архитектурата):** осемте команди в
+`verify.commands` са ВСИЧКИТЕ Windows процеси. Онова, което изглеждаше като Linux покритие —
+`example-cycle-linux` — е Windows процес с linux-образни ОТГОВОРИ: проверява, че генераторът рендира
+за `os: linux`, НЕ че кодът работи на Linux. POSIX каналът е бил покрит единствено от CI, след push,
+с един съвещателен крак (macOS), червен от 0.2.1. CONS-011 е цената. Машината има работещ WSL2
+Ubuntu с Node v22.23.2 и `pwsh` на `/snap/bin/pwsh` — покритието е било на една команда разстояние.
+
+**Съседни договори, намерени от инвентара — всеки щеше да е блокер, нито един не гърми при дрейф:**
+- `templates/PROJECT_OVERRIDES.md.tmpl:110-113` рендира `verify.commands` безусловно, без OS
+  разклонение — но от НЕГОВИЯ конфиг на всеки проект, тоест наш запис не достига консуматор.
+- `dev/PROJECT_OVERRIDES.md:172-180` е РЪЧНО огледало; няма генератор, няма синхронизация.
+- `.github/workflows/ci.yml` не чете `verify.commands`; ubuntu job-ът дублира командите ръчно.
+  Конвенцията на файла е изключенията да се ИМЕНУВАТ с коментар (`:63-66`, `:80-83`).
+- `scripts/setup/interview.mjs:194-205` — при повторен рън неотговорен въпрос пада обратно на
+  съществуващата стойност; кракът трябва да преживее повторно интервю.
+- `schema/aiwf.config.schema.json:289-311` — `run` е `string, minLength 1` и нищо повече: няма
+  проверка, че командата е изпълнима на конфигурирания `os`.
+
+**Отворени въпроси за неговия readiness (изписани като отворени, а не престорени на решени):**
+носителят; какво точно значи „изпълнява суитите" (кои команди); поведението при липсващ WSL или
+`pwsh` (отказ на глас е очевидният отговор, но не е доказан); дали деветият крак променя ГЛОБАЛНАТА
+дефиниция на VERIFY в хедъра на този план (пас 2, блокер 2 — „пълен VERIFY" днес значи осем);
+и границата payload/доктрина, при положение че `scripts/ci/` Е payload, дори когато никой освен наш
+конфиг ред не го вика.
+
 ### CONS-007 [release, ДВУФАЗЕН — Решение 16] — release 0.2.7
 
-Фаза А (нула worktree дифф): независим COO рън (VERIFY + INTERLOCK, HEAD+porcelain еднакви в
-двата края) → tag `v0.2.7` върху КОДОВИЯ commit на CONS-005 (дума) → `git push origin main` +
-`git push origin v0.2.7` (дума + диалози) → CI → consumer proofs relay (двата ъпдейта;
+> **СЪСТОЯНИЕ 2026-09-18: фаза А е ИЗПЪЛНЕНА ВЕДНЪЖ И СПРЯНА НА ЧЕРВЕН CI.** Независимият рън мина
+> (8/8, `TREE_IDENTICAL=yes`), `gh auth status` exit 0, тагът `v0.2.7` легна на `a445cbf`, двата
+> push-а минаха (`0 0`), и CI върна `ubuntu` **failure** на двата рънa — блокиращ крак. Причината е
+> CONS-011. Фаза А се **РЕСТАРТИРА ОТ НУЛАТА** след неговото затваряне: нов независим рън, нов push,
+> нов CI.
+>
+> **Тагът е горе и сочи commit БЕЗ поправката.** Стратегията, решена при readiness на CONS-011 и
+> чакаща операторска дума в момента на изпълнение: **(A) преместване** — `git tag -f v0.2.7 <новия
+> кодов commit>` + `git push --force origin v0.2.7`. Преместване на публикуван таг е лоша практика
+> по принцип, но тук е оправдано по факти: консуматорите са ЗАМРАЗЕНИ до своя 0.2.7 ъпдейт и нито
+> един не го е консумирал, а публикуване към външни потребители не е започвало (чака доказан update
+> път, P8) — тоест никой не държи този таг. Алтернативите: **(B)** изтегляне и ново издание под
+> същия номер (същата необратима операция плюс изтрит таг в историята), **(C)** 0.2.7 остава счупена
+> и поправката излиза в 0.2.8 (нула необратими операции, но публикувано издание с известен POSIX
+> дефект и чужд товар върху „Roles"). **(A) е избрана от оператора (дума 2026-09-18,
+> арбитраж)**; изпълнява се СЛЕД зелен `ubuntu`, по А-2 стъпка 5, с отделна дума за тага и отделна
+> дума + диалог за force push-а в момента на изпълнение.
+
+**Фаза А — ОПЕРАТИВНИЯТ РЕД, пренаписан 2026-09-18 (readiness пас 3 блокер 3: старият ред нареждаше
+таг преди push и CI и показваше обикновен таг push, което противоречеше на статус блока отгоре).**
+Двата случая са различни и се изписват поотделно:
+
+**А-1. Първо издание (какъвто беше редът преди 2026-09-18) — вече НЕ приложим за 0.2.7**, защото
+тагът съществува. Пази се като образец за 0.2.8 и нататък: независим рън → tag върху кодовия commit
+(дума) → `git push origin main` + `git push origin <таг>` (дума + диалози) → CI → consumer proofs.
+
+**А-2. ПОВТОРНО издание на вече тагнат номер — това е пътят за 0.2.7 сега.** Тагът `v0.2.7` е горе
+върху `a445cbf` и сочи издание БЕЗ поправката на CONS-011. Редът е:
+  1. CONS-011 е затворен с кодов commit — той става последният КОДОВ commit на изданието.
+  2. Независим COO рън (VERIFY + INTERLOCK, HEAD+porcelain еднакви в двата края, нула worktree дифф).
+  3. `git push origin main` (дума + диалог). Тагът ОЩЕ не мърда.
+  4. CI върху новия връх на `main` — `windows` и `ubuntu` зелени. **Ако `ubuntu` е червен, спира се
+     тук**; тагът не се мести върху непроверено издание.
+  5. ЧАК СЕГА тагът се мести, по стратегия (A). Целта НЕ е placeholder, а деривация: кодовият
+     commit на CONS-011 е ЕДИНСТВЕНИЯТ commit на `origin/main`, чийто subject започва с
+     `CONS-011:` (конвенцията на repo-то: `CONS-005: ...` за кода, `dev: CONS-005 closed ...` за
+     записа). `git log --format=%H --grep=^CONS-011: origin/main` → точно един ред, `<H>`; после
+     `git tag -f v0.2.7 <H>` (**отделна дума**) → `git push --force origin v0.2.7` (**втора
+     отделна дума** + диалог; force push е необратим и не се вози на думата за тага). Ако
+     командата върне 0 или 2+ реда — стоп, нищо не се тагва.
+  6. CI върху таг рънa. Двата рънa вече съществуват, всеки върху своя SHA — acceptance командата
+     по-долу ги проверява и двата.
+  7. consumer proofs relay (двата ъпдейта;
 CHANGES там носи Supersedes редовете; консуматорите изпълняват D4 чистенето си — тяхна
 страна). Фаза Б (allowlist dev/** + памет): release записът, отделен docs commit.
 Acceptance (литерално, fail-capable — деривирани стойности в ЕДНА команда, без плейсхолдъри):
@@ -631,10 +878,23 @@ Acceptance (литерално, fail-capable — деривирани стойн
 - `git cat-file -t v0.2.7` → commit.
 - `node -e "const{execSync}=require('child_process');const s=c=>execSync(c).toString().trim();const local=s('git rev-list -n1 v0.2.7');const r=s('git ls-remote --exit-code --tags origin refs/tags/v0.2.7');if(!r.startsWith(local)){console.error('tag hash mismatch',local,r);process.exit(1)}"`
   → exit 0 (пада при липсващ таг ИЛИ различен хеш).
+- **[r9, readiness пас 4 блокер 2]** Тагът сочи КОДОВИЯ commit на CONS-011, не просто „същия хеш в
+  двата края":
+  `node -e "const{execSync}=require('child_process');const s=c=>execSync(c).toString().trim();const tag=s('git rev-list -n1 v0.2.7');const want=s('git log --format=%H --grep=^CONS-011: origin/main').split(/\r?\n/).filter(Boolean);if(want.length!==1){console.error('expected exactly one CONS-011: commit on origin/main, found',want.length);process.exit(1)}if(want[0]!==tag){console.error('v0.2.7 is on',tag,'not on the CONS-011 code commit',want[0]);process.exit(1)}console.log('v0.2.7 sits on the CONS-011 code commit',tag)"`
+  → exit 0. Fail-capable днес: пада с `found 0` (няма CONS-011 commit), а с таг на грешен commit —
+  с `v0.2.7 is on ...`.
 - `git rev-list --left-right --count origin/main...main` → `0 0`.
-- `node -e "const{execSync}=require('child_process');const s=c=>execSync(c).toString().trim();const sha=s('git rev-list -n1 v0.2.7');const runs=JSON.parse(s('gh run list --commit '+sha+' --json databaseId'));if(runs.length<2){console.error('expected 2 CI runs (main push + tag push) for',sha,'got',runs.length);process.exit(1)}for(const r of runs){const jobs=JSON.parse(s('gh run view '+r.databaseId+' --json jobs')).jobs;for(const n of ['windows','ubuntu']){const j=jobs.find(x=>x.name===n);if(!j||j.conclusion!=='success'){console.error('run',r.databaseId,n,j?j.conclusion:'ABSENT');process.exit(1)}}}console.log('both runs: blocking legs green')"`
-  → exit 0 ([r8] пас 4 топъл: push-ът на main И на тага правят ДВА рънa на същия SHA —
-  проверяват се ВСИЧКИТЕ, не runs[0]; пада при <2 рънa, липсващ или червен блокиращ leg).
+- **[ПОПРАВЕНО 2026-09-18, наблюдавано на живо + readiness пас 2 блокер 5]** Предишната команда
+  търсеше ДВА рънa върху SHA-то на ТАГА, с довода „push-ът на main и на тага правят два рънa на
+  същия SHA". Това е вярно само ако тагът седи на върха на `main`. По Решение 17 тагът седи на
+  КОДОВИЯ commit, а `main` върви напред с docs commit-и — тоест двата push-а раждат рънове на ДВА
+  РАЗЛИЧНИ SHA-та и командата можеше само да пада. Наблюдавано на живо на 2026-09-18: таг рън
+  `35316398052` върху `a445cbf`, main рън `35316388955` върху `8959be9`.
+  Новата команда проверява ДВАТА рънa, всеки по собствения си SHA:
+  `node -e "const{execSync}=require('child_process');const s=c=>execSync(c).toString().trim();const tag=s('git rev-list -n1 v0.2.7');const tip=s('git rev-parse origin/main');const runs=JSON.parse(s('gh run list --limit 40 --json databaseId,headSha,conclusion,status'));const need=[['tag',tag],['main',tip]];for(const [what,sha] of need){const r=runs.find(x=>x.headSha===sha);if(!r){console.error('no CI run for',what,sha);process.exit(1)}if(r.status!=='completed'){console.error(what,'run still',r.status);process.exit(1)}const jobs=JSON.parse(s('gh run view '+r.databaseId+' --json jobs')).jobs;for(const n of ['windows','ubuntu']){const j=jobs.find(x=>x.name===n);if(!j||j.conclusion!=='success'){console.error(what,'run',r.databaseId,n,j?j.conclusion:'ABSENT');process.exit(1)}}}console.log('both runs, both SHAs: blocking legs green')"`
+  → exit 0. Пада при липсващ рън за който и да е от двата SHA, при незавършил рън, и при червен или
+  липсващ блокиращ leg. `macos` НЕ се проверява — той е `continue-on-error` по конструкция
+  (`ci.yml:126`).
 - Consumer proofs записани с числа (relay) — вкл. конфиг обвързването им (Решение 19в).
 Risk threshold: tag преди независимия рън или преди gh auth exit 0; push без дума; дифф във
 фаза А; фаза Б извън allowlist-а. Stop: acceptance зелен + записът легнал. Assignee: COO.
@@ -751,6 +1011,7 @@ Risk threshold/Stop: като CONS-007. Assignee: COO.
 | 9 | METRICS | нов: docs/METRICS.md → docs/README.md:1-23 индексът → нови редове в docs/WORKFLOW.md + docs/LOOP.md → skills/review/SKILL.md:359-362 (CONS-005) | render |
 | 10 | D6 → консуматора | P-D6 в NOTE OP ТЕКСТА на 0011 (единственото, което стига CHANGES: migrate:1134→:1164) → CHANGES assertion в test-update | render+test |
 | 11 | release до края | migrations/index.json:11 → .claude-plugin/plugin.json:3 → fixture сайтовете (bump.json:2; ops.json:2; NOTES.md:1,16,31; examples README:17,45,78-79) → validate-payload.mjs:251-256 (last==version) → CONS-007 фаза А командите (изписани в тикета: gh auth / cat-file / двата node one-liner-а / rev-list) → фаза Б записът в PLAN_CONS | процес → запис |
+| 12 | [r10] червен self-check стига цял (CONS-011) | ENTRY (update пътят, изписан докрай): aiwf-update.mjs:220 `if (isMain()) process.exit(main())` → main():136 → `return finish(...)` :193/:211 → closure :159 → finishWithSelfCheck run-selfcheck.mjs:74 → CALL runSelfCheck :84 → :49-57 (`spawnSync` улавя детето през pipe) → CHILD aiwf-selfcheck.js:8275-8279 печата тялото и FAILURES блока, :8280 `process.exitCode` → RETURN в run-selfcheck.mjs:98-99 уловеният stdout се пише в async pipe на POSIX, :106 връща 1 → EXIT обратно в aiwf-update.mjs:220 `process.exit(1)` — ТУК недоизточеният запис умира; поправката: `process.exitCode = main()`, Node източва и излиза сам. Другите три входа, същата форма: generate.mjs:1672 `if (isMain())` → :1700 `process.exit(finishWithSelfCheck(...))`; interview.mjs:251 `if (isMain())` → :324 `code = finishWithSelfCheck(...)` → :336 `process.exit(code)`; aiwf-roles.mjs:688 `if (isMain())` → :723 `const code = finishWithSelfCheck(...)` → :734 `process.exit(code)` — и трите → `process.exitCode`. CONSUMER: test-update.mjs:172-178 улавя stdout+stderr цели → :1583-1584 [FAIL]→[PASS] под non-root WSL → нов: guard-ът в test-setup.mjs (статичен, над четирите call site-а, червен в мутация) → CHANGELOG.md блокът на 0.2.7 `### Fixed` | test+render |
 
 ## Сух процесен trace
 Одобрение → PLAN_CONS.md в active/ (guard (e), docs commit) → per ticket: дума → route-state →
