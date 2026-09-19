@@ -684,7 +684,7 @@ scratchpad-а на сесията, не в дървото; изпълнение�
 3. *Контрола / интервенция върху самия suite* (WSL, копие от `git archive HEAD`, tmpfs):
    контрола → `checks: 518, failures: 5`, твърдението `[FAIL]`; интервенция = ЕДИН ред,
    `aiwf-update.mjs:220` `process.exit(main())` → `process.exitCode = main()` → `checks: 518,
-   failures: 4`, СЪЩОТО твърдение `[PASS]`. Детерминистично: 3 контролни и 2 интервенционни
+   failures: 4`, СЪЩОТО твърдение `[PASS]`. Детерминистично НА ТИХА МАШИНА (r11: под 4 паралелни Windows suite-а контролата веднъж върна 0 провала — race под натоварване, съвместим с причината; контролата е наблюдение, поправката не зависи от товара): 3 контролни и 2 интервенционни
    рънa, байт-еднакъв FAIL набор във всяко рамо.
 4. *Остатъчните 4 провала в WSL НЕ са в CI и НЕ са дефект:* като root всичките са „a bare
    -Resume against an UNWRITABLE state file exits 2" (root пише в chmod-нат файл; GitHub runner-ът
@@ -697,10 +697,10 @@ scratchpad-а на сесията, не в дървото; изпълнение�
 **Поправени твърдения от по-ранните версии на този тикет** (всяко проверено срещу лог или дърво):
 мястото на сплайса не е „EMPTY value. A" (то е `[PASS]` ред); `pwsh` СЪЩЕСТВУВА в WSL
 (`/snap/bin/pwsh`) и 4-те локални провала бяха от root, не от липсващ pwsh; `CHANGELOG.md:521-530`
-(записът на POSIX-005 в 0.2.1) ВЕЧЕ назовава верния механизъм — „buffered stdout being dropped
+(записът на POSIX-005 в блока на **0.2.2** — r11 поправка: r9/r10 казваха „0.2.1", Колегата провери: `CHANGELOG.md:405` е `## [0.2.2]`, `:532` е `## [0.2.1]`) ВЕЧЕ назовава верния механизъм — „buffered stdout being dropped
 when a process ends while its stdout pipe is asynchronous" — и честно казва, че мястото е
 „unpinned"; `spawnSync` без `maxBuffer` е споменат там като контекст, не като причина. Онзи
-запис е история на 0.2.1 и НЕ се пренаписва; новият запис в блока на 0.2.7 заковава мястото.
+запис е история на 0.2.2 и НЕ се пренаписва; новият запис в блока на 0.2.7 заковава мястото.
 
 **Мястото:** детето е коректно (`aiwf-selfcheck.js:8280` завършва с `process.exitCode`).
 `run-selfcheck.mjs:98-99` пише уловения stdout на детето в СВОЯ `process.stdout` (async pipe на
@@ -740,13 +740,13 @@ Outcome: изходът на червен self-check стига до викащ�
     показва червен в мутация по литералната команда в Acceptance;
 (3) `CHANGELOG.md`, блокът на 0.2.7, `### Fixed`: `- **The self-check's output no longer
     truncates on POSIX (CONS-011)** - ...` — заковава мястото (четиримата викащи, `process.exit`
-    след async pipe запис), казва, че 0.2.1-ият запис на POSIX-005 сочеше улавянето, а мястото
+    след async pipe запис), казва, че 0.2.2-ият запис на POSIX-005 сочеше улавянето, а мястото
     беше излизането на викащите, и че macOS показваше същия дефект от 0.2.0 (CI доказателството
     за macOS идва с CONS-007, не се обещава тук).
 Извън обхвата: смаляване на изхода; промяна на самите проверки; семантиката на exit кода на
 червен self-check (HARD-013/CONS-002 я закова — кодовете остават байт за байт); другите
 `process.exit(` в тези файлове, които НЕ консумират `finishWithSelfCheck` (грешкови пътища с
-кратък изход); блокът на 0.2.1 в CHANGELOG; каквото и да е в WSL (прекондицията е операторска);
+кратък изход); блокът на 0.2.2 в CHANGELOG; каквото и да е в WSL (прекондицията е операторска);
 migration/version bump (няма managed артефакт в диффa).
 
 Acceptance (литерално, fail-capable; **всяка WSL команда е self-validating — exit кодът на
@@ -781,7 +781,7 @@ single quotes към WSL; НИЩО не се трие — `mktemp -d` дава �
   интервенция `failures: 0` + `[PASS]`×1, guard червен ×1 — и те лягат в completion record-а с
   командата си.
 Risk threshold: поправка, доказана само на Windows; по-малко от четиримата викащи; промяна в exit
-кодовете; смаляване на изхода вместо поправка; редакция на блока на 0.2.1; guard, който никой не е
+кодовете; смаляване на изхода вместо поправка; редакция на блока на 0.2.2; guard, който никой не е
 видял червен.
 **Stop: локалното POSIX доказателство е налице** — контрола червена / интервенция зелена под
 non-root WSL, guard-ът показан червен в мутация, 8/8 на Windows, CHANGELOG редът в блока на 0.2.7.
@@ -789,6 +789,46 @@ non-root WSL, guard-ът показан червен в мутация, 8/8 на
 иска доказателство, което идва след собственото му затваряне). Ако CI падне въпреки зелен локален
 рън, това е нов тикет, не пре-отворен.
 Review: Class code. Assignee: Колега. **Блокира CONS-007 фаза А** и с това 0.2.7.
+
+**CONS-011 CLOSED 2026-09-19 — code commit `ef95d88`** (7 файла, 145+/5−; арбитражната сесия
+`promptandpray-fe` довърши изпълнението по операторска дума след handover от `promptandpray-f3`).
+- *Промени:* четиримата викащи → `process.exitCode` (`aiwf-update.mjs:224`, `generate.mjs:1704`,
+  `interview.mjs:340`, `aiwf-roles.mjs:738`; редовете са изместени спрямо r10 от WHY коментарите);
+  `run-selfcheck.mjs` договор т.4 казва защо; guard в `test-setup.mjs:791-894` — **BYTE PIN-ове**, не
+  текстов анализ (виж отклонение); CHANGELOG `## [0.2.7]` `### Fixed` един запис; блокът на 0.2.2
+  непипнат.
+- *Отклонение (COO, архитектурно):* планът искаше „статично твърдение над consuming реда". Кръг 1
+  построи текстов анализатор (normaliser + value tracker); verification пас 2 го счупи с 3 P2
+  (template literal с `process.exit`, alias `result = code`, regex текст, shadowed `code`, computed
+  import, `.js` извън `scripts/`). Решение: JS по текст без AST е безкрайна пътечка (класът, който
+  Gate 4 отказа, LOOP.md § Commit gate) → кръг 2 замени guard-а с byte pin-ове: `present` ред ×1,
+  `absent` ред ×0 по trimmed-line равенство за всеки от четиримата + count pin `finishWithSelfCheck(`
+  = 5 в `scripts/` + `hooks/` (`*.mjs|js|cjs`); три контроли през същата `pinViolations(sources)`
+  върху собствена fixture. Sound по конструкция, непълен по декларация (нов викащ не се открива —
+  count pin-ът е backstop-ът); CHANGELOG вече НЕ обещава „пети викащ пада". Константата
+  `CALL_SITES = 5` е декларираният дизайн: легитимен пети call site прави suite-а червен, докато
+  таблицата не се обнови.
+- *Verification (точни exit кодове):* Windows 8/8 един паралелен батч → 0 всяка (test-setup 455/0,
+  test-update 518/0, selfcheck 1275/1275, cycles 44/0 ×2, spikes PASS, validate 11 миграции 0.2.7,
+  plugin validate OK); CYR grep празен. WSL под `pnp`: CONTROL (HEAD) exit 1, 518/1, единственият
+  провал = твърдението; E exit 0, 518/0, `[PASS]` ×1 (тиха машина); F exit 0, 453/0, guard + 3
+  контроли PASS; G (мутация `sed` в `mut` копие) exit 0: suite 453/1, единственият червен ред е
+  guard-ът с `aiwf-update.mjs: present 1 got 0 | absent 0 got 1`; closing grep 5 (run-selfcheck:80,
+  aiwf-roles:723, generate:1704, interview:324, aiwf-update:159).
+- *Одит:* pass 1 cold `fail` (1 блокер: guard-ът четеше сурови редове, 4 контрапримера) →
+  корекция 1 (текстов анализатор) → verification pass 2 cold (кешът изтекъл) `fail` (3 P2, всичките
+  по guard-а) → корекция 2 = капът (pin-ове) → fact-check гейт чист → verification pass 3 resume
+  **`pass`, нула находки** (одиторът изпълни `pinViolations` сам: 0 / точно 2 / `count 5 got 6` / 0).
+- *Среда, за следващия читател:* (1) `snap` pwsh под `pnp` пада с `FileLoadException` след много
+  паралелни pwsh spawn-а (self-check-ът) — състоянието е в `~/.cache/powershell`, лекува се с
+  `rm -rf /home/pnp/.cache/powershell` (операторска дума, два пъти през тикета), HEAD без дифа
+  пада със същите 5 PowerShell-channel реда; (2) WSL `/tmp` е tmpfs и се трие при idle — prep +
+  run в ЕДНА инвокация; (3) гол `/tmp/...` аргумент към `wsl.exe` от Git Bash се пренаписва в
+  Windows път и pwsh го чете относително → роди untracked `C:` директория в корена, която
+  provenance секцията на self-check-а хвана (изтрита с дума); (4) Windows 8/8 + WSL suite-ове
+  едновременно → memory kill от harness-а: VERIFY върви на ПОРЦИИ (PROJECT_OVERRIDES § Test policy).
+- *Наблюдение, не тикет:* `aiwf-roles.mjs:708` `--show` печата таблицата и `process.exit(0)` —
+  същият POSIX клас, извън guard-а; кандидат на transfer surface.
 
 ### CONS-012 [ПАРКИРАН — собствен readiness цикъл, не в текущия] — VERIFY порасва с POSIX крак
 

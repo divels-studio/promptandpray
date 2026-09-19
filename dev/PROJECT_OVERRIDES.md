@@ -179,6 +179,19 @@ The literal VERIFY commands live in `aiwf.config.json`:
 - `spikes`: `node scripts/spike/run-spikes.mjs` (cwd: `.`)
 - `plugin-validate`: `claude plugin validate .` (cwd: `.`)
 
+**VERIFY runs in PORTIONS, each portion ONE PARALLEL batch** (operator words 2026-09-17 and
+2026-09-19). Portion 1: the eight Windows commands above as one parallel batch (~10.4 min wall
+measured). Portion 2: the POSIX suites under WSL (non-root user `pnp`) as their own batch, AFTER the
+Windows batch has finished - never concurrent with it. A sequential run inside a portion is a defect
+of the brief, not a choice; running the two portions at once is the opposite defect: 8 Windows + 3 WSL
+node processes together exhausted the machine's memory on 2026-09-19 and the harness killed both
+batches. Every Writer brief states the portions and "one parallel batch per portion", never "parallel
+is allowed". WSL specifics: `/tmp` is tmpfs and is wiped when WSL idles between commands, so a prep
+step and the run that consumes it are ONE invocation; never pass a bare `/tmp/...` path as its own
+argument to `wsl.exe` from Git Bash (it is rewritten to a Windows path) - keep paths inside the `-lc`
+string; snap `pwsh` under `pnp` can break after many parallel spawns and is repaired by clearing
+`~/.cache/powershell` (operator word).
+
 ## Status and release artifacts
 
 The documents the "status / release docs policy" in the payload doc `docs/WORKFLOW.md` applies to, in this project:
