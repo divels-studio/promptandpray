@@ -1697,7 +1697,11 @@ if (isMain()) {
     });
     const seeds = (has('--no-seeds') || report.blocked || has('--dry-run')) ? [] : readMemorySeeds(pluginRoot);
     if (!has('--quiet') || report.blocked) console.log(formatReport(report, { projectRoot, seeds }));
-    process.exit(finishWithSelfCheck({
+    // The code is RETURNED, never forced: `process.exit()` would kill the run while this process's
+    // OWN stdout write is still pending - a pipe is synchronous on Windows but asynchronous on POSIX
+    // (Node, "A note on process I/O") - and the self-check report printed inside the call below would
+    // reach the operator truncated. Same exit code, drained output.
+    process.exitCode = finishWithSelfCheck({
       pluginRoot,
       projectRoot,
       code: report.blocked ? 1 : 0,
@@ -1705,7 +1709,7 @@ if (isMain()) {
       skipped: has('--no-selfcheck'),
       quiet: has('--quiet'),
       subject: 'the installed project layer',
-    }));
+    });
   } catch (e) {
     console.error(`setup: ${e.message}`);
     process.exit(e instanceof SetupError ? 1 : 2);

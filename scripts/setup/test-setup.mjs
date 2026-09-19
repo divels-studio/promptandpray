@@ -788,6 +788,110 @@ section('17 - the self-check is the install\'s own last step, and "could not che
   check('which is true: the project layer really is on disk',
     exists(at(p24, CONFIG_REL)) && exists(at(p24, ROLES_REL)) && exists(at(p24, 'CLAUDE.md')));
 }
+{
+  // The red branch above proves the caller PRINTS the report. This one proves the operator still
+  // gets it WHOLE: a caller that forces `process.exit(<code>)` kills the run while its own stdout
+  // write is still pending on a POSIX pipe, and the tail of the report is dropped (POSIX-005,
+  // CONS-011) - red on Linux and macOS, green on Windows, from one tree. No runtime case on a
+  // Windows machine can show that, so the four exit statements are pinned BYTE FOR BYTE here.
+  //
+  // WHAT IS PINNED: for each of the four callers, the compliant line occurs exactly once and the
+  // forced line exactly zero times, compared as WHOLE TRIMMED LINES - never by regex or substring,
+  // which is what let the previous version be fooled by a comment, a template literal and a
+  // shadowed local. Plus the number of call sites in the payload's scripts, pinned at five.
+  // WHAT IS DELIBERATELY NOT PINNED: DISCOVERY of a NEW caller. Judging JS by text without an AST
+  // is an unwinnable maintenance treadmill - the same class this repository refused for Gate 4
+  // (`docs/LOOP.md` § Commit gate) - so the count pin is the enumeration backstop: a fifth call
+  // site anywhere under `scripts/` or `hooks/` fails this suite even though nothing here can tell
+  // whether that new caller exits correctly.
+  const SYMBOL = 'finishWithSelfCheck';
+  const CALL_FORM = `${SYMBOL}(`; // assembled, never written out: a literal here IS a call site
+  const CALL_SITES = 5; // the definition in run-selfcheck.mjs + the four callers below
+  const PINS = [
+    { file: 'scripts/update/aiwf-update.mjs',
+      present: 'if (isMain()) process.exitCode = main();', absent: ['if (isMain()) process.exit(main());'] },
+    { file: 'scripts/setup/generate.mjs',
+      present: `process.exitCode = ${CALL_FORM}{`, absent: [`process.exit(${CALL_FORM}{`] },
+    { file: 'scripts/setup/interview.mjs',
+      present: 'process.exitCode = code;', absent: ['process.exit(code);'] },
+    { file: 'scripts/setup/aiwf-roles.mjs',
+      present: 'process.exitCode = code;', absent: ['process.exit(code);'] },
+  ];
+
+  // THE instrument. It takes the file CONTENTS, so the controls below run THIS function over a
+  // fixture instead of a mirror of its rules. A file that cannot be read arrives as '' and fails
+  // its own `present` pin rather than being skipped.
+  function pinViolations(sources) {
+    const contentsOf = (file) => (sources.find((s) => s.file === file) || { contents: '' }).contents;
+    const problems = [];
+    for (const pin of PINS) {
+      const lines = contentsOf(pin.file).split('\n').map((l) => l.trim());
+      const occurrences = (needle) => lines.filter((l) => l === needle).length;
+      const p = occurrences(pin.present);
+      if (p !== 1) problems.push(`${pin.file}: present 1 got ${p}`);
+      for (const a of pin.absent) {
+        const n = occurrences(a);
+        if (n !== 0) problems.push(`${pin.file}: absent 0 got ${n}`);
+      }
+    }
+    const total = sources.reduce((n, s) => n + (s.contents.split(CALL_FORM).length - 1), 0);
+    if (total !== CALL_SITES) problems.push(`payload scripts+hooks: count ${CALL_SITES} got ${total}`);
+    return problems;
+  }
+
+  const scriptsUnder = (dir, acc = []) => {
+    if (!fs.existsSync(dir)) return acc;
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (e.name === 'node_modules') continue;
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) scriptsUnder(p, acc);
+      else if (/\.(mjs|js|cjs)$/.test(e.name)) {
+        acc.push({ file: path.relative(PLUGIN_ROOT, p).split(path.sep).join('/'), contents: read(p) || '' });
+      }
+    }
+    return acc;
+  };
+
+  // THE CONTROLS, over a FIXTURE this suite owns rather than over the real tree: a control whose
+  // premise ("nothing is modified") is falsified by the very mutation the guard exists to catch is
+  // not a control, and it would double-report every real violation. The fixture carries one call
+  // form per caller plus the definition, so the count pin sits at CALL_SITES for the compliant case.
+  const FIXTURE = PINS.map((pin) => {
+    const body = [`// fixture for ${pin.file}`];
+    if (!pin.present.includes(CALL_FORM)) body.push(`  const code = ${CALL_FORM}{});`);
+    body.push(`  ${pin.present}`, '');
+    return { file: pin.file, contents: body.join('\n') };
+  }).concat([{ file: 'scripts/selfcheck/run-selfcheck.mjs', contents: `export function ${CALL_FORM}{}) {}\n` }]);
+
+  // A control's detail is printed only when it FAILS: a passing row that dumps what the instrument
+  // said drowns the failures, which is this suite's rule for every other row.
+  const saw = (ok, found) => (ok ? '' : `saw [${found.join(' | ')}]`.slice(0, 300));
+
+  const cClean = pinViolations(FIXTURE);
+  check('pin control: an unmodified caller set reports nothing', cClean.length === 0, saw(cClean.length === 0, cClean));
+
+  const REVERTED = PINS[0];
+  const cReverted = pinViolations(FIXTURE.map((s) => (s.file === REVERTED.file
+    ? { file: s.file, contents: s.contents.split(REVERTED.present).join(REVERTED.absent[0]) }
+    : s)));
+  const revertedOk = cReverted.length === 2
+    && cReverted[0] === `${REVERTED.file}: present 1 got 0`
+    && cReverted[1] === `${REVERTED.file}: absent 0 got 1`;
+  check('pin control: a caller reverted to process.exit() is reported by file', revertedOk, saw(revertedOk, cReverted));
+
+  const cFifth = pinViolations(FIXTURE.concat([
+    { file: 'scripts/setup/fixture-new-caller.mjs', contents: `  const c = ${CALL_FORM}{});\n  process.exitCode = c;\n` },
+  ]));
+  const fifthOk = cFifth.length === 1
+    && cFifth[0] === `payload scripts+hooks: count ${CALL_SITES} got ${CALL_SITES + 1}`;
+  check('pin control: a fifth call site is reported by the count pin', fifthOk, saw(fifthOk, cFifth));
+
+  const violations = pinViolations(
+    scriptsUnder(path.join(PLUGIN_ROOT, 'scripts')).concat(scriptsUnder(path.join(PLUGIN_ROOT, 'hooks'))),
+  );
+  check('every caller of finishWithSelfCheck returns its code through process.exitCode, never process.exit()',
+    violations.length === 0, violations.join(' | ').slice(0, 300));
+}
 
 // ---------------------------------------------------------------------------
 // ADOPT MODE. Every case below installs into a project that ALREADY carries an AIWF surface, which

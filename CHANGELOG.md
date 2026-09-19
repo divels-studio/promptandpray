@@ -102,6 +102,20 @@ never writes a file of the operator's.
 
 ### Fixed
 
+- **The self-check's output no longer truncates on POSIX (CONS-011)** - a red self-check printed its
+  report and then lost the tail of it, so the operator read half a failure list. The place is the
+  CALLERS' exit: `finishWithSelfCheck` writes the child's captured stdout into the caller's own
+  stdout, which is synchronous on Windows but an asynchronous pipe on POSIX, and all four callers -
+  `scripts/update/aiwf-update.mjs`, `scripts/setup/generate.mjs`, `scripts/setup/interview.mjs`,
+  `scripts/setup/aiwf-roles.mjs` - turned the returned code into `process.exit(<code>)`, which forces
+  the exit with that write still pending. Each now assigns it to `process.exitCode` instead; the exit
+  codes themselves are unchanged, byte for byte. POSIX-005 was recorded as a known limit in 0.2.2:
+  that entry named this mechanism, pointed at the `spawnSync` CAPTURE of the child's output, and said
+  honestly that the exact site was unpinned - the site is the callers' exit. macOS had been showing
+  the same defect since 0.2.0, and Linux joined it when the self-check's own output grew. The setup
+  suite pins the four exit statements byte for byte - the compliant form present once, the forced
+  form absent - and pins the count of `finishWithSelfCheck(` call sites across the payload's scripts
+  at five; a new caller is not discovered by that pin, and is the reason the count is pinned.
 - **`skills/README.md` lists every shipped command (CONS-005)** - the index line named ten of them
   and omitted `roles`, so the directory's own index disagreed with the directory. The corrected line
   is pinned, with a control that reverts it to the ten-name list.

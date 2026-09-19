@@ -731,7 +731,11 @@ if (isMain()) {
       console.log('');
       for (const line of showLines(plan.config)) console.log(line);
     }
-    process.exit(code);
+    // The code is RETURNED, never forced: `process.exit()` would kill the run while this process's
+    // OWN stdout write is still pending - a pipe is synchronous on Windows but asynchronous on POSIX
+    // (Node, "A note on process I/O") - and the self-check report written by the call above would
+    // reach the operator truncated. Same exit code, drained output.
+    process.exitCode = code;
   } catch (e) {
     console.error(`pnp-roles: ${e.message}`);
     process.exit(e instanceof RolesUsageError ? 2 : 1);

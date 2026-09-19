@@ -23,6 +23,12 @@
  *      part of the contract in this environment - a host the checks need (a bash, a PowerShell) was
  *      missing or unusable, and dozens of assertions then go red about the machine rather than about
  *      the project. The exit code is 1 in both cases; only the detail above the verdict says which.
+ *      HOW that code leaves the CLI is part of this point: the caller assigns it to `process.exitCode`
+ *      and never passes it to `process.exit()`. The verdict and the child's report are written to this
+ *      process's own stdout, which is a synchronous file/pipe on Windows but an ASYNCHRONOUS pipe on
+ *      POSIX (Node, "A note on process I/O"), and `process.exit()` forces the exit with that write
+ *      still pending - so the operator would read a truncated report, on the one branch where the
+ *      detail is the whole point.
  *   5. The child cannot be spawned at all (missing script, spawn error, no exit status) -> exit 1
  *      naming what could not run. Fail-closed: "could not check" is never reported as "checked".
  *   6. `--no-selfcheck` skips it and says so on one line. Silence is not an option in either branch,

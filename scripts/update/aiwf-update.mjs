@@ -217,4 +217,8 @@ function main() {
   }
 }
 
-if (isMain()) process.exit(main());
+// The code is RETURNED, never forced. `process.exit()` here would kill the run while this
+// process's OWN stdout write is still pending - a pipe is synchronous on Windows but asynchronous
+// on POSIX (Node, "A note on process I/O") - and the self-check report `finishWithSelfCheck` just
+// wrote would reach the operator truncated. Same exit code, drained output.
+if (isMain()) process.exitCode = main();
