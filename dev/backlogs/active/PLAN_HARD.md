@@ -1346,6 +1346,24 @@ own commit, so what was audited and what is a note after it stay distinguishable
 **Извън обхват:** нова функционалност/команди; смяна на технически претенции (само формулиране
 за студен читател — фактите остават каквито selfcheck-ът ги пази); Cyrillic/origin
 имена/абсолютни пътища (provenance гейтът важи с пълна сила).
+
+**[ДОПИСАНО 2026-09-20, при затварянето на CONS-007]**
+6. **macOS: отпадналото основание се маха, support tier-ът НЕ се пипа.** Два текста твърдят
+   нещо, което вече не е вярно: `README.md` § Status `:83-84` и `:96-102` („carries a known
+   unfixed defect", „one measured defect stands unfixed: on macOS the self-check's captured
+   output truncates partway through and the run ends without its tally"), и коментарът на
+   `macos` job-а в `.github/workflows/ci.yml:115-123` („one measured defect stands unfixed
+   here… The key comes off the day macOS is either fixed or dropped"). Дефектът е поправен от
+   CONS-011 и `macos` мина изцяло зелен на двата рънa на 0.2.7 (`35431474157`, `35433501937`) —
+   първи път от 0.2.1. **Пипа се само основанието.** `continue-on-error` ОСТАВА, support tier-ът
+   остава best-effort, поддържан канал не се обявява: операторска дума 2026-09-20 —
+   преразглеждане в отделна сесия след затварянето на PLAN_CONS (ruling ledger). `CHANGELOG.md`
+   блокът на 0.2.2 е история и НЕ се пренаписва; корекцията отива в блока на изданието, което
+   носи този тикет. `ci.yml` не е payload, но язди с README-а, защото носи същата предпоставка —
+   съседен договор, който се движи с промяната, от която зависи.
+7. **Целта на изданието е `v0.2.9`, не `v0.2.8`** (PLAN_CONS Решение 19б: `HARD-011 → 0.2.9`;
+   0.2.8 е изданието на CONS-010). Заглавието на секцията и т.5 по-горе носят старото число и
+   се четат през тази бележка.
 **Acceptance:** всяко от 14-те payload README-та отваря с ориентиращо изречение (списъкът
 файл-по-файл в handback-а; броят се проверява:
 `git ls-files "*README.md" ":(exclude)dev" | Measure-Object -Line` → 14); `git grep -nP
