@@ -1331,6 +1331,16 @@ own commit, so what was audited and what is a note after it stay distinguishable
    `/plugin marketplace update promptandpray` сам актуализира инсталирания плъгин — отделната
    `/plugin update pnp@promptandpray` стъпка е поне отчасти излишна; README/docs казват
    каквото живият хост прави, не по-дългата церемония.
+   **[ВТОРО ИЗМЕРВАНЕ 2026-09-21, операторски екран от сесия на консуматор.]** Церемонията, която
+   операторът кара всеки път, е ТРИ команди, не четирите на `README.md:127-129`:
+   `/plugin marketplace update promptandpray` → `/reload-plugins` → `/pnp:update`. Изходът на
+   първата е `Updated 1 marketplace (1 plugin bumped)`, тоест плъгинът вече е обновен и
+   `/plugin update pnp@promptandpray` няма какво да свърши — този път доказано от самия изход, не
+   само от наблюдение. **Плюс аргумента:** README пише командата ГОЛА, а гола тя отваря диалог за
+   избор какво да се обнови; с `promptandpray` отива право на целта и хостът сам дописва аргумента
+   с tab, тоест по-правилната форма е и по-малко писане. Документираната форма е по-неудобната от
+   двете. Тикетът пише и трите факта: аргументът, отпадането на втората стъпка, три стъпки вместо
+   четири. `:133-135` (защо `/reload-plugins` не е опционален) остава вярно и се пази.
 2. Останалите 13 payload README-та (`docs/`, `skills/`, `templates/`,
    `scripts/{ci,native,selfcheck,setup,spike,update}/`, `migrations/`, `schema/`, `examples/`,
    `examples/example-project/` — 14 общо с root) — всяко отваря с едно изречение „какво е това
