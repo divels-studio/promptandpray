@@ -1036,6 +1036,67 @@ exit 0 + контролите; INTERLOCK → „… 0.2.8"; VERIFY; CYR.
 Risk threshold: createIfAbsent, който осиновява съществуващ файл; консуматорско име в payload;
 модел ключ за ролята в схемата. Stop: acceptance зелен. Review: Class code. Assignee: Колега.
 
+**CONS-008 CLOSED 2026-09-21 — code commit `6c8d714`** (24 файла, 1526+/44−; този запис е отделният
+docs commit).
+- *Реални промени:* `createIfAbsent` на rerender op-а — validate-payload: optional boolean, отказ по
+  ПРИСЪСТВИЕ на двете полета (`ifRecorded`+`createIfAbsent`), отказ при `region ≠ null` (whole-file
+  only); migrate.mjs: createIfAbsent клонът в `planRerender` (файл липсва → creation; файл ==
+  рендера → creation без запис; различен → отказ), `created: true` в плана, в stage metadata-та и
+  в re-plan-а след recovery, `writeCreatedTarget` (hard-link публикуване, EEXIST = отказът, друга
+  грешка = явен UpdateError, БЕЗ fallback), `assertNoForeignFileAtCreationTarget` (ранната
+  проверка; гаранцията е syscall-ът), `recover` тройно правило преди hash клоновете (липсва →
+  replay/re-plan; == postHash → наш, щампова; различен → отказ), `createdOps` per-операция за
+  CHANGES етикета `created (no record, no file)`; `templates/ORCHESTRATOR.md.tmpl` (198 реда,
+  model-agnostic, без frontmatter) → `.claude/aiwf-native/ORCHESTRATOR.md`, безусловен addArtifact,
+  RESOLVABLE ключ; `CLAUDE.md.tmpl` preflight bullet-ът назовава ролята (единствената промяна в
+  региона); миграция `0012_orchestrator-role` (note със `supersedes`, createIfAbsent rerender,
+  region rerender); index 12; plugin 0.2.8; fixture → `0013_example-bump`; CHANGELOG `[0.2.8]`;
+  self-install приложен (`CHANGES_0.2.7-to-0.2.8.md` проследен); selfcheck: needle, cover set +
+  контрола за ключа, 5 doctrine пина с генерирани контроли (data discipline, verdict/dispatch,
+  form check, duals, ledger row), `doctrine-orchestrator-model-agnostic` с 3 контроли (roles ключ,
+  model/effort поле, frontmatter fence), 2 validator refusal контроли; test-setup +4 checks (459→460);
+  test-update секция 15 (10 лица + crash матрица + in-process production dispatch тест с patch-нат
+  `fs.linkSync`; 538→591); README.md:169, skills/setup/SKILL.md:3 и :43 — по една клауза за ролята;
+  migrations/README.md — полето и двата отказа.
+- *Решения и отклонения:* (1) `created: true` вместо `preHash === null` — resolved take-new/merge над
+  липсващ файл също носи null preHash (Колегата, с доказателство); (2) `region: null` по fixture
+  образеца; (3) `createdKeys` по ключ → `createdOps` по операция (два rerender-а на един ключ в един
+  рън); (4) 0012 повтаря `orchestrator-regulation-v2-seed` — 0011 го обяви, тук каца заместителят
+  (текстът го казва); (5) без P-D6 word-gate изречение — ролята не въвежда гейт; (6) CHANGELOG
+  стеснен до пиннатото; (7) отказът НЕ препоръчва `/pnp:setup --adopt` на инсталиран проект (adopt
+  отказва `_aiwf`; `ADOPT_ALREADY_INSTALLED`) — „move it aside or remove it, then run the update
+  again"; 0.1.0 блокът в CHANGELOG, който назовава `--adopt`, е released история и остава; (8) journal
+  състояние `written` въведено в рунд 2 и МАХНАТО в рунд 3 (при „идентичен = наш" recovery се решава
+  по байтове, състоянието беше излишно и създаваше orphan прозорец); (9) contract коментарът на
+  шаблона: „two kinds" — D12 правилата се ИЗПИСВАТ (ролята е техният дом), D17 четирите са само
+  референции; секциите canon-conflict/doctrine-writes свити до частта на COO + указател; guard (f)
+  е прецедентно правило, не стоп правило (fact-check catch).
+- *Операторско решение (ruling ledger 2026-09-21):* байт-идентично съдържание на creation target-а
+  = запис на engine-а; `.claude/aiwf-native/` е папка на плъгина, чужд файл там е проблем на автора
+  му; threshold = загуба на данни ИЗВЪН папката на плъгина. Одиторът четеше „никакво осиновяване,
+  дори равни байтове" и това четене доведе до рунд 2 + вер. 2 — арбитраж при оператора СЛЕД
+  нарушение на D18 т.4 от COO-то (event ledger).
+- *Одит:* fact-check (1 невярна претенция) → cold p1 `fail` 1 P1 + 6 P2 (всички приети) → рунд 1 →
+  resume v1 `fail` (5/7 затворени; B1 прозорци, B3 `--adopt`) → рунд 2 = капът → resume v2 `fail`
+  (B1: stage без `created`; нов P1: publish преди journal `written` → orphan) → операторски арбитраж
+  → рунд 3 на дума (протоколът по решението) → cold пас с ТЕСЕН обхват `fail` (1 нов: няма тест за
+  продукционния диспач) → рунд 4 test-only на дума → resume v4 **`pass`, нула блокери**. Codex сесии:
+  `01a0bfe4-b7f3-7f31-acfa-c3209734e92a` (p1–v2), `01a0c285-a671-76e1-bddb-a3a215d51832` (cold + v4).
+  Всеки нов инструмент видян червен на sabotage копие (записано по рундове в handback-ите).
+- *VERIFY, финално дърво:* Порция 1 (Windows, един паралелен батч, 8/8 exit 0): validate-payload
+  12 миграции 0.2.8, test-setup 460/0, test-update 591/0, cycle-windows 44/0, cycle-linux 44/0,
+  selfcheck 1292/1292, spikes 318/0, plugin validate OK. Порция 2 (WSL под `pnp`, 4/4 exit 0):
+  selfcheck 1296/1296 (CI форма), test-setup 458/0, test-update 591/0, cycle-linux 44/0.
+- *Два средови капана, хванати на живо:* (а) порция 2 selfcheck трябва да е в CI формата
+  `--plugin-root .` БЕЗ `--project-fixture .` — копирано дърво + шестте root-bound owned rules на
+  self-install-а = фалшиво червено (дефект на брифа ми, доказан с контрола върху HEAD); (б) snap
+  `pwsh` кешът под `pnp` умря след паралелните spawn-ове в рунд 4 — Колегата спря, изчистване по
+  операторска дума → 4/4.
+- *Остатъчен дълг:* няма. Наблюдение, не тикет: `newRender` се хешира суров, а се пише `lf()` —
+  предсъществуваща конвенция в целия engine, шаблоните са `eol=lf`.
+- *За CONS-010:* консуматорите нямат файл на пътя → 0012 го създава; ако имат — стопът с „move it
+  aside".
+
 ### CONS-009 [R2 code] — /pnp:arbiter + D25/D5 (Решения 5, 8, 13)
 
 > **Бележка от CONS-005 (2026-09-18), не тикет:** индекс редът на `skills/README.md:6` е пиннат
@@ -1057,7 +1118,16 @@ ledger конвенцията; succession) + D5 (тригер = задължит
 ръка само отваря сесия при липса) + D25 „COO routing" подсекция в § Routes след :668 (4-те
 проверки; динамичната клауза; одит-инвариантът; hardening принципът); README.md:31 → новият
 Twelve ред (от списъка); skills/README.md → +arbiter (12); selfcheck: пинове + контроли;
-CHANGELOG.
+CHANGELOG. **[2026-09-21, операторска дума, роден от CONS-008 — кандидатът „Разногласието не е
+блокер" (CANDIDATES.md):]** абзац към § Escalation на `templates/ORCHESTRATOR.md.tmpl` — оспорено от
+Одитора ДИЗАЙНЕРСКО решение на COO не се решава с корекционен рунд и пас: COO спира, записва спора в
+две-три изречения на човешки език (какво иска всяка страна, какво губи операторът при всеки избор)
+и го дава на оператора; рунд едва след думата му; рунд, който имплементира оспорено решение, е
+нарушение на D18 — плюс изречение в `skills/review/SKILL.md` Step 4 („a disputed blocker is parked
+for the operator, not implemented in a correction round"), двете пиннати с контрола. Консуматорите
+получават новия рендер през 0012 (createIfAbsent рендира ТЕКУЩИЯ шаблон при ъпдейта); този repo
+се ре-синква с `--resolve` take-new. Acceptance: `git grep -cF "disputed blocker" --
+skills/review/SKILL.md templates/ORCHESTRATOR.md.tmpl` → ≥2.
 Извън обхват: ролевият рендер (008); каквато и да е arbiter автоматизация отвъд скила.
 Acceptance (литерално): `git grep -n "aiwf-update.mjs" -- skills/arbiter/SKILL.md` → ≥1 И
 `git grep -n "\-\-check" -- skills/arbiter/SKILL.md` → ≥1; `git grep -nF "no parked
