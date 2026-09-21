@@ -978,7 +978,7 @@ PLAN_CONS: суровина, чакаща собствен readiness цикъл,
 
 ## D2 pointer rows
 
-| 2026-09-16 | PLAN_CONS одобрен — пълните решения/фрази живеят в dev/backlogs/active/PLAN_CONS.md; дизайн авторитетът в dev/backlogs/CONSOLIDATION_2026-09-16.md |
+| 2026-09-16 | PLAN_CONS одобрен — пълните решения/фрази живеят в dev/backlogs/active/PLAN_CONS.md; дизайн авторитетът в dev/backlogs/CONSOLIDATION_2026-09-16.md | **[дописано 2026-09-21: планът е архивиран, сега е `dev/backlogs/archive/005_PLAN_CONS_2026-09-21.md`. Редът е датиран лог и пътят в него е бил верен, когато е писан — затова се дописва, а не се пренаписва.]** |
 | 2026-09-17 | VERIFY кадансът паралелен (операторска дума) + pre-dispatch checklist — домовете: PLAN_CONS хедърът; памет machine-constraints-verify-runs |
 
 ## Witness sessions (тристранката — държат се ЖИВИ/възобновими по време на изпълнението на PLAN_CONS; read-only свидетели)
