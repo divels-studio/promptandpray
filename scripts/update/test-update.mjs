@@ -47,7 +47,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { UpdateError, extractRegion, resolveArtifact, runUpdate } from './migrate.mjs';
+import {
+  UpdateError, assertNoForeignFileAtCreationTarget, extractRegion, resolveArtifact, runUpdate, writeCreatedTarget,
+} from './migrate.mjs';
 import { sha256 } from '../setup/generate.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -1985,6 +1987,473 @@ section('14 - supersedes: the ids a release retires reach the CHANGES report, an
       supersedesLines(changes2).length === 0, supersedesLines(changes2).join(' | ').slice(0, 160) || 'none');
     check('the control on that predicate: the declared run DID produce exactly five such lines',
       supersedesLines(changes).length === RETIRED.length, `${supersedesLines(changes).length} lines`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+section('15 - createIfAbsent: an unrecorded artifact is CREATED on empty ground, REFUSED over a foreign file, and the field is invisible where a record exists');
+{
+  // The subject is `.claude/agents/reviewer.md` for exactly the reason section 13 uses it: it is the
+  // one shipped artifact whose ABSENCE is a legitimate configuration, so a codex-hosted install is a
+  // project with no record and no file, and a claude-hosted one is a project with both. Building the
+  // two faces out of the same artifact keeps this section from inventing a managed surface of its
+  // own - and the field under test is about the RECORD, not about which artifact carries it.
+  const opFor = (extra) => [{
+    op: 'rerender-managed-region', file: '.claude/agents/reviewer.md', region: null,
+    template: 'templates/agents/reviewer.md.tmpl', ...extra,
+  }];
+  const codexAnswers = baseAnswers({
+    roles: {
+      writer: { model: 'claude-opus-5[1m]', effort: 'high' },
+      reviewer: { engine: 'codex', model: 'codex-atom-2', effort: 'high' },
+      qa: { engine: 'codex', model: 'codex-atom-2', effort: 'medium' },
+      qal: { enabled: false, engine: 'codex', model: 'unset', effort: 'high' },
+    },
+  });
+  // The payload's reviewer template really moves, so the face-3 comparison is about a re-render that
+  // APPLIED something rather than about an artifact that was already current - a pair of no-ops is
+  // byte-identical for a reason that has nothing to do with the field under test.
+  const moveReviewerTemplate = (dir) => fs.appendFileSync(
+    at(dir, 'templates/agents/reviewer.md.tmpl'), '\nA line the next payload version added.\n', 'utf8');
+  const withCreate = makePayload('create-yes', {
+    version: '0.2.0', migrations: [{ id: '0002_create', version: '0.2.0', ops: opFor({ createIfAbsent: true }) }],
+    tweak: moveReviewerTemplate,
+  });
+  const withoutField = makePayload('create-plain', {
+    version: '0.2.0', migrations: [{ id: '0002_create', version: '0.2.0', ops: opFor({}) }],
+    tweak: moveReviewerTemplate,
+  });
+  const bothFields = makePayload('create-both', {
+    version: '0.2.0',
+    migrations: [{ id: '0002_create', version: '0.2.0', ops: opFor({ ifRecorded: true, createIfAbsent: true }) }],
+  });
+  // THE refusal sentence, held here in one constant and asserted wherever it can be raised. It names
+  // the only door that exists: `/pnp:setup --adopt` refuses a project that already has an
+  // installation, so a hint to adopt would point at a locked one.
+  const REFUSAL = 'this installation has no record of it but a file is standing at that path - an update never '
+    + 'adopts a file it did not write; move it aside or remove it, then run the update again';
+  const FOREIGN = '---\nname: reviewer\n---\nSomebody else put this here. It is not ours.\n';
+
+  // --- face 1: no record, no file -> rendered, stamped, and named in CHANGES ------------------
+  {
+    const p = project('create-empty');
+    check('install exits 0 (codex-hosted: no reviewer agent, no record)', install(p, { answers: codexAnswers }).status === 0);
+    check('precondition: neither the file nor a record for it is there',
+      !exists(at(p, '.claude/agents/reviewer.md'))
+      && !Object.prototype.hasOwnProperty.call(bookkeeping(p).managedRegions, '.claude/agents/reviewer.md'),
+      JSON.stringify(Object.keys(bookkeeping(p).managedRegions)));
+    const a = update(p, ['--apply'], { payload: withCreate });
+    check('createIfAbsent over empty ground: exit 0 and the summary says it was created',
+      a.status === 0 && a.out.includes('.claude/agents/reviewer.md: created (no record, no file) - rendered and recorded'), why(a));
+    check('the file really exists afterwards', exists(at(p, '.claude/agents/reviewer.md')));
+    const rec = bookkeeping(p).managedRegions['.claude/agents/reviewer.md'] || {};
+    const onDisk = read(at(p, '.claude/agents/reviewer.md'));
+    check('and its bookkeeping stamps what is on disk: upstream == local == sha(file), override false',
+      !!onDisk && rec.upstream === sha256(onDisk) && rec.local === sha256(onDisk) && rec.override === false,
+      `${String(rec.upstream).slice(0, 12)} / ${String(rec.local).slice(0, 12)} / disk ${onDisk ? sha256(onDisk).slice(0, 12) : '-'}`);
+    const changes = read(at(p, 'CHANGES_0.1.0-to-0.2.0.md')) || '';
+    check('the CHANGES report labels it with the face it took, not with "payload-current"',
+      changes.includes('`rerender-managed-region` .claude/agents/reviewer.md - created (no record, no file)'),
+      changes.split('\n').filter((l) => l.includes('reviewer.md')).join(' | ').slice(0, 200) || 'no line about it');
+  }
+
+  // --- face 2: no record, but a FOREIGN file is standing there -> refused, nothing touched ----
+  {
+    const p = project('create-foreign');
+    check('install exits 0 (codex-hosted again)', install(p, { answers: codexAnswers }).status === 0);
+    fs.mkdirSync(path.dirname(at(p, '.claude/agents/reviewer.md')), { recursive: true });
+    fs.writeFileSync(at(p, '.claude/agents/reviewer.md'), FOREIGN, 'utf8');
+    const a = update(p, ['--apply'], { payload: withCreate });
+    check('createIfAbsent over a foreign file REFUSES (exit 1), naming the only door that exists',
+      a.status === 1 && a.out.includes(REFUSAL), why(a));
+    check('and the foreign file was not touched, byte for byte',
+      read(at(p, '.claude/agents/reviewer.md')) === FOREIGN,
+      JSON.stringify(String(read(at(p, '.claude/agents/reviewer.md'))).slice(0, 60)));
+    check('the refusal wrote nothing: no record for it, and the project is still at the baseline version',
+      !Object.prototype.hasOwnProperty.call(bookkeeping(p).managedRegions, '.claude/agents/reviewer.md')
+      && bookkeeping(p).installedPluginVersion === BASELINE.targetPluginVersion,
+      `${String(bookkeeping(p).installedPluginVersion)} / ${JSON.stringify(Object.keys(bookkeeping(p).managedRegions))}`);
+  }
+
+  // --- face 3: a record exists -> the field is invisible --------------------------------------
+  {
+    const withIt = project('create-recorded-yes');
+    const without = project('create-recorded-no');
+    check('both installs exit 0 (claude-hosted: the reviewer agent IS recorded here)',
+      install(withIt).status === 0 && install(without).status === 0);
+    const a1 = update(withIt, ['--apply'], { payload: withCreate });
+    const a2 = update(without, ['--apply'], { payload: withoutField });
+    check('both runs exit 0', a1.status === 0 && a2.status === 0, why(a1.status === 0 ? a2 : a1));
+    const f1 = read(at(withIt, '.claude/agents/reviewer.md'));
+    const f2 = read(at(without, '.claude/agents/reviewer.md'));
+    check('precondition: the re-render really applied something (the payload template moved)',
+      !!f1 && f1.includes('A line the next payload version added.'), f1 ? `${f1.length} bytes` : 'no file');
+    check('with the field and without it, the artifact is byte-identical', f1 !== null && f1 === f2,
+      `${f1 ? sha256(f1).slice(0, 12) : '-'} vs ${f2 ? sha256(f2).slice(0, 12) : '-'}`);
+    const r1 = bookkeeping(withIt).managedRegions['.claude/agents/reviewer.md'];
+    const r2 = bookkeeping(without).managedRegions['.claude/agents/reviewer.md'];
+    check('and so is its bookkeeping record', JSON.stringify(r1) === JSON.stringify(r2), `${JSON.stringify(r1)} vs ${JSON.stringify(r2)}`);
+    check('the summary is the ordinary re-render, with no line about the field at all',
+      a1.out.includes('.claude/agents/reviewer.md: the payload version applied (you had not edited it)')
+      && !/createIfAbsent/i.test(a1.out) && !a1.out.includes('created (no record, no file)'), why(a1));
+    // The discriminating control for face 1's label: the same op over a RECORDED artifact reaches
+    // CHANGES as `payload-current`, so "created (no record, no file)" up there is the face and not
+    // the op type printing a constant.
+    const changes = read(at(withIt, 'CHANGES_0.1.0-to-0.2.0.md')) || '';
+    check('and CHANGES labels it payload-current, not created',
+      changes.includes('`rerender-managed-region` .claude/agents/reviewer.md - payload-current')
+      && !changes.includes('created (no record, no file)'),
+      changes.split('\n').filter((l) => l.includes('reviewer.md')).join(' | ').slice(0, 200) || 'no line about it');
+  }
+
+  // --- face 4: the two fields together are a VALIDATOR refusal --------------------------------
+  {
+    const MUTUAL = 'rerender-managed-region: ifRecorded and createIfAbsent are mutually exclusive '
+      + '(skip versus create/refuse for an unrecorded artifact) - carry one of them';
+    const p = project('create-both');
+    check('install exits 0', install(p, { answers: codexAnswers }).status === 0);
+    const before = snapshot(p);
+    const a = update(p, ['--apply'], { payload: bothFields });
+    check('an op carrying BOTH fields is refused by the payload validator (exit 1), with the literal message',
+      a.status === 1 && a.out.includes(MUTUAL), why(a));
+    check('and that refusal wrote nothing at all', diffSnapshots(before, snapshot(p)).length === 0,
+      diffSnapshots(before, snapshot(p)).join(', '));
+
+    // PRESENCE, not value. Each of these behaves identically to carrying one field, which is
+    // exactly why it must not pass: the op still states both answers, and the edit that flips a
+    // false to a true would turn a legal payload into an undefined one with nobody reviewing the
+    // combination.
+    for (const [label, extra] of [
+      ['ifRecorded:false + createIfAbsent:true', { ifRecorded: false, createIfAbsent: true }],
+      ['ifRecorded:true + createIfAbsent:false', { ifRecorded: true, createIfAbsent: false }],
+    ]) {
+      const payload = makePayload(`create-both-${seq}`, {
+        version: '0.2.0', migrations: [{ id: '0002_create', version: '0.2.0', ops: opFor(extra) }],
+      });
+      const p2 = project(`create-both-${seq}`);
+      check(`install exits 0 (${label})`, install(p2, { answers: codexAnswers }).status === 0);
+      const before2 = snapshot(p2);
+      const r = update(p2, ['--apply'], { payload });
+      check(`BOTH fields PRESENT is refused whatever the values: ${label} (exit 1, the literal message)`,
+        r.status === 1 && r.out.includes(MUTUAL), why(r));
+      check(`and ${label} wrote nothing at all`, diffSnapshots(before2, snapshot(p2)).length === 0,
+        diffSnapshots(before2, snapshot(p2)).join(', '));
+    }
+  }
+
+  // --- face 5: the field is defined for WHOLE FILES only --------------------------------------
+  {
+    // A region-scoped creation has no subject: the whole point of the field is that no file is
+    // there, and a region is a span INSIDE a file. There is no defined splice for "insert these
+    // markers into a file that does not exist", so the payload is refused rather than left to
+    // whatever the writer would have done with it.
+    const WHOLE_FILE_ONLY = 'rerender-managed-region: createIfAbsent applies to whole-file artifacts only '
+      + '(region must be null) - a region cannot be created into a file that does not exist.';
+    const regionCreate = makePayload('create-region', {
+      version: '0.2.0',
+      migrations: [{
+        id: '0002_create', version: '0.2.0',
+        ops: [{
+          op: 'rerender-managed-region', file: 'CLAUDE.md', region: 'aiwf-core',
+          template: 'templates/CLAUDE.md.tmpl#aiwf-core', createIfAbsent: true,
+        }],
+      }],
+    });
+    const p = project('create-region');
+    check('install exits 0', install(p).status === 0);
+    const before = snapshot(p);
+    const a = update(p, ['--apply'], { payload: regionCreate });
+    check('createIfAbsent on a REGION op is refused by the payload validator (exit 1), with the literal message',
+      a.status === 1 && a.out.includes(WHOLE_FILE_ONLY), why(a));
+    check('and that refusal wrote nothing at all either', diffSnapshots(before, snapshot(p)).length === 0,
+      diffSnapshots(before, snapshot(p)).join(', '));
+  }
+
+  // --- face 6: THE MATRIX OF AN INTERRUPTED CREATION. A creation is journalled before it is
+  // written, so the resume has to decide what the path holds now. The ruling that decides it: the
+  // artifact lives in the PLUGIN'S OWN FOLDER, so content that IS the render is this engine's own
+  // write - there is nothing of anybody else's to lose - while content that DIFFERS was never
+  // written by us and is refused rather than adopted or overwritten. All three rows start from the
+  // same real crash, at the same injection point.
+  {
+    const crashAt = { PNP_UPDATE_CRASH_AT: '0002_create/0/after-journal-prepared' };
+    const crashed = (p) => {
+      const r = update(p, ['--apply'], { payload: withCreate, env: crashAt });
+      const j = bookkeeping(p).migrationJournal;
+      return { r, j, staged: read(at(p, `${STAGE_REL}/0002_create-0/content`)) };
+    };
+
+    // (a) nothing at the path: the ordinary resume, whose write is the no-clobber publish.
+    {
+      const p = project('create-crash-absent');
+      check('install exits 0 (codex-hosted)', install(p, { answers: codexAnswers }).status === 0);
+      const { r, j, staged } = crashed(p);
+      check('crash injection: journalled as PREPARED with nothing written, and the stage holds the render',
+        r.status === 86 && j && j.state === 'prepared' && j.preHash === null
+        && !exists(at(p, '.claude/agents/reviewer.md')) && staged !== null && staged.length > 0,
+        `exit ${r.status}: journal=${JSON.stringify(j)}`);
+      const resumed = update(p, ['--apply'], { payload: withCreate });
+      check('an ABSENT target resumes and completes (exit 0)',
+        resumed.status === 0 && bookkeeping(p).installedPluginVersion === '0.2.0'
+        && bookkeeping(p).migrationJournal === null, why(resumed));
+      const onDisk = read(at(p, '.claude/agents/reviewer.md'));
+      const rec = bookkeeping(p).managedRegions['.claude/agents/reviewer.md'] || {};
+      check('the file is there, is the render, and is stamped for what is on disk',
+        onDisk === staged && rec.local === sha256(String(onDisk))
+        && rec.upstream === sha256(String(onDisk)) && rec.override === false,
+        JSON.stringify(rec).slice(0, 120));
+      check('and the replay left no publish temporary behind',
+        fs.readdirSync(path.dirname(at(p, '.claude/agents/reviewer.md'))).filter((n) => n.includes('.pnp-new-')).length === 0,
+        fs.readdirSync(path.dirname(at(p, '.claude/agents/reviewer.md'))).join(', ').slice(0, 120));
+    }
+
+    // (b) bytes EQUAL to the render, taken from the stage the interrupted run left - so they are the
+    // real render rather than a copy this suite composed. Ours by the ruling: stamped, not refused.
+    {
+      const p = project('create-crash-equal');
+      check('install exits 0 (codex-hosted)', install(p, { answers: codexAnswers }).status === 0);
+      const { staged } = crashed(p);
+      fs.mkdirSync(path.dirname(at(p, '.claude/agents/reviewer.md')), { recursive: true });
+      fs.writeFileSync(at(p, '.claude/agents/reviewer.md'), String(staged), 'utf8');
+      const resumed = update(p, ['--apply'], { payload: withCreate });
+      check('EQUAL bytes are OURS: the resume completes (exit 0), with no refusal',
+        resumed.status === 0 && !resumed.out.includes(REFUSAL)
+        && bookkeeping(p).installedPluginVersion === '0.2.0'
+        && bookkeeping(p).migrationJournal === null, why(resumed));
+      check('the file was not rewritten, byte for byte',
+        read(at(p, '.claude/agents/reviewer.md')) === String(staged),
+        `${String(staged).length} bytes`);
+      const rec = bookkeeping(p).managedRegions['.claude/agents/reviewer.md'] || {};
+      check('and it is stamped for what is on disk', rec.local === sha256(String(staged))
+        && rec.upstream === sha256(String(staged)) && rec.override === false, JSON.stringify(rec).slice(0, 120));
+    }
+
+    // (c) a DIFFERING file: never ours, so neither adopted nor overwritten.
+    {
+      const p = project('create-crash-foreign');
+      check('install exits 0 (codex-hosted)', install(p, { answers: codexAnswers }).status === 0);
+      crashed(p);
+      fs.mkdirSync(path.dirname(at(p, '.claude/agents/reviewer.md')), { recursive: true });
+      fs.writeFileSync(at(p, '.claude/agents/reviewer.md'), FOREIGN, 'utf8');
+      const resumed = update(p, ['--apply'], { payload: withCreate });
+      check('a DIFFERING file is REFUSED on resume (exit 1)',
+        resumed.status === 1 && resumed.out.includes(REFUSAL), why(resumed));
+      check('the foreign file was not touched, byte for byte',
+        read(at(p, '.claude/agents/reviewer.md')) === FOREIGN,
+        JSON.stringify(String(read(at(p, '.claude/agents/reviewer.md'))).slice(0, 60)));
+      check('no record was created for it, and the project is still at the baseline version',
+        !Object.prototype.hasOwnProperty.call(bookkeeping(p).managedRegions, '.claude/agents/reviewer.md')
+        && bookkeeping(p).installedPluginVersion === BASELINE.targetPluginVersion,
+        `${String(bookkeeping(p).installedPluginVersion)} / ${JSON.stringify(Object.keys(bookkeeping(p).managedRegions))}`);
+      check('and no dialog was raised: the resume never reached the conflict vocabulary',
+        !/CONFLICT at/.test(resumed.out), why(resumed));
+    }
+  }
+
+  // --- face 7: THE PLANNING ARM of the same rule, without any crash. A file that IS the render at
+  // a path this installation has no record of is ours; the operation is planned, nothing is
+  // written, and the artifact ends recorded. (The differing half of this arm is face 2.)
+  {
+    const p = project('create-plan-equal');
+    check('install exits 0 (codex-hosted)', install(p, { answers: codexAnswers }).status === 0);
+    // The render, obtained from a real run rather than composed here: a second project takes the
+    // same migration to completion and its artifact is the payload's own bytes.
+    const donor = project('create-plan-equal-donor');
+    install(donor, { answers: codexAnswers });
+    update(donor, ['--apply'], { payload: withCreate });
+    const render = read(at(donor, '.claude/agents/reviewer.md'));
+    check('precondition: the donor run produced the render', render !== null && render.length > 0,
+      render ? `${render.length} bytes` : 'no file');
+    fs.mkdirSync(path.dirname(at(p, '.claude/agents/reviewer.md')), { recursive: true });
+    fs.writeFileSync(at(p, '.claude/agents/reviewer.md'), String(render), 'utf8');
+    const a = update(p, ['--apply'], { payload: withCreate });
+    check('a file that IS the render is planned as a creation and the run completes (exit 0)',
+      a.status === 0 && !a.out.includes(REFUSAL)
+      && bookkeeping(p).installedPluginVersion === '0.2.0', why(a));
+    check('nothing was written over it - byte for byte what was planted',
+      read(at(p, '.claude/agents/reviewer.md')) === String(render), `${String(render).length} bytes`);
+    const rec = bookkeeping(p).managedRegions['.claude/agents/reviewer.md'] || {};
+    check('and it is recorded, clean', rec.local === sha256(String(render))
+      && rec.upstream === sha256(String(render)) && rec.override === false, JSON.stringify(rec).slice(0, 120));
+  }
+
+  // --- face 8: the write primitives at their own entrypoints, and the flag that has to reach them.
+  // There is no crash point between the guard and the write, so the primitive is exercised directly
+  // rather than through a race nobody can schedule.
+  {
+    const dir = project('create-writeguard');
+    const content = 'the render we are about to write\n';
+
+    // The early guard: the message, on the two contents it has to tell apart.
+    const differing = at(dir, 'guard-differs.md');
+    fs.writeFileSync(differing, 'somebody else was here first\n', 'utf8');
+    let thrown = null;
+    try { assertNoForeignFileAtCreationTarget(differing, content, 'artifact.md'); } catch (e) { thrown = e; }
+    check('the early guard REFUSES a DIFFERING file',
+      thrown instanceof UpdateError && thrown.message.includes(REFUSAL),
+      thrown ? String(thrown.message).slice(0, 120) : 'nothing was thrown');
+    const same = at(dir, 'guard-same.md');
+    fs.writeFileSync(same, content, 'utf8');
+    let passed = null;
+    try { assertNoForeignFileAtCreationTarget(same, content, 'artifact.md'); } catch (e) { passed = e; }
+    check('and PASSES a file that is the render (the folder is the plugin\'s - those bytes are ours)',
+      passed === null, passed ? String(passed.message).slice(0, 120) : 'no throw');
+
+    // The publish: the guarantee. It is only ever called on an absent target, so an EEXIST here is
+    // the race - and `link` cannot tell identical from differing, which is why the caller decides
+    // equality first.
+    let published = null;
+    try { writeCreatedTarget(differing, content, 'artifact.md'); } catch (e) { published = e; }
+    check('the no-clobber publish REFUSES at the syscall when anything is already there',
+      published instanceof UpdateError && published.message.includes(REFUSAL),
+      published ? String(published.message).slice(0, 120) : 'nothing was thrown');
+    check('with the pre-placed bytes intact', read(differing) === 'somebody else was here first\n',
+      JSON.stringify(String(read(differing)).slice(0, 60)));
+    check('and no publish temporary left behind',
+      fs.readdirSync(dir).filter((n) => n.includes('.pnp-new-')).length === 0,
+      fs.readdirSync(dir).join(', ').slice(0, 120));
+    const fresh = at(dir, 'fresh.md');
+    writeCreatedTarget(fresh, content, 'artifact.md');
+    check('and it writes the render whole on empty ground', read(fresh) === content,
+      JSON.stringify(String(read(fresh)).slice(0, 60)));
+
+    // ITEM 1, structurally: `created` has to survive the crash that makes a replay necessary. The
+    // stage metadata is read back from the fixture project of the matrix above and the flag is
+    // asserted there - a stage written without it would rebuild a plan that takes the clobbering
+    // write path, and no injection point sits between the recovery check and the write to prove it
+    // any other way.
+    const p = project('create-stage-meta');
+    install(p, { answers: codexAnswers });
+    update(p, ['--apply'], { payload: withCreate, env: { PNP_UPDATE_CRASH_AT: '0002_create/0/after-journal-prepared' } });
+    const meta = readJson(at(p, `${STAGE_REL}/0002_create-0/stage.json`));
+    check('the stage of an interrupted creation records created: true, so the replay can route the write',
+      !!meta && meta.created === true, JSON.stringify(meta).slice(0, 160));
+    check('and it is the creation\'s own stage (null preHash, the artifact as target)',
+      !!meta && meta.preHash === null && meta.target === '.claude/agents/reviewer.md',
+      JSON.stringify(meta).slice(0, 160));
+  }
+
+  // --- face 9b: THE PRODUCTION DISPATCH. Every other face here proves a PROPERTY that survives
+  // the dispatch being deleted: an absent target looks the same whichever write puts the render
+  // there, an equal target is untouched either way, a differing one is refused by the guard before
+  // any write, and face 8 calls the primitive itself. So this one proves the WIRING - that
+  // `applyTarget` really routes a creation to `writeCreatedTarget` - and it proves it by standing
+  // in the one place only that path reaches.
+  //
+  // `fs.linkSync` is patched on the default export of `node:fs`, which is exactly the binding
+  // production calls: `scripts/update/migrate.mjs:81` is `import fs from 'node:fs'` and the
+  // primitive calls `fs.linkSync(tmp, absFile)` - a property lookup on that same module object at
+  // call time, so a property replaced here is the function that runs there. The wrapper plants a
+  // DIFFERING file at the target at the instant of publishing - the race no crash point can
+  // schedule - and then calls the original, so the refusal comes from the syscall rather than from
+  // any check this suite arranged.
+  //
+  // `runUpdate` is invoked with the shape the CLI uses (`aiwf-update.mjs:198`): pluginRoot,
+  // projectRoot, resolve, log. The resolver THROWS if it is ever consulted - nothing in a creation
+  // may raise a dialog, so a resolver that answered would be hiding exactly that defect.
+  {
+    const p = project('create-dispatch');
+    check('install exits 0 (codex-hosted: no reviewer agent, no record)',
+      install(p, { answers: codexAnswers }).status === 0);
+    const target = at(p, '.claude/agents/reviewer.md');
+    const PLANTED = 'a file that appeared between the guard and the link\n';
+    const realLinkSync = fs.linkSync;
+    let reachedFor = null;
+    let asked = null;
+    let thrown = null;
+    try {
+      fs.linkSync = function patchedLinkSync(src, dest) {
+        if (reachedFor === null && path.resolve(String(dest)) === path.resolve(target)) {
+          reachedFor = String(dest);
+          fs.mkdirSync(path.dirname(target), { recursive: true });
+          fs.writeFileSync(target, PLANTED, 'utf8');
+        }
+        return realLinkSync.call(fs, src, dest);
+      };
+      runUpdate({
+        pluginRoot: withCreate,
+        projectRoot: p,
+        resolve: (address, kind) => { asked = `${kind} at ${address}`; throw new Error(`the resolver was consulted: ${asked}`); },
+        log: () => {},
+      });
+    } catch (e) {
+      thrown = e;
+    } finally {
+      fs.linkSync = realLinkSync;
+    }
+    check('production reached the no-clobber publish for the creation target (the dispatch is wired)',
+      reachedFor !== null, reachedFor === null ? 'fs.linkSync was never called for it' : reachedFor);
+    check('and nothing asked a question on the way (no dialog in a creation)', asked === null, String(asked));
+    check('the run FAILED with the standard refusal, raised by the syscall',
+      thrown instanceof UpdateError && String(thrown.message).includes(REFUSAL),
+      thrown ? String(thrown.message).slice(0, 140) : 'nothing was thrown');
+    check('the file that appeared is unchanged, byte for byte', read(target) === PLANTED,
+      JSON.stringify(String(read(target)).slice(0, 60)));
+    check('no publish temporary was left beside it',
+      fs.readdirSync(path.dirname(target)).filter((n) => n.includes('.pnp-new-')).length === 0,
+      fs.readdirSync(path.dirname(target)).join(', ').slice(0, 120));
+    check('no bookkeeping record was created for the key',
+      !Object.prototype.hasOwnProperty.call(bookkeeping(p).managedRegions, '.claude/agents/reviewer.md'),
+      JSON.stringify(Object.keys(bookkeeping(p).managedRegions)));
+    // The journal is left at `prepared`, and that is the right place to leave it: the operation was
+    // journalled before the write and the write never happened, so the run is resumable exactly
+    // where it stopped. The operator moves the file aside and re-runs; recovery then finds nothing
+    // at the path, replays the stage, and the publish writes the render.
+    const j = bookkeeping(p).migrationJournal;
+    check('and the journal is left at "prepared" - resumable once the file is moved aside',
+      !!j && j.state === 'prepared' && j.preHash === null && j.target === '.claude/agents/reviewer.md',
+      JSON.stringify(j));
+    check('the project is still at the baseline version',
+      bookkeeping(p).installedPluginVersion === BASELINE.targetPluginVersion,
+      String(bookkeeping(p).installedPluginVersion));
+  }
+
+  // --- face 10: the SHIPPED note of 0012, held to what it may tell an operator to do. A note is
+  // the only text of a migration that reaches the operator's CHANGES report, so a door named wrongly
+  // there is named wrongly in the one place it is read. `/pnp:setup --adopt` bootstraps a project
+  // with NO installation and is REFUSED on one that has (generate.mjs), so a project running
+  // /pnp:update cannot take it - the note must say what that operator can actually do.
+  {
+    const shipped = readJson(path.join(PLUGIN_ROOT, 'migrations', '0012_orchestrator-role', 'ops.json'));
+    const note = shipped && (shipped.operations || []).find((o) => o.op === 'note');
+    check('the shipped 0012 carries a note operation', !!note,
+      shipped ? `${(shipped.operations || []).length} ops` : 'unreadable');
+    check('and its text recommends no --adopt to an installed project',
+      !!note && !String(note.text).includes('--adopt'),
+      note ? (String(note.text).split('--adopt')[1] || '').slice(0, 80) || 'clean' : 'no note');
+    check('and it tells the operator what they CAN do instead',
+      !!note && String(note.text).includes('move it aside or remove it'),
+      note ? `${String(note.text).length} chars` : 'no note');
+  }
+
+  // --- face 9: the created LABEL belongs to the operation that created the artifact, not to the
+  // key. Two migrations in ONE run: the first creates, the second re-renders what is now recorded.
+  {
+    const twoStep = makePayload('create-two-step', {
+      version: '0.3.0',
+      migrations: [
+        { id: '0002_create', version: '0.2.0', ops: opFor({ createIfAbsent: true }) },
+        { id: '0003_again', version: '0.3.0', ops: opFor({}) },
+      ],
+      tweak: moveReviewerTemplate,
+    });
+    const p = project('create-two-step');
+    check('install exits 0 (codex-hosted)', install(p, { answers: codexAnswers }).status === 0);
+    const a = update(p, ['--apply'], { payload: twoStep });
+    check('both migrations apply in one run, exit 0', a.status === 0
+      && bookkeeping(p).installedPluginVersion === '0.3.0', why(a));
+    const changes = read(at(p, 'CHANGES_0.1.0-to-0.3.0.md')) || '';
+    const created = changes.split('\n').filter((l) => l.includes('created (no record, no file)'));
+    check('CHANGES says "created" exactly ONCE across the whole run', created.length === 1,
+      created.join(' | ').slice(0, 200) || 'not present at all');
+    const section = (id) => changes.slice(changes.indexOf(`### ${id}`), changes.indexOf(`### ${id}`) + 400);
+    check('and it is on the 0002 line, the operation that really created it',
+      section('0002_create').includes('.claude/agents/reviewer.md - created (no record, no file)'),
+      section('0002_create').split('\n').filter((l) => l.includes('reviewer.md')).join(' | ').slice(0, 160));
+    check('while the LATER migration re-rendering the same artifact says payload-current',
+      section('0003_again').includes('.claude/agents/reviewer.md - payload-current')
+      && !section('0003_again').includes('created (no record, no file)'),
+      section('0003_again').split('\n').filter((l) => l.includes('reviewer.md')).join(' | ').slice(0, 160));
   }
 }
 

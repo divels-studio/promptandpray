@@ -125,10 +125,16 @@ export const OP_SPECS = {
     // unrecorded artifact THROWS (that is the invariant: an update never adopts a file it did not
     // write), which would break the apply of every installation that legitimately does not have it.
     // With it, such an artifact is reported as skipped and the migration continues.
+    //
+    // `createIfAbsent: true` is the OTHER answer to the same situation, for an artifact the payload
+    // has just started rendering: with no record AND no file the artifact is rendered and stamped,
+    // with no record but a file already standing there the migration REFUSES (an update never adopts
+    // a file it did not write - that stays /pnp:setup's business). The two fields are opposite
+    // behaviours for one state and may not travel together; see the mutual-exclusion check below.
     required: ['op', 'file', 'region', 'template'],
-    optional: ['ifRecorded'],
+    optional: ['ifRecorded', 'createIfAbsent'],
     conditional: () => [],
-    types: { file: 'string', template: 'string', ifRecorded: 'boolean' },
+    types: { file: 'string', template: 'string', ifRecorded: 'boolean', createIfAbsent: 'boolean' },
   },
   'reconcile-ask-ruleset': {
     required: ['op', 'ruleset'],
@@ -361,6 +367,33 @@ export function validateOp(op, at, pluginRoot) {
       errors.push(`${at} (rerender-managed-region) "region" must be a marker id or null (null = a whole-file managed artifact).`);
     }
     if (has(op, 'template')) for (const m of payloadRefErrors('template', op.template, pluginRoot)) errors.push(`${at} (rerender-managed-region) ${m}.`);
+    // The two optional fields answer the SAME question - what happens to an artifact this
+    // installation has no record of - and they answer it in opposite directions. No precedence is
+    // defined between them, on purpose: a precedence rule would make the migration's intent depend
+    // on which field the reader remembers first, and the author of an op that carries both has not
+    // decided yet. The combination is refused here rather than resolved.
+    //
+    // Refused on PRESENCE, not on value. `{ifRecorded: false, createIfAbsent: true}` behaves
+    // identically to carrying one field - and that is exactly why it must not pass: the op still
+    // states both answers, the reader still has to work out which one is live, and the next edit
+    // that flips a false to a true turns a legal payload into an undefined one with no review of
+    // the combination. "May not travel in one operation" is the rule, and presence is what
+    // travelling means.
+    if (has(op, 'ifRecorded') && has(op, 'createIfAbsent')) {
+      // The literal message carries the op type itself rather than taking it from the `(op)` prefix
+      // every other error here uses: this exact sentence is pinned by the suites and by the
+      // self-check, and a message assembled around a prefix would read `(rerender-managed-region)
+      // rerender-managed-region:` twice.
+      errors.push(`${at} rerender-managed-region: ifRecorded and createIfAbsent are mutually exclusive (skip versus create/refuse for an unrecorded artifact) - carry one of them.`);
+    }
+    // And `createIfAbsent` is defined for WHOLE-FILE artifacts only. A region is a span INSIDE a
+    // file, and the field's whole premise is that no file is there - so "create this region" has no
+    // subject and no defined splice. Refused here rather than left to whatever the writer would do
+    // with a plan carrying a region mode and no file, which is behaviour nobody specified. Same
+    // no-prefix form as the message above, and for the same reason.
+    if (op.createIfAbsent === true && op.region !== null && op.region !== undefined) {
+      errors.push(`${at} rerender-managed-region: createIfAbsent applies to whole-file artifacts only (region must be null) - a region cannot be created into a file that does not exist.`);
+    }
   }
   if (op.op === 'reconcile-ask-ruleset' && has(op, 'ruleset')) {
     for (const m of payloadRefErrors('ruleset', op.ruleset, pluginRoot)) errors.push(`${at} (reconcile-ask-ruleset) ${m}.`);

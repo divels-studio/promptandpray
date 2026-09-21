@@ -167,8 +167,9 @@ commands, the end-to-end proof surface, the paths it should use, and any product
 Reviewer must check. `--dry-run` prints the exact action list and writes nothing, and the generator plans
 everything before it writes anything - so a run that hits a blocker leaves the project exactly as
 it was. What it writes: `aiwf.config.json` and `roles.json`, the agent
-files for the roles hosted on Claude, a project overrides document, a managed region inside your
-`CLAUDE.md` (your own text outside its markers is never touched), and the permission ask-rules merged into
+files for the roles hosted on Claude, the rendered Orchestrator role, a project overrides document,
+a managed region inside your `CLAUDE.md` (your own text outside its markers is never touched), and
+the permission ask-rules merged into
 `settings.json` without taking over rules it did not insert. It finishes by running the self-check
 itself, and prints its memory seeds for you to paste into your own memory tool - the store's format
 is machine-local and not the plugin's to assume.

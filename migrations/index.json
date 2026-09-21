@@ -9,5 +9,6 @@
   { "id": "0008_consumer-correctness", "targetPluginVersion": "0.2.4" },
   { "id": "0009_readiness-discipline", "targetPluginVersion": "0.2.5" },
   { "id": "0010_plan-prefix-legibility", "targetPluginVersion": "0.2.6" },
-  { "id": "0011_transfer-surface", "targetPluginVersion": "0.2.7" }
+  { "id": "0011_transfer-surface", "targetPluginVersion": "0.2.7" },
+  { "id": "0012_orchestrator-role", "targetPluginVersion": "0.2.8" }
 ]

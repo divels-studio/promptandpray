@@ -45,7 +45,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { scanSupersededLegacy, sha256 } from './generate.mjs';
+import { renderTemplate, scanSupersededLegacy, sha256, templateContext } from './generate.mjs';
 import { runInterview } from './interview.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -171,6 +171,10 @@ check('and the PASS line quotes the self-check\'s own summary line verbatim',
 check('config written', exists(at(p1, CONFIG_REL)));
 check('roles.json written', exists(at(p1, ROLES_REL)));
 check('writer agent always rendered', exists(at(p1, '.claude/agents/writer.md')));
+// The Orchestrator role is UNCONDITIONAL like the writer: the main session exists on every
+// installation whatever the review hosts are, so there is no configuration in which this file is
+// legitimately absent.
+check('the Orchestrator role is always rendered', exists(at(p1, '.claude/aiwf-native/ORCHESTRATOR.md')));
 check('reviewer agent rendered (claude-hosted)', exists(at(p1, '.claude/agents/reviewer.md')));
 check('NO qa agent rendered (codex-hosted role has no Claude agent file)', !exists(at(p1, '.claude/agents/qa.md')));
 check('CLAUDE.md written with the managed markers',
@@ -211,8 +215,32 @@ check('memory seeds are PRINTED for the operator', r1.out.includes('MEMORY SEEDS
   const regions = bk.managedRegions || {};
   const keys = Object.keys(regions).sort();
   check('managedRegions covers exactly the rendered artifacts',
-    keys.join(',') === ['.claude/agents/reviewer.md', '.claude/agents/writer.md', '.claude/aiwf-native/roles.json', 'CLAUDE.md#aiwf-core'].sort().join(','),
+    keys.join(',') === ['.claude/agents/reviewer.md', '.claude/agents/writer.md', '.claude/aiwf-native/ORCHESTRATOR.md', '.claude/aiwf-native/roles.json', 'CLAUDE.md#aiwf-core'].sort().join(','),
     keys.join(', '));
+  // The render itself, against the production render path rather than against a copy of the
+  // expectation: the same two exported functions the generator renders through, over the config
+  // that was really written. A mirrored expectation here would assert the test's own template
+  // engine.
+  {
+    const tmpl = read(path.join(PLUGIN_ROOT, 'templates', 'ORCHESTRATOR.md.tmpl'));
+    const rendered = read(at(p1, '.claude/aiwf-native/ORCHESTRATOR.md'));
+    const expected = tmpl === null ? null : renderTemplate(tmpl, templateContext(cfg, p1));
+    check('the rendered Orchestrator role is exactly the template render', rendered !== null && rendered === expected,
+      rendered === null ? 'the file is missing' : `${rendered.length} bytes vs ${expected === null ? 'no template' : expected.length}`);
+    check('it carries the project name and the overrides path from the config, and no model key',
+      !!rendered && rendered.includes(baseAnswers().project.name) && rendered.includes(baseAnswers().paths.overridesDoc)
+      && !/^model:/m.test(rendered) && !rendered.includes('{{'),
+      rendered ? rendered.split('\n').find((l) => l.startsWith('# ')) || '(no heading)' : '-');
+    // And it is not an AGENT file: no frontmatter fence on the first line. An agent opens with one,
+    // nothing dispatches this artifact, and a fence is where a model would arrive next - so the
+    // claim "without frontmatter" is asserted on the render rather than left to the template's
+    // intent. The `---` in the fixture's own agent files is what makes this discriminating.
+    check('and it is NOT an agent file: the render opens with no frontmatter fence',
+      !!rendered && !/^---\s*$/.test(String(rendered).split('\n')[0] || ''),
+      rendered ? JSON.stringify(String(rendered).split('\n')[0]).slice(0, 80) : '-');
+    check('and the TEMPLATE still carries a contract block, so the render above stripped something',
+      tmpl !== null && tmpl.includes('<!-- TEMPLATE CONTRACT') && !String(rendered).includes('TEMPLATE CONTRACT'));
+  }
   let hashOk = keys.length > 0;
   for (const key of keys) {
     const entry = regions[key];

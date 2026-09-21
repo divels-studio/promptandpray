@@ -4,6 +4,51 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.2.8] - 2026-09-20
+
+The main session gets a rendered rules file of its own, and the re-render operation learns how to
+put a brand-new artifact on an installation that has never had one. The Orchestrator role is the
+COO's standing rules as DATA, in two kinds: a rule whose home is a payload document is pointed at
+rather than restated, while the COO's own working rules have no other home and are stated there in
+full - with no model pinned anywhere in it, because who audits what is the audit table's answer. It
+reaches an existing installation through `createIfAbsent`, the new optional field on
+`rerender-managed-region`, which relaxes nothing about adoption: it renders and stamps where nothing
+is on disk, and it STOPS where a file this engine never wrote is already standing.
+
+### Added
+
+- **The rendered Orchestrator role (CONS-008)** - `.claude/aiwf-native/ORCHESTRATOR.md`, a managed
+  artifact rendered from `templates/ORCHESTRATOR.md.tmpl` on every installation: unconditional (a
+  project has a main session whatever its review hosts are), without frontmatter (nothing dispatches
+  it), and model-agnostic by contract - the template reads no `config.roles.*` key, and the
+  self-check holds all three of those as negatives over the file. It STATES the COO's own working
+  rules, five of them pinned literally by the self-check with a control each: data discipline, the
+  separation of a verdict from the next dispatch, the honest limit of the chain-table form check,
+  the duals law, and the event-ledger row format. The rules whose home is a payload document are
+  named and pointed at rather than restated.
+- **`createIfAbsent` on the rerender operation (CONS-008)** - an optional boolean on
+  `rerender-managed-region` for an artifact the payload has only just started rendering. No record
+  and no file: rendered, written and stamped, and reported as `created (no record, no file)` in the
+  `CHANGES` report, on the operation that created it. No record but a file already standing there
+  whose content IS the render: that is this engine's own write - the artifact lives in the plugin's
+  own folder - so nothing is written over it and it is simply recorded. No record and a file that
+  DIFFERS: the run stops, at planning, at the last read before the write, at the write itself (a
+  creation publishes NO-CLOBBER at the syscall, so a file that appears in between fails with EEXIST
+  and gets the same sentence) and in the recovery of an interrupted creation, because an update
+  never adopts a file it did not write. A record already there: the ordinary re-render, with the
+  field invisible. It is refused for a
+  region-scoped operation (a region cannot be created into a file that does not exist), and it may
+  not travel in one operation with `ifRecorded`, whatever the two values are - they answer the same
+  question in opposite directions, and the validator refuses the pair rather than inventing a
+  precedence between them.
+
+### Changed
+
+- **The managed CLAUDE.md region's preflight names the rendered role (CONS-008)** - the
+  doctrine-preflight bullet inside the `aiwf-core` markers now lists
+  `.claude/aiwf-native/ORCHESTRATOR.md` beside the two payload documents and the project's overrides
+  document. That is the whole delta of the region; migration `0012_orchestrator-role` re-renders it.
+
 ## [0.2.7] - 2026-09-17
 
 An installation gets one operator-owned page, and a release note gets a way to say what it retires.

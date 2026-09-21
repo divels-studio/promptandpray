@@ -1,6 +1,6 @@
 ---
 name: setup
-description: Install PromptAndPray into this project - interview, dry-run preview, generate the project layer (config, roles, agents, overrides doc, managed CLAUDE.md region, permission rules), self-check, and print the memory seeds.
+description: Install PromptAndPray into this project - interview, dry-run preview, generate the project layer (config, roles, agents, the rendered Orchestrator role, overrides doc, managed CLAUDE.md region, permission rules), self-check, and print the memory seeds.
 allowed-tools: Read, Grep, Glob, Bash
 ---
 
@@ -41,8 +41,9 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
   refuses anything outside those three fail-closed: an unknown channel would name wrappers that do
   not exist, and an installation this version cannot run is worse than a refusal.
 - **A legacy AIWF surface without an installation** - files at the managed paths (`CLAUDE.md` with
-  an `aiwf-core` region, `.claude/aiwf-native/roles.json`, `.claude/agents/*.md`) while
-  `<root>/.claude/aiwf-native/aiwf.config.json` does not exist, or exists without an `_aiwf` block:
+  an `aiwf-core` region, `.claude/aiwf-native/roles.json`, `.claude/aiwf-native/ORCHESTRATOR.md`,
+  `.claude/agents/*.md`) while `<root>/.claude/aiwf-native/aiwf.config.json` does not exist, or
+  exists without an `_aiwf` block:
   offer **adopt** (`--adopt`) instead of telling the operator to move files aside. Say what it does,
   in these words:
   - a file **identical** to what the payload would render is adopted **silently and clean** - nothing

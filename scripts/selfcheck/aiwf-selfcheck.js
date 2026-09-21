@@ -579,6 +579,10 @@ function writeFixture(root, pluginVersion) {
     `---\nname: ${name}\ndescription: fixture ${name} agent\ntools: Read, Grep, Glob\nmodel: ${model}\neffort: ${effort}\n---\n\nFixture body.\n`;
   put('.claude/agents/writer.md', `---\nname: writer\ndescription: fixture writer agent\ntools: Read, Grep, Glob, Edit, Write, Bash\nmodel: claude-opus-5[1m]\neffort: high\n---\n\nFixture body.\n`);
   put('.claude/agents/reviewer.md', agent('reviewer', 'opus', 'high'));
+  // The Orchestrator role: a managed WHOLE FILE with no frontmatter and no model - it is a rules
+  // document the main session reads, not an agent anything dispatches. It is unconditional here for
+  // the same reason it is unconditional in the generator: every installation has a main session.
+  put('.claude/aiwf-native/ORCHESTRATOR.md', '# Orchestrator standing rules - Fixture\n\nFixture body.\n');
   // No qa.md ON PURPOSE: qa is codex-hosted here, and the conditional-render contract says a
   // codex-hosted role has NO Claude agent file. A file here would be a stale render.
 
@@ -611,9 +615,10 @@ function writeFixture(root, pluginVersion) {
 
   // The bookkeeping is computed from the files just written, never hand-typed: a fixture carrying
   // invented hashes would make the managed-region checks pass on nothing. Every artifact the config
-  // implies gets an entry - roles.json, the writer, the claude-hosted reviewer, and the region.
+  // implies gets an entry - roles.json, the Orchestrator role, the writer, the claude-hosted
+  // reviewer, and the region.
   const managedRegions = {};
-  for (const key of ['CLAUDE.md#aiwf-core', '.claude/aiwf-native/roles.json', '.claude/agents/writer.md', '.claude/agents/reviewer.md']) {
+  for (const key of ['CLAUDE.md#aiwf-core', '.claude/aiwf-native/roles.json', '.claude/aiwf-native/ORCHESTRATOR.md', '.claude/agents/writer.md', '.claude/agents/reviewer.md']) {
     const hash = managedHash(root, key);
     managedRegions[key] = { upstream: hash, local: hash, override: false };
   }
@@ -2018,7 +2023,7 @@ function sectionMigrationPayload(tmpRoot) {
   // template paths themselves are proven to exist by the payload cross-reference check below.
   const migrateSrc = readText(path.join(PLUGIN_ROOT, 'scripts', 'update', 'migrate.mjs')) || '';
   check('migrate.mjs maps every resolvable managed artifact to a payload template',
-    ['CLAUDE.md#aiwf-core', 'roles.json.tmpl', 'writer.md.tmpl', 'reviewer.md.tmpl', 'qa.md.tmpl']
+    ['CLAUDE.md#aiwf-core', 'roles.json.tmpl', 'ORCHESTRATOR.md.tmpl', 'writer.md.tmpl', 'reviewer.md.tmpl', 'qa.md.tmpl']
       .every((needle) => migrateSrc.includes(needle)));
 
   // --- the controls: each way of breaking a payload must be REJECTED ------------------------
@@ -2100,6 +2105,25 @@ function sectionMigrationPayload(tmpRoot) {
   rejects('a file path that escapes the project', variant('traversal', (root) => {
     writeOps(root, firstId, [{ op: 'rerender-managed-region', file: '../outside.md', region: null, template: 'templates/roles.json.tmpl' }]);
   }), 'traverse upwards');
+  // The two optional fields of a re-render answer the SAME question - what happens to an artifact
+  // this installation has no record of - in opposite directions, so an op carrying both has not
+  // decided. No precedence is defined between them; the pair is refused, and this is the control
+  // that proves the refusal is real rather than a sentence in the README.
+  rejects('a rerender op carrying BOTH ifRecorded and createIfAbsent', variant('bothfields', (root) => {
+    writeOps(root, firstId, [{
+      op: 'rerender-managed-region', file: '.claude/aiwf-native/ORCHESTRATOR.md', region: null,
+      template: 'templates/ORCHESTRATOR.md.tmpl', ifRecorded: true, createIfAbsent: true,
+    }]);
+  }), 'rerender-managed-region: ifRecorded and createIfAbsent are mutually exclusive (skip versus create/refuse for an unrecorded artifact) - carry one of them');
+  // The same field on a REGION op: a region is a span inside a file, and the field's premise is that
+  // no file is there - so there is no subject to create and no defined splice. Refused by the
+  // validator, and this is the control that the refusal is real.
+  rejects('createIfAbsent on a region-scoped rerender op', variant('regioncreate', (root) => {
+    writeOps(root, firstId, [{
+      op: 'rerender-managed-region', file: 'CLAUDE.md', region: 'aiwf-core',
+      template: 'templates/CLAUDE.md.tmpl#aiwf-core', createIfAbsent: true,
+    }]);
+  }), 'rerender-managed-region: createIfAbsent applies to whole-file artifacts only (region must be null) - a region cannot be created into a file that does not exist.');
   // The template FILE is there and the REGION is not: existence alone would let this through, and it
   // would then resolve to nothing halfway through a migration.
   rejects('a template reference naming a region the template does not carry', variant('badregion', (root) => {
@@ -4717,7 +4741,11 @@ function projectLayerFindings(projectRoot, pluginRoot, opts) {
 
     // The set itself must be right: an artifact with no entry is unmanaged (an update would refuse
     // to touch it), and an entry with no artifact is a stamp for something that is not there.
-    const expected = new Set(['CLAUDE.md#aiwf-core', '.claude/aiwf-native/roles.json', '.claude/agents/writer.md']);
+    // The three unconditional artifacts, plus the Orchestrator role, which is unconditional for a
+    // reason of its own: the review AGENTS depend on which host a role is configured for, and the
+    // main session does not depend on anything - every installation has one.
+    const expected = new Set(['CLAUDE.md#aiwf-core', '.claude/aiwf-native/roles.json',
+      '.claude/aiwf-native/ORCHESTRATOR.md', '.claude/agents/writer.md']);
     // Same rule as agent-present-*: reviewer.md is part of this configuration when the Reviewer role
     // OR any review row is claude-hosted; qa.md follows its own role alone.
     if (reviewerAgentWanted) expected.add('.claude/agents/reviewer.md');
@@ -5671,6 +5699,24 @@ const DOCTRINE_CONS_DOCS_COMMIT =
   'the docs commit is separate from the code commit: the code commit carries only the ticket\'s '
   + 'work, and the record about it lands in its own commit, so what was audited and what is a note '
   + 'after it stay distinguishable';
+// The four rules the rendered Orchestrator role has to STATE, not reference. Everything else in that
+// artifact points at a payload section and quotes nothing; these four are the COO's own working
+// rules, and a rendered file that loses one of them loses it for every installation at once.
+const DOCTRINE_CONS_ORCH_DATA =
+  'every sentence with a number carries its source; data only the operator can see is ASKED for, '
+  + 'never promised; arithmetic over two measurements is not a measurement';
+const DOCTRINE_CONS_ORCH_VERDICT =
+  'a verdict and the next dispatch never share one message';
+const DOCTRINE_CONS_ORCH_FORM_CHECK =
+  'the form check verifies coverage and resolution, never attention';
+const DOCTRINE_CONS_ORCH_DUALS =
+  'every obligation that COMMANDS an action ships with its suppression dual';
+// The event-ledger ROW, pinned as the literal it is: rule health is read off these rows and nothing
+// else, so the row's shape is the whole instrument. The type column is the part that carries the
+// signal (a violation and a catch are opposite evidence about the same rule), which is why the
+// control below is the row WITHOUT it rather than a rewording.
+const DOCTRINE_CONS_ORCH_LEDGER_ROW =
+  '| <date> | <rule or D-id> | violation|catch|operator-correction | <pointer> |';
 const DOCTRINE_CONSOLIDATION_SURFACES = [
   { id: 'doctrine-cons-one-executing-session',
     file: 'docs/WORKFLOW.md',
@@ -5732,6 +5778,36 @@ const DOCTRINE_CONSOLIDATION_SURFACES = [
     phrase: DOCTRINE_CONS_DOCS_COMMIT,
     replacement: 'the completion record is committed together with the work it describes',
     what: 'the docs commit stands apart from the code commit (both homes lose it here)' },
+  // The four rules the rendered Orchestrator role states in its own words rather than by reference,
+  // because each is a rule ABOUT how the COO works rather than a pointer to a payload section. Each
+  // replacement below is the practice the rule replaced - a number with no source, a verdict folded
+  // into the next dispatch, a form check sold as proof of attention, an obligation shipped alone -
+  // so a sabotage leaves a sentence that still reads perfectly true.
+  { id: 'doctrine-cons-orchestrator-data-discipline',
+    file: 'templates/ORCHESTRATOR.md.tmpl',
+    phrase: DOCTRINE_CONS_ORCH_DATA,
+    replacement: 'numbers are quoted from the best source available and estimated where none is',
+    what: 'the rendered Orchestrator role states data discipline: a source per number, operator-only data asked for, no arithmetic passed off as measurement' },
+  { id: 'doctrine-cons-orchestrator-verdict-dispatch',
+    file: 'templates/ORCHESTRATOR.md.tmpl',
+    phrase: DOCTRINE_CONS_ORCH_VERDICT,
+    replacement: 'a verdict is reported together with the next step it leads to',
+    what: 'the rendered Orchestrator role keeps a verdict and the next dispatch in separate messages' },
+  { id: 'doctrine-cons-orchestrator-form-check',
+    file: 'templates/ORCHESTRATOR.md.tmpl',
+    phrase: DOCTRINE_CONS_ORCH_FORM_CHECK,
+    replacement: 'a complete chain table is evidence that the chains were really followed',
+    what: 'the rendered Orchestrator role states the honest limit of the chain-table form check' },
+  { id: 'doctrine-cons-orchestrator-duals',
+    file: 'templates/ORCHESTRATOR.md.tmpl',
+    phrase: DOCTRINE_CONS_ORCH_DUALS,
+    replacement: 'an obligation is written with its scope and the reviewer judges where it stops',
+    what: 'the rendered Orchestrator role states the duals law for every obligation that commands an action' },
+  { id: 'doctrine-cons-orchestrator-ledger-row',
+    file: 'templates/ORCHESTRATOR.md.tmpl',
+    phrase: DOCTRINE_CONS_ORCH_LEDGER_ROW,
+    replacement: '| <date> | <rule or D-id> | <pointer> |',
+    what: 'the rendered Orchestrator role carries the event-ledger row with its type column (violation|catch|operator-correction)' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -6149,6 +6225,32 @@ function payloadDoctrineFindings(pluginRoot) {
       text == null ? 'the file is missing' : (present ? `"${collapseWs(s.phrase)}"` : `the sentence is missing or reworded: "${collapseWs(s.phrase)}"`));
   }
 
+  // The rendered Orchestrator role is a RULES document, not an agent definition, and the one way it
+  // could quietly become the second kind is a model. Asserted as a negative over the template, in
+  // both spellings that would do it: a rendered role key, and a frontmatter field. Who audits what,
+  // on which engine and with how many passes, is the audit table - a value the operator reads and
+  // changes - and a model pinned in a rendered document would state it as doctrine instead.
+  {
+    const tmpl = readText(path.join(pluginRoot, 'templates', 'ORCHESTRATOR.md.tmpl'));
+    const readsRole = tmpl != null && /config\.roles\./.test(tmpl);
+    const hasField = tmpl != null && /^(?:model|effort):/m.test(tmpl);
+    // The third spelling, and the one that would make the artifact a different KIND of file: a
+    // frontmatter fence. An agent file opens with one; this one must not, because nothing dispatches
+    // it and a fence is where a model would arrive next. Tested on the template's first line, which
+    // is what the render's first line is built from.
+    const hasFence = tmpl != null && /^---\s*$/.test(tmpl.split('\n')[0] || '');
+    const problems = [
+      readsRole ? 'it reads a roles key of the config' : null,
+      hasField ? 'it carries a model/effort field' : null,
+      hasFence ? 'it opens with a frontmatter fence' : null,
+    ].filter(Boolean);
+    add('doctrine-orchestrator-model-agnostic',
+      'templates/ORCHESTRATOR.md.tmpl pins no model: it reads no roles key of the config, renders no model/effort field, and opens with no frontmatter fence',
+      tmpl != null && problems.length === 0,
+      tmpl == null ? 'the file is missing'
+        : (problems.length ? problems.join('; ') : `${tmpl.length} bytes, none of the three spellings present`));
+  }
+
   for (const s of DOCTRINE_PASS_CONDUCT_SURFACES) {
     const text = readText(path.join(pluginRoot, ...s.file.split('/')));
     const present = text != null && collapseWs(text).includes(collapseWs(s.phrase));
@@ -6298,6 +6400,14 @@ const DOCTRINE_CONTROLS = [
     apply: (r) => doctrinePhrase(r, 'skills/review/SKILL.md', DOCTRINE_REVIEW_CLASS_HOST, 'Invoke the **Agent tool** with `subagent_type: "general-purpose"`, `model: "opus"`') },
   { id: 'doctrine-review-class', label: 'plan readiness stops being the `review.plan` row - the pass count returns to a number in a document',
     apply: (r) => doctrinePhrase(r, 'skills/review/SKILL.md', DOCTRINE_REVIEW_READINESS_SENTENCE, 'the engine the Reviewer role names, always') },
+  // One control per SPELLING, because the assertion reads two and a single control would leave the
+  // other able to pass while the model is really there.
+  { id: 'doctrine-orchestrator-model-agnostic', label: 'the Orchestrator template given a model frontmatter field',
+    apply: (r) => doctrineFile(r, 'templates/ORCHESTRATOR.md.tmpl', (t) => `model: a-model-id\n${t}`) },
+  { id: 'doctrine-orchestrator-model-agnostic', label: 'the Orchestrator template made to render the writer role\'s model',
+    apply: (r) => doctrineFile(r, 'templates/ORCHESTRATOR.md.tmpl', (t) => `${t}\nRun this role on {{config.roles.writer.model}}.\n`) },
+  { id: 'doctrine-orchestrator-model-agnostic', label: 'the Orchestrator template turned into an agent file by a frontmatter fence',
+    apply: (r) => doctrineFile(r, 'templates/ORCHESTRATOR.md.tmpl', (t) => `---\nname: orchestrator\n---\n${t}`) },
   { id: 'doctrine-update-conflict-rule', label: '/pnp:update reworded back to the two-predicate rule - a dialog for an artifact the operator never touched',
     apply: (r) => doctrinePhrase(r, 'skills/update/SKILL.md', 'a conflict is raised **only when you edited** the artifact', 'a conflict is raised when you edited the artifact OR the payload changed it') },
   // One control per TOOL on each of the two rules: a doctrine that is only enforced on Bash is the
@@ -7950,6 +8060,13 @@ const NEGATIVE_CONTROLS = [
   { id: 'managed-regions-cover', label: 'a managed artifact with no bookkeeping entry at all',
     apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
       delete c._aiwf.managedRegions['.claude/agents/writer.md'];
+    }) },
+  // The newest member of that set gets its own control: an expectation added to the cover check
+  // without one would be a line nobody has seen fail, and the artifact it names is exactly the kind
+  // an installation can end up carrying unrecorded (it arrives by migration on an older project).
+  { id: 'managed-regions-cover', label: 'the Orchestrator role rendered but not recorded (its bookkeeping entry deleted)',
+    apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
+      delete c._aiwf.managedRegions['.claude/aiwf-native/ORCHESTRATOR.md'];
     }) },
   // BOTH arms of the transfer-surface rule, because the check reads two spellings and a control for
   // one of them would leave the other able to pass while recording nothing.

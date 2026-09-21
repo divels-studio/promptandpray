@@ -110,6 +110,10 @@ export const CONFIG_REL = path.join('.claude', 'aiwf-native', 'aiwf.config.json'
 export const ROLES_REL = path.join('.claude', 'aiwf-native', 'roles.json');
 export const SETTINGS_REL = path.join('.claude', 'settings.json');
 const AGENTS_DIR = path.join('.claude', 'agents');
+// The COO's own standing rules, rendered like an agent file but addressed to the MAIN session - so
+// it lives beside the config rather than under .claude/agents/, carries no frontmatter, and is
+// rendered unconditionally: there is no configuration in which a project has no main session.
+const ORCHESTRATOR_REL = path.join('.claude', 'aiwf-native', 'ORCHESTRATOR.md');
 const REGION_ID = 'aiwf-core';
 const REGION_BEGIN = `<!-- BEGIN ${REGION_ID} -->`;
 const REGION_END = `<!-- END ${REGION_ID} -->`;
@@ -1120,6 +1124,12 @@ export function planInstall({
   addArtifact(toPosix(ROLES_REL), ROLES_REL, rolesRendered);
   addArtifact(toPosix(path.join(AGENTS_DIR, 'writer.md')), path.join(AGENTS_DIR, 'writer.md'),
     renderTemplate(readTemplate(pluginRoot, 'agents', 'writer.md.tmpl'), context));
+  // Unconditional, like the writer and for the mirror-image reason: the Writer is a Claude subagent
+  // by definition, and the Orchestrator is the main session by definition. It is a rules document
+  // rather than an agent definition - no frontmatter, no model, nothing dispatches it - so it reads
+  // no roles key and the artifacts loop below treats it like any other managed whole file.
+  addArtifact(toPosix(ORCHESTRATOR_REL), ORCHESTRATOR_REL,
+    renderTemplate(readTemplate(pluginRoot, 'ORCHESTRATOR.md.tmpl'), context));
 
   const stale = [];
   // reviewer.md is rendered for the Reviewer role OR for any claude-hosted review row (the row has

@@ -56,8 +56,9 @@ How you execute is **route-conditional**:
   passes, is the audit table: `/pnp:roles`** - the review brief's `Class: plan | code | docs` names
   the row, and nothing about the host is hardcoded in doctrine any more.
 - **Doctrine preflight:** before the FIRST Writer dispatch of a session - and before authoring any
-  R2/R3 ticket brief - read payload `docs/WORKFLOW.md`, payload `docs/LOOP.md` AND
-  `dev/PROJECT_OVERRIDES.md` IN FULL. This file is a thin entry point; knowing a rule's
+  R2/R3 ticket brief - read payload `docs/WORKFLOW.md`, payload `docs/LOOP.md`,
+  `dev/PROJECT_OVERRIDES.md` AND `.claude/aiwf-native/ORCHESTRATOR.md` (your rendered standing
+  rules) IN FULL. This file is a thin entry point; knowing a rule's
   headline is not knowing its text, and the overrides document is where this project's identity,
   hard rules and product truth live - a session without it works without the product's boundaries.
   Session entry points for the operator: `/pnp:mission` (resume a mission without a brief),

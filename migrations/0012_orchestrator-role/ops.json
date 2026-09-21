@@ -1,0 +1,26 @@
+{
+  "migration": "0012_orchestrator-role",
+  "targetPluginVersion": "0.2.8",
+  "operations": [
+    {
+      "op": "note",
+      "id": "orchestrator-role-rendered",
+      "text": "0.2.8 gives the main session its own rendered rules file and gives the re-render operation a way to put a brand-new artifact on an installation that has never had one. THE ORCHESTRATOR ROLE: `.claude/aiwf-native/ORCHESTRATOR.md` is a managed artifact rendered from `templates/ORCHESTRATOR.md.tmpl` - the COO's standing rules in one place, as DATA: data discipline, the coverage line a paid dispatch is written into, verdict and dispatch as separate messages, what a canon conflict does, the doctrine-write participation, the four escalation triggers, the operator-channel filter, the chain-trace duty, the duals law, the event-ledger row, and four rules named as references only. Two kinds, and the difference is where each rule LIVES: a rule whose home is a payload document is pointed at and not restated, while the COO's own working rules have no other home and are stated here in full. The file pins no model: who audits what is the audit table's answer, not this artifact's. A fresh install has had it since this release; on YOUR installation it is CREATED by the second operation of this migration, because you have no record of it. If a file is already standing at that path and its content IS this release's render, it is this engine's own write - the artifact lives in the plugin's own folder - so nothing is written over it and it is simply recorded. If it DIFFERS, this migration STOPS with that refusal: an update never adopts a file it did not write - move it aside or remove it, then run the update again. (Setup's adopt mode is for a project with NO installation and is refused on one that already has it, so it is not the door here.) THE OTHER ARTIFACT OF YOURS THIS TOUCHES: the `aiwf-core` region of your CLAUDE.md, re-rendered by the third operation for ONE new sentence - the doctrine-preflight bullet now names the rendered role beside the two payload documents and your overrides document. Your own text outside the region markers is untouched: the operation replaces what stands between the markers and nothing else. An artifact you hold through an override is not applied at all - the new render is recorded as upstream and the CHANGES report says so. THE MIGRATION FORMAT: `rerender-managed-region` gains an optional `createIfAbsent`, which is what the second operation carries. It has two faces and relaxes nothing about adoption - no record and no file means rendered and stamped, no record and the render already there means recorded without a write, no record and a DIFFERING file there means the run stops and tells you to move that file aside - and it may not travel in one operation with `ifRecorded`, which answers the same question in the opposite direction; the validator refuses the pair rather than inventing a precedence between them. SUPERSEDED IDS: `orchestrator-regulation-v2-seed` was already announced as retired by 0.2.7, and it is named again here because THIS is the release in which its replacement actually lands - a local orchestrator-regulation seed can now be dropped in favour of the rendered role above.",
+      "docRefs": ["CHANGELOG.md", "docs/WORKFLOW.md", "migrations/README.md"],
+      "supersedes": ["orchestrator-regulation-v2-seed"]
+    },
+    {
+      "op": "rerender-managed-region",
+      "file": ".claude/aiwf-native/ORCHESTRATOR.md",
+      "region": null,
+      "template": "templates/ORCHESTRATOR.md.tmpl",
+      "createIfAbsent": true
+    },
+    {
+      "op": "rerender-managed-region",
+      "file": "CLAUDE.md",
+      "region": "aiwf-core",
+      "template": "templates/CLAUDE.md.tmpl#aiwf-core"
+    }
+  ]
+}

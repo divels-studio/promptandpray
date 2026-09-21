@@ -1,8 +1,8 @@
 {
   "$schema": "D:/promptandpray/schema/aiwf.config.schema.json",
   "_aiwf": {
-    "installedPluginVersion": "0.2.7",
-    "lastMigrationApplied": "0011_transfer-surface",
+    "installedPluginVersion": "0.2.8",
+    "lastMigrationApplied": "0012_orchestrator-role",
     "migrationJournal": null,
     "managedRegions": {
       ".claude/aiwf-native/roles.json": {
@@ -16,8 +16,13 @@
         "override": false
       },
       "CLAUDE.md#aiwf-core": {
-        "upstream": "65988bb2bda74125ad87ae2a68c251a154b8fd07db353000502dc02c30e77f5f",
-        "local": "65988bb2bda74125ad87ae2a68c251a154b8fd07db353000502dc02c30e77f5f",
+        "upstream": "39239e377bb3f22ed7ff67d358cbbf975d4323d4c33c571eb3f886bfa8a08d67",
+        "local": "39239e377bb3f22ed7ff67d358cbbf975d4323d4c33c571eb3f886bfa8a08d67",
+        "override": false
+      },
+      ".claude/aiwf-native/ORCHESTRATOR.md": {
+        "upstream": "d7fad0ed0e8bb56aebb2c989420412d62c165ed774a2a57c5762b914cfd26c23",
+        "local": "d7fad0ed0e8bb56aebb2c989420412d62c165ed774a2a57c5762b914cfd26c23",
         "override": false
       }
     },

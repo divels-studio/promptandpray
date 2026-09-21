@@ -106,6 +106,70 @@ export class UpdateError extends Error {}
 /** The run could not start at all (no config, unreadable payload). Exit 2. */
 export class UpdateStartError extends Error {}
 
+/**
+ * THE refusal for an artifact this installation has no record of while a file is standing at its
+ * path. One definition, because it is raised from three places that must not drift: the planning arm
+ * of `createIfAbsent`, the last read before that plan's first write, and the recovery of an
+ * interrupted creation. It names the only door that exists: `/pnp:setup --adopt` refuses a project
+ * that already HAS an installation, so telling the operator to adopt would be pointing at a locked
+ * one.
+ */
+const unrecordedFileRefusal = (key) =>
+  `${key}: this installation has no record of it but a file is standing at that path - an update never `
+  + 'adopts a file it did not write; move it aside or remove it, then run the update again';
+
+/**
+ * The EARLY half of the creation guard: the last read before a creation's first write, so the
+ * operator gets this sentence rather than an errno. It is exported so it can be exercised directly -
+ * the in-process window between planning a creation and writing it has no crash point to inject at,
+ * and a guard that is only reachable through a race is a guard nobody has seen work.
+ *
+ * A file standing at the target refuses only when it DIFFERS from the render. Identical bytes are
+ * this engine's own write - the folder is the plugin's - so there is nothing there to lose and
+ * nothing to ask about.
+ *
+ * This check is the message, not the guarantee - between it and the write there is a window nothing
+ * in one process can close. `writeCreatedTarget` below is the guarantee.
+ */
+export function assertNoForeignFileAtCreationTarget(absFile, content, key) {
+  const standing = readText(absFile);
+  if (standing !== null && lf(standing) !== lf(content)) throw new UpdateError(unrecordedFileRefusal(key));
+}
+
+/**
+ * THE guarantee: a creation's target is published NO-CLOBBER, at the syscall boundary.
+ *
+ * `writeAtomic` is the wrong primitive here - its `rename` replaces whatever is at the target, which
+ * is exactly right for re-rendering an artifact we own and exactly wrong for creating one we do not.
+ * So the content is staged in the target's own directory and published with `link`, which FAILS with
+ * EEXIST when anything is already there and is otherwise all-or-nothing: no window, no partial file,
+ * no clobber. The temporary is removed either way; a hard link and its source are the same inode, so
+ * unlinking the temp leaves the published file whole.
+ *
+ * It is called only where the target is ABSENT: the caller has already dealt with a file that is
+ * there (identical content is ours and needs no write; differing content is refused). So an EEXIST
+ * here is the race - a file that appeared between those two instructions - and it gets the same
+ * refusal. Any OTHER link failure means this filesystem will not give the guarantee at all, and the
+ * run stops rather than falling back to a write that could clobber.
+ */
+export function writeCreatedTarget(absFile, content, key) {
+  fs.mkdirSync(path.dirname(absFile), { recursive: true });
+  const body = lf(content);
+  const tmp = `${absFile}.pnp-new-${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
+  fs.writeFileSync(tmp, body, 'utf8');
+  try {
+    fs.linkSync(tmp, absFile);
+  } catch (e) {
+    if (e && e.code === 'EEXIST') throw new UpdateError(unrecordedFileRefusal(key));
+    throw new UpdateError(
+      `${key}: could not publish without clobbering - the filesystem refused a hard link (${e && e.code}); `
+      + 'nothing was written, re-run on a filesystem that supports hard links',
+    );
+  } finally {
+    try { fs.rmSync(tmp, { force: true }); } catch { /* the publish already succeeded or threw */ }
+  }
+}
+
 // The setup-rendered managed artifacts and the payload template each one comes from. A migration op
 // names its own template explicitly; this map exists for `--resolve <key>`, which reopens the dialog
 // for an artifact OUTSIDE a version bump and therefore has no op to read the template from. The
@@ -113,6 +177,7 @@ export class UpdateStartError extends Error {}
 export const RESOLVABLE_ARTIFACT_TEMPLATES = {
   'CLAUDE.md#aiwf-core': 'templates/CLAUDE.md.tmpl#aiwf-core',
   [ROLES_POSIX]: 'templates/roles.json.tmpl',
+  '.claude/aiwf-native/ORCHESTRATOR.md': 'templates/ORCHESTRATOR.md.tmpl',
   '.claude/agents/writer.md': 'templates/agents/writer.md.tmpl',
   '.claude/agents/reviewer.md': 'templates/agents/reviewer.md.tmpl',
   '.claude/agents/qa.md': 'templates/agents/qa.md.tmpl',
@@ -371,6 +436,7 @@ export function loadProjectConfig(projectRoot) {
 }
 
 const JOURNAL_FIELDS = ['migration', 'opIndex', 'state', 'target', 'preHash', 'postHash', 'resolution'];
+export const JOURNAL_STATES = ['prepared', 'applied'];
 
 function checkJournal(journal) {
   if (journal === null || journal === undefined) return null;
@@ -384,8 +450,12 @@ function checkJournal(journal) {
   if (typeof journal.migration !== 'string' || !Number.isInteger(journal.opIndex)) {
     throw new UpdateError('invariant violated: _aiwf.migrationJournal needs a migration id and an integer opIndex.');
   }
-  if (journal.state !== 'prepared' && journal.state !== 'applied') {
-    throw new UpdateError(`invariant violated: _aiwf.migrationJournal state "${journal.state}" is neither "prepared" nor "applied".`);
+  // THE state vocabulary, as a named list rather than two literals in a condition: `prepared` and
+  // `applied` are the two ends of every operation, creations included. A creation needs no state of
+  // its own, because byte-identical content at its target IS this engine's own write - the artifact
+  // lives in the plugin's own folder - so the hashes already say everything a resume has to know.
+  if (!JOURNAL_STATES.includes(journal.state)) {
+    throw new UpdateError(`invariant violated: _aiwf.migrationJournal state "${journal.state}" is not one of ${JOURNAL_STATES.map((s) => `"${s}"`).join(', ')}.`);
   }
   return journal;
 }
@@ -553,6 +623,33 @@ function planRerender(ctx, op, addressOf) {
         op, mode: 'none', target: null, key, preHash: null, postHash: null,
         content: null, resolution: null, bookkeeping: null,
         summary: `${key}: not on this installation (no record) - skipped`,
+      };
+    }
+    // `createIfAbsent: true` is the opposite answer to the same state, for an artifact the payload
+    // has only just started rendering: an installation older than it has no record, and the
+    // migration is what puts the artifact there. It relaxes NOTHING about adoption. Nothing on disk
+    // is the ordinary case - render, write, stamp. A file whose content IS the render is this
+    // engine's own write (the artifact lives in the plugin's own folder), so the creation is planned
+    // anyway and ends as a stamp with nothing written. A file that DIFFERS is content this engine
+    // never wrote, and the run stops - the refusal says what to do with it.
+    if (op.createIfAbsent === true) {
+      // "a file is already standing there" is read off the FILE, never off the extracted region: for
+      // a region artifact a null extraction ALSO means "the file is there and carries no markers",
+      // and creating from the render in that state would splice into - or replace - a file this
+      // engine did not write. The file is the honest subject of the question.
+      if (fileText !== null && lf(fileText) !== lf(newRender)) throw new UpdateError(unrecordedFileRefusal(key));
+      const createHash = sha256(newRender);
+      return {
+        // The region arm is unreachable: the validator refuses `createIfAbsent` on a region op.
+        op, mode: op.region ? 'region' : 'file', target: op.file, key,
+        // `created` marks this plan as a CREATION for every step that touches the target after
+        // planning. It is not derivable from `preHash: null`: a take-new or merge that resolved a
+        // conflict over a MISSING file carries a null preHash too, and that one has an operator
+        // decision behind it, so the two must not share a refusal.
+        created: true,
+        preHash: null, postHash: createHash, content: newRender, resolution: null,
+        bookkeeping: { managedRegions: { [key]: { upstream: createHash, local: createHash, override: false } } },
+        summary: `${key}: created (no record, no file) - rendered and recorded`,
       };
     }
     throw new UpdateError(
@@ -757,6 +854,11 @@ function stageMetaOf(migration, opIndex, plan) {
   return {
     migration, opIndex, op: plan.op.op, mode: plan.mode, key: plan.key, target: plan.target,
     region: plan.op.region ?? null, resolution: plan.resolution ?? null,
+    // `created` TRAVELS. A replay rebuilds the plan from this record, and a rebuilt plan without the
+    // flag would take the ordinary write path - `writeAtomic`, which clobbers - for an artifact this
+    // engine is bringing into existence. The flag is what routes the write to the no-clobber
+    // publish, so it has to survive the crash that makes a replay necessary.
+    created: plan.created === true,
     preHash: plan.preHash, postHash: plan.postHash,
     bookkeeping: plan.bookkeeping ?? null,
     value: plan.mode === 'config' ? { value: plan.value } : null,
@@ -801,6 +903,19 @@ function applyTarget(ctx, plan) {
   }
   const abs = path.join(ctx.projectRoot, ...plan.target.split('/'));
   const next = projectedFileContent(ctx, plan);
+  // A CREATION does not take `writeAtomic` at all: its rename replaces whatever is at the target,
+  // which is right for an artifact this engine owns and wrong for one it is bringing into
+  // existence. The three cases are decided HERE, in the last instruction before the write, and the
+  // equality test comes first because `link` cannot tell "identical, ours" from "different,
+  // somebody else's" - both are EEXIST to it.
+  if (plan.created === true) {
+    const standing = readText(abs);
+    if (standing === null) { writeCreatedTarget(abs, next, plan.key); return true; }
+    // Identical bytes are this engine's own write - the folder is the plugin's - so there is
+    // nothing to write and nothing to ask about; the bookkeeping flip stamps it.
+    if (lf(standing) === lf(next)) return false;
+    throw new UpdateError(unrecordedFileRefusal(plan.key));
+  }
   const current = readText(abs);
   if (current !== null && lf(current) === lf(next)) return false; // identical bytes: do not touch the file
   writeAtomic(abs, next);
@@ -833,8 +948,20 @@ function applyOperation(ctx, migration, opIndex, plan) {
   // re-hashed here, in the last instruction before the first write, and an operation planned against
   // a state that no longer exists is refused rather than applied to a file it never saw. Zero writes
   // for this operation; everything before it stays applied and journalled.
+  // 0a. A CREATION is judged on its own terms, and BEFORE the generic re-check. That check asks only
+  // "did the target move", and for a creation every answer other than "still absent" would be
+  // reported as a state change - true, but the wrong sentence: the real question is whether somebody
+  // else's file is now standing at that path. This is the last read before the first write, so it is
+  // where the window between planning and writing NARROWS - it is closed by the no-clobber publish
+  // in `applyTarget`, not here. The generic check must not run for a creation: it would report a
+  // state change where this one names the situation.
+  if (plan.created === true && plan.target) {
+    assertNoForeignFileAtCreationTarget(
+      path.join(ctx.projectRoot, ...plan.target.split('/')), projectedFileContent(ctx, plan), plan.key,
+    );
+  }
   const nowHash = hashPlanTargetOnDisk(ctx, plan);
-  if (plan.target && nowHash !== plan.preHash) {
+  if (plan.target && plan.created !== true && nowHash !== plan.preHash) {
     throw new UpdateError(
       `"${migration}/${opIndex}/${plan.key}": ${plan.target} changed while the update was deciding what to do with it, ` +
       'so the decision was taken against a state that no longer exists. Nothing was applied - re-run the update and it ' +
@@ -913,6 +1040,15 @@ function flipWithoutStage(ctx, migration, opIndex, op, journal) {
     // overwrite it without a dialog. "No record" is the whole answer: no read, no adoption, no
     // bookkeeping, whatever is or is not on disk.
     if (op.ifRecorded === true && !isPlainObject(ctx.config._aiwf.managedRegions[key])) return null;
+    // A `createIfAbsent` OPERATION WITH NO RECORD IS DELIBERATELY *NOT* EARLY-RETURNED HERE, and the
+    // reason is the mirror image of the paragraph above: that operation's whole point is that a
+    // record must EXIST when it is done, so returning null would leave an artifact this engine
+    // rendered and then refused to own - the next payload change would meet it unrecorded and
+    // abort. Reconstructing it from disk is safe because of WHO may arrive here: a creation reaches
+    // this function only through the journal-state rule in `recover`, i.e. only when the journal
+    // says our own write succeeded AND the bytes on disk are the ones it recorded. A file this
+    // engine did not write is refused there and never gets this far, so the generic reconstruction
+    // below is already the consistent form for the field.
     // The artifact is hashed from the OPERATION rather than from journal.target: the operation is
     // the authority on which file and which region this record is about, and this path is reached
     // exactly when the journal's own account of it (the stage) is missing.
@@ -971,6 +1107,23 @@ function recover(ctx, pending) {
   }
 
   // state === 'prepared'
+
+  // AN INTERRUPTED CREATION, decided before any hash branch and in three ways only. Identical bytes
+  // at the target are THIS ENGINE'S OWN WRITE: the artifact lives in the plugin's own folder, so a
+  // file there with exactly the render's content came from a run of ours, and the postHash branch
+  // below stamps it. A DIFFERING file is content this engine never wrote, and the conflict
+  // vocabulary is wrong for it in both directions - keep-mine would adopt it, take-new would
+  // overwrite it - so it is refused here instead. Nothing on disk is nothing to decide: that falls
+  // through to the ordinary resume, which replays the stage or re-plans and writes no-clobber.
+  const creationKey = op.op === 'rerender-managed-region' && op.createIfAbsent === true
+    ? operationKey(op, journal.target) : null;
+  if (creationKey !== null && !isPlainObject(ctx.config._aiwf.managedRegions[creationKey])) {
+    const standing = readText(path.join(ctx.projectRoot, ...op.file.split('/')));
+    if (standing !== null && sha256(standing) !== journal.postHash) {
+      throw new UpdateError(unrecordedFileRefusal(creationKey));
+    }
+  }
+
   if (journal.target === null) {
     // Nothing on disk to compare (a note, or a held artifact): finishing it is a bookkeeping write.
     const bookkeeping = flipWithoutStage(ctx, migration, opIndex, op, journal);
@@ -999,6 +1152,13 @@ function recover(ctx, pending) {
       // Replay the EXACT accepted result - including a manual merge and an operator's answer.
       const plan = {
         op, mode: stage.meta.mode, target: stage.meta.target, key: stage.meta.key,
+        // Rebuilt from the STAGE where the stage says so, and from the OPERATION otherwise: a stage
+        // written by an older payload carries no `created` field, and for a `createIfAbsent` op on a
+        // key this installation still has no record of, the answer is the same one planning would
+        // give. Without it the replayed write would clobber.
+        created: stage.meta.created === true
+          || (op.op === 'rerender-managed-region' && op.createIfAbsent === true
+            && !isPlainObject(ctx.config._aiwf.managedRegions[stage.meta.key])),
         preHash: stage.meta.preHash, postHash: stage.meta.postHash,
         content: stage.content, value: stage.meta.value ? stage.meta.value.value : undefined,
         resolution: stage.meta.resolution, bookkeeping: stage.meta.bookkeeping,
@@ -1016,6 +1176,11 @@ function recover(ctx, pending) {
   // Neither hash: the target moved under an interrupted run. That is EXACTLY a conflict, so it is
   // resolved through the same dialog every other conflict goes through - a recovery that could only
   // throw would be a state the machine can enter and never leave.
+  // A CREATION never reaches this branch: the three-way rule above has already decided it - stamped
+  // (its own bytes), refused (a differing file), or fallen through with nothing on disk, which
+  // matches a creation's null preHash and is handled by the replay branch. That is deliberate, not
+  // incidental: the conflict vocabulary is wrong for a creation in both directions - keep-mine would
+  // ADOPT a file this engine never wrote, take-new would OVERWRITE it.
   const key = operationKey(op, journal.target);
   const address = `${migration}/${opIndex}/${key}`;
   // The interrupted attempt's stage is NOT cleared here: if this dialog goes unanswered the run is
@@ -1122,8 +1287,24 @@ function measureForeignAskRules(ctx, pending) {
  * during the run. That is what makes it identical whether the run completed in one process or in
  * three after two crashes. `foreignAskRules` obeys the same rule: it is measured from the final
  * state by `measureForeignAskRules` above, not accumulated by the operations that ran.
+ *
+ * `createdOps` is the ONE input that cannot obey that rule, and it is worth saying why rather than
+ * pretending otherwise. It names the OPERATIONS - `<migrationId>/<opIndex>`, never bare artifact
+ * keys - that really created an artifact in this run: the first pending `createIfAbsent` op on a key
+ * that had no bookkeeping record when the process started. The identity is per-operation because a
+ * run can carry several migrations: with the key alone, a LATER migration re-rendering the same
+ * artifact in the same run would print "created" too, and only one of those operations created
+ * anything. The fact itself - "there was no record before" - is destroyed by the act of creating the
+ * record, so no reading of the final state can recover it and no derivation exists that a resumed
+ * process could repeat. The caller takes it as a snapshot of the pre-run bookkeeping (not as an
+ * accumulator built by the operations), and the cost is bounded to ONE label on ONE line: after a
+ * crash between the creation and this report, that operation prints as `payload-current`, which is
+ * less specific and still true - the payload version is what is on disk. Every other line, and
+ * everything else in this report, stays derived from the final state. The alternative - a `created`
+ * flag written into the operator's durable bookkeeping - would pay for a one-line label with a
+ * permanent field in a record that describes content, not history.
  */
-export function assembleChanges({ from, to, pending, migrations, managedRegions, foreignAskRules = new Map() }) {
+export function assembleChanges({ from, to, pending, migrations, managedRegions, foreignAskRules = new Map(), createdOps = new Set() }) {
   const notes = [];
   const held = [];
   // The managed-artifact renders this run really carried. A `rerender-managed-region` whose key has
@@ -1189,19 +1370,24 @@ export function assembleChanges({ from, to, pending, migrations, managedRegions,
     const ops = (migrations.get(entry.id) || { operations: [] }).operations;
     lines.push(`### ${entry.id} (-> ${entry.targetPluginVersion})`, '');
     if (ops.length === 0) lines.push('- no operations (a version bump with nothing to migrate)');
-    for (const op of ops) {
+    for (const [opIndex, op] of ops.entries()) {
       if (op.op === 'add-config-key') lines.push(`- \`add-config-key\` ${op.path}`);
       else if (op.op === 'rerender-managed-region') {
         // The label is the artifact's FINAL state, read from the bookkeeping and nowhere else, so it
         // is the same whether the run took one process or three. Bookkeeping distinguishes exactly
         // two outcomes: `override:false` (the payload version is what is on disk - an auto take-new,
         // an operator take-new and an "already current" artifact all end there) and `override:true`
-        // (the operator's own content stands - keep-mine and merge alike).
+        // (the operator's own content stands - keep-mine and merge alike). The third label is the
+        // created one, and it is the single thing here the final bookkeeping cannot tell apart -
+        // see `createdOps` in the doc comment above, degradation included. It is matched on THIS
+        // operation's identity, so a later migration re-rendering the same artifact in the same run
+        // gets the ordinary label: only one operation created anything.
         const key = op.region ? `${op.file}#${op.region}` : op.file;
         const record = managedRegions[key];
         const label = !isPlainObject(record)
           ? (op.ifRecorded === true ? 'not on this installation - skipped' : null)
-          : record.override === true ? 'held (your version kept)' : 'payload-current';
+          : createdOps.has(`${entry.id}/${opIndex}`) ? 'created (no record, no file)'
+            : record.override === true ? 'held (your version kept)' : 'payload-current';
         lines.push(`- \`rerender-managed-region\` ${key}${label ? ` - ${label}` : ''}`);
       }
       else if (op.op === 'reconcile-ask-ruleset') {
@@ -1313,6 +1499,27 @@ export function runUpdate({ pluginRoot, projectRoot, resolve, dryRun = false, lo
     return { current: false, from, to, applied: [], preview, pending, dryRun: true, changesFile: null, notes: ctx.notes };
   }
 
+  // Taken BEFORE recovery and before the first operation, because this is the last moment the fact
+  // still exists: which `createIfAbsent` artifacts this installation had no record of. The moment
+  // one is created the record is there, and nothing in the final state distinguishes it from an
+  // artifact that had always been recorded (see assembleChanges). Only the report's label depends on
+  // it, and only for a run that completes in this process.
+  //
+  // Recorded as `<migrationId>/<opIndex>` and claimed ONCE per key, in the order the operations will
+  // run: the operation that finds no record is the one that creates the artifact, and every later
+  // operation on the same key in the same run meets a record and creates nothing.
+  const createdOps = new Set();
+  const claimed = new Set();
+  for (const entry of pending) {
+    for (const [opIndex, op] of payload.migrations.get(entry.id).operations.entries()) {
+      if (op.op !== 'rerender-managed-region' || op.createIfAbsent !== true) continue;
+      const key = op.region ? `${op.file}#${op.region}` : op.file;
+      if (claimed.has(key) || isPlainObject(ctx.config._aiwf.managedRegions[key])) continue;
+      claimed.add(key);
+      createdOps.add(`${entry.id}/${opIndex}`);
+    }
+  }
+
   let start = { migrationIndex: 0, opIndex: 0, staged: null };
   if (journal) start = recover(ctx, pending);
 
@@ -1334,7 +1541,7 @@ export function runUpdate({ pluginRoot, projectRoot, resolve, dryRun = false, lo
   // atomic config write that moves the version stamps and clears the journal.
   const changes = assembleChanges({
     from, to, pending, migrations: payload.migrations, managedRegions: ctx.config._aiwf.managedRegions,
-    foreignAskRules: measureForeignAskRules(ctx, pending),
+    foreignAskRules: measureForeignAskRules(ctx, pending), createdOps,
   });
   const changesFile = path.join(projectRoot, `CHANGES_${from}-to-${to}.md`);
   writeAtomic(changesFile, changes);
