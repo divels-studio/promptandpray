@@ -8,6 +8,10 @@
 > документира финалното състояние, вкл. 12-те команди). **HARD-014 отпадна** — темата „одитор
 > с resume" е погълната от PLAN_CONS (CONS-003 + METRICS политиката). Изпълнителният ред
 > оттук: [PLAN_CONS: CONS-001…010] → HARD-011 (+release 0.2.9) → архивиране на двата плана.
+> **[2026-09-21, операторска дума]** Два дефекта в шипнатата 0.2.8 влизат ПРЕДИ HARD-011 като
+> HARD-015 и HARD-016 (HARD-014 е отпаднал номер и не се преизползва): редът става
+> HARD-015 → HARD-016 → HARD-011 (+release 0.2.9). Двата минават readiness цикъла на този план
+> (пас 1 на думата за тях, всеки следващ с отделна дума) преди диспач; кодов пас по таблицата (1).
 
 > Роден от `dev/backlogs/PROPOSAL_PNP_HARDENING.md` (операторски одобрено разпределение,
 > 2026-09-12) по операторската дума за планова сесия. Дума 2026-09-12 = readiness (COO
@@ -39,6 +43,8 @@
 | HARD-012 | — (вердикт-докладът, роден 2026-09-13) | 0.2.5 |
 | HARD-013 | — (bash по голо име, роден 2026-09-15) | 0.2.7 (ЗАМРАЗЕН) |
 | HARD-014 | — ОТПАДНАЛ (2026-09-16; темата „одитор с resume" — след консолидацията) | — |
+| HARD-015 | — (двете врати не казват за рендерираната роля, роден 2026-09-21) | 0.2.9 |
+| HARD-016 | — (seed-ът печата отменено четене на guard (b), роден 2026-09-21) | 0.2.9 |
 
 ## Context (discovery 2026-09-12: 4× Explore/sonnet + claude-code-guide; котви проверявани при диспач)
 
@@ -1388,6 +1394,94 @@ VERIFY 8/8; след release: `git ls-remote --tags origin v0.2.8` → hash; `or
 `node -e "const{execSync}=require('child_process');const sh=c=>execSync(c).toString().trim();const A='<КОТВА>';const ch=sh('git diff --name-only '+A).split(/\r?\n/).filter(Boolean);const un=sh('git status --porcelain').split(/\r?\n/).filter(l=>l.startsWith('??')).map(l=>l.slice(3));const ok=f=>f.startsWith('docs/')||f.endsWith('README.md')||(f.startsWith('skills/')&&f.endsWith('/SKILL.md'))||f==='CHANGELOG.md';const bad=ch.filter(f=>!ok(f)).concat(un.filter(f=>!(ok(f)||f.startsWith('dev/')||f.startsWith('.aiwf/'))));if(bad.length){console.error(bad);process.exit(1)}"`
 → exit 0; всичко извън allowlist-а (tracked: `docs/**`, `**/README.md`, `skills/**/SKILL.md`,
 `CHANGELOG.md`; untracked: плюс `dev/**`, `.aiwf/**`) → exit 1 с имената.
+**Stop condition:** acceptance зелен → стоп.
+**Review:** `Class: docs` → Codex (1 пас), fact-check преди; cap 2.
+**Assignee:** Колега. Branch `main`.
+
+## 0.2.9 — двата дефекта на 0.2.8, преди README-то (операторска дума 2026-09-21; записани и СПРЕНИ — диспач след readiness и дума per тикет)
+
+### HARD-015 [R2 code-class] — двете операторски врати изброяват три документа за preflight, регионът — четири; изброяването получава пин (роден 2026-09-21, от арбитража с Furnissimo)
+
+**Outcome:** сесия, влязла през `/pnp:mission` или `/pnp:work`, чете същите четири документа,
+които managed регионът на `CLAUDE.md` изисква — включително `.claude/aiwf-native/ORCHESTRATOR.md`;
+и трите дома на изброяването се държат заедно от self-check-а, така че четвърти артефакт в
+списъка да не може да мине покрай два от тях.
+
+**Наблюдение (проверено първолично, 2026-09-21):** `templates/CLAUDE.md.tmpl:58-61` — четири
+документа; `skills/mission/SKILL.md:33-37` и `skills/work/SKILL.md:32-35` — три, без ролята.
+`grep -rn "Doctrine preflight" skills/ templates/ docs/` → 3 дома; `grep -rln
+"aiwf-native/ORCHESTRATOR.md" skills/` → само `setup`. Консуматор (Furnissimo, 2026-09-20/21)
+влезе през `/pnp:mission` и цял ден работи по остарял preflight — дефектът произведе собствения
+си свидетел. Трети екземпляр на похвата „изброяване с няколко дома, обновен един" (вж. CONS-009
+и `docs/LOOP.md` § Role boundaries).
+
+**Обхват:**
+1. `skills/mission/SKILL.md:33-37` и `skills/work/SKILL.md:32-35`: изброяването става четири —
+   payload `docs/WORKFLOW.md`, payload `docs/LOOP.md`, `{{config.paths.overridesDoc}}` И
+   `.claude/aiwf-native/ORCHESTRATOR.md` — със същата формулировка като региона („your rendered
+   standing rules"), не с нова.
+2. Структурен пин в `scripts/selfcheck/aiwf-selfcheck.js`: една фразова константа за preflight
+   списъка, броена на трите дома (`templates/CLAUDE.md.tmpl`, `skills/mission/SKILL.md`,
+   `skills/work/SKILL.md`) по механизма на `DOCTRINE_CONSOLIDATION_SURFACES` (CONS-005/CONS-009),
+   с негативна контрола, която маха артефакта от ЕДИН дом и очаква FAIL.
+3. `skills/README.md` / `docs/README.md` — само ако някой ред там повтаря изброяването (closing
+   grep за `Doctrine preflight` и за `ORCHESTRATOR.md` в `skills/ docs/ templates/` първо УДРЯ
+   трите дома, после връща нула извън тях).
+**Извън обхват:** нов документ в preflight-а; промяна на самото съдържание на ролята; миграция
+(скиловете не са managed артефакти — промяната пътува с версията на payload-а, която носи
+release-ът на HARD-011).
+**Acceptance:** `grep -rn "aiwf-native/ORCHESTRATOR.md" skills/mission/SKILL.md skills/work/SKILL.md`
+→ по 1 ред във всеки; `node scripts/selfcheck/aiwf-selfcheck.js --plugin-root .` → exit 0, с
+новата находка и нейната контрола в изхода („FAIL as required"); мутация (махни
+`ORCHESTRATOR.md` от `skills/work/SKILL.md` на работно копие) → selfcheck exit 1 с името на дома;
+VERIFY 8/8 exit 0 (по каданса: пълните при затваряне).
+**Risk threshold:** блокира различна формулировка на списъка в двата скила спрямо региона; пин,
+който минава зелен при махнат дом; какъвто и да е файл извън `skills/mission`, `skills/work`,
+`scripts/selfcheck/`, `skills/README.md`, `docs/README.md`, `CHANGELOG.md` в диффа.
+**Stop condition:** acceptance зелен → стоп.
+**Review:** `Class: code` → Codex (1 пас), fact-check преди; cap 2.
+**Assignee:** Колега. Branch `main`.
+
+### HARD-016 [R2 docs-class] — seed-ът `dispatch-waits-for-operator-word` печата отменено четене на guard (b); операторска реплика става правило само по негова дума (роден 2026-09-21, операторска дума)
+
+**Outcome:** нищо, което `/pnp:setup` печата в паметта на нова инсталация, не казва обратното на
+доктрината; guard (b) се чете еднозначно до „една дума на пас"; guard (g) казва изрично, че
+произходът „операторът го каза" не освобождава записа от гейта.
+
+**Наблюдение (проверено първолично, 2026-09-21):** `templates/memory-seeds/dispatch-waits-for-operator-word.md`
+завършва с „a notification, not a question" — четене, което `docs/WORKFLOW.md:210-214` обявява
+за REVOKED; seed-ът е `[R]` (`templates/README.md:32-34`: „point at the doctrine section rather
+than restating it"), а преразказва отменената версия. Второто му изречение „After the word, the
+loop runs to the end without asking again" стои и в самия guard (b) (`:202`) до „една дума на
+пас" (`:157-162`). Механизмът, назован от оператора: ситуативна негова реплика, записана като
+стоящо правило (Furnissimo — пет такива записа, проверени на 2026-09-21). Останалите 16 seed-а
+са прегледани: без друг сблъсък.
+
+**Обхват:**
+1. Seed-ът става указател по `[R]` определението: две-три изречения, сочат guard (b), без
+   „notification" и без „runs to the end" като самостоятелно правило.
+2. `docs/WORKFLOW.md:202`: „After the word, the loop runs to the end of what the word covers
+   without asking again - every further paid pass takes its own word (§ The operator does not
+   arbitrate engineering decisions)" — едно уточнение, нищо друго в guard (b).
+3. `docs/WORKFLOW.md` guard (g), едно изречение: операторска реплика е стоящо правило само когато
+   операторът я обяви за такава; записът на правило казва чие е обобщението; произходът
+   „операторът го каза" не освобождава от гейта — той е причината записът да е опасен.
+4. `docs/WORKFLOW.md` § COO owns broad scans, tripwire (4): seed-овете под `templates/memory-seeds/`
+   са дом на изброяването при всяка доктринна промяна — closing grep-ът ги обхваща.
+5. `CHANGELOG.md` — ред в блока на 0.2.9 (`### Fixed`).
+**Извън обхват:** останалите seed-ове; `templates/CLAUDE.md.tmpl` (регионът вече казва вярното);
+код — ако някоя пинната в self-check-а фраза (`DOCTRINE_*` константите) се промени с тези редове,
+тикетът се рекласифицира в code-class по правилото и пинът пътува с текста.
+**Acceptance:** `grep -rn "notification, not a question" templates/memory-seeds/` → празно;
+`grep -rn "runs to the end without asking again" templates/memory-seeds/` → празно;
+`grep -n "Reinforces payload" templates/memory-seeds/dispatch-waits-for-operator-word.md` → 1 ред;
+`grep -n "declares it so" docs/WORKFLOW.md` → ред в guard (g); `grep -n "every further paid
+pass takes its own word" docs/WORKFLOW.md` → ред в guard (b);
+`node scripts/update/validate-payload.mjs --plugin-root .` → exit 0; selfcheck exit 0 (или
+рекласификация, ако пин мръдне).
+**Risk threshold:** блокира seed, който пак преразказва вместо да сочи; второ копие на правило от
+guard (g) другаде; какъвто и да е файл извън `templates/memory-seeds/`, `docs/WORKFLOW.md`,
+`CHANGELOG.md` в диффа (изпълним артефакт → code loop).
 **Stop condition:** acceptance зелен → стоп.
 **Review:** `Class: docs` → Codex (1 пас), fact-check преди; cap 2.
 **Assignee:** Колега. Branch `main`.
