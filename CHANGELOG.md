@@ -4,7 +4,7 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
-## [0.2.8] - 2026-09-20
+## [0.2.8] - 2026-09-21
 
 The main session gets a rendered rules file of its own, and the re-render operation learns how to
 put a brand-new artifact on an installation that has never had one. The Orchestrator role is the
