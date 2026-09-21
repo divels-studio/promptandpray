@@ -747,6 +747,42 @@ R3 always uses the full ticket-brief contract. It also uses the durable Mission 
 work crosses the durable-history threshold above. Durable decisions go to a short ADR when
 warranted.
 
+### COO routing
+
+Which session drives a ticket is a routing question of its own, beside R1/R2/R3, and it is answered
+by counting rather than by feel. The term is **COO routing**: "tier" stays reserved for the model
+vocabulary - the scan tier, the top tier - because a routing decision is not a model decision.
+
+Four checks, yes/no, read off the ticket before it starts:
+
+1. the ticket writes migration / access-policy / grants / auth / permission-model code;
+2. the contract leaves an architecture or a concurrency decision open - countable form: any worklist
+   item without a `file:line` anchor, or any unresolved decision marker in the plan section (or, for
+   an unplanned R2, in the brief);
+3. the diff surface greppably matches one of the escalation trigger classes (§ Escalation and the
+   arbiter);
+4. a canon conflict or an open incident stands on the ticket's path.
+
+ANY "yes" puts the ticket on a COO at the top tier. ALL "no" puts it on the cheap COO.
+
+**The routing moves the COO and nothing else.** The Writer's model stays pinned in its agent
+frontmatter and the audit table stays exactly as `/pnp:roles` shows it - a cheap COO does not buy a
+cheaper Writer or a cheaper auditor. That invariant is part of the rule, not a note beside it: the
+whole reason a cheap COO is survivable is that the audit net above and below it did not move, so
+mis-routing downward costs rounds and never the tree.
+
+**The dynamic clause.** A trigger that surfaces MID-ticket suspends the ticket exactly as a canon
+conflict does - escalation, not continuation. The four checks are read again against what is now
+true, not against what the brief assumed when it was written.
+
+**The hardening principle - an economics note, not a fifth check.** The saving a cheap COO brings is
+real downstream of expensive readiness: on a hardened plan the cheap COO executes a contract that is
+already written down. Work routed cheap without a readiness cycle behind it keeps the same routing
+and pays the difference later, in correction rounds - the principle says where the saving comes from
+and where it evaporates; it changes no answer of the four checks and names no kind of work.
+**The dual** guards the opposite failure: routing upward "to be safe" on a ticket where all four
+checks really are "no" is the same defect as routing everything cheap, read from the other end.
+
 ## Branch policy
 
 `project.defaultBranch` is the default integration/base branch, not the only allowed working
@@ -795,6 +831,48 @@ real consumer that still ran to 9 blockers, and a fifth blocker raised a round l
 that introduced the audit table, with the ban above already written. A pass that is handed the
 previous list cannot re-derive it from scratch, and the COO sees which blockers the revision
 created.
+
+## Escalation and the arbiter
+
+Some decisions are not the COO's to make alone, and which ones they are is countable rather than
+felt. A decision escalates when:
+
+1. the decision reverses a plan-recorded decision;
+2. it touches access policy / tenancy / security-definer surfaces;
+3. its blast radius crosses the current ticket's boundary;
+4. two sessions/roles disagree in writing.
+
+**A fired trigger makes escalation MANDATORY - no word gates it.** A word here would hand the
+judgment back to the party tempted to skip the escalation, which is the whole of the failure this
+rule exists against. The COO announces it to the operator in ONE line and prepares the brief: the
+casus, the `file:line` evidence, and WHICH trigger fired. The brief is the whole transfer - nothing
+is explained by hand on top of it.
+
+**Where it goes, and what the operator's part is.** Where a suitable second-view session is live,
+the COO sends the brief to it directly: the operator is never a courier between two sessions. Where
+none is live, the operator's part is purely PHYSICAL - a session cannot open another session - and
+it is one command, `/pnp:arbiter`, which loads this section, reads the ruling ledger and takes the
+parked brief. Succession, where the installation has no second session at all: the escalation target
+is the OPERATOR, who is a second view by construction, and a solo installation loses nothing by it.
+
+**The arbiter reads; it does not write.** It is a non-executing session in the sense of § Branch
+policy - zero repo writes, zero database operations, zero paid auditor passes. "No ruling without an
+opened file" is a duty to READ the evidence rather than reason about it from a description; it is
+never a licence to edit. The ruling comes back as a MESSAGE, and the EXECUTING session writes the
+one-line ruling row, because the session that writes the tree is the one accountable for what lands
+in it.
+
+**The ruling ledger.** One row per ruling - `{ question / ruling / evidence pointer }` - in the
+**Ruling ledger** section of the transfer surface (§ The transfer surface above defines that file
+and its four sections; nothing is restated here). One line with a pointer rather than a retelling:
+the ledger is the whole memory a cold arbiter has of what was already settled, and that is what
+makes an on-demand session possible where a standing one would otherwise be needed.
+
+**Its suppression dual.** No trigger fired means no escalation: the decision is the COO's, made and
+reported with a one-line rationale. An escalation opened without a fired trigger turns the operator
+- or a second session - into a tie-breaker for routine engineering, which is the defect at the other
+end of the same axis. Escalations are rare by design; a mission that escalates on most of its
+tickets has stopped classifying them.
 
 ## Tests
 

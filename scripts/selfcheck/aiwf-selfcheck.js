@@ -5360,7 +5360,7 @@ const DOCTRINE_READING_SENTENCE =
   '**Reading is not a shell job.** Read or inspect files with the Read/Grep/Glob tools - never '
   + '`cat`/`grep`/`ls`/`head`/`node -e` through the shell for reading; the shell is for execution '
   + '(tests, git, build).';
-const DOCTRINE_READING_SKILLS = ['mission', 'work', 'setup', 'review', 'qa', 'loop', 'update', 'roles'];
+const DOCTRINE_READING_SKILLS = ['mission', 'work', 'setup', 'review', 'qa', 'loop', 'update', 'roles', 'arbiter'];
 const DOCTRINE_NEWBORN_SENTENCE =
   'A NEWLY BORN ticket - one that is not in the PLAN\'s recorded execution order - is written into '
   + 'the PLAN, announced in ONE sentence, and STOPS the same way.';
@@ -5811,6 +5811,97 @@ const DOCTRINE_CONSOLIDATION_SURFACES = [
 ];
 
 // ---------------------------------------------------------------------------
+// ESCALATION, THE ARBITER AND COO ROUTING - the rules that decide WHO decides
+// ---------------------------------------------------------------------------
+// The family that governs the moment a decision stops being the COO's own. Each of these was a
+// judgment call before it was a rule, and each rots in the same direction: back into a judgment
+// call. So the replacements below are not nonsense - they are the discretionary version of the same
+// sentence, which is what an edit written in good faith actually lands on.
+//   - The four triggers are COUNTABLE. "Escalate when it feels big enough" is the rule they replaced,
+//     and it reads perfectly reasonable while handing the decision back to the party with a reason
+//     to skip it.
+//   - A fired trigger obliges the escalation with NO word gating it, for the same reason.
+//   - The naming is "COO routing". "COO tier" collides with the model vocabulary (scan tier, top
+//     tier) and was retired by an operator decision; the negative sweep below is its other half.
+//   - The routing moves the COO and NOTHING else. The regression is a "cheap ticket" that also buys
+//     a cheaper Writer and a cheaper auditor - which removes the net that makes cheap survivable.
+//   - The arbiter REFUSES without a parked brief. A session that reconstructs the case from the
+//     conversation is judging a case it wrote itself.
+const DOCTRINE_ESC_TRIGGERS =
+  '1. the decision reverses a plan-recorded decision; '
+  + '2. it touches access policy / tenancy / security-definer surfaces; '
+  + '3. its blast radius crosses the current ticket\'s boundary; '
+  + '4. two sessions/roles disagree in writing.';
+const DOCTRINE_ESC_MANDATORY = 'A fired trigger makes escalation MANDATORY - no word gates it.';
+const DOCTRINE_COO_ROUTING_TERM =
+  'The term is **COO routing**: "tier" stays reserved for the model vocabulary - the scan tier, the '
+  + 'top tier - because a routing decision is not a model decision.';
+const DOCTRINE_COO_ROUTING_INVARIANT =
+  'The Writer\'s model stays pinned in its agent frontmatter and the audit table stays exactly as '
+  + '`/pnp:roles` shows it - a cheap COO does not buy a cheaper Writer or a cheaper auditor.';
+// The hardening principle, pinned on the clause that makes it NON-NORMATIVE. Read the trap before
+// the instances: every wrong version of this sentence asserted a CONTAINMENT - it enumerated the
+// world and was refuted by the case it left out. Three died that way. (1) As a condition beside the
+// four checks ("all four no AND the plan is hardened") it manufactured a branch nothing could
+// decide. (2) As an EQUIVALENCE ("hardening is what check 2 counts") it was false: readiness also
+// reads the plan against the repository, its scope, its dependency order, its acceptance and
+// verification commands and its Git prerequisites, so a plan can answer "no" on check 2 and still be
+// unhardened. (3) As a SEQUENCE claim ("a plan-borne ticket is routed after readiness") it was false
+// too: R2/R3 work takes a ticket in a plan, while the readiness cycle is for durable plans, so
+// plan-borne work without readiness exists. What the authority actually states is economics - where
+// a saving comes from and where it evaporates - and the binding word "only" in front of
+// "downstream", sitting next to a routing rule, is what turned a note into a condition. So the pin
+// is the clause that refuses the condition, and the control puts that binding back.
+const DOCTRINE_COO_ROUTING_HARDENING =
+  'it changes no answer of the four checks and names no kind of work';
+const DOCTRINE_ARBITER_REFUSAL =
+  'no parked escalation brief found at <path> - the COO parks the brief before /pnp:arbiter is '
+  + 'opened';
+// The retired naming, held as a NEGATIVE over the same three directories the acceptance grep reads.
+// An assertion that "COO routing" is present cannot catch a payload that says both.
+const DOCTRINE_RETIRED_ROUTING_NAME = 'COO tier';
+const DOCTRINE_ESCALATION_SURFACES = [
+  { id: 'doctrine-esc-triggers',
+    file: 'docs/WORKFLOW.md',
+    phrase: DOCTRINE_ESC_TRIGGERS,
+    replacement: 'a decision escalates when it is big enough to be worth a second view.',
+    what: '§ Escalation and the arbiter lists the four countable triggers' },
+  { id: 'doctrine-esc-mandatory',
+    file: 'docs/WORKFLOW.md',
+    phrase: DOCTRINE_ESC_MANDATORY,
+    replacement: 'A fired trigger is escalated when the COO judges the case worth the operator\'s time.',
+    what: 'a fired trigger obliges the escalation, with no word gating it' },
+  { id: 'doctrine-coo-routing-term',
+    file: 'docs/WORKFLOW.md',
+    phrase: DOCTRINE_COO_ROUTING_TERM,
+    replacement: 'The term is **COO tier**: a ticket picks the tier its COO runs at.',
+    what: '§ Routes names the rule "COO routing" and keeps "tier" for the model vocabulary' },
+  { id: 'doctrine-coo-routing-invariant',
+    file: 'docs/WORKFLOW.md',
+    phrase: DOCTRINE_COO_ROUTING_INVARIANT,
+    replacement: 'A cheap ticket runs cheap throughout - the Writer and the auditor follow the COO down.',
+    what: 'COO routing moves the COO alone: the Writer pin and the audit table do not follow it' },
+  { id: 'doctrine-coo-routing-hardening',
+    file: 'docs/WORKFLOW.md',
+    phrase: DOCTRINE_COO_ROUTING_HARDENING,
+    replacement: 'a cheap COO is coherent only DOWNSTREAM of expensive readiness, so an unhardened ticket does not take that route',
+    what: 'the hardening principle is an economics note: it binds the cheap route to no condition beyond the four checks' },
+  { id: 'doctrine-arbiter-refusal',
+    file: 'skills/arbiter/SKILL.md',
+    phrase: DOCTRINE_ARBITER_REFUSAL,
+    replacement: 'no brief was parked, so reconstruct the case from the conversation and rule on it',
+    what: '/pnp:arbiter refuses to rule without the brief the COO parked, in the exact words' },
+];
+
+// The one rule of this family that stands in TWO FILES, asserted by COUNT and by home: the rendered
+// Orchestrator role is where the COO reads it, the review skill is where the finding arrives, and a
+// substring test over the pair would be satisfied by either one alone. Two occurrences, one per
+// home - a second copy inside one file would be a count of 2 with a home still empty, which is why
+// the per-home counts are checked as well as the total.
+const DOCTRINE_DISPUTED_BLOCKER = 'disputed blocker';
+const DOCTRINE_DISPUTED_BLOCKER_HOMES = ['templates/ORCHESTRATOR.md.tmpl', 'skills/review/SKILL.md'];
+
+// ---------------------------------------------------------------------------
 // THE CONDUCT OF A PASS - thirteen rules about what a pass is HANDED and when it may RESUME
 // ---------------------------------------------------------------------------
 // A family of its own rather than an addition to the tables above, for two reasons. By subject:
@@ -5892,9 +5983,24 @@ const DOCTRINE_PASS_INTERRUPTION =
   'the DEFAULT recovery is a bare resume plus a SHORT continuation prompt - "continue - you already '
   + 'have the brief and your progress; produce the verdict" - never a fresh dispatch carrying the '
   + 'full brief again';
-// The index line of skills/, pinned outside the conduct family (see its assertion for why).
+// The index line of skills/, pinned outside the conduct family (see its assertion for why), and
+// pinned TWICE over: once as this literal, which catches a rewording, and once structurally against
+// the directory listing, which catches a skill that shipped without ever being written into the
+// line. Neither instrument sees what the other sees, so neither replaces the other.
 const DOCTRINE_SHIPPED_COMMANDS =
-  'Shipped: loop, review, qa, qal, brief, mission, work, roles, setup, update, selfcheck.';
+  'Shipped: loop, review, qa, qal, brief, mission, work, roles, arbiter, setup, update, selfcheck.';
+// The structural reading of the SAME line: the names it lists, taken as data.
+const shippedIndexNames = (text) => {
+  const m = /^Shipped:\s*(.+)$/m.exec(text || '');
+  if (!m) return null;
+  return m[1].replace(/\.\s*$/, '').split(',').map((s) => s.trim().replace(/`/g, '')).filter(Boolean);
+};
+const skillDirNames = (root) => {
+  try {
+    return fs.readdirSync(path.join(root, 'skills'), { withFileTypes: true })
+      .filter((e) => e.isDirectory()).map((e) => e.name).sort();
+  } catch (e) { return []; }
+};
 const DOCTRINE_PASS_CONDUCT_SURFACES = [
   { id: 'doctrine-pass-chain-table',
     file: 'skills/review/SKILL.md',
@@ -6225,6 +6331,65 @@ function payloadDoctrineFindings(pluginRoot) {
       text == null ? 'the file is missing' : (present ? `"${collapseWs(s.phrase)}"` : `the sentence is missing or reworded: "${collapseWs(s.phrase)}"`));
   }
 
+  for (const s of DOCTRINE_ESCALATION_SURFACES) {
+    const text = readText(path.join(pluginRoot, ...s.file.split('/')));
+    const present = text != null && collapseWs(text).includes(collapseWs(s.phrase));
+    add(s.id, `${s.file}: ${s.what}`, present,
+      text == null ? 'the file is missing' : (present ? `"${collapseWs(s.phrase)}"` : `the sentence is missing or reworded: "${collapseWs(s.phrase)}"`));
+  }
+
+  // The retired naming, as a negative over docs/, skills/ and templates/ - the same three
+  // directories the ticket's acceptance grep reads. "COO routing is stated" and "COO tier is gone"
+  // are two different facts, and a payload can hold both wordings while contradicting itself.
+  const cooTierHits = [];
+  for (const file of doctrineSweepFiles(pluginRoot)) {
+    const rel = path.relative(pluginRoot, file).split(path.sep).join('/');
+    if (!DOCTRINE_SWEEP_DIRS.some((d) => rel.startsWith(`${d}/`))) continue;
+    const lines = (readText(file) || '').split('\n');
+    for (let i = 0; i < lines.length; i += 1) {
+      if (lines[i].includes(DOCTRINE_RETIRED_ROUTING_NAME)) cooTierHits.push(`${rel}:${i + 1}`);
+    }
+  }
+  add('doctrine-coo-routing-naming',
+    `the retired name "${DOCTRINE_RETIRED_ROUTING_NAME}" survives nowhere in ${DOCTRINE_SWEEP_DIRS.join('/, ')}/ - the doctrine term is "COO routing"`,
+    cooTierHits.length === 0,
+    cooTierHits.length ? `still present at: ${cooTierHits.join(', ')}` : 'not one occurrence');
+
+  // The BINDING, as a negative over one file. The pin above holds the clause that refuses the
+  // condition; this holds the wording that would reinstate it. "only" in front of "downstream",
+  // standing next to a routing rule, is the mechanism that turned the hardening note into a
+  // condition three times over, and a paragraph can be rewritten around thirteen pinned words while
+  // putting that binding back somewhere else in it. Case-free and tolerant of a line break between
+  // the two words, because the regression IS a rewrite and a rewrite re-wraps: "only" at the end of
+  // one line and "downstream" at the start of the next is the same defect, and a substring test
+  // would miss exactly the version that actually gets written. Scoped to docs/WORKFLOW.md alone -
+  // this is a claim about one paragraph, not about a phrase another document may legitimately use.
+  const bindingText = readText(path.join(pluginRoot, 'docs', 'WORKFLOW.md'));
+  const bindingHits = [];
+  if (bindingText != null) {
+    const re = /only\s+downstream/gi;
+    for (let m = re.exec(bindingText); m; m = re.exec(bindingText)) {
+      bindingHits.push(`docs/WORKFLOW.md:${bindingText.slice(0, m.index).split('\n').length}`);
+    }
+  }
+  add('doctrine-coo-routing-no-binding',
+    'docs/WORKFLOW.md: the binding "only ... downstream" appears nowhere - the hardening principle is an economics note, and that one word in front of it is what made it a condition',
+    bindingText != null && bindingHits.length === 0,
+    bindingText == null ? 'the file is missing'
+      : (bindingHits.length ? `still present at: ${bindingHits.join(', ')}`
+        : 'not one occurrence (case-free, and tolerant of a line break between the two words)'));
+
+  // The disputed-decision rule, by COUNT and by home (see the constant for why both).
+  const disputedCounts = DOCTRINE_DISPUTED_BLOCKER_HOMES.map((f) => ({
+    file: f,
+    n: countPhrase(readText(path.join(pluginRoot, ...f.split('/'))), DOCTRINE_DISPUTED_BLOCKER),
+  }));
+  const disputedTotal = disputedCounts.reduce((a, c) => a + c.n, 0);
+  add('doctrine-disputed-blocker-two-homes',
+    'the disputed-decision rule stands in BOTH of its homes - the rendered Orchestrator role (where the COO reads it) and /pnp:review Step 4 (where the finding arrives)',
+    disputedTotal === 2 && disputedCounts.every((c) => c.n === 1),
+    disputedCounts.map((c) => `${c.file}: ${c.n}`).join(', ') + ` (1 each, ${disputedTotal} total)`);
+
   // The rendered Orchestrator role is a RULES document, not an agent definition, and the one way it
   // could quietly become the second kind is a model. Asserted as a negative over the template, in
   // both spellings that would do it: a rendered role key, and a frontmatter field. Who audits what,
@@ -6271,6 +6436,25 @@ function payloadDoctrineFindings(pluginRoot) {
     indexPresent,
     skillsIndex == null ? 'the file is missing'
       : (indexPresent ? `"${DOCTRINE_SHIPPED_COMMANDS}"` : `the line is missing or reworded: "${DOCTRINE_SHIPPED_COMMANDS}"`));
+
+  // The second instrument on the same line, and it exists because the first one CANNOT see this:
+  // a literal pin catches a rewording and nothing else, so a twelfth skill that nobody wrote into
+  // the line ships perfectly green - the index disagreeing with the directory it indexes, which is
+  // the one thing the line is for. Read structurally, in BOTH directions: every directory under
+  // skills/ is named, and every name is a directory.
+  const indexed = shippedIndexNames(skillsIndex);
+  const dirs = skillDirNames(pluginRoot);
+  const unlisted = indexed == null ? dirs : dirs.filter((n) => !indexed.includes(n));
+  const strangers = indexed == null ? [] : indexed.filter((n) => !dirs.includes(n));
+  add('doctrine-shipped-commands-structure',
+    'skills/README.md: the index line names EVERY directory under skills/ and nothing that is not one',
+    indexed != null && dirs.length > 0 && unlisted.length === 0 && strangers.length === 0,
+    indexed == null ? 'no "Shipped:" line to read'
+      : (unlisted.length || strangers.length
+        ? [unlisted.length ? `shipped but unlisted: ${unlisted.join(', ')}` : null,
+          strangers.length ? `listed but not a skill directory: ${strangers.join(', ')}` : null]
+          .filter(Boolean).join('; ')
+        : `${dirs.length} directories, ${indexed.length} names, one to one`));
 
   // The one rule of that family stated TWICE in one file, asserted by COUNT rather than by presence:
   // the record's own commit belongs both where the completion record is defined and where the commit
@@ -6483,13 +6667,70 @@ const DOCTRINE_CONTROLS = [
     label: `${s.file}: the conduct rule loosened back ("${collapseWs(s.phrase).slice(0, 60)}" -> "${s.replacement}")`,
     apply: (r) => doctrinePhrase(r, s.file, s.phrase, s.replacement),
   })),
-  // The index line's control is the regression itself: the line as it stood before `/pnp:roles` was
-  // added to it - ten names, backticked, perfectly well-formed, and one command short of the
-  // directory it indexes.
+  // One control per escalation surface, and each sabotage is the DISCRETIONARY version of the rule
+  // rather than a rewording: triggers that fire on a feeling, an escalation the COO decides is worth
+  // it, the retired "COO tier" naming back in place, a cheap ticket that takes the Writer and the
+  // auditor down with it, and an arbiter that reconstructs the case it then rules on. Each one reads
+  // perfectly sensible, which is exactly why the text alone is not evidence that the rule survived.
+  ...DOCTRINE_ESCALATION_SURFACES.map((s) => ({
+    id: s.id,
+    label: `${s.file}: the rule handed back to judgment ("${collapseWs(s.phrase).slice(0, 60)}" -> "${s.replacement}")`,
+    apply: (r) => doctrinePhrase(r, s.file, s.phrase, s.replacement),
+  })),
+  // The negative's control is the retired name arriving where it is most plausible - in the routing
+  // section itself, in a sentence that reads like an explanation.
+  { id: 'doctrine-coo-routing-naming',
+    label: 'docs/WORKFLOW.md: the retired "COO tier" naming creeps back beside the rule that replaced it',
+    apply: (r) => doctrineFile(r, 'docs/WORKFLOW.md', (t) => `${t}\nThe COO tier for a ticket is read off the same four checks.\n`) },
+  // The binding's control is the binding coming back where it is most plausible - inside the
+  // hardening note itself - and it arrives RE-WRAPPED, with the two words split across a line break.
+  // One control, two guarantees: that the check sees the phrase at all, and that it sees the form a
+  // real rewrite produces rather than only the form written on one line.
+  { id: 'doctrine-coo-routing-no-binding',
+    label: 'docs/WORKFLOW.md: "only" put back in front of "downstream" inside the hardening note, split across a line break',
+    apply: (r) => doctrinePhrase(r, 'docs/WORKFLOW.md',
+      'The saving a cheap COO brings is real downstream of expensive readiness',
+      'The saving a cheap COO brings is real only\ndownstream of expensive readiness') },
+  // Two controls for the two-homes count, one per home, because the count is the whole claim: each
+  // drops exactly ONE occurrence, leaving the rule perfectly present in the other file - which is
+  // the regression this check exists for, a consolidation that keeps the sentence where it reads
+  // best and quietly loses the other home.
+  { id: 'doctrine-disputed-blocker-two-homes',
+    label: 'templates/ORCHESTRATOR.md.tmpl: the disputed-decision rule kept only in the review skill',
+    apply: (r) => doctrinePhrase(r, 'templates/ORCHESTRATOR.md.tmpl',
+      'A disputed DESIGN decision is a disputed blocker, and it stops the loop.',
+      'A disputed DESIGN decision stops the loop.') },
+  { id: 'doctrine-disputed-blocker-two-homes',
+    label: 'skills/review/SKILL.md: the disputed-decision rule kept only in the rendered role',
+    apply: (r) => doctrinePhrase(r, 'skills/review/SKILL.md',
+      'a disputed blocker is parked for the operator, not implemented in a correction round',
+      'a design dispute is settled by the correction round like any other finding') },
+  // The index line's control is the regression itself: the line as it stood before `/pnp:arbiter`
+  // was added to it - eleven names, perfectly well-formed, and one command short of the directory
+  // it indexes.
   { id: 'doctrine-shipped-commands-line',
-    label: 'skills/README.md: the index line reverts to the ten-name list that omits `roles`',
+    label: 'skills/README.md: the index line reverts to the eleven-name list that omits `arbiter`',
     apply: (r) => doctrinePhrase(r, 'skills/README.md', DOCTRINE_SHIPPED_COMMANDS,
-      'Shipped: `loop`, `review`, `qa`, `qal`, `brief`, `mission`, `work`, `setup`, `update`, `selfcheck`.') },
+      'Shipped: loop, review, qa, qal, brief, mission, work, roles, setup, update, selfcheck.') },
+  // The structural check gets one control per DIRECTION, because the two directions fail on
+  // opposite mutations and a single control would prove only the half it happened to pick: a skill
+  // that ships without being written into the line (the literal pin above stays green through it),
+  // and a name in the line that is NOT a skill directory - the state a rename or a removal leaves
+  // behind, and the one a name added by hand produces directly. The sabotage below is that second
+  // form, `telemetry` - a name that never had a directory in the base copy - because it is the one a
+  // throwaway copy can perform cleanly: deleting a real skill directory would also take its SKILL.md
+  // out from under the generic skills loop, a second mutation this control never intended to make.
+  { id: 'doctrine-shipped-commands-structure',
+    label: 'a twelfth skill ships without being written into the index line',
+    apply: (r) => {
+      const dir = path.join(r, 'skills', 'ghost');
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, 'SKILL.md'), '---\nname: ghost\n---\n\nA skill nobody indexed.\n');
+    } },
+  { id: 'doctrine-shipped-commands-structure',
+    label: 'the index line names `telemetry`, which is not a skill directory (a rename, a removal, or a name added by hand)',
+    apply: (r) => doctrinePhrase(r, 'skills/README.md', DOCTRINE_SHIPPED_COMMANDS,
+      'Shipped: loop, review, qa, qal, brief, mission, work, roles, arbiter, setup, update, selfcheck, telemetry.') },
   // The count check needs a control the generic one cannot give it: the spread above replaces EVERY
   // occurrence (the sabotage regex is global), which takes both homes at once and would prove only
   // that zero is not two. This one drops exactly ONE home - the first - so the count falls to 1 with

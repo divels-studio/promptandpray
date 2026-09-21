@@ -28,13 +28,12 @@ What is here:
   `/plugin marketplace update`, `/plugin update pnp@promptandpray`, `/reload-plugins` and
   `/pnp:update` inside the project - and `/pnp:roles` prints, on one screen, who audits what in
   the installation that took it.
-- **Eleven commands** as skills: `loop`, `brief`, `mission`, `work`, `review`, `qa`, `qal`, `roles`,
-  `setup`, `update`, `selfcheck` - each opening with the same Step 0, because a skill inside a
-  plugin has no project of its own: resolve the project root, read the config, and stop against the
-  version
-  interlock if migrations are pending. `update` and `selfcheck` are the two documented exceptions -
-  the command that applies the migrations and the diagnostic you need most when something is out of
-  date cannot be the two that refuse to run.
+- **Twelve commands** as skills: `loop`, `brief`, `mission`, `work`, `review`, `qa`, `qal`, `roles`,
+  `arbiter`, `setup`, `update`, `selfcheck` - each opening with the same Step 0, because a skill
+  inside a plugin has no project of its own: resolve the project root, read the config, and stop
+  against the version interlock if migrations are pending. `update` and `selfcheck` are the two
+  documented exceptions - the command that applies the migrations and the diagnostic you need most
+  when something is out of date cannot be the two that refuse to run.
 - **Three enforcement hooks** (`hooks/hooks.json`): the mutation guard - Gate 1, non-writer subagents
   cannot use the Edit/Write family, plus Gate 3, the route-state write guard that keeps the main
   session out of code while an R2/R3 ticket is open - the dispatch gate, Gate 2, which puts the
@@ -201,6 +200,7 @@ node scripts/ci/run-example-cycle.mjs
 | `/pnp:qa` | QA as an artifact judge over what an end-to-end run produced. Only for tickets with observable runtime behavior. |
 | `/pnp:qal` | the live agentic-browser exception: unsandboxed, Codex-only, disabled by default, and never invoked on the orchestrator's own initiative. |
 | `/pnp:roles` | the audit table on one screen - who audits what, on which engine, with how many passes - and the one command that changes it, without a re-interview. |
+| `/pnp:arbiter` | the escalation session, opened cold when one of the four triggers fires: it loads the rule, reads the ruling ledger, takes the brief the COO parked and returns one ruling. Read-only - it writes nothing, not even the ledger row. |
 | `/pnp:setup` | installs or re-interviews the project layer. |
 | `/pnp:update` | applies the payload's migrations to this project, with conflict dialogs and a CHANGES report. Never commits. |
 | `/pnp:selfcheck` | runs the payload and project-layer assertions, with their negative controls. |

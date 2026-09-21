@@ -459,7 +459,11 @@ tool.
 Return the Reviewer's `pass` / `pass-with-notes` / `fail` verdict and its blockers verbatim to the
 COO (for a **plan-readiness** pass, relay `PASS` / `NEEDS-FIX` instead). Do not act on the findings
 yourself - routing corrections back to the Writer (within the correction-round cap), scheduling the
-next readiness pass, and any commit gate are the COO's calls, not this skill's.
+next readiness pass, and any commit gate are the COO's calls, not this skill's. And one class of
+finding does not take a correction round at all: **a disputed blocker is parked for the operator, not
+implemented in a correction round** - where the Reviewer disputes a DESIGN decision the COO made
+rather than naming a defect, the COO writes the disagreement down and takes it to the operator, and
+the round waits for the word.
 
 The COO then owes the OPERATOR its own report of that verdict:
 the verdict plus one or two sentences of its substance, before the next dispatch - what the pass

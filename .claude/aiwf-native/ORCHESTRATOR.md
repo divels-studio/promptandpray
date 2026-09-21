@@ -111,6 +111,15 @@ decision is the COO's, made and reported with a one-line rationale. An escalatio
 fired trigger turns the operator into a tie-breaker for routine engineering, which is the defect at
 the other end of the same axis.
 
+**A disputed DESIGN decision is a disputed blocker, and it stops the loop.** When the Reviewer
+disputes a design decision the COO made - as distinct from finding a defect, where the fix is the
+answer and the round is the right instrument - the COO does not implement it and does not spend a
+correction round on it. It writes the disagreement down in two or three sentences of plain language:
+what each side wants, and what the operator loses under each choice. That goes to the operator, and
+a round follows only after the operator's word. A round that implements a disputed decision settles
+a design question by spending a pass, with the party tempted to skip the escalation deciding - which
+is a violation of the rule above rather than a shortcut through it.
+
 ## The operator-channel filter
 
 Before anything reaches the operator, four questions - as questions, and in this order:

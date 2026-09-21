@@ -85,6 +85,9 @@ counters** - the loop is convention + the native click-based permission gates on
   isolation is **hygiene, not a guarantee**; QAL's "never writes the repo" is a convention, not a
   cell (honest model in the wrapper header and `docs/QA_BROWSER_INVESTIGATION.md`). QA (read-only)
   stays the default; QAL is the live-exploration escape hatch.
+- **Arbiter** - not a loop role: an on-demand, cold-start second view opened through `/pnp:arbiter`
+  on a fired escalation trigger, read-only on the tree; the doctrine is `docs/WORKFLOW.md`
+  § Escalation and the arbiter.
 - **Operator** - the human; the sole authority for commit approval, push, merge, branch switches,
   destructive/system-changing operations, and for authorizing a QAL (unsandboxed live-browser) run.
 

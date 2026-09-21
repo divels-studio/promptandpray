@@ -21,8 +21,8 @@
         "override": false
       },
       ".claude/aiwf-native/ORCHESTRATOR.md": {
-        "upstream": "d7fad0ed0e8bb56aebb2c989420412d62c165ed774a2a57c5762b914cfd26c23",
-        "local": "d7fad0ed0e8bb56aebb2c989420412d62c165ed774a2a57c5762b914cfd26c23",
+        "upstream": "890ed4abd0ae8464820a3be6d0378de8f5e9d405ef27e207000e64aac013a1f6",
+        "local": "890ed4abd0ae8464820a3be6d0378de8f5e9d405ef27e207000e64aac013a1f6",
         "override": false
       }
     },

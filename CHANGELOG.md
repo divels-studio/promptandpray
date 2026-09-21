@@ -42,8 +42,53 @@ is on disk, and it STOPS where a file this engine never wrote is already standin
   question in opposite directions, and the validator refuses the pair rather than inventing a
   precedence between them.
 
+- **`/pnp:arbiter` - the escalation session (CONS-009)** - a twelfth command, and the only one that
+  is opened cold on purpose: it loads the escalation rule, reads the **Ruling ledger** section of the
+  transfer surface (the configured `paths.transferSurface`, or `<plansDir>/PNP_CANDIDATES.md` when
+  the key is absent), takes the brief the COO parked at
+  `<scratchDir>/arbiter-brief.txt` and returns ONE ruling as a message. Without that brief it
+  refuses in one line rather than reconstructing the case from the conversation, and the last parked
+  brief overwrites the previous one - one open case at a time. It is read-only on the tree by the
+  construction of its own steps: it writes nothing, dispatches nothing, and does not write the ledger
+  row it hands over ready to paste, because the executing session is the one accountable for what
+  lands in the tree.
+- **Escalation and the arbiter in `docs/WORKFLOW.md` (CONS-009)** - the four countable triggers (a
+  reversed plan-recorded decision, an access-policy/tenancy/security-definer surface, a blast radius
+  that crosses the ticket, two sessions or roles disagreeing in writing), and the rule that a fired
+  trigger makes the escalation MANDATORY with no word gating it. Where a second-view session is live
+  the COO sends the brief to it directly and the operator is never a courier; where none is, the
+  operator's part is purely physical - one command - and a solo installation escalates to the
+  operator. The ruling returns as a message and the executing session writes the
+  `{ question / ruling / evidence pointer }` row.
+- **COO routing (CONS-009)** - a subsection of § Routes with four countable checks deciding whether a
+  ticket is driven by a COO at the top tier or by the cheap one: any "yes" routes upward, all "no"
+  routes cheap, and two sessions reading the same ticket compute the same answer. Beside them the
+  dynamic clause (a trigger surfacing mid-ticket suspends the ticket) and the invariant that makes
+  the cheap route survivable - the routing moves the COO and nothing else, so the Writer's pin and
+  the audit table do not follow it down. The hardening principle rides with them as an ECONOMICS
+  NOTE rather than as a fifth check: it says where the saving of a cheap COO comes from and where it
+  evaporates - work routed cheap without a readiness cycle behind it keeps the same routing and pays
+  the difference later, in correction rounds - and it changes no answer of the four checks and names
+  no kind of work. The four checks are the whole rule. The term is "COO routing"; "tier" stays
+  reserved for the model vocabulary. What the self-check buys here is text,
+  not behaviour: it holds these SENTENCES in `docs/WORKFLOW.md` and holds the retired "COO tier"
+  spelling as a negative over `docs/`, `skills/` and `templates/` - a routing rule has no runtime
+  surface, and nothing here proves how a session routed.
+
 ### Changed
 
+- **A disputed design decision stops the loop instead of being implemented (CONS-009)** - the
+  rendered Orchestrator role and `/pnp:review` Step 4 now say the same thing in their own registers:
+  where the Reviewer disputes a DESIGN decision the COO made, rather than naming a defect, the COO
+  writes the disagreement down in two or three sentences and takes it to the operator; the
+  correction round waits for the word. A round that implements a disputed blocker settles a design
+  question by spending a pass, with the party tempted to skip the escalation deciding. Pinned in both
+  homes, by count.
+- **The index of shipped commands gets a second instrument (CONS-009)** - the literal pin on
+  `skills/README.md`'s `Shipped:` line catches a rewording and nothing else, so a skill could ship
+  without ever being written into the line. It is now also read structurally, in both directions:
+  every directory under `skills/` is named, and every name is a directory. Both counts of twelve -
+  the prose line and the command table in `README.md` - were updated with it.
 - **The managed CLAUDE.md region's preflight names the rendered role (CONS-008)** - the
   doctrine-preflight bullet inside the `aiwf-core` markers now lists
   `.claude/aiwf-native/ORCHESTRATOR.md` beside the two payload documents and the project's overrides
