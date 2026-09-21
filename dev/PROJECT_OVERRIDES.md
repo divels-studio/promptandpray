@@ -191,6 +191,16 @@ step and the run that consumes it are ONE invocation; never pass a bare `/tmp/..
 argument to `wsl.exe` from Git Bash (it is rewritten to a Windows path) - keep paths inside the `-lc`
 string; snap `pwsh` under `pnp` can break after many parallel spawns and is repaired by clearing
 `~/.cache/powershell` (operator word).
+**Third trap, added 2026-09-21 from the 0.2.8 release:** `git archive` against `/mnt/d/...` does NOT
+work as `pnp` - it fails with `dubious ownership`, that message flows into `tar`, and the copy comes
+out SILENTLY EMPTY, after which every leg fails in seconds against nothing. The prep (archive +
+`chown`) runs as **root** and the legs run as `pnp`; the work copy lives under `/home/pnp`, not under
+`/tmp`; and the prep carries a `test -f` guard on a file the copy must contain, so an empty copy dies
+THERE instead of as a batch of mystery failures. This also sharpens the `/tmp` sentence above, which
+is what misled the release run: "prep and run are ONE invocation" is right about tmpfs and impossible
+taken literally, because prep needs root and the legs need `pnp` - the working form is ONE invocation
+in which root prepares and `su - pnp` runs the legs. Measured the hard way: three attempts, two lost,
+on 2026-09-21 (PLAN_CONS, CONS-010 record).
 
 ## Status and release artifacts
 
