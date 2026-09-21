@@ -1469,6 +1469,14 @@ loop runs to the end without asking again" стои и в самия guard (b) (
 4. `docs/WORKFLOW.md` § COO owns broad scans, tripwire (4): seed-овете под `templates/memory-seeds/`
    са дом на изброяването при всяка доктринна промяна — closing grep-ът ги обхваща.
 5. `CHANGELOG.md` — ред в блока на 0.2.9 (`### Fixed`).
+6. **[ДОБАВЕНО 2026-09-21, находка на Furnissimo COO при прегледа на списъка]** `docs/WORKFLOW.md:311-314`
+   (§ Planning lock: „It may also update its own agent-local memory… these memory updates need no
+   separate approval") противоречи на guard (g) в същия файл. Решение (COO, 2026-09-21): guard (g)
+   е по-новото (0.2.7, D10) и по-тясното (правило-носещи записи) — печели; `:311-314` получава
+   едно уточнение: без отделно одобрение са ФАКТИТЕ и предпочитанията, а правило-носещ запис в
+   паметта минава през guard (g) и под planning lock. Acceptance: `grep -n "need no separate
+   approval" docs/WORKFLOW.md` → редът носи уточнението „(facts and preferences; a rule-bearing
+   memory write goes through guard (g))" или еквивалент, проверен от fact-check гейта.
 **Извън обхват:** останалите seed-ове; `templates/CLAUDE.md.tmpl` (регионът вече казва вярното);
 код — ако някоя пинната в self-check-а фраза (`DOCTRINE_*` константите) се промени с тези редове,
 тикетът се рекласифицира в code-class по правилото и пинът пътува с текста.
