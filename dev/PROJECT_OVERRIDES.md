@@ -191,6 +191,11 @@ step and the run that consumes it are ONE invocation; never pass a bare `/tmp/..
 argument to `wsl.exe` from Git Bash (it is rewritten to a Windows path) - keep paths inside the `-lc`
 string; snap `pwsh` under `pnp` can break after many parallel spawns and is repaired by clearing
 `~/.cache/powershell` (operator word).
+**Portion discipline sharpened (operator word 2026-09-22, option A):** the ONE-PARALLEL-batch
+sentence above applies to Portion 1 (the eight Windows commands). Portion 2 (WSL) runs as ONE
+invocation with its legs SEQUENTIAL inside it - the measured working form of the 0.2.8 release;
+parallel spawns inside WSL are exactly what trips the snap pwsh cache trap, and a parallel
+Portion 2 has never been measured.
 **Third trap, added 2026-09-21 from the 0.2.8 release:** `git archive` against `/mnt/d/...` does NOT
 work as `pnp` - it fails with `dubious ownership`, that message flows into `tar`, and the copy comes
 out SILENTLY EMPTY, after which every leg fails in seconds against nothing. The prep (archive +
@@ -201,6 +206,11 @@ is what misled the release run: "prep and run are ONE invocation" is right about
 taken literally, because prep needs root and the legs need `pnp` - the working form is ONE invocation
 in which root prepares and `su - pnp` runs the legs. Measured the hard way: three attempts, two lost,
 on 2026-09-21 (PLAN_CONS, CONS-010 record).
+
+**The operational runbook is `dev/VERIFY_RUNBOOK.md`** (operator word 2026-09-22). Every brief that
+runs VERIFY - in full or in part - carries a pointer to it; a red test on a trap described there is a
+defect of the brief, not of the code. The runbook holds the working command shapes and the recorded
+incidents; this section stays the policy home.
 
 ## Status and release artifacts
 
