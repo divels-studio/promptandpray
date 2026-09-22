@@ -1,8 +1,8 @@
 {
   "$schema": "D:/promptandpray/schema/aiwf.config.schema.json",
   "_aiwf": {
-    "installedPluginVersion": "0.2.8",
-    "lastMigrationApplied": "0012_orchestrator-role",
+    "installedPluginVersion": "0.2.9",
+    "lastMigrationApplied": "0013_preflight-and-word-gate",
     "migrationJournal": null,
     "managedRegions": {
       ".claude/aiwf-native/roles.json": {

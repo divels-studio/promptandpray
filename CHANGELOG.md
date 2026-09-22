@@ -4,6 +4,26 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.2.9] - 2026-09-22
+
+The two defects the 0.2.8 arbitration surfaced are fixed: the operator's two session doors now
+read the same four documents the managed CLAUDE.md region requires, and nothing /pnp:setup
+prints contradicts the doctrine it reinforces.
+
+### Fixed
+
+- **The session doors' doctrine preflight names all four documents (HARD-015)** - /pnp:mission
+  and /pnp:work listed three, and a consumer session worked a full day on a stale preflight;
+  both skills now carry the managed region's wording for the rendered standing rules, and the
+  self-check pins the enumeration's three payload homes with a per-home negative control.
+- **The dispatch-waits-for-operator-word seed no longer prints a revoked reading (HARD-016)** -
+  the seed restated "a notification, not a question"; it now points at guard (b). Guard (b)
+  says the loop runs to the end of what the word covers - every further paid pass takes its
+  own word; guard (g) now states when an operator remark becomes a standing rule (read the
+  guard - the mechanism lives there, not here); the planning-lock memory sentence defers to
+  guard (g) for rule-bearing writes; the memory-seeds directory joins tripwire (4)'s
+  closing-grep homes.
+
 ## [0.2.8] - 2026-09-21
 
 The main session gets a rendered rules file of its own, and the re-render operation learns how to

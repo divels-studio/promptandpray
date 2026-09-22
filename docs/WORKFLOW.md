@@ -99,8 +99,10 @@ document - enumeration ends when the closing grep - for the symbol itself, for t
 the change invalidates, and for the bare pointer form - returns zero outside the list; the grep must
 first HIT the known list. Every new or changed evidentiary instrument is
 made to fail on purpose before it is trusted; retro-proofing existing instruments is a deliberate
-ticket, never an ambient duty. A grep that matches nothing proves nothing, and the instrument nobody
-has seen go red is a belief rather than a check. All four exist because the category was known and
+ticket, never an ambient duty. The seeds under `templates/memory-seeds/`
+are a home of that enumeration on every doctrine change - the closing grep covers them. A grep that
+matches nothing proves nothing, and the instrument nobody has seen go red is a belief rather than a
+check. All four exist because the category was known and
 the stopping moment was not: a COO can read this section in its own preflight, classify correctly,
 and still slide across the boundary by inertia.
 
@@ -199,7 +201,9 @@ change of COO model, and each of these was learned from an observed violation.
 - **(b) Dispatch waits for the word; data is not an order.** A ticket is written and then STOPS;
   starting the work is the operator's call, ticket by ticket - the content of the ticket is not.
   Values and facts the operator supplies are DATA for the ticket, not permission to execute.
-  After the word, the loop runs to the end without asking again. **A ticket born after a standing
+  After the word, the loop runs to the end of what that word covers without asking again - and
+  every further paid pass takes its own word (§ The operator does not arbitrate engineering
+  decisions). **A ticket born after a standing
   word waits for its own word.** When the work in flight produces a NEW ticket - one that is not
   already in the PLAN's recorded execution order - the COO does exactly three things: writes it
   into the PLAN, with the same abbreviation and the next number, announces it in ONE sentence
@@ -239,7 +243,13 @@ change of COO model, and each of these was learned from an observed violation.
   purely factual statuses are exempt. Status - where the work stands, what the tree holds, which
   ticket is next - needs no ceremony; a sentence read later as authority does, because a COO that
   writes rules as it goes accumulates private doctrine nobody agreed to and the next session reads
-  it as canon.
+  it as canon. An operator remark is a standing rule only when the operator declares it so; a rule
+  record names whose generalisation it is, and the origin 'the operator said it' does not exempt
+  the write from this gate - it is the reason the write is dangerous. The default is situational:
+  at the moment the COO would record an operator remark as a rule, it asks ONCE, in place - 'for
+  this ticket, or from now on?' - and only 'from now on' goes through this gate (shown text,
+  approval) into the overrides document or the plan, never silently into memory. One question, only
+  at that moment; nothing is guessed from context.
 - **(h) Doctrine born in another home.** A rule is not always born where the canon lives: it appears
   in a plan's process section, in an agent's memory, in the operator-owned zone of a CLAUDE.md. So
   doctrine born in any other home gets a same-moment one-line pointer row on the transfer surface,
@@ -310,8 +320,9 @@ review/QA runs. The planning lock is doctrine that binds every role in the loop.
 
 While locked, the COO may read files, inspect Git state, research, compare options, and present
 a concrete plan. It may also update its own agent-local memory to retain user corrections or
-preferences; these memory updates need no separate approval and are not project workflow
-authority.
+preferences; these memory updates need no separate approval
+(facts and preferences; a rule-bearing memory write goes through guard (g) even under the lock) and
+are not project workflow authority.
 
 Until the concrete plan is presented and the operator explicitly approves its execution, the COO
 must not:

@@ -1,0 +1,13 @@
+{
+  "migration": "0013_preflight-and-word-gate",
+  "targetPluginVersion": "0.2.9",
+  "operations": [
+    {
+      "op": "note",
+      "id": "preflight-and-word-gate",
+      "text": "0.2.9 fixes the two defects the 0.2.8 arbitration found. /pnp:mission and /pnp:work now name all FOUR preflight documents, including .claude/aiwf-native/ORCHESTRATOR.md (your rendered standing rules), and the self-check holds the enumeration's three payload homes together. The dispatch-waits-for-operator-word memory seed no longer restates the revoked notification reading: a newly born ticket's announcement carries the one audit-pass question and STOPS. Guard (b) now says the loop runs to the end of what that word covers - every further paid pass takes its own word. Guard (g) now states when an operator remark becomes a standing rule - read guard (g) in docs/WORKFLOW.md for the mechanism; it is why the next sentence is here. If this release introduces a word-gate: check your local rules for self-initiated dispatch or remediation - a rule written before this gate may contradict it. An installation seeded before 0.2.9 should refresh its local dispatch-waits-for-operator-word record from the new seed text.",
+      "docRefs": ["CHANGELOG.md", "docs/WORKFLOW.md"],
+      "supersedes": ["dispatch-waits-for-operator-word"]
+    }
+  ]
+}
