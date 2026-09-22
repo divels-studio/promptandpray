@@ -22,6 +22,9 @@
 >    conditional); Furnissimo resumes PLAN_PROJ after; regulation v2 there is superseded by the
 >    rendered role. The chain is word → PNP plan → release → consumer updates → pilot; no
 >    dates, only order; every link starts on the operator's word.
+>    **[2026-09-22, операторска дума] Пилотната брънка ОТПАДА: Етап 1 отменен ("пилотът нищо не
+>    доказва — доказват го живите сесии"); Етап 0 остава мерен (transfer surface). PLAN_PROJ се
+>    размразява направо с дума; CAP-001 е обикновена мисия. Пълният запис: dev/backlogs/CANDIDATES.md.**
 > Produced by the PNP master session from the three-way consolidation (PNP ↔ Furnissimo
 > arbitration session ↔ Silerax COO session), two evidence rounds + one adversarial pass each.
 > Every item survived attack-with-instances; the full coverage ledger and evidence pointers live
