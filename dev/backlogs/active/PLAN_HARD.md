@@ -1618,16 +1618,15 @@ loop runs to the end without asking again" стои и в самия guard (b) (
    ```
    # Dispatch waits for the operator's word; data is not an order [R]
 
-   Reinforces payload `docs/WORKFLOW.md` - "Operator-interaction guards", guard (b) - read it
-   there.
-
-   A ticket is written and then STOPS; starting it is the operator's call, ticket by ticket, and
-   data the operator supplies is never permission to execute. A NEWLY BORN ticket waits for its
-   own word, and its announcement carries the one audit-pass question - guard (b) holds the full
-   text, including what a standing word does and does not cover.
+   Reinforces payload `docs/WORKFLOW.md` - "Operator-interaction guards", guard (b). Read the guard
+   itself: it holds the word that starts a ticket, what a standing word does and does not cover, and
+   the question a newly born ticket's announcement carries.
    ```
 
-   Без "notification" и без "runs to the end" в каквато и да е форма.
+   Без "notification" и без "runs to the end" в каквато и да е форма. **[Корекционен рунд 1,
+   2026-09-22: литералът свит до чист указател по блокера на docs паса — старата версия
+   назоваваше пет правила по същество; нанесено през шел по изрична операторска дума
+   (класификаторът блокира Edit в цялото репо).]**
 2. `docs/WORKFLOW.md:202` — изречението става, буквално: "After the word, the loop runs to the end
    of what that word covers without asking again - and every further paid pass takes its own word
    (§ The operator does not arbitrate engineering decisions)." Нищо друго в guard (b); `:207` е
@@ -1821,6 +1820,42 @@ NEEDS-FIX, 4 блокера (1 остатъчен + 3 родени от реви
 mktemp вместо rm; CHANGELOG/миграцията сочат guard (g) вместо копие). Таванът от 2 паса изчерпан;
 операторска дума 2026-09-22: readiness затворен БЕЗ пас 3 — имплементационният docs пас остава
 мрежата. Кодовият пас на изпълнението: по таблицата (1, Class: docs).
+
+#### HARD-016 — Completion record (2026-09-22)
+
+**Release commit `9f62b4c`** върху котвата `d979709` (14 файла, 154+/30−; едноредово съобщение,
+нула trailers; dev/ извън диффа). Изпълнено: seed-ът указател (корекционен рунд 1: свит до чист
+указател по блокера на docs паса, нанесен от COO през шел по изрична операторска дума —
+класификаторът на auto mode блокира Edit в цялото репо, harness дефект, докладван); четирите
+WORKFLOW редакции с байт-непокътнати пинове; CHANGELOG `[0.2.9] - 2026-09-22` (датата == денят
+на тага, удържано); миграция `0013_preflight-and-word-gate` (note, word-gate изречението, supersedes);
+bump 0.2.9; fixture → `0014_example-bump` (git mv); README:21; self-install apply (1 операция,
+0 диалога, CHANGES файлът роден от него).
+
+**Ревю:** fact-check ×3 (пред-пасов: чист по съдържание; delta ×2 след рунда: 1 wrap дефект,
+поправен). Codex docs пас 1: **fail, 2 блокера** (seed-ът преразказваше 5 правила; NOTES
+парафразираше guard (g)) → рунд 1, чиста проза, затворен без платен верификационен пас по
+правилото (fact-check + COO първолично, записани). Пас икономика: 84,888 токена, 100/99→94/98.
+
+**VERIFY (точни кодове):** Порция 1 — 8/8 exit 0, една паралелна партида, 14.9 мин (доказаният
+драйвер с кеширани handles). Порция 2 — WSL, една инвокация (tar от работното дърво, mktemp под
+/home/pnp, нула изтривания), 7/7, `P2-GREEN`, selfcheck в копието 1328/1328. Двете ПРЕДИ commit-а,
+по каданса.
+
+**Церемония:** `gh auth` ок → tag `v0.2.9` на `9f62b4c` (дума; лек, cat-file=commit) → push main
+(`6feeb47..9f62b4c`) + tag (дума + диалози) → sync `0 0`, tag-hash проверен. **CI: рънове
+35742265309 + 35742246818 — windows+ubuntu зелени, macos СЪЩО зелен (трето поредно; advisory
+остава по ruling 2026-09-20).**
+
+**Consumer proof (релей, ПРЕДИ CI по операторска дума — обявено отклонение от реда на
+церемонията, рискът приет като обратим):** Silerax 0.2.8→0.2.9, 1 оп / 0 конфликта, selfcheck
+1328/1328, commit `a8ce87a0`; Furnissimo същото, selfcheck 1329/1329, отпечатък 2 файла чисто
+отделен от замразения PROJ-004, commit `8bf5a627`. И двамата подкараха CLEAN-001 веднага —
+guard (g)/word-gate механизмът хвана първия си реален случай на терен (Furnissimo seed refresh,
+показан за одобрение вместо тих запис).
+
+**Останал дълг: няма.** Планът остава АКТИВЕН (HARD-011 отложен открит за 0.3.0, операторска
+дума 2026-09-22); route-state `{}` при този запис.
 
 ## 0.2.7 — Environment correctness · tag `v0.2.7` (операторска дума 2026-09-16: HARD-013; ЗАМРАЗЕНО до края на консолидацията. HARD-014 ОТПАДНА — беше „Одитор с resume на сесията"; темата отива където консолидационното решение я прати)
 
