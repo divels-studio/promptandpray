@@ -5811,6 +5811,44 @@ const DOCTRINE_CONSOLIDATION_SURFACES = [
 ];
 
 // ---------------------------------------------------------------------------
+// THE DOCTRINE PREFLIGHT ENUMERATION - one list of documents, stated in three homes
+// ---------------------------------------------------------------------------
+// A family of its own rather than a row of the table above: that one holds rules ADOPTED from a
+// consumer's notes, while this is a LIST whose members have to agree across every file that states
+// it. The failure mode is the third instance of the one CONS-005 and CONS-009 were paid for - an
+// enumeration with several homes, updated in one of them. The managed `CLAUDE.md` region took the
+// rendered Orchestrator role as its FOURTH preflight document; the two operator doors
+// (`/pnp:mission`, `/pnp:work`) went on listing three, and a consumer session that entered through a
+// door worked a whole day on a preflight the region had already replaced (measured 2026-09-20/21).
+// One fragment held identically in all three homes is what makes the list ONE list, so the pin is
+// the member that was lost rather than the whole paragraph, which is worded per home. Whitespace is
+// collapsed on both sides, so the template's line wrap through the middle of the fragment is not a
+// missing rule - and a line-based grep for it is not an instrument here, which is exactly why the
+// identity of the wording is held by this check instead.
+// The replacement per entry is the sentence the list collapses into when the role is dropped: it
+// closes on the overrides document and still reads perfectly true with three documents in it, which
+// is what the edit that caused this actually looked like.
+const DOCTRINE_PREFLIGHT_PHRASE =
+  '`.claude/aiwf-native/ORCHESTRATOR.md` (your rendered standing rules)';
+const DOCTRINE_PREFLIGHT_SURFACES = [
+  { id: 'doctrine-preflight-claude-template',
+    file: 'templates/CLAUDE.md.tmpl',
+    phrase: DOCTRINE_PREFLIGHT_PHRASE,
+    replacement: 'the overrides document',
+    what: 'the managed CLAUDE.md region names the rendered standing rules as the fourth preflight document' },
+  { id: 'doctrine-preflight-mission',
+    file: 'skills/mission/SKILL.md',
+    phrase: DOCTRINE_PREFLIGHT_PHRASE,
+    replacement: 'the overrides document',
+    what: '/pnp:mission preflight lists the same four documents as the managed region' },
+  { id: 'doctrine-preflight-work',
+    file: 'skills/work/SKILL.md',
+    phrase: DOCTRINE_PREFLIGHT_PHRASE,
+    replacement: 'the overrides document',
+    what: '/pnp:work preflight lists the same four documents as the managed region' },
+];
+
+// ---------------------------------------------------------------------------
 // ESCALATION, THE ARBITER AND COO ROUTING - the rules that decide WHO decides
 // ---------------------------------------------------------------------------
 // The family that governs the moment a decision stops being the COO's own. Each of these was a
@@ -6331,6 +6369,13 @@ function payloadDoctrineFindings(pluginRoot) {
       text == null ? 'the file is missing' : (present ? `"${collapseWs(s.phrase)}"` : `the sentence is missing or reworded: "${collapseWs(s.phrase)}"`));
   }
 
+  for (const s of DOCTRINE_PREFLIGHT_SURFACES) {
+    const text = readText(path.join(pluginRoot, ...s.file.split('/')));
+    const present = text != null && collapseWs(text).includes(collapseWs(s.phrase));
+    add(s.id, `${s.file}: ${s.what}`, present,
+      text == null ? 'the file is missing' : (present ? `"${collapseWs(s.phrase)}"` : `the sentence is missing or reworded: "${collapseWs(s.phrase)}"`));
+  }
+
   for (const s of DOCTRINE_ESCALATION_SURFACES) {
     const text = readText(path.join(pluginRoot, ...s.file.split('/')));
     const present = text != null && collapseWs(text).includes(collapseWs(s.phrase));
@@ -6651,6 +6696,16 @@ const DOCTRINE_CONTROLS = [
   ...DOCTRINE_CONSOLIDATION_SURFACES.map((s) => ({
     id: s.id,
     label: `${s.file}: the adopted rule reverted ("${collapseWs(s.phrase).slice(0, 60)}" -> "${s.replacement}")`,
+    apply: (r) => doctrinePhrase(r, s.file, s.phrase, s.replacement),
+  })),
+  // One control per HOME of the preflight enumeration, sabotaged the way a list actually loses a
+  // member: the rendered role is dropped and the sentence closes on the overrides document - three
+  // documents, a sentence still true of itself, and no longer the region's list. One entry per file
+  // is the whole point here, because the defect this pin exists against is exactly the list updated
+  // in one home and left standing in the other two.
+  ...DOCTRINE_PREFLIGHT_SURFACES.map((s) => ({
+    id: s.id,
+    label: `${s.file}: the fourth preflight document dropped from the list ("${collapseWs(s.phrase).slice(0, 60)}" -> "${s.replacement}")`,
     apply: (r) => doctrinePhrase(r, s.file, s.phrase, s.replacement),
   })),
   // One control per pass-conduct surface, sabotaged with the looser practice each rule replaced: the

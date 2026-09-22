@@ -30,9 +30,10 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
 ## Steps
 
 1. **Doctrine preflight (mandatory).** Read the plugin's `docs/WORKFLOW.md` and `docs/LOOP.md` IN
-   FULL, and this project's `{{config.paths.overridesDoc}}` IN FULL, before anything else. The
-   overrides document carries the project's identity, hard rules and product truth - a session
-   without it works without the product's boundaries.
+   FULL, this project's `{{config.paths.overridesDoc}}` IN FULL, AND
+   `.claude/aiwf-native/ORCHESTRATOR.md` (your rendered standing rules) IN FULL, before anything
+   else. The overrides document carries the project's identity, hard rules and product truth - a
+   session without it works without the product's boundaries.
 2. **Tree check.** Current branch, `git status`, the last ~5 commits. Identify uncommitted work -
    NEVER touch or stage foreign uncommitted files; commit only by explicit paths.
    Print the **audit table** with it, **verbatim** - the tool's literal output, never a retelling -
