@@ -1395,6 +1395,24 @@ own commit, so what was audited and what is a note after it stay distinguishable
 7. **Целта на изданието е `v0.2.9`, не `v0.2.8`** (PLAN_CONS Решение 19б: `HARD-011 → 0.2.9`;
    0.2.8 е изданието на CONS-010). Заглавието на секцията и т.5 по-горе носят старото число и
    се четат през тази бележка.
+
+**[ДОПИСАНО 2026-09-23, операторска дума]**
+8. **Codex хостът се описва в README-то.** Кратък раздел за оператор, чийто Одитор/QA е на
+   Codex. Съдържа два измерени факта и една проверка:
+   (а) **Нов OpenAI модел иска CLI версия, която го познава.** Измерено на 2026-09-23:
+   codex-cli 0.154.0 върна за `gpt-6-sol` предупреждение „model metadata not found“ и 400
+   „not supported when using Codex with a ChatGPT account“. Съобщението звучи като проблем на
+   акаунта, но не е. След `codex update` до 0.156.1 същият модел отговаря нормално. Преди смяна
+   на модел в `roles.json`: първо `codex update`.
+   (б) **Multi-agent функциите на Codex се заключват изрично в `~/.codex/config.toml`:**
+   `[features] multi_agent = false` и `multi_agent_v2 = false`. Мотив: при multi-agent пасът
+   изяде 42% от квотата срещу 14% без него. Освен това codex-cli 0.156.1 донесе `multi_agent_v2`
+   като stable, изключен само по подразбиране и незаключен. Бъдеща версия може да го включи
+   тихо.
+   (в) **Проверката, преди модел да влезе в `roles.json`:**
+   `codex exec -m <model> -s read-only --skip-git-repo-check "Reply with exactly: OK"`.
+   README-то описва механизма и проверката, без да заковава конкретни model id-та като
+   препоръка, защото те остаряват. Payload правилата важат (английски, без абсолютни пътища).
 **Acceptance:** всяко от 14-те payload README-та отваря с ориентиращо изречение (списъкът
 файл-по-файл в handback-а; броят се проверява:
 `git ls-files "*README.md" ":(exclude)dev" | Measure-Object -Line` → 14); `git grep -nP
