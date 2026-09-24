@@ -14,7 +14,7 @@ the repository; the cycle asserts that the repository is byte-identical afterwar
 | `answers.json` | a complete, non-interactive answers file for `/pnp:setup` (Windows channel, both review roles claude-hosted on tier aliases, QAL off). It is also a valid config body: the self-check validates it against `schema/aiwf.config.schema.json`. |
 | `answers-linux.json` | the same answers on the `linux` OS channel, and nothing else changed. It is what the ubuntu and macos CI legs run the cycle with: the channel decides which wrapper paths get RENDERED into the project, and rendering is pure file writing, so this file runs on any host - including Windows. |
 | `seed/` | the host project BEFORE the install: its own `CLAUDE.md` prose, its own `.claude/settings.json` with one foreign permission rule, and `src/hello.mjs` - the target of the configured VERIFY command. The install must append beside all three, never over them. |
-| `bump/` | the simulated next release (the shipped payload version -> `0.3.0`): the manifest entry (`bump.json`), the migration itself (`0015_example-bump/`, one operation of each of the four types plus a second `rerender-managed-region` over `.claude/agents/writer.md`, which the cycle never edits), and the schema property that migration introduces (`schema-key.json`). |
+| `bump/` | the simulated next release, as a template the harness numbers: its slug (`bump.json`), the migration itself with no number and no version (`example-bump/`, one operation of each of the four types plus a second `rerender-managed-region` over `.claude/agents/writer.md`, which the cycle never edits), and the schema property that migration introduces (`schema-key.json`). `scripts/ci/example-bump.mjs` builds it into a payload copy as migration `<NNNN>_example-bump` (that payload's manifest length + 1), targeting that payload's next minor version. |
 
 ## The cycle
 
@@ -24,7 +24,7 @@ runs on every push. Substitute the four paths and you can run it by hand:
 - `<repo>` - this repository
 - `<work>` - any empty directory OUTSIDE it
 - `<payload>` - `<work>/payload-shipped`, a copy of `<repo>`
-- `<payload2>` - `<work>/payload-bumped`, that copy with `bump/` overlaid onto it
+- `<payload2>` - `<work>/payload-bumped`, a second copy of `<payload>`, into which step 2 builds `bump/`
 - `<project>` - `<work>/project`, a copy of `seed/`
 - `<answers>` - `<repo>/examples/example-project/answers.json`, or the file passed to `--answers`
   (CI's POSIX legs pass `answers-linux.json`)
@@ -41,10 +41,19 @@ node <payload>/scripts/setup/interview.mjs --answers-file <answers> --plugin-roo
 
 exit 0
 
-**2. Validate the bumped payload.** Copy `<payload>` to `<payload2>`, set its `plugin.json` version
-to `0.3.0`, append `bump/bump.json` to `migrations/index.json`, copy `bump/0015_example-bump/` into
-`migrations/`, splice `bump/schema-key.json` into the schema, and append a line to
-`templates/agents/writer.md.tmpl` so that artifact's render really changes. Then:
+**2. Build and validate the bumped payload.** Copy `<payload>` to `<payload2>`, then build the
+simulated release into it. The builder numbers the migration `<NNNN>_example-bump` (the manifest
+length + 1), raises `plugin.json` to the payload's next minor version, appends the manifest entry,
+copies `bump/example-bump/` into `migrations/<NNNN>_example-bump/` with both values written into its
+`ops.json`, and splices `bump/schema-key.json` into the schema. Nothing under `examples/` is written.
+
+```
+node <repo>/scripts/ci/example-bump.mjs --payload <payload2> --example <repo>/examples/example-project
+```
+
+exit 0 - it prints `migration: <NNNN>_example-bump` and `targetPluginVersion: <target>`, the two
+values the later steps use. Then append a line to `<payload2>/templates/agents/writer.md.tmpl` so that
+artifact's render really changes, and validate:
 
 ```
 node <payload2>/scripts/update/validate-payload.mjs --plugin-root <payload2>
@@ -71,12 +80,13 @@ node <payload2>/scripts/update/aiwf-update.mjs --dry-run --plugin-root <payload2
 
 exit 1 - and the project is byte-identical afterwards
 
-**6. Apply.** Write `<work>/resolutions.json` first - one record per address:
+**6. Apply.** Write `<work>/resolutions.json` first - one record per address, where
+`<NNNN>_example-bump` is the migration id step 2 printed:
 
 ```json
 {
-  "0015_example-bump/0/enforcement.exampleToggle": { "kind": "answer", "value": false },
-  "0015_example-bump/1/CLAUDE.md#aiwf-core": { "kind": "conflict", "resolution": "keep-mine" }
+  "<NNNN>_example-bump/0/enforcement.exampleToggle": { "kind": "answer", "value": false },
+  "<NNNN>_example-bump/1/CLAUDE.md#aiwf-core": { "kind": "conflict", "resolution": "keep-mine" }
 }
 ```
 
@@ -90,7 +100,7 @@ node <payload2>/scripts/update/aiwf-update.mjs --apply --plugin-root <payload2> 
 
 exit 0 - your edit survives, that artifact is now held (`override: true`), the Writer agent quietly
 takes the payload version ("the payload version applied (you had not edited it)"), the other
-operations applied, `CHANGES_<installed>-to-0.3.0.md` appears at the project root listing each
+operations applied, `CHANGES_<installed>-to-<target>.md` appears at the project root listing each
 re-rendered artifact as `payload-current` or `held (your version kept)`, and the update runs the
 self-check itself
 

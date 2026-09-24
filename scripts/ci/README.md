@@ -3,6 +3,7 @@
 | file | what it is |
 |---|---|
 | `run-example-cycle.mjs` | The end-to-end gate: install -> simulated version bump -> update (with a real conflict) -> self-check, run against the committed data in `examples/example-project/`. Nine steps, an assertion at each. `[--work-dir <dir>] [--keep] [--quiet]`; exit 0 = every check passed, 1 = at least one failed, 2 = could not start. |
+| `example-bump.mjs` | The one builder of the simulated next release: turns the template in `examples/example-project/bump/` into a real migration inside a payload COPY, numbered at run time (manifest length + 1, the payload's next minor version), and only reads `examples/`. The cycle runs it at step 3; the self-check executes it over a throwaway copy. `--payload <dir> --example <dir>`; prints `migration: <id>` and `targetPluginVersion: <version>`; exit 0 = built, 1 = the build failed (the reason printed), 2 = a required argument is missing. |
 
 Two properties this directory exists to hold:
 

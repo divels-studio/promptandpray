@@ -51,6 +51,8 @@ import {
   UpdateError, assertNoForeignFileAtCreationTarget, extractRegion, resolveArtifact, runUpdate, writeCreatedTarget,
 } from './migrate.mjs';
 import { sha256 } from '../setup/generate.mjs';
+import { validatePayload } from './validate-payload.mjs';
+import { buildExampleBump } from '../ci/example-bump.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PLUGIN_ROOT = path.resolve(HERE, '..', '..');
@@ -270,31 +272,8 @@ function makePayload(name, { version, migrations, tweak = null }) {
     fs.writeFileSync(path.join(mdir, 'NOTES.md'), `# ${m.id}\n\nFixture migration written by the update acceptance suite.\n`, 'utf8');
   }
   writeJson(at(dir, 'migrations/index.json'), manifest);
-  renumberExampleBump(dir, manifest);
   if (tweak) tweak(dir);
   return dir;
-}
-
-/**
- * The committed example fixture travels with every payload copy, and the self-check - which a real
- * `--apply` runs against the payload it applied - holds it to the manifest of the payload it sits
- * in: the entry numbered NNNN-1 must really exist. The manifest here is FABRICATED (truncated to the
- * baseline, then fixture migrations appended), so the example bump is renumbered to follow it.
- * Without this the fixture's number would silently depend on how many migrations the payload ships.
- */
-function renumberExampleBump(dir, manifest) {
-  const bumpDir = at(dir, 'examples/example-project/bump');
-  const bump = readJson(path.join(bumpDir, 'bump.json'));
-  if (!bump || typeof bump.migration !== 'string') return;
-  const slug = bump.migration.replace(/^\d+_/, '');
-  const nextId = `${String(manifest.length + 1).padStart(4, '0')}_${slug}`;
-  if (nextId === bump.migration) return;
-  fs.renameSync(path.join(bumpDir, bump.migration), path.join(bumpDir, nextId));
-  const ops = readJson(path.join(bumpDir, nextId, 'ops.json'));
-  ops.migration = nextId;
-  writeJson(path.join(bumpDir, nextId, 'ops.json'), ops);
-  bump.migration = nextId;
-  writeJson(path.join(bumpDir, 'bump.json'), bump);
 }
 
 // The payload every project here is INSTALLED from: the shipped plugin at its baseline migration.
@@ -2455,6 +2434,93 @@ section('15 - createIfAbsent: an unrecorded artifact is CREATED on empty ground,
       && !section('0003_again').includes('created (no record, no file)'),
       section('0003_again').split('\n').filter((l) => l.includes('reviewer.md')).join(' | ').slice(0, 160));
   }
+}
+
+// ---------------------------------------------------------------------------
+section('16 - a release never touches examples/: the example bump is numbered when it is built, against the payload it lands in');
+// The committed example bump carries no number and no version. Here it is built into a payload that
+// has just shipped a release of its own (a full fake migration on top of the baseline), and the
+// result must be the NEXT release of THAT payload - a coherent one the validator accepts - while the
+// example template it was built from stays byte for byte what it was.
+{
+  const NOTE_ONLY = [{ op: 'note', id: 'fake-release', text: 'A release the example bump has to follow.', docRefs: ['docs/LOOP.md'] }];
+  const sim = makePayload('release-sim', {
+    version: '0.2.0',
+    migrations: [{ id: '0002_fake-release', version: '0.2.0', ops: NOTE_ONLY }],
+  });
+  const exampleDir = at(sim, 'examples/example-project');
+  const templateBefore = snapshot(at(exampleDir, 'bump'));
+  let built = null;
+  let buildError = null;
+  try { built = buildExampleBump(sim, exampleDir); } catch (e) { buildError = e; }
+  check('the builder runs against the released payload', buildError === null, buildError ? buildError.message : '');
+  check('it numbers the bump manifest length + 1 of THAT payload: 0003_example-bump',
+    !!built && built.id === '0003_example-bump', built ? built.id : 'nothing built');
+  check('and targets that payload\'s next minor version: 0.3.0',
+    !!built && built.targetPluginVersion === '0.3.0', built ? built.targetPluginVersion : 'nothing built');
+  const manifest = readJson(at(sim, 'migrations/index.json')) || [];
+  const ops = readJson(at(sim, 'migrations/0003_example-bump/ops.json')) || {};
+  check('the manifest, plugin.json and the copied ops.json all carry the computed id and version',
+    JSON.stringify(manifest[manifest.length - 1]) === JSON.stringify({ id: '0003_example-bump', targetPluginVersion: '0.3.0' })
+      && (readJson(at(sim, '.claude-plugin/plugin.json')) || {}).version === '0.3.0'
+      && ops.migration === '0003_example-bump' && ops.targetPluginVersion === '0.3.0'
+      && exists(at(sim, 'migrations/0003_example-bump/NOTES.md')),
+    `${JSON.stringify(manifest[manifest.length - 1])} / ops ${ops.migration} -> ${ops.targetPluginVersion}`);
+  const v = validatePayload(sim);
+  check('validate-payload accepts the built payload with ZERO errors (numbering, directories, monotonic versions, last entry == payload version)',
+    v.errors.length === 0, () => v.errors.join('\n'));
+  check('the example template it was built from is byte-identical afterwards',
+    diffSnapshots(templateBefore, snapshot(at(exampleDir, 'bump'))).length === 0,
+    diffSnapshots(templateBefore, snapshot(at(exampleDir, 'bump'))).join(', '));
+}
+
+// An UNUSABLE template is refused before the payload is touched, and the payload stays buildable.
+// The unreadable entry is a DANGLING link inside the template directory: a junction on Windows (no
+// privilege needed) and a plain symlink on POSIX (Node ignores the 'junction' type there), so the
+// same case runs on every OS this payload supports. It is the case a copy-as-you-go builder gets
+// wrong: ops.json reads fine, the target directory is created, and the copy then dies on the link -
+// a partial migration directory, and a retry refused because that directory now exists.
+{
+  const NOTE_ONLY = [{ op: 'note', id: 'fake-release', text: 'A release the example bump has to follow.', docRefs: ['docs/LOOP.md'] }];
+  const sim = makePayload('release-sim-broken-template', {
+    version: '0.2.0',
+    migrations: [{ id: '0002_fake-release', version: '0.2.0', ops: NOTE_ONLY }],
+  });
+  // The broken template lives OUTSIDE the payload copy, so the payload tree can be compared whole.
+  const exampleDir = path.join(tmpRoot, 'example-broken-template');
+  copyTree(at(PLUGIN_ROOT, 'examples/example-project/bump'), path.join(exampleDir, 'bump'));
+  const link = path.join(exampleDir, 'bump', 'example-bump', 'AAA-dangling');
+  let linkError = null;
+  try { fs.symlinkSync(path.join(tmpRoot, 'no-such-target'), link, 'junction'); } catch (e) { linkError = e; }
+  // A link that cannot be made is a FAILED check, never a skip: on every supported OS it can be.
+  check('a dangling link can be planted in the template (a junction on Windows, a symlink on POSIX)',
+    linkError === null, linkError ? `${linkError.code || ''} ${linkError.message}` : '');
+  // Directories are part of the state: a failed build that left an EMPTY migration directory behind
+  // changes no file, and would still refuse the retry.
+  const treeState = (dir, base = dir, acc = {}) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      const rel = path.relative(base, p).split(path.sep).join('/');
+      if (e.isDirectory()) { acc[`${rel}/`] = '<dir>'; treeState(p, base, acc); } else acc[rel] = fs.readFileSync(p, 'utf8');
+    }
+    return acc;
+  };
+  const before = treeState(sim);
+  let refusal = null;
+  try { buildExampleBump(sim, exampleDir); } catch (e) { refusal = e; }
+  check('the build is REFUSED, marked as a refusal, naming the unreadable entry',
+    !!refusal && refusal.refused === true && /AAA-dangling/.test(refusal.message),
+    refusal ? `refused=${refusal.refused}: ${refusal.message}` : 'it did not throw at all');
+  const changed = diffSnapshots(before, treeState(sim));
+  check('the payload is byte-identical afterwards - no migration directory, no manifest entry, no version change',
+    changed.length === 0, changed.join(', '));
+  try { fs.rmdirSync(link); } catch { try { fs.unlinkSync(link); } catch { /* the check below is the real answer */ } }
+  let retry = null;
+  let retryError = null;
+  try { retry = buildExampleBump(sim, exampleDir); } catch (e) { retryError = e; }
+  check('once the template is repaired, the SAME payload builds: 0003_example-bump -> 0.3.0',
+    !!retry && retry.id === '0003_example-bump' && retry.targetPluginVersion === '0.3.0',
+    retryError ? retryError.message : JSON.stringify(retry));
 }
 
 // ---------------------------------------------------------------------------

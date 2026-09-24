@@ -7009,6 +7009,7 @@ function sectionPayloadIntegrity() {
     const ENTRYPOINTS = [
       'scripts/setup/interview.mjs', 'scripts/setup/generate.mjs', 'scripts/setup/validate-config.mjs',
       'scripts/setup/aiwf-roles.mjs', 'scripts/update/aiwf-update.mjs', 'scripts/update/validate-payload.mjs',
+      'scripts/ci/example-bump.mjs',
     ];
     const guardBody = (src) => {
       const m = /function isMain\(\)\s*\{([\s\S]*?)\n\}/.exec(String(src || ''));
@@ -7025,7 +7026,7 @@ function sectionPayloadIntegrity() {
       if (src === null) { weak.push(`${rel} (missing)`); continue; }
       if (!guardResolvesLinks(src)) weak.push(rel);
     }
-    check('every setup/update entrypoint decides "am I main?" through realpath, so a symlinked payload still runs',
+    check('every setup/update/ci entrypoint decides "am I main?" through realpath, so a symlinked payload still runs',
       weak.length === 0, weak.length ? weak.join('; ') : `${ENTRYPOINTS.length} entrypoints`);
     // The needle on constructed input: "nothing weak" is also what a scan matching NOTHING reports,
     // so the detector is shown to accept the resolved guard and to report the literal one.
@@ -7522,13 +7523,12 @@ function sectionProvenance(tmpRoot) {
 //
 // EVERY CHECK BELOW MUST SURVIVE BEING RUN AGAINST A PAYLOAD COPY. The acceptance suites and the
 // cycle itself run this self-check with --plugin-root pointing at a copy that already carries a
-// fixture migration, so a check phrased as "the bump is newer than the last manifest entry" would
-// fail on exactly the payloads that exercise the engine hardest. The predecessor rule below is
-// phrased against the entry the bump declares itself to FOLLOW, which is stable in both.
+// fixture migration - the cycle's copy carries the example bump itself. That is why the bump holds
+// no number of its own: the build check below numbers it against whichever payload it runs over.
 const EXAMPLE_REL = 'examples/example-project';
 const exAt = (root, ...rel) => path.join(root, 'examples', 'example-project', ...rel);
 const OP_TYPES = ['add-config-key', 'rerender-managed-region', 'reconcile-ask-ruleset', 'note'];
-const MIGRATION_ID_RE = /^([0-9]{4})_([a-z0-9]+(?:-[a-z0-9]+)*)$/;
+const BUMP_SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const VERSION_RE = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/;
 
 // An independent implementation, like sha256 above and for the same reason: this file must be able
@@ -7726,19 +7726,24 @@ function exampleFixtureFindings(root, tmpDir, { guardProbes = true } = {}) {
   add('example-seed', `${EXAMPLE_REL}/seed/ carries the pre-existing prose, the foreign permission rule and the VERIFY target`,
     seedMissing.length === 0, seedMissing.length ? `missing ${seedMissing.join(', ')}` : '3 files');
 
+  // The bump is a TEMPLATE: no migration number and no version anywhere under bump/. Both are
+  // computed by scripts/ci/example-bump.mjs from the payload it is built into, so a number written
+  // back here is the hand-renaming ritual returning - and it is what these two checks refuse.
   const bump = readJson(exAt(root, 'bump', 'bump.json'));
   const bumpShapeOk = isPlainObject(bump)
-    && Object.keys(bump).sort().join(',') === 'migration,targetPluginVersion'
-    && typeof bump.migration === 'string' && typeof bump.targetPluginVersion === 'string';
-  add('example-bump-json', `${EXAMPLE_REL}/bump/bump.json carries exactly {migration, targetPluginVersion}`,
-    bumpShapeOk, isPlainObject(bump) ? Object.keys(bump).join(', ') : 'not an object');
+    && Object.keys(bump).join(',') === 'slug'
+    && typeof bump.slug === 'string' && BUMP_SLUG_RE.test(bump.slug);
+  add('example-bump-json', `${EXAMPLE_REL}/bump/bump.json carries exactly {slug} - a slug, no number and no version`,
+    bumpShapeOk, isPlainObject(bump) ? `${Object.keys(bump).join(', ')}${typeof bump.slug === 'string' ? ` (slug "${bump.slug}")` : ''}` : 'not an object');
 
-  const migrationId = bumpShapeOk ? bump.migration : '';
-  const ops = readJson(exAt(root, 'bump', migrationId, 'ops.json'));
-  const notes = readText(exAt(root, 'bump', migrationId, 'NOTES.md'));
-  add('example-bump-migration', `${EXAMPLE_REL}/bump/<migration>/ has ops.json + NOTES.md, both agreeing with bump.json`,
-    isPlainObject(ops) && notes !== null && ops.migration === migrationId && ops.targetPluginVersion === (bump || {}).targetPluginVersion,
-    isPlainObject(ops) ? `ops declares ${ops.migration} -> ${ops.targetPluginVersion}` : 'ops.json missing or unparseable');
+  const slug = bumpShapeOk ? bump.slug : '';
+  const ops = slug ? readJson(exAt(root, 'bump', slug, 'ops.json')) : null;
+  const notes = slug ? readText(exAt(root, 'bump', slug, 'NOTES.md')) : null;
+  const stamped = isPlainObject(ops) ? ['migration', 'targetPluginVersion'].filter((k) => Object.prototype.hasOwnProperty.call(ops, k)) : [];
+  add('example-bump-migration', `${EXAMPLE_REL}/bump/<slug>/ has ops.json + NOTES.md, and ops.json carries no migration id and no version of its own`,
+    isPlainObject(ops) && Array.isArray(ops.operations) && notes !== null && stamped.length === 0,
+    !isPlainObject(ops) ? 'ops.json missing or unparseable'
+      : (stamped.length ? `ops.json hard-codes ${stamped.join(' and ')} - those are computed when the bump is built` : `${ops.operations.length} operations`));
 
   const opList = (isPlainObject(ops) && Array.isArray(ops.operations)) ? ops.operations : [];
   const usedTypes = new Set(opList.filter(isPlainObject).map((o) => o.op));
@@ -7746,21 +7751,65 @@ function exampleFixtureFindings(root, tmpDir, { guardProbes = true } = {}) {
   add('example-bump-ops-types', 'the example migration exercises ALL FOUR operation types, so a reader sees the whole vocabulary',
     missingTypes.length === 0, missingTypes.length ? `missing ${missingTypes.join(', ')}` : `${opList.length} operations`);
 
-  // --- the bump is a plausible NEXT release ---------------------------------------------------
-  // The predecessor rule, phrased exactly as validate-payload phrases an appended entry: the id is
-  // NNNN_<slug>, the entry numbered NNNN-1 really exists in the manifest, and the target version is
-  // strictly greater than that entry's.
-  const manifest = readJson(path.join(root, 'migrations', 'index.json'));
-  const idMatch = MIGRATION_ID_RE.exec(migrationId);
-  const number = idMatch ? Number(idMatch[1]) : 0;
-  const predecessor = (Array.isArray(manifest) && number >= 2) ? manifest[number - 2] : null;
-  add('example-bump-id', 'the bump id is NNNN_<slug> and the manifest entry it declares itself to FOLLOW really exists',
-    !!idMatch && isPlainObject(predecessor) && typeof predecessor.id === 'string',
-    idMatch ? `${migrationId} follows ${predecessor ? predecessor.id : 'nothing at position ' + (number - 1)}` : `"${migrationId}" is not NNNN_<slug>`);
-  add('example-bump-version', 'the bump target version is a plain MAJOR.MINOR.PATCH triple, strictly greater than that entry\'s',
-    versionTriple((bump || {}).targetPluginVersion) !== null && isPlainObject(predecessor)
-      && versionGreater(bump.targetPluginVersion, predecessor.targetPluginVersion),
-    `${(bump || {}).targetPluginVersion} vs ${predecessor ? predecessor.targetPluginVersion : '(no predecessor)'}`);
+  // --- the bump BUILDS as the NEXT release of this payload --------------------------------------
+  // EXECUTED, not read: the one builder (scripts/ci/example-bump.mjs, from THIS payload) is spawned
+  // over a throwaway copy of the four inputs it reads - plugin.json, the manifest, the schema and the
+  // bump template - and the result is read off the copy. The id must be the copy's manifest length
+  // + 1, the target version strictly greater than the copy's payload version (and carried by
+  // plugin.json, the new last manifest entry and the copied ops.json alike), and the template must be
+  // byte-identical afterwards: the builder only READS examples/. Measured against whatever payload
+  // this runs over, so it holds on the shipped payload and on every fabricated copy the suites build.
+  {
+    const probeRoot = path.join(tmpDir, `example-build-${exampleProbe += 1}`);
+    const exampleCopy = path.join(probeRoot, ...EXAMPLE_REL.split('/'));
+    let ok = false;
+    let detail = '';
+    try {
+      for (const rel of ['.claude-plugin/plugin.json', 'migrations/index.json', 'schema/aiwf.config.schema.json']) {
+        const to = path.join(probeRoot, ...rel.split('/'));
+        fs.mkdirSync(path.dirname(to), { recursive: true });
+        fs.copyFileSync(path.join(root, ...rel.split('/')), to);
+      }
+      copyPayloadTree(exAt(root, 'bump'), path.join(exampleCopy, 'bump'));
+      const digest = (dir) => {
+        const acc = [];
+        const walk = (d) => {
+          for (const e of fs.readdirSync(d, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1))) {
+            const p = path.join(d, e.name);
+            if (e.isDirectory()) walk(p); else acc.push(`${path.relative(dir, p)}:${sha256Bytes(fs.readFileSync(p))}`);
+          }
+        };
+        walk(dir);
+        return acc.join('\n');
+      };
+      const manifestBefore = readJson(path.join(probeRoot, 'migrations', 'index.json'));
+      const versionBefore = (readJson(path.join(probeRoot, '.claude-plugin', 'plugin.json')) || {}).version;
+      const templateBefore = digest(exampleCopy);
+      const r = spawnSync(process.execPath, [
+        path.join(root, 'scripts', 'ci', 'example-bump.mjs'), '--payload', probeRoot, '--example', exampleCopy,
+      ], { encoding: 'utf8' });
+      const out = (r.stdout || '') + (r.stderr || '');
+      const manifestAfter = readJson(path.join(probeRoot, 'migrations', 'index.json'));
+      const last = Array.isArray(manifestAfter) ? manifestAfter[manifestAfter.length - 1] : null;
+      const expectedId = Array.isArray(manifestBefore) && slug ? `${String(manifestBefore.length + 1).padStart(4, '0')}_${slug}` : null;
+      const builtOps = isPlainObject(last) ? readJson(path.join(probeRoot, 'migrations', String(last.id), 'ops.json')) : null;
+      const versionAfter = (readJson(path.join(probeRoot, '.claude-plugin', 'plugin.json')) || {}).version;
+      const templateUntouched = digest(exampleCopy) === templateBefore;
+      ok = r.status === 0 && expectedId !== null && isPlainObject(last)
+        && manifestAfter.length === manifestBefore.length + 1 && last.id === expectedId
+        && versionTriple(last.targetPluginVersion) !== null && versionGreater(last.targetPluginVersion, versionBefore)
+        && versionAfter === last.targetPluginVersion
+        && isPlainObject(builtOps) && builtOps.migration === last.id && builtOps.targetPluginVersion === last.targetPluginVersion
+        && out.includes(`migration: ${last.id}`) && templateUntouched;
+      detail = r.status !== 0 ? `builder exit ${r.status}: ${firstLine(out)}`
+        : `${isPlainObject(last) ? last.id : '(no entry)'} (expected ${expectedId}), ${versionBefore} -> ${isPlainObject(last) ? last.targetPluginVersion : '?'}`
+          + `${templateUntouched ? '' : ', AND THE BUILDER WROTE INTO THE EXAMPLE TEMPLATE'}`;
+    } catch (e) {
+      detail = `the probe could not run (${e.message})`;
+    }
+    add('example-bump-build', 'the example bump BUILDS as this payload\'s next release: id = manifest length + 1, a higher version, the template only read',
+      ok, detail);
+  }
 
   // --- the schema half of the same release ----------------------------------------------------
   const schemaKey = readJson(exAt(root, 'bump', 'schema-key.json'));
@@ -8049,14 +8098,12 @@ function copyPayloadTree(from, to) {
 // One control per assertion above. Each names the check `id` it must break, exactly like the
 // project-layer controls: a control that stops targeting a live check fails loudly rather than
 // quietly proving nothing.
-// The example bump's directory is named by `bump.json`, and that name legitimately MOVES: the fixture
-// is renumbered whenever the payload ships another migration (the ascend-by-1 rule), including inside
-// the fabricated payload copies the acceptance suites build. A control that hardcodes the number
-// silently stops sabotaging anything the day it changes - `mutateJson` would read a file that is not
-// there - so the id is read from `bump.json`, exactly as the findings above read it.
+// The example bump's template directory is named by the slug in `bump.json`, so the controls read it
+// from there, exactly as the findings above do: a control that hardcodes the name would silently stop
+// sabotaging anything the day it changes - `mutateJson` would read a file that is not there.
 const exampleBumpOps = (r) => {
   const bump = readJson(path.join(r, 'examples', 'example-project', 'bump', 'bump.json')) || {};
-  return ['examples', 'example-project', 'bump', String(bump.migration), 'ops.json'];
+  return ['examples', 'example-project', 'bump', String(bump.slug), 'ops.json'];
 };
 const EXAMPLE_CONTROLS = [
   { id: 'example-readme', label: 'the example README deleted',
@@ -8067,30 +8114,24 @@ const EXAMPLE_CONTROLS = [
     apply: (r) => fs.rmSync(exAt(r, 'seed', 'src', 'hello.mjs')) },
   { id: 'example-bump-json', label: 'an extra field smuggled into bump.json',
     apply: (r) => mutateJson(r, ['examples', 'example-project', 'bump', 'bump.json'], (b) => { b.extra = 'nope'; }) },
-  { id: 'example-bump-migration', label: 'the migration ops.json claims another migration id',
-    apply: (r) => mutateJson(r, exampleBumpOps(r), (o) => { o.migration = '0009_other'; }) },
+  { id: 'example-bump-json', label: 'a migration number written back into the bump slug',
+    apply: (r) => mutateJson(r, ['examples', 'example-project', 'bump', 'bump.json'], (b) => { b.slug = `0099_${b.slug}`; }) },
+  { id: 'example-bump-migration', label: 'the template ops.json hard-codes a migration id again (the rename ritual returning)',
+    apply: (r) => mutateJson(r, exampleBumpOps(r), (o) => { o.migration = '0099_example-bump'; }) },
   { id: 'example-bump-ops-types', label: 'the note operation dropped, so one op type is undemonstrated',
     apply: (r) => mutateJson(r, exampleBumpOps(r),
       (o) => { o.operations = o.operations.filter((x) => x.op !== 'note'); }) },
-  // DERIVED FROM THE MANIFEST IN THE COPY, not a hardcoded number and not the fixture's own number
-  // either. The finding asks whether the entry this bump declares itself to FOLLOW (position N-1)
-  // exists, so the sabotage has to name a position past the end - and "past the end" depends on the
-  // manifest it is measured against, which is not the same in every copy this control runs over:
-  //   - the shipped payload has N entries and the fixture is numbered N+1;
-  //   - the example CYCLE appends the bump to the manifest first, so there the same fixture number
-  //     sits at N, and "one past the fixture" would name an entry that really does exist.
-  // A literal was worse still: `0009` at base `0007` really did name nothing, and at base `0008`
-  // would name the entry the cycle just appended - the sabotage would stop sabotaging and the row
-  // would go green while proving nothing. `length + 2` overshoots by exactly one in every copy.
-  { id: 'example-bump-id', label: 'the bump renumbered so it follows a manifest entry that does not exist',
-    apply: (r) => {
-      const manifest = readJson(path.join(r, 'migrations', 'index.json'));
-      if (!Array.isArray(manifest) || manifest.length === 0) throw new Error('the copy carries no readable migrations/index.json');
-      mutateJson(r, ['examples', 'example-project', 'bump', 'bump.json'],
-        (b) => { b.migration = `${String(manifest.length + 2).padStart(4, '0')}_example-bump`; });
-    } },
-  { id: 'example-bump-version', label: 'the bump target version no longer rises above its predecessor',
-    apply: (r) => mutateJson(r, ['examples', 'example-project', 'bump', 'bump.json'], (b) => { b.targetPluginVersion = '0.0.1'; }) },
+  // The builder's controls sabotage the BUILDER in the copy - the file the build check spawns - at
+  // each of its three promises: the number, the version, and leaving examples/ alone. Each patch is
+  // anchored on one exact source line; an anchor that stops matching leaves the copy intact and the
+  // control reports "still PASS - the check is vacuous", never a quiet green.
+  { id: 'example-bump-build', label: 'the builder numbers the bump one past the next migration (a gap in the manifest)',
+    apply: (r) => patchText(r, ['scripts', 'ci', 'example-bump.mjs'], /const number = manifest\.length \+ 1;/, 'const number = manifest.length + 2;') },
+  { id: 'example-bump-build', label: 'the builder no longer raises the version (the bump targets the payload\'s own version)',
+    apply: (r) => patchText(r, ['scripts', 'ci', 'example-bump.mjs'], /\$\{Number\(minor\) \+ 1\}\.0/, '${minor}.${version[3]}') },
+  { id: 'example-bump-build', label: 'the builder writes the computed number back into examples/ (the rename ritual, automated)',
+    apply: (r) => patchText(r, ['scripts', 'ci', 'example-bump.mjs'], /^ {2}return \{ id, targetPluginVersion \};$/m,
+      "  fs.writeFileSync(path.join(bumpDir, 'bump.json'), JSON.stringify({ slug, migration: id }));\n  return { id, targetPluginVersion };") },
   { id: 'example-bump-schema-key', label: 'schema-key.json points at a schema block that does not exist',
     apply: (r) => mutateJson(r, ['examples', 'example-project', 'bump', 'schema-key.json'], (s) => { s.at = 'notABlock'; }) },
   { id: 'example-bump-schema-key', label: 'schema-key.json declares a default, which would make the migration a no-op on a fresh install',
@@ -8612,8 +8653,9 @@ function main() {
   console.log('field, and a traversal path are each REJECTED.');
   console.log('The EXAMPLE FIXTURE - the committed answers file, seed project and simulated version bump under');
   console.log('examples/example-project/ - is asserted as data that cannot rot: the answers really satisfy the');
-  console.log('shipped schema (at the validator\'s own entrypoint), the bump is a plausible next release by the');
-  console.log('payload validator\'s own id/version rules, the migration demonstrates all four op types, and the');
+  console.log('shipped schema (at the validator\'s own entrypoint), the bump template carries no number and');
+  console.log('its builder is EXECUTED to prove it lands as the payload\'s next migration and a higher version,');
+  console.log('the migration demonstrates all four op types, and the');
   console.log('README, the cycle driver and the CI workflow are compared against each other in both directions.');
   console.log('Every one of those assertions has its own negative control on a sabotaged payload copy.');
   console.log('The cycle driver is also EXECUTED there: it is spawned with a --work-dir inside the repository,');

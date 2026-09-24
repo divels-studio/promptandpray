@@ -55,6 +55,7 @@ const EXAMPLE_DIR = path.join(REPO_ROOT, 'examples', 'example-project');
 // The README lists these lines verbatim; the self-check compares the two sets in both directions.
 export const DOCUMENTED_COMMANDS = [
   'node <payload>/scripts/setup/interview.mjs --answers-file <answers> --plugin-root <payload> --project-root <project> --no-seeds',
+  'node <repo>/scripts/ci/example-bump.mjs --payload <payload2> --example <repo>/examples/example-project',
   'node <payload2>/scripts/update/validate-payload.mjs --plugin-root <payload2>',
   'node <payload2>/scripts/update/aiwf-update.mjs --check --plugin-root <payload2> --project-root <project>',
   'node <payload2>/scripts/update/aiwf-update.mjs --dry-run --plugin-root <payload2> --project-root <project>',
@@ -62,7 +63,7 @@ export const DOCUMENTED_COMMANDS = [
   'node <payload2>/scripts/update/aiwf-update.mjs --resolve CLAUDE.md#aiwf-core --plugin-root <payload2> --project-root <project> --resolution-file <work>/resolve-take-new.json',
   'node <payload2>/scripts/selfcheck/aiwf-selfcheck.js --plugin-root <payload2> --project-fixture <project>',
 ];
-const [CMD_INSTALL, CMD_VALIDATE, CMD_CHECK, CMD_DRYRUN, CMD_APPLY, CMD_RESOLVE, CMD_SELFCHECK] = DOCUMENTED_COMMANDS;
+const [CMD_INSTALL, CMD_BUILD, CMD_VALIDATE, CMD_CHECK, CMD_DRYRUN, CMD_APPLY, CMD_RESOLVE, CMD_SELFCHECK] = DOCUMENTED_COMMANDS;
 
 // ---------------------------------------------------------------------------
 // Reporting
@@ -91,7 +92,6 @@ function bail(message) {
 // ---------------------------------------------------------------------------
 const read = (p) => { try { return fs.readFileSync(p, 'utf8'); } catch { return null; } };
 const readJson = (p) => { const t = read(p); try { return t === null ? null : JSON.parse(t); } catch { return null; } };
-const writeJson = (p, value) => { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, JSON.stringify(value, null, 2) + '\n', 'utf8'); };
 // RAW BYTES, no decode and no line-ending normalisation. Everything downstream of this claims a
 // tree is "byte-identical", and a hash taken over LF-normalised text cannot see a file whose only
 // change is its line endings - which is a real class here, because .gitattributes deliberately keeps
@@ -363,10 +363,17 @@ if (!answersStat.isFile()) {
   bail(`--answers "${ANSWERS_FILE}" is not a regular file - the install step reads it as JSON.`);
 }
 
+// The bump is a TEMPLATE: bump.json names only its slug, and the documented builder
+// (scripts/ci/example-bump.mjs, step 3) computes the migration number and the target version from
+// the payload it builds into. What is judged here, before anything is created, is only that the
+// template is there to build from.
 const bump = readJson(path.join(EXAMPLE_DIR, 'bump', 'bump.json'));
 const schemaKey = readJson(path.join(EXAMPLE_DIR, 'bump', 'schema-key.json'));
-if (!bump || typeof bump.migration !== 'string' || typeof bump.targetPluginVersion !== 'string') {
-  bail('examples/example-project/bump/bump.json does not declare {migration, targetPluginVersion}.');
+if (!bump || typeof bump.slug !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(bump.slug)) {
+  bail('examples/example-project/bump/bump.json does not declare {slug}.');
+}
+if (!fs.existsSync(path.join(EXAMPLE_DIR, 'bump', bump.slug, 'ops.json'))) {
+  bail(`examples/example-project/bump/${bump.slug}/ops.json is missing - the cycle runs on committed fixture data, and this run cannot start without it.`);
 }
 if (!schemaKey || typeof schemaKey.at !== 'string' || typeof schemaKey.property !== 'string' || schemaKey.schema === undefined) {
   bail('examples/example-project/bump/schema-key.json does not declare {at, property, schema}.');
@@ -489,29 +496,31 @@ try {
   }
 
   // -- 3. the simulated version bump -----------------------------------------
-  step(`3 - build the bumped payload (${payload1Version} -> ${bump.targetPluginVersion}) from examples/example-project/bump/`);
+  // The bump is numbered HERE, by the documented builder, against the payload it is built into: the
+  // id is that payload's manifest length + 1 and the target is its next minor version. Nothing about
+  // the number lives under examples/, so a real release never has to touch the fixture.
+  step('3 - build the bumped payload: the documented builder numbers examples/example-project/bump/ against it');
   createOwnedDir('payload-bumped');
   copyTree(PAYLOAD_1, PAYLOAD_2);
+  const manifest1Length = (readJson(path.join(PAYLOAD_1, 'migrations', 'index.json')) || []).length;
+  const build = run(CMD_BUILD);
+  check('the builder exits 0', build.status === 0, tail(build));
+  const manifest2 = readJson(path.join(PAYLOAD_2, 'migrations', 'index.json')) || [];
+  const built = manifest2[manifest2.length - 1] || {};
+  const bumpId = built.id;
+  const bumpVersion = built.targetPluginVersion;
+  const expectedId = `${String(manifest1Length + 1).padStart(4, '0')}_${bump.slug}`;
+  const [shippedMajor, shippedMinor] = String(payload1Version).split('.').map(Number);
+  const expectedVersion = `${shippedMajor}.${shippedMinor + 1}.0`;
+  check('it appended the bump as the payload\'s NEXT migration (manifest length + 1), and printed that id',
+    manifest2.length === manifest1Length + 1 && bumpId === expectedId && build.out.includes(`migration: ${bumpId}`),
+    `${bumpId} (expected ${expectedId})`);
+  check('it targets the payload\'s next minor version, which plugin.json now carries, and printed that version',
+    bumpVersion === expectedVersion && build.out.includes(`targetPluginVersion: ${bumpVersion}`)
+      && (readJson(path.join(PAYLOAD_2, '.claude-plugin', 'plugin.json')) || {}).version === bumpVersion,
+    `${payload1Version} -> ${bumpVersion} (expected ${expectedVersion})`);
+  if (build.status !== 0 || bumpId !== expectedId) throw new Error('the bumped payload could not be built, and every later step runs against it');
   {
-    const pluginJson = readJson(path.join(PAYLOAD_2, '.claude-plugin', 'plugin.json'));
-    pluginJson.version = bump.targetPluginVersion;
-    writeJson(path.join(PAYLOAD_2, '.claude-plugin', 'plugin.json'), pluginJson);
-
-    const manifest = readJson(path.join(PAYLOAD_2, 'migrations', 'index.json'));
-    manifest.push({ id: bump.migration, targetPluginVersion: bump.targetPluginVersion });
-    writeJson(path.join(PAYLOAD_2, 'migrations', 'index.json'), manifest);
-
-    copyTree(path.join(EXAMPLE_DIR, 'bump', bump.migration), path.join(PAYLOAD_2, 'migrations', bump.migration));
-
-    // The schema half of the same release: the migration adds a config key, so the payload that
-    // ships it must admit that key. A migration whose key the schema rejects is refused by the
-    // runner before it writes anything - which is correct, and is why this overlay exists.
-    const schema = readJson(path.join(PAYLOAD_2, 'schema', 'aiwf.config.schema.json'));
-    const host = schema.properties[schemaKey.at];
-    if (!host || !host.properties) throw new Error(`schema-key.json names "${schemaKey.at}", which is not an object block in the payload schema`);
-    host.properties[schemaKey.property] = schemaKey.schema;
-    writeJson(path.join(PAYLOAD_2, 'schema', 'aiwf.config.schema.json'), schema);
-
     // The other half of the same release: the Writer agent template really changes. Without this the
     // migration's second re-render would meet an artifact whose render is identical, and the cycle
     // would exercise the "already current" branch instead of the silent-apply one it is here for.
@@ -529,7 +538,7 @@ try {
   step('4 - the version interlock stops a project the payload has moved past');
   const interlock = run(CMD_CHECK);
   check('--check exits 1 (pending migrations - that is what makes it an interlock)', interlock.status === 1, tail(interlock));
-  check('--check names the pending migration', interlock.out.includes(bump.migration), tail(interlock, 2));
+  check('--check names the pending migration', interlock.out.includes(bumpId), tail(interlock, 2));
 
   // -- 5. the operator edits a managed region by hand -------------------------
   step('5 - the operator edits the managed region by hand, so the update meets a real conflict');
@@ -550,15 +559,15 @@ try {
   const beforeDry = hashTree(PROJECT);
   const dry = run(CMD_DRYRUN);
   check('--dry-run with no --resolution-file exits 1', dry.status === 1, tail(dry));
-  check('and it names the address it stopped on', dry.out.includes(`${bump.migration}/0/`), tail(dry, 2));
+  check('and it names the address it stopped on', dry.out.includes(`${bumpId}/0/`), tail(dry, 2));
   check('the project is byte-identical to before the dry run (nothing staged, nothing written)',
     diffTrees(beforeDry, hashTree(PROJECT)).length === 0, diffTrees(beforeDry, hashTree(PROJECT)).join(', '));
 
   // -- 7. apply ---------------------------------------------------------------
   step('7 - apply, answering the new config key and keeping the hand-edited region');
   const resolutionsHash = writeJsonExclusive(RESOLUTIONS, {
-    [`${bump.migration}/0/enforcement.exampleToggle`]: { kind: 'answer', value: false },
-    [`${bump.migration}/1/${CLAUDE_KEY}`]: { kind: 'conflict', resolution: 'keep-mine' },
+    [`${bumpId}/0/enforcement.exampleToggle`]: { kind: 'answer', value: false },
+    [`${bumpId}/1/${CLAUDE_KEY}`]: { kind: 'conflict', resolution: 'keep-mine' },
   });
   recordCreatedFile('resolutions.json', resolutionsHash);
   // Note what this table does NOT contain: any record for operation 4, the re-render of
@@ -573,7 +582,7 @@ try {
     const bk = cfg._aiwf || {};
     const entry = (bk.managedRegions || {})[CLAUDE_KEY] || {};
     const ask = ((readJson(path.join(PROJECT, ...SETTINGS_REL.split('/'))) || {}).permissions || {}).ask || [];
-    const changes = read(path.join(PROJECT, `CHANGES_${payload1Version}-to-${bump.targetPluginVersion}.md`));
+    const changes = read(path.join(PROJECT, `CHANGES_${payload1Version}-to-${bumpVersion}.md`));
 
     check('keep-mine: the hand-edited content survived', claude.includes(MY_EDIT));
     check('keep-mine: the artifact is now HELD (override true) and upstream != local',
@@ -603,7 +612,7 @@ try {
       !!changes && changes.includes('An unheld artifact you had not edited, whose payload render changed, was applied without a dialog; edited ones were asked about; held ones were recorded, not applied.'));
     check('the CHANGES report was written at the project root', changes !== null);
     check('the version stamps moved together',
-      bk.installedPluginVersion === bump.targetPluginVersion && bk.lastMigrationApplied === bump.migration,
+      bk.installedPluginVersion === bumpVersion && bk.lastMigrationApplied === bumpId,
       `${bk.installedPluginVersion} / ${bk.lastMigrationApplied}`);
     check('the migration journal is clear', bk.migrationJournal === null, JSON.stringify(bk.migrationJournal));
     check('the update ran the self-check ITSELF and it passed', apply.out.includes('self-check: PASS'));
