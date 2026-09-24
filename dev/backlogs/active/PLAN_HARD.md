@@ -61,6 +61,8 @@
 | HARD-015 | — (двете врати не казват за рендерираната роля, роден 2026-09-21) | 0.2.9 |
 | HARD-016 | — (seed-ът печата отменено четене на guard (b), роден 2026-09-21) | 0.2.9 |
 | HARD-017 | — (effort на редовете на одитната таблица е по-тесен от engine-а, роден 2026-09-23) | 0.2.10 |
+| HARD-018 | — (Claude-хостнат Одитор/QA не може да се закове на точен модел, роден 2026-09-24) | 0.2.11 |
+| HARD-019 | — (примерният bump fixture се преименува при всяко издание, роден 2026-09-24) | 0.2.11 |
 
 ## Context (discovery 2026-09-12: 4× Explore/sonnet + claude-code-guide; котви проверявани при диспач)
 
@@ -1958,6 +1960,211 @@ effort в редовете; self-check проверка, която не мож�
 2026-09-24: „да минава на sol-6 xhigh“). Редът `code` се превключва на този host след кодовата
 промяна, защото преди нея схемата не приема `xhigh`. Това е самият тест на поправката в употреба.
 
+#### HARD-017 — Completion record (2026-09-24)
+
+**Commit `54510f4`** (кодът + издание 0.2.10). Тикетът е в `ded1906`, диспачът е на същата котва.
+Промени: схемата `:385`/`:402`/`:419` е `{"type":"string","minLength":1}`, с пренаписано описание;
+self-check-ът заменя enum контролата с четири проверки (празна стойност през CLI → exit 2 и нищо не
+е записано; схемата сама отказва празно (`minLength`); `docs.effort=xhigh` → exit 0; codex Одитор на
+xhigh се копира цял в ред). Изданието: bump 0.2.10, `migrations/0014_open-effort` (само `note`),
+CHANGELOG, преименуване на примерния fixture `0014` → `0015`.
+**Отклонения, приети от COO:** (а) брифът искаше празната стойност да се откаже от схемата с exit 1,
+а CLI-ят я спира по-рано с exit 2 (`aiwf-roles.mjs:141-143`). Колегата покри и двете места и всяка
+проверка я видя червена веднъж. (б) Bump-ът изисква apply на собствената инсталация
+(`aiwf.config.json` + `CHANGES_0.2.9-to-0.2.10.md`), иначе `version-stamp` в self-check-а е червен.
+Прецедент е HARD-016. (в) Директна COO редакция: `README.md:21` → v0.2.10. (г) Редът `review.code`
+→ codex `gpt-6-sol`/`xhigh` по операторска дума, в същия commit.
+**Fact-check:** една находка, остарял брой и повод в `0015_example-bump/NOTES.md` („eleven … 0.2.9“).
+Поправено с микро-рунд на Колегата, после `validate-payload` exit 0 и `example-cycle` exit 0.
+**Одит:** 1 пас, codex `gpt-6-sol`/`xhigh`, **pass, 0 находки**, 68,641 токена (footer). Брояч на
+квотата: не е подаден от оператора. Това е първата употреба на поправката: редът е записан на xhigh,
+преди одитът да тръгне.
+**VERIFY:** Portion 1 (8 Windows, един паралелен batch) → 8/8 exit 0: selfcheck 1326/1326, setup
+460/0, update 591/0, двата example цикъла 44/0, spikes PASS, plugin validate PASS, validate-payload
+14 миграции. **Portion 2 (WSL) — ПРОПУСНАТА по операторска дума 2026-09-24** („да, кажи му да
+пропусне WSL“), не е pass. Беше тръгнала и беше спряна; четири от шестте крака бяха exit 0 до
+спирането. Двете работни директории в WSL (`/home/pnp/pnp017.*`) остават, защото триенето им иска дума.
+**Ескалация:** тригер 1 (обръща записаното решение „CLOSED set“). Решен от оператора; редът е в
+Ruling ledger.
+**Консуматори:** четат локалния marketplace, така че commit-ът стига за `/pnp:update` при тях. Tag и
+push са отделни думи и не са направени.
+**Останал дълг: няма.** Route-state `{}`.
+
+## 0.2.11 — примерът спира да се преименува; точен модел за Claude Одитор/QA (родени 2026-09-24)
+
+Ред: HARD-019, после HARD-018 (операторска дума). HARD-019 не вдига версия, защото не пипа нищо,
+което се рендерира в проект. Изданието 0.2.11 (bump, миграция, CHANGELOG блок с двата записа) се
+вози на HARD-018. **Readiness:** един пас над двата тикета, `Class: plan`, codex `gpt-6-sol`/`xhigh`
+(операторска дума 2026-09-24: „искам одит на двата тикета през сол 6“ + „xhigh“). Редът `plan`
+се превключва на този host преди паса. VERIFY е пропорционален (`dev/PROJECT_OVERRIDES.md` § Test
+policy). Пълният набор върви само преди tag, а tag е отделна дума.
+
+### HARD-019 [R2 code-class] — реално издание не пипа `examples/`: симулираният bump се номерира при рън
+
+**Произход.** HARD-017 (два реда в схемата) повлече пет файла в `examples/` и един корекционен
+микро-рунд. Причината: фалшивата миграция `examples/example-project/bump/0015_example-bump/` е
+номерирана „едно след последната истинска“, а `validate-payload` иска номерата да растат точно с 1
+(`scripts/update/validate-payload.mjs:240-243`). Затова всяко издание я преименува на ръка: 12 пъти
+досега (`bump/0015_example-bump/NOTES.md:29-31`). Операторска дума 2026-09-24: да се генерира при
+самия тест.
+
+**Discovery (Explore/sonnet, 2026-09-24):**
+- Строител на симулираното издание: `scripts/ci/run-example-cycle.mjs:491-520` (стъпка 3). Вдига
+  версията `:496-498`, добавя запис в манифеста `:500-502`, копира
+  `bump/<bump.migration>` → `PAYLOAD_2/migrations/<bump.migration>` `:504`, вмъква `schema-key.json`
+  `:509-513`. Адресите за resolution се строят от `bump.migration` (`:553`, `:559-562`). Проверките на
+  CHANGES отчета четат фиксираното `id: "example-bump"` (`:596-601`) и не зависят от номера. Repo-то е
+  byte-identical преди и след (`:445`, `:640-645`).
+- Готов образец: `scripts/update/test-update.mjs:285-298` `renumberExampleBump(dir, manifest)` (от
+  `makePayload()` `:273`). Той преименува fixture-а в ВРЕМЕННО копие по `manifest.length + 1`.
+- Self-check-ът чете истинския fixture от `--plugin-root .`: `aiwf-selfcheck.js:7729-7780`
+  (`example-bump-json`, `-migration`, `-ops-types`, `-id`, `-version`, `-schema-key`, `-key-agrees`),
+  извикани от `:8203`. Негативните контроли `:8061-8100` работят върху копие. `example-bump-id`
+  контролата вече е относителна (`:8082-8091`).
+- Проза с номера: `examples/example-project/README.md:17`, `:44-46`, `:77-79` (буквални адреси
+  `0015_example-bump/0/...`). README-то е вързано byte-for-byte към `DOCUMENTED_COMMANDS` в
+  `run-example-cycle.mjs:9-11` и към self-check контролите `:8113-8121`.
+  `bump/0015_example-bump/NOTES.md:23-31` описва ритуала по преименуване.
+  `examples/README.md:6-13` описва `bump/` най-общо.
+- `validate-payload.mjs` никога не чете `examples/`. Не се пипа.
+
+**Решения (COO):**
+1. Committed fixture-ът става **без номер**: `examples/example-project/bump/example-bump/`
+   (`ops.json`, `NOTES.md`). `bump/bump.json` става `{ "slug": "example-bump" }`. Полетата
+   `migration` и `targetPluginVersion` отпадат, защото се изчисляват. `schema-key.json` не се пипа.
+2. **Един помощен модул** `scripts/ci/example-bump.mjs` (нула зависимости) с
+   `buildExampleBump(payloadDir, exampleDir)`. Той чете манифеста, изчислява
+   id = `String(manifest.length + 1).padStart(4,'0') + '_' + slug` и целева версия = следващата
+   minor на `plugin.json` (`X.(Y+1).0`). После копира fixture-а в `<payloadDir>/migrations/<id>`,
+   пише `migration`/`targetPluginVersion` в копираното `ops.json`, добавя записа в манифеста, вдига
+   `plugin.json` и вмъква `schema-key.json`. Връща `{ id, targetPluginVersion }`. Ползват го
+   `run-example-cycle.mjs` (стъпка 3 и адресите за resolution) и `test-update.mjs`
+   (`renumberExampleBump` отпада или става тънка обвивка). Един строител, не два.
+3. Self-check `:7729-7780`: проверките за форма остават върху committed fixture-а (bump.json =
+   `{slug}`, директорията съществува, `ops.json` носи и четирите типа op, schema-key проверките).
+   `example-bump-id` и `example-bump-version` стават **една проверка, която пуска
+   `buildExampleBump` върху временно копие** и проверява id == `manifest.length + 1` и целевата
+   версия > версията на payload-а. Контролите `:8061-8100` се подравняват, всяка вижда червено поне
+   веднъж.
+4. Доказателство, че издание вече не пипа `examples/`: нов тест в `test-update.mjs`. Payload копие
+   получава един допълнителен (фалшив) запис в манифеста и вдигната версия. `buildExampleBump`
+   връща id с един по-голям, а `validate-payload` върху копието е exit 0.
+5. Прозата: README-то описва номера като „едно след последния запис в `migrations/index.json`, при
+   рън“, а адресите за resolution се пишат с `<NNNN>` там, където не са команда от
+   `DOCUMENTED_COMMANDS`. `NOTES.md` губи параграфа за ритуала. `examples/README.md` получава един
+   ред, че `bump/` е шаблон, който harness-ът номерира.
+
+**Chain table (Outcome → код):**
+| поведение | верига от входа | endpoint |
+|---|---|---|
+| example cycle строи симулираното издание | `run-example-cycle.mjs` main → стъпка 3 `:491` → `example-bump.mjs` `buildExampleBump` → запис в `PAYLOAD_2/migrations/<id>` и `index.json` | запис на файл (temp payload) |
+| валидаторът приема строения payload | `run-example-cycle.mjs:524-526` → `validate-payload.mjs:240-243` | exit code |
+| update тестовете ползват същия строител | `test-update.mjs:257` `makePayload` → `:273` → `buildExampleBump` | запис на файл (temp payload) |
+| self-check пази fixture-а | `aiwf-selfcheck.js:8203` `exampleFixtureFindings` → проверките `:7729+` → `buildExampleBump` върху копие | assertion |
+
+**Обхват:** `scripts/ci/example-bump.mjs` (нов), `scripts/ci/run-example-cycle.mjs`,
+`scripts/update/test-update.mjs`, `scripts/selfcheck/aiwf-selfcheck.js`, `examples/**`.
+**Извън обхват:** `validate-payload.mjs`; правилото „растат точно с 1“; какво доказва цикълът
+(четирите типа op, конфликт `keep-mine`, тихото прилагане, byte-identical проверката остават същите).
+**Acceptance:**
+- `git grep -n "0015_example-bump" -- . ":(exclude)dev" ":(exclude)CHANGELOG.md" ":(exclude)CHANGES_*"`
+  → празно. Преди промяната удря `examples/`.
+- Новият тест от т.4 е в `test-update.mjs` и се вижда червен веднъж (строител с твърд номер).
+- VERIFY (пропорционален, ред „update engine / migrations / examples“ + linux answers, защото
+  цикълът се сменя): `update-suite`, `validate-payload`, `example-cycle-windows`,
+  `example-cycle-linux`, `selfcheck` → exit 0, в един паралелен batch.
+- Cyrillic grep → празно. Диф гард: котва = HEAD при диспач; файловете ⊆ обхвата.
+**Risk threshold:** блокира: загубено покритие на цикъла (кой да е тип op, конфликтът, тихото
+прилагане, byte-identical); контрола, която не може да падне; симулирано издание, което пак изисква
+редакция в `examples/`; два строителя вместо един.
+**Stop condition:** acceptance зелен → стоп.
+**Review:** `Class: code` → `review.code` (codex `gpt-6-sol`/`xhigh`); fact-check преди паса.
+**Assignee:** Колега. Branch `main`. Одит: 1 пас на кода по таблицата (операторска дума за одит на
+тикетите 2026-09-24).
+
+### HARD-018 [R2 code-class] — Claude-хостнат Одитор/QA се заковава на точен модел; release 0.2.11
+
+**Произход.** Silerax (2026-09-24): QA не може да се закове на `claude-opus-5-5`. Схемата и
+dispatch-ът приемат само `fable|opus|sonnet|haiku`. Днес `opus` сочи Opus 5.5
+(code.claude.com/docs/en/model-config), но алиасът се мести тихо с всяко издание на модел.
+Принципът е от HARD-017 (операторска дума): PnP поддържа всеки модел, който engine-ът поддържа.
+**Ограничението на хоста, измерено:** в тази среда параметърът `model` на Agent tool-а приема само
+алиасите, а подаден `model` при dispatch бие pin-а във frontmatter-а. Точен id е валиден във
+frontmatter-а. Точно така е закован Колегата (`skills/work/SKILL.md:68-70`, `docs/LOOP.md:46-53`).
+
+**Discovery (Explore/sonnet, 2026-09-24):**
+- Схемата: алиас-условията са на `schema/aiwf.config.schema.json:204` (reviewer), `:231` (qa),
+  `:390`/`:407`/`:424` (редовете). Описанията `:168`, `:184-187`, `:216-219`, `:384` обясняват
+  правилото.
+- `scripts/setup/aiwf-roles.mjs:75-76` (`TOP_TIER`, `TIER_ALIASES`), `:178` `rowShapeError`
+  (алиас-проверка на ред), `:277-291` (default `fable` при `engine=claude`), `:579-582` и `:607`
+  (маркерът `(below the top tier)`, сравнение по низ с `'fable'`).
+- `scripts/setup/interview.mjs:67`, `:172-174` (подсказката „a TIER ALIAS“).
+- `scripts/setup/generate.mjs:352-367` `reviewerAgentFrontmatter`: вече пише `roles.reviewer.model`
+  дословно (или `fable`, когато Одиторът е codex). QA шаблонът чете суровата стойност
+  (`templates/agents/qa.md.tmpl:11`). Resolver-ите не проверяват алиаси.
+- Dispatch: `skills/review/SKILL.md:432-435` и `skills/qa/SKILL.md:318`, `:326` винаги подават
+  `model`.
+- Договорен текст: `templates/agents/reviewer.md.tmpl:21-27`, `qa.md.tmpl:21-22`,
+  `writer.md.tmpl:16-17`; `docs/LOOP.md:46-53`; `schema/README.md:16-18`;
+  `skills/roles/SKILL.md:69-70`.
+- Тестове: self-check `tier-alias-<role>` `aiwf-selfcheck.js:4616-4627`, `review-row-shape`
+  `:4675`, негативна контрола `:8339-8340` (точен id на Claude Одитор трябва да пада);
+  `scripts/setup/test-setup.mjs:454-461` (същото при setup).
+
+**Решения (COO):**
+1. **Claude модел = алиас ИЛИ точен id** за `roles.reviewer`, `roles.qa` и редовете. Петте
+   алиас-условия отпадат (остава `minLength: 1`), а описанията се пренаписват.
+2. **Dispatch по образеца на Колегата:** `/pnp:review` и `/pnp:qa` подават `model` САМО когато
+   стойността е алиас. Точен id не се подава, а pin-ът във frontmatter-а на рендерирания агент
+   решава.
+3. **Един агентски файл за Одитора, едно правило за редовете:** Claude ред носи алиас ИЛИ точно
+   `roles.reviewer.model`, когато Одиторът е Claude-хостнат (файлът носи един pin). Иначе би тръгнал
+   моделът от файла, а не този на реда. Когато Одиторът е codex, Claude редовете остават на алиаси
+   (файлът носи `fable`). Проверява се в `rowShapeError` и в `review-row-shape`, с отказ, който
+   назовава причината.
+4. **Маркерът `(below the top tier)`** остава за алиасите. Точен id се маркира
+   `(exact id - tier not ranked)`: PnP не класира точни id-та и казва, че не го прави.
+5. Подсказката в интервюто, договорният текст в трите шаблона, `docs/LOOP.md:46-53`,
+   `schema/README.md:16-18` и `skills/roles/SKILL.md:69-70` казват новото правило.
+6. **Release 0.2.11:** bump; `migrations/0015_exact-model-pin/` с `rerender-managed-region` за
+   рендерираните агенти, чийто шаблонен текст се сменя (`.claude/agents/reviewer.md`,
+   `.claude/agents/qa.md`), само ако ги има в проекта. Колегата проверява по прецедент как op-ът
+   третира липсващ артефакт. Плюс `note`, `migrations/index.json`, CHANGELOG `## [0.2.11]` (HARD-019
+   под `### Changed`, HARD-018 под `### Fixed`), apply на собствената инсталация, `README.md:21` →
+   v0.2.11. Номерът е `0015` без преименуване на fixture, защото HARD-019 го е махнал.
+
+**Chain table (Outcome → код):**
+| поведение | верига от входа | endpoint |
+|---|---|---|
+| `--set qa.model=claude-opus-5-5` се приема | `aiwf-roles.mjs` `applyChanges` → schema validate (`validate-config.mjs`) → `generate.mjs` → `templates/agents/qa.md.tmpl:11` | render на `.claude/agents/qa.md` |
+| `/pnp:qa` пуска QA на точния модел | `skills/qa/SKILL.md:318` → Agent tool без `model` → frontmatter pin | dispatch |
+| Claude Одитор на точен id | `aiwf-roles.mjs` → `generate.mjs:352-367` → `reviewer.md.tmpl:10`; `skills/review/SKILL.md:432` без `model` | render + dispatch |
+| Claude ред с чужд точен id се отказва | `aiwf-roles.mjs:178` `rowShapeError` | exit 1, нищо не е записано |
+
+**Обхват:** schema, `scripts/setup/{aiwf-roles,interview,generate}.mjs`, `templates/agents/*.tmpl`,
+`skills/{review,qa,roles}/SKILL.md`, `docs/LOOP.md`, `schema/README.md`, self-check, `test-setup.mjs`,
+изданието (плюс самоинсталацията и `README.md:21`).
+**Извън обхват:** Колегата (вече е закован); codex хостовете; класиране на точни id-та по tier.
+**Acceptance:**
+- self-check: точен id на Claude Одитор/QA минава, а рендерираният файл носи
+  `model: claude-opus-5-5`. Claude ред с точен id, различен от този на Одитора → отказ. Всяка нова
+  или обърната проверка е видяна червена веднъж. Контролата `:8339-8340` е обърната, не изтрита.
+- `test-setup.mjs`: setup с точен id на Claude Одитор → exit 0 и файлът е рендериран; новият отказ
+  → exit 1 и нищо не е записано.
+- `git grep -n "TIER ALIAS only\|must stay tier aliases\|accepts only the tier aliases" -- docs skills schema templates`
+  → няма твърдение за Одитор/QA. Преди промяната удря `docs/LOOP.md` и схемата.
+- VERIFY (пропорционален; редове schema/roles + migrations + skills prose): `selfcheck`,
+  `validate-payload`, `setup-suite`, `update-suite`, `example-cycle-windows`, `plugin-validate` →
+  exit 0 в един паралелен batch. Пълният набор (+ WSL) — преди tag, с отделна дума.
+- Cyrillic grep → празно. Диф гард: котва = HEAD при диспач.
+**Risk threshold:** блокира: валиден днес config става невалиден; dispatch, който подава точен id
+на Agent tool-а (тих провал) или пропуска `model` при алиас; Claude ред, който може да тръгне на
+модел, различен от записания; bump без миграция; контрола, която не може да падне.
+**Stop condition:** acceptance зелен → стоп.
+**Review:** `Class: code` → `review.code`; fact-check преди паса.
+**Assignee:** Колега. Branch `main`. Одит: 1 пас на кода по таблицата (операторска дума 2026-09-24).
+
 ## 0.2.7 — Environment correctness · tag `v0.2.7` (операторска дума 2026-09-16: HARD-013; ЗАМРАЗЕНО до края на консолидацията. HARD-014 ОТПАДНА — беше „Одитор с resume на сесията"; темата отива където консолидационното решение я прати)
 
 ### HARD-013 [R2 code-class] — self-check-ът хваща кой да е `bash` от PATH; на WSL bash пада 52 пъти и `--apply` връща 1 въпреки приложените миграции (роден 2026-09-15 от консуматорски рън, ЧАКА ОПЕРАТОРСКА ДУМА)
@@ -2008,8 +2215,9 @@ re-apply, naming assertion). Одиторът е Codex на всички → „
 отпадна] — редът след замразяването се потвърждава от консолидационното решение. Вторите
 имена — в таблицата под header-а. **[2026-09-22, операторска дума] Финален ред:** HARD-015 →
 HARD-016 (+release 0.2.9, изцяло) → [пауза; планът остава активен] → **HARD-017 (+release 0.2.10,
-роден 2026-09-23, спешен — операторска дума)** → HARD-011 в цикъла на 0.3.0 → архивиране на плана
-с последния затворен тикет.
+роден 2026-09-23, спешен — операторска дума)** → **HARD-019 → HARD-018 (+release 0.2.11; ред по
+операторска дума 2026-09-24: 019 преди 018)** → HARD-011 в цикъла на 0.3.0 → архивиране на плана с
+последния затворен тикет.
 
 Гейтове: всеки тикет — собствена дума за диспач; commit — клик (стейдж по изрични пътища,
 едноредово съобщение, нула trailers, PLAN файлът и трите EOL-дрейфащи `.ps1` извън кодовия
@@ -2017,7 +2225,9 @@ commit); docs commit отделен; tag — дума (git tag не е в ask с
 cap 2 — отделна дума всеки. Route-state при всеки диспач, `{}` при close; completion record
 веднага след commit-а, същата сесия. Верификация: рънът на Колегата + независим COO-диспачнат
 рън (Одиторската клетка не пуска суитите — не се приема отчет); двата example цикъла и
-`test-update` във фон, без паралелни редакции. **VERIFY каданс (COO решение 2026-09-13):**
+`test-update` във фон, без паралелни редакции. **[ЗАМЕНЕНО 2026-09-24, операторска дума: VERIFY е
+пропорционален на промяната, пълният набор е само преди tag — `dev/PROJECT_OVERRIDES.md` § Test
+policy; следващото изречение е история.]** **VERIFY каданс (COO решение 2026-09-13):**
 пълните 8/8 гейтват затварянето на тикета (преди commit клика) — веднъж, с точни кодове;
 междинен корекционен рунд ре-рънва само засегнатите суити; доктрина/docs тикети въртят на рунд
 бързите три (selfcheck, validate-payload, plugin-validate), а пълните 8/8 — на release тикета

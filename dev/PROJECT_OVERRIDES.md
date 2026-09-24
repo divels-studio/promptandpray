@@ -179,6 +179,17 @@ The literal VERIFY commands live in `aiwf.config.json`:
 - `spikes`: `node scripts/spike/run-spikes.mjs` (cwd: `.`)
 - `plugin-validate`: `claude plugin validate .` (cwd: `.`)
 
+**VERIFY is proportional to the change** (operator word 2026-09-24; it supersedes "the full 8/8
+gate every ticket close" in PLAN_HARD § Ред и гейтове). A ticket runs only the suites its diff can
+break, and the brief names them:
+- schema / config / roles -> `selfcheck`, `validate-payload`, `setup-suite`;
+- update engine / migrations / examples -> `update-suite`, `validate-payload`,
+  `example-cycle-windows`, `selfcheck`;
+- hooks / gates -> `selfcheck`, `spikes`;
+- docs / skills prose -> `selfcheck`, `validate-payload`, `plugin-validate`.
+A diff that spans several rows runs their union. The full set (Portion 1 plus the WSL Portion 2
+below) runs once per release, before the tag, not per ticket.
+
 **VERIFY runs in PORTIONS, each portion ONE PARALLEL batch** (operator words 2026-09-17 and
 2026-09-19). Portion 1: the eight Windows commands above as one parallel batch (~10.4 min wall
 measured). Portion 2: the POSIX suites under WSL (non-root user `pnp`) as their own batch, AFTER the
