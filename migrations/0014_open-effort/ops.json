@@ -1,0 +1,12 @@
+{
+  "migration": "0014_open-effort",
+  "targetPluginVersion": "0.2.10",
+  "operations": [
+    {
+      "op": "note",
+      "id": "open-effort",
+      "text": "The three audit-table rows (review.plan|code|docs) now accept ANY non-empty effort, exactly like roles.*.effort - the schema no longer pins low|medium|high. The engine owns that vocabulary: a codex row's effort reaches the external engine as -c model_reasoning_effort=<value> and a value it does not know is rejected visibly by it at call time, so a list kept here could only be narrower than the engine's own. Two consequences on your installation: /pnp:roles --set <row>.effort=<value> now accepts an effort your engine accepts but this plugin never listed, and --set <row>.engine=codex can copy a codex Reviewer whose own effort is outside the old list, which used to fail schema validation and refuse the whole run. Nothing else changes: the empty value is still refused, a claude row still has no effort of its own (it shares the rendered reviewer agent, whose effort is roles.reviewer.effort), and no config valid before this release becomes invalid.",
+      "docRefs": ["CHANGELOG.md", "docs/CODEX_REVIEW_QA_RECIPE.md"]
+    }
+  ]
+}

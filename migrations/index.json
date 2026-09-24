@@ -11,5 +11,6 @@
   { "id": "0010_plan-prefix-legibility", "targetPluginVersion": "0.2.6" },
   { "id": "0011_transfer-surface", "targetPluginVersion": "0.2.7" },
   { "id": "0012_orchestrator-role", "targetPluginVersion": "0.2.8" },
-  { "id": "0013_preflight-and-word-gate", "targetPluginVersion": "0.2.9" }
+  { "id": "0013_preflight-and-word-gate", "targetPluginVersion": "0.2.9" },
+  { "id": "0014_open-effort", "targetPluginVersion": "0.2.10" }
 ]

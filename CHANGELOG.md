@@ -4,6 +4,22 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.2.10] - 2026-09-24
+
+The audit table stops being stricter than the engines it dispatches to: a review row's `effort` is
+any non-empty string, exactly like a role's.
+
+### Fixed
+
+- **The audit-table rows take any effort the engine takes (HARD-017)** - `review.plan|code|docs`
+  pinned `effort` to `low|medium|high`, so an auditor measured at an effort a newer engine release
+  accepts could not be written down: `/pnp:roles --set code.effort=<value>` exited 1 and the only
+  way to use that configuration was to go around the wrapper. The three rows are now
+  `{"type": "string", "minLength": 1}`, the shape `roles.*.effort` always had - the engine owns the
+  vocabulary and rejects an unknown value visibly at call time, and `--set <row>.engine=codex` can
+  now copy a codex Reviewer whose own effort no list of ours anticipated. The empty value, the
+  refusal on a claude row and every configuration valid before this release are unchanged.
+
 ## [0.2.9] - 2026-09-22
 
 The two defects the 0.2.8 arbitration surfaced are fixed: the operator's two session doors now

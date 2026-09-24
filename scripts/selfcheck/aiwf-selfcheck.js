@@ -4238,17 +4238,42 @@ function sectionRolesCommand(tmpRoot, pluginVersion) {
     check('--set docs.engine=codex with no model, Reviewer codex -> the Reviewer\'s host is copied whole, exit 0',
       r.status === 0 && JSON.stringify(rowOf(root, 'docs')) === JSON.stringify({ passes: 1, engine: 'codex', model: 'codex-atom-2', effort: 'high' }),
       `exit ${r.status}: ${JSON.stringify(rowOf(root, 'docs'))}`);
-    // A row's effort is a CLOSED set (low|medium|high), unlike roles.*.effort: a typo here would
-    // otherwise be discovered as a paid pass the external engine rejects at call time.
+    // A row's effort is ANY non-empty string, exactly like roles.*.effort: THE ENGINE owns the
+    // vocabulary, and an effort it does not know is rejected visibly by IT at call time. What is
+    // still refused is the EMPTY value, and it is refused twice over - by the CLI as a usage error
+    // (a missing value is a typing mistake, not a setting) and, for every other writer of the
+    // config, by the schema's minLength on the same field.
     const before = readText(path.join(root, '.claude', 'aiwf-native', 'aiwf.config.json'));
-    const bad = runRoles(root, ['--set', 'docs.effort=wat']);
-    check('--set docs.effort=wat on a CODEX row -> exit 1 (the schema enum refuses), and nothing is written',
-      bad.status === 1 && /must be one of "low", "medium", "high"/.test(bad.stderr)
+    const empty = runRoles(root, ['--set', 'docs.effort=']);
+    check('--set docs.effort= (empty) on a CODEX row -> exit 2 (a value is missing), and nothing is written',
+      empty.status === 2 && /effort cannot be empty/.test(empty.stderr)
       && readText(path.join(root, '.claude', 'aiwf-native', 'aiwf.config.json')) === before,
-      `exit ${bad.status}: ${bad.stderr.trim().split('\n').filter(Boolean).pop()}`);
-    const ok = runRoles(root, ['--set', 'docs.effort=medium']);
-    check('...while a value INSIDE the set goes through, exit 0',
-      ok.status === 0 && rowOf(root, 'docs').effort === 'medium', `exit ${ok.status}: ${JSON.stringify(rowOf(root, 'docs'))}`);
+      `exit ${empty.status}: ${empty.stderr.trim().split('\n').filter(Boolean).pop()}`);
+    const probe = path.join(tmpRoot, 'roles-empty-row-effort.json');
+    const withEmpty = cfgOf(root);
+    withEmpty.review.docs = { passes: 1, engine: 'codex', model: 'codex-atom-2', effort: '' };
+    fs.writeFileSync(probe, JSON.stringify(withEmpty, null, 2) + '\n');
+    const schemaSays = spawnSync(process.execPath, [
+      VALIDATOR, probe, '--schema', path.join(PLUGIN_ROOT, 'schema', 'aiwf.config.schema.json'),
+    ], { encoding: 'utf8' });
+    check('...and the SCHEMA refuses an empty row effort on its own (minLength), whoever wrote the config',
+      schemaSays.status === 1 && /\/review\/docs\/effort: must not be empty/.test(`${schemaSays.stdout || ''}${schemaSays.stderr || ''}`),
+      `validator exit ${schemaSays.status}: ${String(schemaSays.stderr || '').trim().split('\n').filter(Boolean).pop()}`);
+    const ok = runRoles(root, ['--set', 'docs.effort=xhigh']);
+    check('--set docs.effort=xhigh on a CODEX row -> exit 0: an effort outside the old low|medium|high list is accepted, because the engine owns that list',
+      ok.status === 0 && rowOf(root, 'docs').effort === 'xhigh', `exit ${ok.status}: ${JSON.stringify(rowOf(root, 'docs'))}`);
+  }
+  {
+    // The same freedom where it was actually paid for: `--set <row>.engine=codex` copies a codex
+    // Reviewer's host WHOLE, effort included, so a Reviewer measured at an effort no closed list
+    // anticipated is writable into a row instead of making the copy fail schema validation.
+    const root = fixture(codexReviewer);
+    const raised = runRoles(root, ['--set', 'reviewer.effort=xhigh']);
+    const copied = runRoles(root, ['--set', 'docs.engine=codex']);
+    check('a codex Reviewer at effort "xhigh" is copied whole into a row: both runs exit 0 and the row carries that effort',
+      raised.status === 0 && copied.status === 0
+      && JSON.stringify(rowOf(root, 'docs')) === JSON.stringify({ passes: 1, engine: 'codex', model: 'codex-atom-2', effort: 'xhigh' }),
+      `reviewer exit ${raised.status}, row exit ${copied.status}: ${JSON.stringify(rowOf(root, 'docs'))}`);
   }
   {
     // ORDER INDEPENDENCE. A row's codex default reads roles.reviewer, so with first-seen ordering

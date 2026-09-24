@@ -1,4 +1,4 @@
 {
-  "migration": "0014_example-bump",
+  "migration": "0015_example-bump",
   "targetPluginVersion": "0.3.0"
 }

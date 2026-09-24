@@ -1,13 +1,13 @@
 {
   "$schema": "D:/promptandpray/schema/aiwf.config.schema.json",
   "_aiwf": {
-    "installedPluginVersion": "0.2.9",
-    "lastMigrationApplied": "0013_preflight-and-word-gate",
+    "installedPluginVersion": "0.2.10",
+    "lastMigrationApplied": "0014_open-effort",
     "migrationJournal": null,
     "managedRegions": {
       ".claude/aiwf-native/roles.json": {
-        "upstream": "47b04004f54535c3d417e8220a21fecb042dfc75bddc164591735d982f935b6c",
-        "local": "47b04004f54535c3d417e8220a21fecb042dfc75bddc164591735d982f935b6c",
+        "upstream": "e48e19f67177736a20c47448b7ab03dd9f92275ce25f264655960599631d5fb6",
+        "local": "e48e19f67177736a20c47448b7ab03dd9f92275ce25f264655960599631d5fb6",
         "override": false
       },
       ".claude/agents/writer.md": {
@@ -250,7 +250,10 @@
       "passes": 2
     },
     "code": {
-      "passes": 1
+      "passes": 1,
+      "engine": "codex",
+      "model": "gpt-6-sol",
+      "effort": "xhigh"
     },
     "docs": {
       "passes": 1
