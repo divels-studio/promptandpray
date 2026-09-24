@@ -2012,10 +2012,16 @@ commit. Едва след него котвата `git rev-parse HEAD` се вп
 - V5 `node scripts/ci/run-example-cycle.mjs --answers examples/example-project/answers-linux.json`
 - V6 `node scripts/selfcheck/aiwf-selfcheck.js --plugin-root . --project-fixture .`
 - V7 `claude plugin validate .`
+- V8 `node scripts/spike/run-spikes.mjs`
 - C1 (Cyrillic) `git grep -nP "[\x{0400}-\x{04FF}]" -- docs skills templates scripts schema hooks migrations examples`
   → exit 1 без изход. Всеки ред е провал.
-Пълният набор преди tag: Portion 1 (осемте команди) + Portion 2 (WSL) по формите в
-`dev/VERIFY_RUNBOOK.md`.
+Пълният набор преди tag (readiness p2): Portion 1 = V1–V8 в един паралелен batch (Windows); СЛЕД
+него Portion 2 = W1, едно извикване, в което root подготвя копието, а `pnp` пуска краката
+последователно (правилата от `dev/VERIFY_RUNBOOK.md:26-36`: копие под `/home/pnp`, `git archive`
+като root, `test -f` гард, selfcheck в CI формата без `--project-fixture`):
+- W1 `wsl.exe -e sh -lc 'D=$(mktemp -d /home/pnp/pnp0211.XXXXXX) && cd /mnt/d/promptandpray && git archive HEAD | tar -x -C "$D" && test -f "$D/scripts/selfcheck/aiwf-selfcheck.js" && chown -R pnp:pnp "$D" && su - pnp -c "cd $D && node scripts/update/validate-payload.mjs --plugin-root . && node scripts/setup/test-setup.mjs && node scripts/update/test-update.mjs && node scripts/ci/run-example-cycle.mjs && node scripts/ci/run-example-cycle.mjs --answers examples/example-project/answers-linux.json && node scripts/selfcheck/aiwf-selfcheck.js --plugin-root . && node scripts/spike/run-spikes.mjs"'`
+  → exit 0. „Счупено“ = exit ≠ 0: веригата спира на първия червен крак, а изходът му е последният
+  отпечатан.
 
 ### HARD-019 [R2 code-class] — реално издание не пипа `examples/`: симулираният bump се номерира при рън
 
@@ -2041,7 +2047,7 @@ commit. Едва след него котвата `git rev-parse HEAD` се вп
   контролата вече е относителна (`:8082-8091`).
 - Проза с номера: `examples/example-project/README.md:17`, `:44-46`, `:77-79` (буквални адреси
   `0015_example-bump/0/...`). README-то е вързано byte-for-byte към `DOCUMENTED_COMMANDS` в
-  `run-example-cycle.mjs:9-11` и към self-check контролите `:8113-8121`.
+  `run-example-cycle.mjs:56-64` и към self-check контролите `:8113-8121`.
   `bump/0015_example-bump/NOTES.md:23-31` описва ритуала по преименуване.
   `examples/README.md:6-13` описва `bump/` най-общо.
 - `validate-payload.mjs` никога не чете `examples/`. Не се пипа.
@@ -2082,10 +2088,16 @@ commit. Едва след него котвата `git rev-parse HEAD` се вп
 5. Прозата и ръчният път. Ръчната последователност в README-то (`examples/example-project/README.md:21`,
    `:44-46`) става **една изпълнима стъпка**, CLI формата от т.2:
    `node scripts/ci/example-bump.mjs --payload <payload-copy> --example examples/example-project`.
-   Тя се добавя в `DOCUMENTED_COMMANDS` (`run-example-cycle.mjs:9-11`), а драйверът я вика дословно,
-   така че README и драйвер остават byte-вързани. Адресите за resolution (`:77-79`) се пишат с id-то,
-   което тази команда печата (`<NNNN>_example-bump`). Буквалното `0.3.0` (`examples/example-project/README.md:93`,
-   `bump/…/NOTES.md:3`) става „следващата minor версия на payload-а, която командата печата“.
+   В `DOCUMENTED_COMMANDS` (`run-example-cycle.mjs:56-64`) се добавя ТОЧНО този ред, с плейсхолдъри,
+   които `makeRunner` вече замества (`:429-436`: `<repo>`, `<payload2>`):
+   `node <repo>/scripts/ci/example-bump.mjs --payload <payload2> --example <repo>/examples/example-project`.
+   Драйверът го вика през `run(...)` като останалите, а README-то го носи дословно, така че двете
+   остават byte-вързани. Адресите за resolution (`:77-79`) се пишат с id-то, което командата
+   печата (`<NNNN>_example-bump`). ВСИЧКИ буквални `0.3.0` стават „следващата minor версия на
+   payload-а, която командата печата“ или отпадат, защото вече се изчисляват. Измерено от COO
+   (2026-09-24): `examples/README.md:9`, `examples/example-project/README.md:17`, `:45`, `:93`,
+   `bump/0015_example-bump/NOTES.md:3`, `:12`, `ops.json:3`, `bump/bump.json:3`. Затварящ grep:
+   `git grep -n "0\.3\.0" -- examples` → празно (exit 1).
    `NOTES.md` губи параграфа за ритуала по преименуване. `examples/README.md` получава един ред, че
    `bump/` е шаблон, който harness-ът номерира. (readiness p1, блокер 3.)
 
@@ -2161,7 +2173,9 @@ frontmatter-а. Точно така е закован Колегата (`skills/
    (файлът носи `fable`). **Правилото живее в ЕДНА функция и я викат ВСИЧКИ, които пишат config-а**
    (readiness p1, блокер 5): нов модул `scripts/setup/role-rules.mjs` с `claudePinErrors(config)`.
    Извиква се до schema проверката в трите писача: setup/генератора (`generate.mjs:1533`), update
-   engine-а (`scripts/update/migrate.mjs:594`) и `/pnp:roles --set` (`aiwf-roles.mjs:178`
+   engine-а в `preflight` (`scripts/update/migrate.mjs:467-521`, веднага след `loadProjectConfig` на
+   `:472`, като `UpdateError`, преди първата мутация на всяко update, независимо от op-овете; НЕ на
+   `:594`, който върви само при `add-config-key` — readiness p2) и `/pnp:roles --set` (`aiwf-roles.mjs:178`
    `rowShapeError` го вика вместо собствената алиас-проверка). Грешка от него е blocker/отказ преди
    какъвто и да е запис. **Плюс fail-closed при dispatch:** `/pnp:review` (Claude клон) сравнява
    точния id на реда с `model:` във frontmatter-а на `.claude/agents/reviewer.md`. При разминаване
@@ -2177,8 +2191,10 @@ frontmatter-а. Точно така е закован Колегата (`skills/
    `docs/LOOP.md:46-53`, `skills/roles/SKILL.md:69-70`.
 6. **Release 0.2.11:** bump; `migrations/0015_exact-model-pin/` с `rerender-managed-region` за
    ТРИТЕ рендерирани агента, чийто шаблонен текст се сменя: `.claude/agents/reviewer.md` и
-   `.claude/agents/qa.md` с `"ifRecorded": true`, плюс `.claude/agents/writer.md` (рендериран на всяка
-   инсталация; също с `"ifRecorded": true` за безопасност). На codex-хостнат проект файлът липсва и
+   `.claude/agents/qa.md` с `"ifRecorded": true`, плюс `.claude/agents/writer.md` **без**
+   `ifRecorded`. Колегата се рендерира на всяка инсталация (`generate.mjs:1125`), така че липсващ
+   запис за него е повреда и миграцията трябва да откаже, а не да го прескочи
+   (`migrations/README.md:47-54`; readiness p2). На codex-хостнат проект файлът липсва и
    op-ът се отчита като пропуснат, вместо да хвърли (`migrations/README.md:47-48`; прецедент
    `migrations/0009_readiness-discipline/ops.json:17-22`). Плюс `note`, `migrations/index.json`, CHANGELOG `## [0.2.11]` (HARD-019
    под `### Changed`, HARD-018 под `### Fixed`), apply на собствената инсталация, `README.md:21` →
@@ -2200,7 +2216,7 @@ frontmatter-а. Точно така е закован Колегата (`skills/
 | поведение | верига от входа | endpoint |
 |---|---|---|
 | setup с Claude ред с чужд точен id се отказва | `generate.mjs` → `:1533` schema validate + `claudePinErrors` → blocker | write surface: нищо не е записано |
-| update с такъв config се отказва | `migrate.mjs:594` validate + `claudePinErrors` | write surface: нищо не е записано |
+| update с такъв config се отказва | `aiwf-update.mjs` → `migrate.mjs` `preflight` `:467` → след `loadProjectConfig` `:472` → `claudePinErrors` → `UpdateError` | write surface: нищо не е записано |
 | dispatch с разминат pin спира | `skills/review/SKILL.md` Step 3 (Claude клон) → чете `.claude/agents/reviewer.md` `model:` | source: frontmatter-ът; пас не се пуска |
 | точен id не пропуска fact-check гейта | `skills/review/SKILL.md:197` Step 2b | source: правилото на гейта |
 | `--set qa.model=claude-opus-5-5` се приема | `aiwf-roles.mjs` `applyChanges` → schema validate (`validate-config.mjs`) → `generate.mjs` → `templates/agents/qa.md.tmpl:11` | render на `.claude/agents/qa.md` |
@@ -2224,9 +2240,11 @@ frontmatter-а. Точно така е закован Колегата (`skills/
   т.8 падат, ако някоя от двете половини липсва в review или qa скила. Всяка се вижда червена
   веднъж (половината временно махната).
 - `update-suite`: config с Claude ред с чужд точен id → update отказва, config-ът е непроменен.
-- `git grep -n "TIER ALIAS only\|must stay tier aliases\|accepts only the tier aliases\|ONE place a full model id" -- docs skills schema templates`
-  → няма твърдение за Одитор/QA/редовете. Преди промяната удря `docs/LOOP.md:48`, `:53`, схемата
-  `:187`, `:384` и `writer.md.tmpl`.
+- `git grep -niE "tier alias(es)? only|aliases only|only the tier aliases|TIER ALIAS as its model|valid only for the Writer|pinned to a full model id|ONE place a full model id|must stay tier aliases|conditional on the engine" -- docs skills schema templates`
+  → празно (exit 1). Измерено от COO преди промяната (2026-09-24), удря: `docs/LOOP.md:48`, `:53`,
+  `schema/README.md:11`, `:16`, схемата `:168`, `:187`, `:384`, `skills/setup/SKILL.md:82-83`,
+  `templates/agents/qa.md.tmpl:22`, `reviewer.md.tmpl:26`, `writer.md.tmpl:16-17`. Всеки от тях се
+  пренаписва (readiness p2).
 - VERIFY (пропорционален; редове schema/roles + migrations + skills prose): V1, V2, V3, V4, V6, V7
   от списъка в увода на 0.2.11 → exit 0 всички, в един паралелен batch. Пълният набор (+ WSL по
   `dev/VERIFY_RUNBOOK.md`) — преди tag, с отделна дума.
