@@ -1999,6 +1999,14 @@ push са отделни думи и не са направени.
 се превключва на този host преди паса. VERIFY е пропорционален (`dev/PROJECT_OVERRIDES.md` § Test
 policy). Пълният набор върви само преди tag, а tag е отделна дума.
 
+**Readiness резултат (2026-09-24, codex `gpt-6-sol`/`xhigh`):** p1 (студен) → NEEDS-FIX, 10 блокера.
+p2 (топъл, с трите компенсации; операторска дума) → NEEDS-FIX: 8 от 10 затворени, 2 отворени и 4
+нови, всички с произход. p3 (топъл, `passes + 1`, твърдият таван; операторска дума) → NEEDS-FIX: 1
+отворен (затварящият grep не хващаше `docs/LOOP.md:26` и `skills/roles/SKILL.md:124`), нула нови.
+Поправен от COO **без нов пас по операторска дума** („поправка без пас“), проверен с fact-check
+(чисто) и с първолично пускане на grep-а: 15 удара, всички в обхвата. **Старт на всеки тикет —
+собствена операторска дума.**
+
 **Git предусловие (readiness p1, блокер 10):** преди диспача на HARD-019 дървото е чисто. Ревизията
 на плана и превключеният ред `review.plan` (`aiwf.config.json`, `roles.json`) влизат в един docs
 commit. Едва след него котвата `git rev-parse HEAD` се вписва в брифа.
@@ -2188,7 +2196,9 @@ frontmatter-а. Точно така е закован Колегата (`skills/
    интервюто (`interview.mjs:172-174`), `skills/setup/SKILL.md:82`, договорният текст в трите
    шаблона (`reviewer.md.tmpl:21-27`, `qa.md.tmpl:21-22`, `writer.md.tmpl:16-17`), описанията в
    схемата `:168`, `:184-187`, `:216-219`, `:384`, `schema/README.md:11` и `:16-18`,
-   `docs/LOOP.md:46-53`, `skills/roles/SKILL.md:69-70`.
+   `docs/LOOP.md:25-26` (безусловното `model: <the row's model>`) и `:46-53`,
+   `skills/roles/SKILL.md:69-70` и `:124-127` (маркерът „below the top tier“ за всеки Claude модел;
+   става само за алиасите, а точният id получава своя маркер от т.4). (readiness p3.)
 6. **Release 0.2.11:** bump; `migrations/0015_exact-model-pin/` с `rerender-managed-region` за
    ТРИТЕ рендерирани агента, чийто шаблонен текст се сменя: `.claude/agents/reviewer.md` и
    `.claude/agents/qa.md` с `"ifRecorded": true`, плюс `.claude/agents/writer.md` **без**
@@ -2240,8 +2250,9 @@ frontmatter-а. Точно така е закован Колегата (`skills/
   т.8 падат, ако някоя от двете половини липсва в review или qa скила. Всяка се вижда червена
   веднъж (половината временно махната).
 - `update-suite`: config с Claude ред с чужд точен id → update отказва, config-ът е непроменен.
-- `git grep -niE "tier alias(es)? only|aliases only|only the tier aliases|TIER ALIAS as its model|valid only for the Writer|pinned to a full model id|ONE place a full model id|must stay tier aliases|conditional on the engine" -- docs skills schema templates`
-  → празно (exit 1). Измерено от COO преди промяната (2026-09-24), удря: `docs/LOOP.md:48`, `:53`,
+- `git grep -niE "tier alias(es)? only|aliases only|only the tier aliases|TIER ALIAS as its model|valid only for the Writer|pinned to a full model id|ONE place a full model id|must stay tier aliases|conditional on the engine|model: <the row's model>|whose model is not the top tier" -- docs skills schema templates`
+  → празно (exit 1). Измерено от COO преди промяната (2026-09-24), удря: `docs/LOOP.md:26`, `:48`, `:53`,
+  `skills/roles/SKILL.md:124`,
   `schema/README.md:11`, `:16`, схемата `:168`, `:187`, `:384`, `skills/setup/SKILL.md:82-83`,
   `templates/agents/qa.md.tmpl:22`, `reviewer.md.tmpl:26`, `writer.md.tmpl:16-17`. Всеки от тях се
   пренаписва (readiness p2).
