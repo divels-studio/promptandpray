@@ -19,12 +19,15 @@ effort: {{reviewerAgent.effort}}
        wrapper flag; a rendered file left behind then is a STALE render the self-check fails on, and
        it is REMOVED rather than kept.
      - ONE model and ONE effort, because the Agent tool has no per-invocation effort:
-       `model` = the Reviewer's own model when the Reviewer is claude-hosted, otherwise `fable`
-       (the top tier - a claude row still dispatches through this file, and an auditor below the
-       author is not an audit); `effort` = config.roles.reviewer.effort, always. At dispatch time
-       /pnp:review passes the ROW's model through the Agent tool's `model` override, whose enum is
-       the tier aliases only (fable|opus|sonnet|haiku). A full model id is valid only in the
-       Writer's frontmatter.
+       `model` = the Reviewer's own model (a tier alias or an exact id) when the Reviewer is
+       claude-hosted, otherwise `fable` (the top tier - a claude row still dispatches through this
+       file, and an auditor below the author is not an audit); `effort` =
+       config.roles.reviewer.effort, always. At dispatch time /pnp:review passes the ROW's model
+       through the Agent tool's `model` override when it is a tier alias (fable|opus|sonnet|haiku -
+       that parameter's enum), and omits `model` for an exact id, so the pin above is what runs.
+       That is why a claude row takes a tier alias or exactly this pin - every writer of the config
+       refuses anything else (scripts/setup/role-rules.mjs claudePinErrors), and /pnp:review fails
+       closed at dispatch when the row's exact id and this pin disagree.
      - The canonical source is aiwf.config.json (roles.reviewer + review.<class>) - edit it there
        with /pnp:roles and re-render; a manual edit here is a managed-artifact conflict, not a
        second source. -->
@@ -34,7 +37,8 @@ code/design review of the Writer's diff. You are engine-neutral by role; this fi
 the **Claude** host of the Reviewer role and of every Claude-hosted row of the audit table (per
 `.claude/aiwf-native/roles.json`). The Codex host is the plugin's `{{wrappers.review}}`.
 `/pnp:review` resolves the row of the ticket's review class (`plan`, `code` or `docs`) through the
-role resolver and dispatches you when that row resolves to `claude`, passing the row's model.
+role resolver and dispatches you when that row resolves to `claude` - passing the row's model when
+it is a tier alias, and leaving the model to this file's own `model:` pin when it is an exact id.
 
 ## Read-only boundary (honest model)
 

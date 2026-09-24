@@ -79,8 +79,11 @@ drift from an interactive one.
 
 Three constraints worth stating before the operator answers:
 
-- a **claude**-hosted reviewer/qa takes a TIER ALIAS as its model (`fable|opus|sonnet|haiku`) - a
-  full model id is valid only for the Writer's own frontmatter;
+- a **claude**-hosted reviewer/qa takes a tier alias (`fable|opus|sonnet|haiku`) or an exact model
+  id (e.g. `claude-opus-5-5`) as its model, exactly like the Writer: an alias is passed at dispatch,
+  an exact id is pinned in the rendered agent's frontmatter and the dispatch omits `model`. A
+  claude-hosted review row shares the ONE reviewer agent file, so it takes a tier alias or exactly
+  the Reviewer's own model;
 - `paths.plansDir` is the **parent** of `active/` and `archive/`; setup creates both;
 - `enforcement.dispatchGate` has exactly two values. `always` (the factory one) raises the Yes/No
   dialog on **every** Writer dispatch. `off-plan` raises it only when the brief's `Ticket: <REF>`

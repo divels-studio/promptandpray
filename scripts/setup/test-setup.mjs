@@ -452,12 +452,29 @@ section('7 - refusals happen BEFORE anything is written');
   check('nothing was written', Object.keys(snapshot(p8)).length === 0);
 }
 {
-  const p9 = project('tier');
+  // FLIPPED in 0.2.11: an exact model id on a CLAUDE-hosted Reviewer installs. The dispatch omits
+  // `model` for it, so the pin that runs is the one rendered into the agent's frontmatter - which is
+  // therefore what this asserts, not only the exit code.
+  const p9 = project('exact-id');
   const answers = baseAnswers();
-  answers.roles.reviewer.model = 'claude-opus-5[1m]'; // a full id on a CLAUDE host
+  answers.roles.reviewer.model = 'claude-opus-5-5';
   const r = install(p9, answers, ['--no-seeds']);
-  check('a claude-hosted role pinned to a full model id is refused', r.status === 1, `exit ${r.status}`);
-  check('nothing was written', Object.keys(snapshot(p9)).length === 0);
+  check('a claude-hosted Reviewer pinned to an exact model id installs (exit 0)', r.status === 0, why(r));
+  const reviewerMd = read(at(p9, '.claude/agents/reviewer.md')) || '';
+  check('and the rendered reviewer.md carries that pin as its frontmatter model',
+    /^model: claude-opus-5-5$/m.test(reviewerMd), (reviewerMd.split('\n').find((l) => l.startsWith('model:')) || '(no model line)'));
+}
+{
+  // The rule that replaced the alias conditional: a Claude review ROW shares the ONE reviewer agent
+  // file, so its exact id must be that file's pin. A foreign one is a setup BLOCKER - nothing written.
+  const p9b = project('foreign-row-id');
+  const answers = baseAnswers();
+  answers.roles.reviewer.model = 'claude-opus-5-5';
+  answers.review.docs = { passes: 1, engine: 'claude', model: 'claude-sonnet-5' };
+  const r = install(p9b, answers, ['--no-seeds']);
+  check('a Claude review row on a FOREIGN exact id is refused (exit 1)', r.status === 1, `exit ${r.status}`);
+  check('the refusal names the row and the Claude pin rule', r.out.includes('review.docs') && r.out.includes('Claude pin rule'), why(r, true));
+  check('nothing was written', Object.keys(snapshot(p9b)).length === 0);
 }
 
 // ---------------------------------------------------------------------------

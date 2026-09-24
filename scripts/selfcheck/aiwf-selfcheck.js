@@ -648,6 +648,17 @@ function runValidator(configPath, schemaPath) {
   return { status: r.status, stdout: (r.stdout || '').trim(), stderr: (r.stderr || '').trim() };
 }
 
+// The Claude pin rule (a Claude review row takes a tier alias or exactly the ONE reviewer agent
+// file's pin) compares two fields, so it is not in the schema: it is `claudePinErrors` in
+// scripts/setup/role-rules.mjs, the function setup, the update engine and /pnp:roles all call. ESM
+// again, so it is exercised at its REAL CLI entrypoint, from the plugin root under test. Exit codes:
+// 0 the rule holds, 1 violated (the reasons on stderr), 2 the config cannot be read.
+function runRoleRules(configPath, pluginRoot) {
+  const cli = path.join(pluginRoot || PLUGIN_ROOT, 'scripts', 'setup', 'role-rules.mjs');
+  const r = spawnSync(process.execPath, [cli, configPath], { encoding: 'utf8' });
+  return { status: r.status, stdout: (r.stdout || '').trim(), stderr: (r.stderr || '').trim() };
+}
+
 const writeEnvelope = (identity, filePath, extra) => Object.assign({
   session_id: '02a3eeba-ff69-4daa-94be-329a7a5036c1',
   permission_mode: 'acceptEdits',
@@ -1943,8 +1954,40 @@ function sectionConfigSchema(tmpRoot) {
   rejects('rejects an empty project.name', variant('no-name', (c) => { c.project.name = ''; }), '/project/name');
   rejects('rejects a missing required block', variant('no-paths', (c) => { delete c.paths; }), 'paths');
   rejects('rejects an unknown top-level key (typo protection)', variant('typo', (c) => { c.enforcment = {}; }));
-  rejects('rejects a claude-hosted role pinned to a full model id (the conditional really fires)',
-    variant('full-id', (c) => { c.roles.reviewer.model = 'claude-opus-5[1m]'; }), '/roles/reviewer/model');
+  // FLIPPED in 0.2.11: a claude-hosted role on an EXACT model id is a legal config now - the
+  // dispatch omits `model` for it and the rendered agent's frontmatter pin applies, as for the
+  // Writer. Both roles, because the schema used to carry the conditional on each of them.
+  {
+    const r = runValidator(variant('exact-id', (c) => {
+      c.roles.reviewer.model = 'claude-opus-5-5';
+      c.roles.qa = { engine: 'claude', model: 'claude-opus-5-5', effort: 'medium' };
+    }));
+    check('accepts a claude-hosted Reviewer and QA pinned to an exact model id (claude-opus-5-5)',
+      r.status === 0, `exit ${r.status}${r.stderr ? ' - ' + r.stderr.split('\n').slice(0, 2).join(' ').slice(0, 160) : ''}`);
+  }
+  // ...and the one rule that replaced the conditional, which the schema subset cannot express: a
+  // Claude review row shares the ONE reviewer agent file, so an exact id there must be that file's
+  // pin. Refused by claudePinErrors, at its CLI - the schema alone still ACCEPTS this config, which
+  // is exactly why the rule has its own home.
+  {
+    const foreign = variant('foreign-row-id', (c) => {
+      c.roles.reviewer.model = 'claude-opus-5-5';
+      c.review.docs = { passes: 1, engine: 'claude', model: 'claude-sonnet-5' };
+    });
+    const schemaSays = runValidator(foreign);
+    const rule = runRoleRules(foreign);
+    check('rejects a Claude review row on a FOREIGN exact id (claude-sonnet-5 next to a claude-opus-5-5 Reviewer) - the Claude pin rule, not the schema',
+      schemaSays.status === 0 && rule.status === 1 && rule.stderr.includes('review.docs') && rule.stderr.includes('claude-sonnet-5'),
+      `schema exit ${schemaSays.status}, pin rule exit ${rule.status}${rule.stderr ? ' - ' + rule.stderr.split('\n').slice(1, 2).join(' ').slice(0, 160) : ''}`);
+    const same = variant('same-row-id', (c) => {
+      c.roles.reviewer.model = 'claude-opus-5-5';
+      c.review.docs = { passes: 1, engine: 'claude', model: 'claude-opus-5-5' };
+      c.review.code = { passes: 1, engine: 'claude', model: 'sonnet' };
+    });
+    const ok = runRoleRules(same);
+    check('...while a Claude row on exactly the Reviewer\'s exact id, and another on a tier alias, both pass the pin rule',
+      ok.status === 0, `exit ${ok.status}${ok.stderr ? ' - ' + ok.stderr.slice(0, 160) : ''}`);
+  }
   rejects('rejects a codex-hosted qal switched to another engine', variant('qal-engine', (c) => { c.roles.qal.engine = 'claude'; }));
   rejects('rejects a correctionRoundsCap below 1', variant('cap0', (c) => { c.loop.correctionRoundsCap = 0; }));
   rejects('rejects a scratchDir moved away from .aiwf', variant('scratch', (c) => { c.paths.scratchDir = '.scratch'; }));
@@ -4408,6 +4451,75 @@ function sectionRolesCommand(tmpRoot, pluginVersion) {
       projectLayerFindings(root, PLUGIN_ROOT, { selfAuthored: true }).filter((f) => !f.note && !f.ok).map((f) => f.id).join(', ') || 'clean');
   }
 
+  // --- exact model ids (0.2.11): pinned in the agent file, never ranked, never foreign on a row -----
+  // A claude-hosted Reviewer or QA takes an exact id (the dispatch omits `model`, the frontmatter pin
+  // runs); a Claude ROW shares the one reviewer agent file, so it takes a tier alias or exactly that
+  // file's pin. Each case below is the production CLI on its own fixture.
+  const showModelCell = (root, block, label) => showCells(showRow(parseShow(runRoles(root, ['--show']).stdout), block, label))[2];
+  const qaFront = (root) => {
+    const src = readText(path.join(root, '.claude', 'agents', 'qa.md'));
+    const m = src === null ? null : /^model:\s*(\S+)\s*$/m.exec(src);
+    return m ? m[1] : null;
+  };
+  const layerRed = (root) => projectLayerFindings(root, PLUGIN_ROOT, { selfAuthored: true }).filter((f) => !f.note && !f.ok).map((f) => f.id);
+  {
+    const root = fixture();
+    const r = runRoles(root, ['--set', 'reviewer.model=claude-opus-5-5']);
+    check('--set reviewer.model=claude-opus-5-5 on a Claude Reviewer -> exit 0, and the rendered reviewer.md carries `model: claude-opus-5-5`',
+      r.status === 0 && front(root, 'model') === 'claude-opus-5-5' && cfgOf(root).roles.reviewer.model === 'claude-opus-5-5',
+      r.status === 0 ? `frontmatter model: ${front(root, 'model')}` : `exit ${r.status}: ${r.stderr.trim().split('\n').filter(Boolean).pop()}`);
+    check('--show marks an exact-id Claude auditor `(exact id - tier not ranked)` - on the Reviewer AND on a row that inherits it - never `(below the top tier)`',
+      showModelCell(root, SHOW_BLOCKS[0], 'reviewer') === 'claude-opus-5-5 (exact id - tier not ranked)'
+      && showModelCell(root, SHOW_BLOCKS[1], 'plan') === 'claude-opus-5-5 (exact id - tier not ranked)',
+      `reviewer: ${showModelCell(root, SHOW_BLOCKS[0], 'reviewer')} | plan: ${showModelCell(root, SHOW_BLOCKS[1], 'plan')}`);
+    check('...and the project layer is clean with the exact id in place (config, roles.json, frontmatter agree)',
+      layerRed(root).length === 0, layerRed(root).join(', ') || 'clean');
+
+    // A Claude row on a FOREIGN exact id: refused before anything is written.
+    const before = readText(path.join(root, '.claude', 'aiwf-native', 'aiwf.config.json'));
+    const foreign = runRoles(root, ['--set', 'docs.engine=claude', '--set', 'docs.model=claude-sonnet-5']);
+    check('--set docs.model=claude-sonnet-5 next to a claude-opus-5-5 Reviewer -> exit 1 (the one agent file carries another pin), config untouched',
+      foreign.status === 1 && /review\.docs is a Claude row on the exact id "claude-sonnet-5"/.test(foreign.stderr)
+      && readText(path.join(root, '.claude', 'aiwf-native', 'aiwf.config.json')) === before,
+      `exit ${foreign.status}: ${foreign.stderr.trim().split('\n').filter(Boolean).pop()}`);
+    // The two legal Claude rows next to an exact-id Reviewer: exactly its id, and any tier alias.
+    const same = runRoles(root, ['--set', 'docs.engine=claude', '--set', 'docs.model=claude-opus-5-5']);
+    const alias = runRoles(root, ['--set', 'code.engine=claude', '--set', 'code.model=sonnet']);
+    check('...while a Claude row on exactly the Reviewer\'s id, and one on a tier alias, are both written (exit 0 twice)',
+      same.status === 0 && alias.status === 0
+      && JSON.stringify(rowOf(root, 'docs')) === JSON.stringify({ passes: 1, engine: 'claude', model: 'claude-opus-5-5' })
+      && JSON.stringify(rowOf(root, 'code')) === JSON.stringify({ passes: 1, engine: 'claude', model: 'sonnet' }),
+      `docs exit ${same.status} ${JSON.stringify(rowOf(root, 'docs'))} | code exit ${alias.status} ${JSON.stringify(rowOf(root, 'code'))}`);
+    check('...and an alias row keeps its own marker: `sonnet (below the top tier)`',
+      showModelCell(root, SHOW_BLOCKS[1], 'code (R2/R3)') === 'sonnet (below the top tier)', showModelCell(root, SHOW_BLOCKS[1], 'code (R2/R3)'));
+    // Moving the Reviewer away from the id a row carries would leave that row foreign: refused.
+    const moved = runRoles(root, ['--set', 'reviewer.model=opus']);
+    check('--set reviewer.model=opus while a Claude row carries the old exact id -> exit 1 (the row would become foreign), nothing written',
+      moved.status === 1 && /review\.docs/.test(moved.stderr) && cfgOf(root).roles.reviewer.model === 'claude-opus-5-5',
+      `exit ${moved.status}: ${moved.stderr.trim().split('\n').filter(Boolean).pop()}`);
+  }
+  {
+    const root = fixture(); // qa is codex-hosted here: no qa.md yet
+    const r = runRoles(root, ['--set', 'qa.engine=claude', '--set', 'qa.model=claude-opus-5-5']);
+    check('--set qa.engine=claude qa.model=claude-opus-5-5 -> exit 0, and the rendered qa.md carries `model: claude-opus-5-5`',
+      r.status === 0 && qaFront(root) === 'claude-opus-5-5',
+      r.status === 0 ? `qa.md model: ${qaFront(root)}` : `exit ${r.status}: ${r.stderr.trim().split('\n').filter(Boolean).pop()}`);
+    check('...QA stays unmarked on an exact id too (the marker is about auditing), and the project layer is clean',
+      showModelCell(root, SHOW_BLOCKS[0], 'qa') === 'claude-opus-5-5' && layerRed(root).length === 0,
+      `qa: ${showModelCell(root, SHOW_BLOCKS[0], 'qa')} | red: ${layerRed(root).join(', ') || 'none'}`);
+  }
+  {
+    // The Codex-Reviewer arm: the file would be created on `fable`, so an exact id on a Claude row is
+    // foreign even though nothing else names a pin. Refused, and the agent file is NOT created.
+    const root = fixture(codexReviewer);
+    const before = readText(path.join(root, '.claude', 'aiwf-native', 'aiwf.config.json'));
+    const r = runRoles(root, ['--set', 'docs.engine=claude', '--set', 'docs.model=claude-opus-5-5']);
+    check('Codex Reviewer: --set docs.engine=claude docs.model=claude-opus-5-5 -> exit 1 (the file would carry fable), no agent file, config untouched',
+      r.status === 1 && /Reviewer is not Claude-hosted/.test(r.stderr) && !fs.existsSync(agent(root))
+      && readText(path.join(root, '.claude', 'aiwf-native', 'aiwf.config.json')) === before,
+      `exit ${r.status}: ${r.stderr.trim().split('\n').filter(Boolean).pop()}`);
+  }
+
   // --- crash injection: the honest guarantee, exercised ----------------------
   // Phase 2 is plan-before-write, NOT a transaction. So the claim under test is not "it cannot be
   // interrupted" - it is "an interruption is VISIBLE and re-running the same command finishes it".
@@ -4599,7 +4711,6 @@ function projectLayerFindings(projectRoot, pluginRoot, opts) {
   // --- rendered artifacts agree with the canonical source (aiwf.config.json.roles.*) ------------
   const roles = readJson(path.join(projectRoot, '.claude', 'aiwf-native', 'roles.json'));
   add('roles-parses', 'roles.json exists and parses', roles != null);
-  const TIERS = ['fable', 'opus', 'sonnet', 'haiku'];
   if (roles && cfg.roles) {
     for (const role of ['reviewer', 'qa', 'qal']) {
       const c = cfg.roles[role] || {};
@@ -4613,18 +4724,12 @@ function projectLayerFindings(projectRoot, pluginRoot, opts) {
     const qr = roles.qal || {};
     add('qal-enabled-mirrored', 'roles.json qal carries the enabled gate from config',
       qc.enabled === qr.enabled, `config=${qc.enabled} roles.json=${qr.enabled}`);
-    for (const role of ['reviewer', 'qa']) {
-      const c = cfg.roles[role] || {};
-      if (c.engine === 'claude') {
-        // A claude-hosted role is dispatched through the Agent tool's `model` override, whose enum
-        // is the tier aliases only - a full model id there fails at dispatch time.
-        add(`tier-alias-${role}`, `claude-hosted ${role} model is a tier alias (Agent tool enum)`,
-          TIERS.includes(c.model), `model=${c.model}`);
-      } else {
-        addNote(`tier-alias-${role}`, `claude-hosted ${role} model is a tier alias`,
-          `the ${role} role is ${c.engine}-hosted, so its model is a free engine atom and the tier enum does not apply`);
-      }
-    }
+    // There is no per-ROLE model assertion here any more (until 0.2.11: `tier-alias-<role>`). A
+    // claude-hosted Reviewer or QA takes a tier alias OR an exact model id: the dispatch passes an
+    // alias as the Agent tool's `model` and omits an exact id, so the rendered agent's frontmatter
+    // pin applies - and THAT is asserted below (`agent-model-<role>`: the frontmatter carries the
+    // configured model). The rule that survived is about the review ROWS, which share one agent
+    // file, and it lives in `review-row-shape`, through the same function every writer calls.
 
     // --- the audit table: roles.json carries the EFFECTIVE row of each review class -------------
     // The rule is deliberately restated here rather than imported from the generator: this section
@@ -4662,6 +4767,11 @@ function projectLayerFindings(projectRoot, pluginRoot, opts) {
   // reads. The third - every installation carries all three rows - is not in the schema's
   // `required` either, because a migration adds the rows one add-config-key at a time and the
   // update engine validates the whole config after each one. So the shape is asserted here.
+  // A Claude row's MODEL is the fourth rule, and it compares two fields: the row shares the ONE
+  // reviewer agent file, so it takes a tier alias or exactly that file's pin (roles.reviewer.model
+  // when the Reviewer is claude-hosted, `fable` otherwise). That one is NOT restated here - it is
+  // run through `claudePinErrors` (scripts/setup/role-rules.mjs, the plugin under test), the same
+  // function setup, the update engine and /pnp:roles call before they write.
   {
     const problems = [];
     for (const cls of REVIEW_CLASSES) {
@@ -4672,11 +4782,16 @@ function projectLayerFindings(projectRoot, pluginRoot, opts) {
         : (keys === 'engine,model,passes' && row.engine === 'claude') ? 'claude'
           : (keys === 'effort,engine,model,passes' && row.engine === 'codex') ? 'codex' : null;
       if (shape === null) problems.push(`review.${cls} is none of the three legal shapes (keys: ${keys}, engine: ${JSON.stringify(row.engine)})`);
-      else if (shape === 'claude' && !TIERS.includes(row.model)) problems.push(`review.${cls} is a claude row whose model "${row.model}" is not a tier alias`);
       else if (!Number.isInteger(row.passes)) problems.push(`review.${cls} passes is not an integer`);
     }
+    const pin = runRoleRules(cfgPath, pluginRoot);
+    if (pin.status !== 0) {
+      problems.push(pin.status === 1
+        ? `the Claude pin rule: ${pin.stderr.split('\n').slice(1).map((l) => l.trim()).filter(Boolean).join(' | ')}`
+        : `the Claude pin rule could not run (exit ${pin.status}): ${pin.stderr.slice(0, 160)}`);
+    }
     add('review-row-shape',
-      'every review row is one of the three legal shapes: {passes} inherited, {passes,engine:claude,model}, or {passes,engine:codex,model,effort}',
+      'every review row is one of the three legal shapes: {passes} inherited, {passes,engine:claude,model}, or {passes,engine:codex,model,effort} - and a Claude row\'s model is a tier alias or exactly the ONE reviewer agent file\'s pin',
       problems.length === 0, problems.length ? problems.join('; ') : `${REVIEW_CLASSES.length} rows`);
   }
 
@@ -5408,7 +5523,22 @@ const GIT_C_PROJECT_TOOLS = ['Bash', 'PowerShell'];
 const DOCTRINE_REVIEW_CLASS_ROW = 'The class names a ROW of the **audit table**';
 const DOCTRINE_REVIEW_CLASS_RESOLVER = '-Role reviewer -Class <class> -RolesPath';
 const DOCTRINE_REVIEW_CLASS_HOST =
-  'Invoke the **Agent tool** with `subagent_type: "reviewer"`, `model: <$row.model>`';
+  'Invoke the **Agent tool** with `subagent_type: "reviewer"`, the ROW\'s model per the dispatch contract below';
+// THE `model` DISPATCH CONTRACT, two halves, held in BOTH dispatching skills (/pnp:review and
+// /pnp:qa). Until 0.2.11 both skills passed `model` unconditionally, which only worked because every
+// claude-hosted model was a tier alias. A claude-hosted Reviewer/QA/row may now be an exact id, and
+// the Agent tool's `model` takes a tier alias and nothing else - so the alias is passed and the exact
+// id is omitted (the rendered agent's frontmatter pin applies, the Writer's pattern). Losing EITHER
+// half is a defect with money behind it: without the first, an alias row stops overriding the file
+// and runs whatever the file pins; without the second, an exact id is handed to a parameter that
+// cannot carry it. Each half is therefore asserted per skill, each with its own control.
+const DOCTRINE_DISPATCH_ALIAS_HALF = 'a tier alias (`fable|opus|sonnet|haiku`) is passed as the Agent tool\'s `model`';
+const DOCTRINE_DISPATCH_EXACT_HALF = 'an exact model id is NOT passed - `model` is omitted.';
+const DOCTRINE_DISPATCH_SKILLS = ['review', 'qa'];
+// The reviewer's ONE agent file carries ONE pin for every Claude row, so /pnp:review compares the
+// row's exact id with that pin before dispatching and stops on a mismatch rather than running a
+// model the row does not name.
+const DOCTRINE_REVIEW_PIN_FAIL_CLOSED = '**Fail closed on a pin mismatch.**';
 // The fourth claim, and the one with money behind it: plan readiness is the `review.plan` row, and
 // its pass count is `review.plan.passes` rather than a number written into a document. A wording
 // that re-hardcodes the count silently removes the operator's control over how much a plan costs.
@@ -6349,7 +6479,7 @@ function payloadDoctrineFindings(pluginRoot) {
     classMissing.push(`no resolver call carrying the class (${DOCTRINE_REVIEW_CLASS_RESOLVER})`);
   }
   if (!reviewFlat.includes(collapseWs(DOCTRINE_REVIEW_CLASS_HOST))) {
-    classMissing.push('the Claude host is not the rendered `reviewer` agent dispatched with the ROW\'s model');
+    classMissing.push('the Claude host is not the rendered `reviewer` agent dispatched with the ROW\'s model per the dispatch contract');
   }
   if (!reviewFlat.includes(collapseWs(DOCTRINE_REVIEW_READINESS_SENTENCE))) {
     classMissing.push('plan readiness is not the `review.plan` row resolved with -Class plan');
@@ -6358,6 +6488,20 @@ function payloadDoctrineFindings(pluginRoot) {
     '/pnp:review takes the ticket class as an explicit brief input (Class: plan | code | docs), resolves it as a ROW of the audit table through the resolver\'s -Class, dispatches a Claude row to the rendered `reviewer` agent with the ROW\'s model (no ad-hoc subagent, no model pinned in the doctrine), and takes plan readiness from the `review.plan` row',
     classMissing.length === 0,
     classMissing.length ? classMissing.join('; ') : 'the Class line, Step 0c, the row lookup, the -Class resolver call, the rendered Claude host and the readiness row are all present');
+
+  // The `model` dispatch contract, per dispatching skill: both halves, each on its own.
+  for (const name of DOCTRINE_DISPATCH_SKILLS) {
+    const flat = collapseWs(skillText(name) || '');
+    const missing = [];
+    if (!flat.includes(collapseWs(DOCTRINE_DISPATCH_ALIAS_HALF))) missing.push(`the alias half ("${DOCTRINE_DISPATCH_ALIAS_HALF}")`);
+    if (!flat.includes(collapseWs(DOCTRINE_DISPATCH_EXACT_HALF))) missing.push(`the exact-id half ("${DOCTRINE_DISPATCH_EXACT_HALF}")`);
+    if (name === 'review' && !flat.includes(collapseWs(DOCTRINE_REVIEW_PIN_FAIL_CLOSED))) {
+      missing.push(`the fail-closed pin comparison ("${DOCTRINE_REVIEW_PIN_FAIL_CLOSED}")`);
+    }
+    add(`doctrine-dispatch-model-${name}`,
+      `/pnp:${name} states the \`model\` dispatch contract in both halves: a tier alias is passed as \`model\`, an exact id is omitted so the rendered agent's frontmatter pin applies${name === 'review' ? ' - and it fails closed when the row\'s exact id and the one agent file\'s pin disagree' : ''}`,
+      missing.length === 0, missing.length ? `missing: ${missing.join('; ')}` : 'both halves present');
+  }
 
   for (const s of DOCTRINE_TABLE_SURFACES) {
     const text = readText(path.join(pluginRoot, ...s.file.split('/')));
@@ -6652,6 +6796,18 @@ const DOCTRINE_CONTROLS = [
     apply: (r) => doctrinePhrase(r, 'skills/review/SKILL.md', DOCTRINE_REVIEW_CLASS_RESOLVER, '-Role reviewer -RolesPath') },
   { id: 'doctrine-review-class', label: 'the Claude host goes back to an ad-hoc subagent on a model pinned in the doctrine',
     apply: (r) => doctrinePhrase(r, 'skills/review/SKILL.md', DOCTRINE_REVIEW_CLASS_HOST, 'Invoke the **Agent tool** with `subagent_type: "general-purpose"`, `model: "opus"`') },
+  // One control per HALF per skill, because the assertion reads each on its own and a control for
+  // one would leave the other free to vanish while the check still passed.
+  { id: 'doctrine-dispatch-model-review', label: '/pnp:review loses the alias half - an alias row would stop overriding the one agent file',
+    apply: (r) => doctrinePhrase(r, 'skills/review/SKILL.md', DOCTRINE_DISPATCH_ALIAS_HALF, 'a tier alias is left to the agent file') },
+  { id: 'doctrine-dispatch-model-review', label: '/pnp:review loses the exact-id half - an exact id would be handed to the Agent tool\'s `model`',
+    apply: (r) => doctrinePhrase(r, 'skills/review/SKILL.md', DOCTRINE_DISPATCH_EXACT_HALF, 'an exact model id is passed as `model` too.') },
+  { id: 'doctrine-dispatch-model-review', label: '/pnp:review drops the fail-closed comparison of the row\'s exact id with the agent file\'s pin',
+    apply: (r) => doctrinePhrase(r, 'skills/review/SKILL.md', DOCTRINE_REVIEW_PIN_FAIL_CLOSED, '**Dispatch anyway.**') },
+  { id: 'doctrine-dispatch-model-qa', label: '/pnp:qa loses the alias half - an alias would stop overriding the qa agent file',
+    apply: (r) => doctrinePhrase(r, 'skills/qa/SKILL.md', DOCTRINE_DISPATCH_ALIAS_HALF, 'a tier alias is left to the agent file') },
+  { id: 'doctrine-dispatch-model-qa', label: '/pnp:qa loses the exact-id half - an exact id would be handed to the Agent tool\'s `model`',
+    apply: (r) => doctrinePhrase(r, 'skills/qa/SKILL.md', DOCTRINE_DISPATCH_EXACT_HALF, 'an exact model id is passed as `model` too.') },
   { id: 'doctrine-review-class', label: 'plan readiness stops being the `review.plan` row - the pass count returns to a number in a document',
     apply: (r) => doctrinePhrase(r, 'skills/review/SKILL.md', DOCTRINE_REVIEW_READINESS_SENTENCE, 'the engine the Reviewer role names, always') },
   // One control per SPELLING, because the assertion reads two and a single control would leave the
@@ -7009,7 +7165,7 @@ function sectionPayloadIntegrity() {
     const ENTRYPOINTS = [
       'scripts/setup/interview.mjs', 'scripts/setup/generate.mjs', 'scripts/setup/validate-config.mjs',
       'scripts/setup/aiwf-roles.mjs', 'scripts/update/aiwf-update.mjs', 'scripts/update/validate-payload.mjs',
-      'scripts/ci/example-bump.mjs',
+      'scripts/ci/example-bump.mjs', 'scripts/setup/role-rules.mjs',
     ];
     const guardBody = (src) => {
       const m = /function isMain\(\)\s*\{([\s\S]*?)\n\}/.exec(String(src || ''));
@@ -8147,10 +8303,12 @@ const EXAMPLE_CONTROLS = [
     apply: (r) => mutateJson(r, ['examples', 'example-project', 'answers-linux.json'], (a) => { a.os = 'windows'; }) },
   { id: 'example-answers-linux-parity', label: 'a second, unintended difference smuggled into the POSIX answers file',
     apply: (r) => mutateJson(r, ['examples', 'example-project', 'answers-linux.json'], (a) => { a.roles.qa.engine = 'codex'; }) },
+  // Both invalid values are an EMPTY model since 0.2.11: an exact model id on a claude-hosted role is
+  // a legal answer now, so the old sabotage (a full id) would no longer be one.
   { id: 'example-answers-linux-valid', label: 'the POSIX answers file violating the schema',
-    apply: (r) => mutateJson(r, ['examples', 'example-project', 'answers-linux.json'], (a) => { a.roles.reviewer.model = 'claude-opus-5[1m]'; }) },
-  { id: 'example-answers-valid', label: 'a claude-hosted role in the answers pinned to a full model id',
-    apply: (r) => mutateJson(r, ['examples', 'example-project', 'answers.json'], (a) => { a.roles.reviewer.model = 'claude-opus-5[1m]'; }) },
+    apply: (r) => mutateJson(r, ['examples', 'example-project', 'answers-linux.json'], (a) => { a.roles.reviewer.model = ''; }) },
+  { id: 'example-answers-valid', label: 'a claude-hosted role in the answers with an empty model',
+    apply: (r) => mutateJson(r, ['examples', 'example-project', 'answers.json'], (a) => { a.roles.reviewer.model = ''; }) },
   { id: 'example-driver-commands', label: 'the driver\'s DOCUMENTED_COMMANDS block renamed',
     apply: (r) => patchText(r, ['scripts', 'ci', 'run-example-cycle.mjs'], /export const DOCUMENTED_COMMANDS = \[/, 'export const SOMETHING_ELSE = [') },
   { id: 'example-readme-in-driver', label: 'the README shows a command the driver never runs',
@@ -8377,8 +8535,22 @@ const NEGATIVE_CONTROLS = [
       c.review.docs = { passes: 1, engine: 'claude', model: 'opus' };
       delete c._aiwf.managedRegions['.claude/agents/reviewer.md'];
     }) },
-  { id: 'tier-alias-reviewer', label: 'a claude-hosted role pinned to a full model id',
-    apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => { c.roles.reviewer.model = 'claude-opus-5[1m]'; }) },
+  // FLIPPED in 0.2.11. Until then this control pinned the Claude REVIEWER to an exact id and required
+  // a failure; that config is legal now (the dispatch omits `model` and the agent file's pin runs).
+  // What an exact id can still break is a Claude ROW, which shares the one reviewer agent file - so
+  // the same sabotage, moved onto a row: the Reviewer stays on `opus`, the docs row takes an exact id
+  // that file does not carry, and `review-row-shape` (through claudePinErrors) must fail.
+  { id: 'review-row-shape', label: 'a Claude review row pinned to an exact id the one reviewer agent file does not carry',
+    apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
+      c.review.docs = { passes: 1, engine: 'claude', model: 'claude-opus-5-5' };
+    }) },
+  // The other arm of the same rule: a Codex-hosted Reviewer leaves the file on `fable`, so a Claude
+  // row takes a tier alias there - even an exact id that happens to be the one it names elsewhere.
+  { id: 'review-row-shape', label: 'a Claude review row on an exact id while the Reviewer is Codex-hosted (the file carries fable)',
+    apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
+      c.roles.reviewer = { engine: 'codex', model: 'codex-atom-2', effort: 'high' };
+      c.review.docs = { passes: 1, engine: 'claude', model: 'claude-opus-5-5' };
+    }) },
   { id: 'agent-effort-reviewer', label: 'an agent frontmatter effort drifted from the config',
     apply: (r) => patchText(r, ['.claude', 'agents', 'reviewer.md'], /^effort: .*$/m, 'effort: low') },
   { id: 'agent-model-reviewer', label: 'an agent frontmatter model drifted from the config',

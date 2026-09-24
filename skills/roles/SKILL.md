@@ -66,8 +66,12 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/setup/aiwf-roles.mjs" --show \
 Every refusal ends the run with **zero writes**, including a run with several `--set` pairs where
 only the last one is bad:
 
-- a result the payload schema rejects (a `passes` outside its range, a Claude model that is not a
-  tier alias);
+- a result the payload schema rejects (a `passes` outside its range, an empty model);
+- a Claude row on an exact model id that the ONE rendered `reviewer` agent file does not carry: a
+  Claude row takes a tier alias (`fable|opus|sonnet|haiku`), or exactly `roles.reviewer.model` when
+  the Reviewer is Claude-hosted. `/pnp:review` passes an alias as the Agent tool's `model` and omits
+  an exact id, so the file's pin is what would run - a different id would run a model the row does
+  not name. The Reviewer and QA roles themselves take a tier alias or any exact id;
 - an artifact you **hold** through an override - `/pnp:update --resolve <key>` is that door;
 - an artifact you **edited by hand** that is not already exactly the render this run wants;
 - a file at an artifact's path that PromptAndPray never wrote and that differs from the render;
@@ -121,10 +125,12 @@ R1            -       -                  -       0       no auditor
   returns `pass`, `0` = no auditor. Correction rounds stay capped by `loop.correctionRoundsCap`.
 - `(the Reviewer's)` after an effort means the row is Claude-hosted and shares the reviewer agent
   file; there is no per-row effort to set.
-- `(below the top tier)` marks a Claude auditor whose model is not the top tier. It is printed for
-  the Reviewer and for the review rows only - **QA is not marked**, because QA compares artifacts
-  against acceptance criteria rather than auditing decisions, so a mid-tier QA is an ordinary
-  choice.
+- `(below the top tier)` marks a Claude auditor on a tier alias other than the top tier (`opus`,
+  `sonnet`, `haiku`). `(exact id - tier not ranked)` marks a Claude auditor on an exact model id
+  (e.g. `claude-opus-5-5`): PnP does not rank exact ids against the aliases, and says so rather
+  than guess. Both are printed for the Reviewer and for the review rows only - **QA is not
+  marked**, because QA compares artifacts against acceptance criteria rather than auditing
+  decisions, so a mid-tier QA is an ordinary choice.
 - The **fact-check** row and the **R1** row are there so the picture is complete. Neither is
   configurable: the fact-check gate runs before every pass, over a diff or over a plan, and R1 has
   no auditor by definition.

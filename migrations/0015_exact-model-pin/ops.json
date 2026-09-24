@@ -1,0 +1,32 @@
+{
+  "migration": "0015_exact-model-pin",
+  "targetPluginVersion": "0.2.11",
+  "operations": [
+    {
+      "op": "note",
+      "id": "exact-model-pin",
+      "text": "A claude-hosted Reviewer or QA - and a claude-hosted row of the audit table - can now be pinned to an EXACT model id (for example claude-opus-5-5), not only to a tier alias (fable|opus|sonnet|haiku). A tier alias silently moves to a newer model with every model release; an exact id does not. The dispatch follows the pattern the Writer has always used: /pnp:review and /pnp:qa pass `model` to the Agent tool ONLY when the value is a tier alias (that parameter takes the aliases and nothing else), and omit it for an exact id, so the pin rendered into the agent file's frontmatter is what runs. One rule comes with it, because the Reviewer has ONE agent file carrying ONE pin for every claude-hosted row: a claude row takes a tier alias or exactly roles.reviewer.model (a tier alias when your Reviewer is codex-hosted and the file carries fable). /pnp:setup, /pnp:update and /pnp:roles all refuse anything else before writing, and /pnp:review stops at dispatch if a row's exact id and the file's pin ever disagree. An exact id is never ranked: /pnp:roles --show marks it `(exact id - tier not ranked)` instead of `(below the top tier)`, and the fact-check gate always runs before a pass on an exact id - it is skipped only for a reviewer on a scan-tier ALIAS (haiku/sonnet). No configuration that was valid before this release becomes invalid: every claude model you could write before was a tier alias, and aliases keep working exactly as they did. The rendered agent files whose wording states the dispatch contract are re-rendered here: .claude/agents/reviewer.md where your installation has it - it is rendered whenever the Reviewer role OR any review row is claude-hosted, so a codex-hosted Reviewer with a claude row has it and gets it re-rendered, and only an installation where neither is claude-hosted has none and sees that operation reported as skipped; .claude/agents/qa.md where your QA role is claude-hosted (a codex-hosted QA has none, and that operation is reported as skipped); and .claude/agents/writer.md, which every installation has. An agent file you hold through an override is not re-applied; the new render is recorded as upstream and the CHANGES report says so.",
+      "docRefs": ["CHANGELOG.md", "docs/LOOP.md"]
+    },
+    {
+      "op": "rerender-managed-region",
+      "file": ".claude/agents/reviewer.md",
+      "region": null,
+      "template": "templates/agents/reviewer.md.tmpl",
+      "ifRecorded": true
+    },
+    {
+      "op": "rerender-managed-region",
+      "file": ".claude/agents/qa.md",
+      "region": null,
+      "template": "templates/agents/qa.md.tmpl",
+      "ifRecorded": true
+    },
+    {
+      "op": "rerender-managed-region",
+      "file": ".claude/agents/writer.md",
+      "region": null,
+      "template": "templates/agents/writer.md.tmpl"
+    }
+  ]
+}

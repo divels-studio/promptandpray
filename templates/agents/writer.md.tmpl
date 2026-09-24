@@ -13,8 +13,10 @@ effort: {{config.roles.writer.effort}}
 <!-- TEMPLATE CONTRACT (read by the P2 generate engine, not by the Writer)
      - ALWAYS rendered: the Writer is a Claude subagent by definition; it has no engine key and no
        codex host. (The reviewer/qa templates are conditional - see their own contract blocks.)
-     - The Writer's `model` is the ONE place a full model id is valid; the Agent tool's `model`
-       override accepts tier aliases only, which is why a dispatch must never pass it.
+     - The Writer's `model` is a tier alias or an exact model id. The Agent tool's `model` override
+       takes a tier alias (fable|opus|sonnet|haiku) and wins over frontmatter, which is why a Writer
+       dispatch never passes it. A claude-hosted Reviewer/QA follows the same pattern for an exact
+       id (its dispatch omits `model`, so its own frontmatter pin applies) and passes an alias.
      - {{resolvedRoot}} is a RENDER-TIME placeholder, not a config path: the generate engine
        substitutes the project root it resolves while rendering (`git rev-parse --show-toplevel`,
        or the explicit absolute path when config.project.root is not "auto"). Never render

@@ -18,7 +18,7 @@ Born in a real production project, then extracted and genericized.
 
 ## Status
 
-**v0.2.10. Public since 0.2.0.**
+**v0.2.11. Public since 0.2.0.**
 
 What is here:
 

@@ -40,7 +40,11 @@
  *   - `<row>.effort=` on a Claude row: every Claude-hosted review pass runs through the ONE
  *     rendered reviewer agent, whose effort is roles.reviewer.effort, because the Agent tool has no
  *     per-invocation effort. A value nothing reads is not a setting;
- *   - `<target>.engine=codex` with no model, when the Reviewer is not codex either.
+ *   - `<target>.engine=codex` with no model, when the Reviewer is not codex either;
+ *   - a Claude row on an exact model id that the ONE reviewer agent file does not carry (a Claude row
+ *     takes a tier alias, or exactly roles.reviewer.model when the Reviewer is Claude-hosted):
+ *     /pnp:review omits `model` for an exact id, so the file's pin is what would run
+ *     (role-rules.mjs claudePinErrors, shared with setup and the update engine).
  *
  * EXIT CODES (one contract)
  *   0  shown, or written
@@ -69,11 +73,10 @@ import {
   reviewerAgentRendered, sha256, templateContext,
 } from './generate.mjs';
 import { formatErrors, loadSchema, validate } from './validate-config.mjs';
+import { TOP_TIER, claudePinErrors, isTierAlias } from './role-rules.mjs';
 import { finishWithSelfCheck } from '../selfcheck/run-selfcheck.mjs';
 
 const AGENTS_DIR = '.claude/agents';
-const TOP_TIER = 'fable';
-const TIER_ALIASES = ['fable', 'opus', 'sonnet', 'haiku'];
 const ROLE_TARGETS = ['writer', 'reviewer', 'qa', 'qal'];
 const TARGETS = [...ROLE_TARGETS, ...REVIEW_CLASSES];
 const FIELDS = ['engine', 'model', 'effort', 'passes', 'enabled'];
@@ -155,9 +158,12 @@ export function parseAssignment(text) {
  * Anything else is refused. The schema enforces most of it, but two rules need `not` (which this
  * project's schema interpreter deliberately does not implement) and live here plus in the
  * self-check's `review-row-shape` assertion: no `effort` on a Claude row, and no host field at all
- * on an inherited one.
+ * on an inherited one. A third compares two fields - a Claude row's model is a tier alias or exactly
+ * the pin of the ONE reviewer agent file - and it is not restated here: it is role-rules.mjs
+ * `claudePinErrors`, the one function every writer of the config calls, so `config` (the config the
+ * row belongs to, which carries roles.reviewer) is passed in for it.
  */
-export function rowShapeError(cls, row) {
+export function rowShapeError(cls, row, config) {
   if (!isPlainObject(row)) return `review.${cls} is not an object.`;
   const keys = Object.keys(row);
   const unknown = keys.filter((k) => !['passes', 'engine', 'model', 'effort'].includes(k));
@@ -175,7 +181,8 @@ export function rowShapeError(cls, row) {
     if (Object.prototype.hasOwnProperty.call(row, 'effort')) {
       return `review.${cls} is a Claude row and carries its own "effort" (${CLAUDE_ROW_EFFORT_NOTE}).`;
     }
-    if (!TIER_ALIASES.includes(row.model)) return `review.${cls} is a Claude row, so its model must be a tier alias (${TIER_ALIASES.join('|')}).`;
+    const pin = claudePinErrors({ roles: isPlainObject(config) ? config.roles : undefined, review: { [cls]: row } });
+    if (pin.length) return pin[0];
     return null;
   }
   if (row.engine === 'codex') {
@@ -297,7 +304,7 @@ export function applyChanges(config, { sets = [], resets = [] }) {
 
   for (const cls of REVIEW_CLASSES) {
     if (!isPlainObject(next.review[cls])) continue;
-    const bad = rowShapeError(cls, next.review[cls]);
+    const bad = rowShapeError(cls, next.review[cls], next);
     if (bad) throw new RolesRefusal(bad);
   }
   return { config: next, notes };
@@ -537,6 +544,13 @@ function roleLine(label, role, notes) {
   return { label, host, model: role.model || DASH, effort: role.effort || DASH, passes: DASH, notes };
 }
 
+/** A Claude auditor's model cell: the top tier bare, another alias marked, an exact id never ranked. */
+function claudeAuditorModel(model) {
+  if (typeof model !== 'string' || model === '') return DASH;
+  if (!isTierAlias(model)) return `${model} (exact id - tier not ranked)`;
+  return model === TOP_TIER ? model : `${model} (below the top tier)`;
+}
+
 /**
  * The table. It is the answer to "who audits what", so every cell is a resolved value, never a
  * template: an inherited row prints the Reviewer's host because that is what will really run.
@@ -566,9 +580,11 @@ function roleLine(label, role, notes) {
  * Two markers earn their place:
  *   `(the Reviewer's)` on a Claude row's effort - the row has no effort of its own and the number
  *     shown is the agent file's, so a reader does not go looking for a setting that is not there;
- *   `(below the top tier)` on a Claude auditor whose model is not the top tier - the Reviewer role
- *     and the review rows only. QA is deliberately NOT marked: QA compares artifacts against
- *     acceptance criteria, it does not audit decisions, so a mid-tier QA is an ordinary choice.
+ *   `(below the top tier)` on a Claude auditor on a tier alias other than the top tier - the
+ *     Reviewer role and the review rows only. QA is deliberately NOT marked: QA compares artifacts
+ *     against acceptance criteria, it does not audit decisions, so a mid-tier QA is an ordinary
+ *     choice. A Claude auditor on an EXACT model id is marked `(exact id - tier not ranked)`
+ *     instead: PnP does not rank exact ids against the aliases, and it says so rather than guess.
  */
 export function showLines(config) {
   const roles = isPlainObject(config.roles) ? config.roles : {};
@@ -577,8 +593,8 @@ export function showLines(config) {
   roleRows.push(roleLine('writer', roles.writer, DASH));
   const reviewerRow = roleLine('reviewer', roles.reviewer, DASH);
   // The Reviewer role carries the same "auditor is never below the author" marker as the rows.
-  if (isPlainObject(roles.reviewer) && roles.reviewer.engine === 'claude' && roles.reviewer.model !== TOP_TIER) {
-    reviewerRow.model = `${roles.reviewer.model} (below the top tier)`;
+  if (isPlainObject(roles.reviewer) && roles.reviewer.engine === 'claude') {
+    reviewerRow.model = claudeAuditorModel(roles.reviewer.model);
   }
   roleRows.push(reviewerRow);
   roleRows.push(roleLine('qa', roles.qa, 'runtime/UI tickets only'));
@@ -604,7 +620,7 @@ export function showLines(config) {
       classRows.push({ label: CLASS_LABEL[cls], host: DASH, model: DASH, effort: DASH, passes: '0', notes: 'no auditor' });
       continue;
     }
-    const marked = row.engine === 'claude' && row.model !== TOP_TIER ? `${row.model} (below the top tier)` : row.model;
+    const marked = row.engine === 'claude' ? claudeAuditorModel(row.model) : row.model;
     const effort = row.engine === 'claude' ? `${row.effort} (${CLAUDE_ROW_EFFORT_NOTE})` : row.effort;
     classRows.push({ label: CLASS_LABEL[cls], host: row.engine, model: marked, effort, passes: String(row.passes), notes: CLASS_NOTE[cls] });
   }

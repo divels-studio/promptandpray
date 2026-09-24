@@ -4,6 +4,35 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.2.11] - 2026-09-24
+
+A Claude-hosted Reviewer or QA can be pinned to an exact model id, the way the Writer always could,
+and a real release stops rewriting the example project.
+
+### Changed
+
+- **A real release no longer touches examples/ (HARD-019)** - the example project's simulated bump
+  used to be a numbered migration fixture that had to be renamed at every release, so every version
+  bump rewrote `examples/`. The fixture is now an unnumbered template (`bump/example-bump/`), and
+  `scripts/ci/example-bump.mjs` numbers it at run time against the payload it lands in, reading the
+  whole template into memory before it writes anything - a refused build leaves the payload intact
+  and can simply be run again.
+
+### Fixed
+
+- **A Claude-hosted Reviewer/QA can be pinned to an exact model id (HARD-018)** - a claude-hosted
+  `roles.reviewer`, `roles.qa` and audit-table row took `fable|opus|sonnet|haiku` only, and an alias
+  silently moves to a newer model with every model release. They now take a tier alias or an exact
+  id (e.g. `claude-opus-5-5`): `/pnp:review` and `/pnp:qa` pass `model` to the Agent tool only for
+  an alias and omit it for an exact id, so the rendered agent's frontmatter pin runs - the Writer's
+  pattern. A claude row shares the ONE reviewer agent file, so it takes an alias or exactly
+  `roles.reviewer.model`; one function (`scripts/setup/role-rules.mjs` `claudePinErrors`) enforces
+  that for setup, `/pnp:update` preflight and `/pnp:roles` before any write, and `/pnp:review` fails
+  closed at dispatch on a pin mismatch. An exact id is never ranked: `/pnp:roles --show` marks it
+  `(exact id - tier not ranked)` and the fact-check gate always runs before a pass on it. No config
+  valid before this release becomes invalid; migration `0015_exact-model-pin` re-renders the agent
+  files that state the dispatch contract.
+
 ## [0.2.10] - 2026-09-24
 
 The audit table stops being stricter than the engines it dispatches to: a review row's `effort` is

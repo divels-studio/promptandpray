@@ -18,8 +18,9 @@ effort: {{config.roles.qa.effort}}
        {{wrappers.qa}} and its effort travels as a wrapper flag. If the engine later
        changes to 'codex', the rendered file is REMOVED, not left behind: a stale
        .claude/agents/qa.md next to a codex-hosted role is a defect the self-check fails.
-     - The `model` above goes through the Agent tool's `model` override, whose enum is the tier
-       aliases only (fable|opus|sonnet|haiku).
+     - The `model` above is a tier alias or an exact model id. /pnp:qa passes a tier alias
+       (fable|opus|sonnet|haiku - the enum of the Agent tool's `model` override) at dispatch, and
+       omits `model` for an exact id, so this frontmatter pin is what runs - the Writer's pattern.
      - The canonical source is aiwf.config.json.roles.qa - edit it there and re-render; a manual
        edit here is a managed-artifact conflict, not a second source. -->
 

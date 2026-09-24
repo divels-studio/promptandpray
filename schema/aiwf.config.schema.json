@@ -165,7 +165,7 @@
             "model": {
               "type": "string",
               "minLength": 1,
-              "description": "Rendered into .claude/agents/writer.md frontmatter, which is the ONE place a full model id is valid (a dispatch must never pass `model`, because the Agent tool override accepts tier aliases only)."
+              "description": "Rendered into .claude/agents/writer.md frontmatter - a tier alias or an exact model id. A Writer dispatch never passes `model`: the Agent tool's `model` parameter takes a tier alias (fable|opus|sonnet|haiku) and takes precedence over frontmatter, so passing one would silently replace this pin."
             },
             "effort": { "$comment": "see the effort note on roles.reviewer.effort", "type": "string", "minLength": 1 }
           }
@@ -184,28 +184,14 @@
             "model": {
               "type": "string",
               "minLength": 1,
-              "description": "engine=claude: a TIER ALIAS only (the conditional below), because a claude-hosted role is dispatched through the Agent tool's `model` override whose enum is the aliases. engine=codex: any non-empty engine atom - the codex model vocabulary is the external engine's, and pinning it here would reject valid ids."
+              "description": "engine=claude: a tier alias (fable|opus|sonnet|haiku) OR an exact model id (e.g. claude-opus-5-5). It is rendered into the reviewer agent's frontmatter either way; /pnp:review passes it as the Agent tool's `model` only when it is a tier alias (that parameter's enum), and omits `model` for an exact id so the frontmatter pin applies - the Writer's pattern. A claude-hosted review row shares that ONE agent file, so it takes a tier alias or exactly this value (scripts/setup/role-rules.mjs claudePinErrors, called by every writer of the config - a two-field rule this schema subset cannot express). engine=codex: any non-empty engine atom - the codex model vocabulary is the external engine's, and pinning it here would reject valid ids."
             },
             "effort": {
               "type": "string",
               "minLength": 1,
               "description": "Reasoning effort. Deliberately NOT an enum: the two consumers accept a free string and neither publishes a closed set to derive one from - a claude-hosted role renders it into agent frontmatter (`effort: <value>`), a codex-hosted role passes it as `-c model_reasoning_effort=<value>` to an external engine that owns its own vocabulary. The role resolver states the same contract (scripts/native/ps/aiwf-roles.ps1: engine has an enum, effort has none - a bad value is the engine's business) and rejects only a non-string or empty value, which is exactly what minLength 1 enforces here. Values seen in practice: \"high\", \"medium\"."
             }
-          },
-          "allOf": [
-            {
-              "$comment": "The tier-alias conditional. Asserted independently by the self-check (tier-alias-<role>).",
-              "if": {
-                "required": ["engine"],
-                "properties": { "engine": { "const": "claude" } }
-              },
-              "then": {
-                "properties": {
-                  "model": { "enum": ["fable", "opus", "sonnet", "haiku"] }
-                }
-              }
-            }
-          ]
+          }
         },
         "qa": {
           "type": "object",
@@ -216,23 +202,10 @@
             "model": {
               "type": "string",
               "minLength": 1,
-              "description": "Same rule as roles.reviewer.model: tier alias when claude-hosted, free engine atom when codex-hosted."
+              "description": "Same shape as roles.reviewer.model: a tier alias or an exact model id when claude-hosted (/pnp:qa passes `model` only for an alias and omits it for an exact id, so the pin in .claude/agents/qa.md applies; QA has its own agent file, so no row shares it), a free engine atom when codex-hosted."
             },
             "effort": { "$comment": "see the effort note on roles.reviewer.effort", "type": "string", "minLength": 1 }
-          },
-          "allOf": [
-            {
-              "if": {
-                "required": ["engine"],
-                "properties": { "engine": { "const": "claude" } }
-              },
-              "then": {
-                "properties": {
-                  "model": { "enum": ["fable", "opus", "sonnet", "haiku"] }
-                }
-              }
-            }
-          ]
+          }
         },
         "qal": {
           "type": "object",
@@ -381,13 +354,12 @@
               "description": "Factory default 2. Read by collectDefaults, so a fresh install receives the whole table without the interview asking a single new question."
             },
             "engine": { "type": "string", "enum": ["claude", "codex"], "description": "Optional. Present = this row has its own host and does NOT inherit the Reviewer's. Absent = inherited, and then `model`/`effort` must be absent too (there is nothing to pair them with)." },
-            "model": { "type": "string", "minLength": 1, "description": "Required whenever `engine` is present. engine=claude: a TIER ALIAS only (the conditional below), because a claude-hosted row is dispatched through the Agent tool's `model` override. engine=codex: any non-empty engine atom." },
+            "model": { "type": "string", "minLength": 1, "description": "Required whenever `engine` is present. engine=claude: a tier alias (fable|opus|sonnet|haiku), or exactly roles.reviewer.model when the Reviewer is claude-hosted - a claude-hosted row is dispatched through the ONE rendered reviewer agent, whose frontmatter carries one pin (the Reviewer's model, or `fable` when the Reviewer is codex-hosted); an alias is passed as the Agent tool's `model`, an exact id is omitted and that pin runs. The two-field comparison is not expressible in this schema subset: it is scripts/setup/role-rules.mjs claudePinErrors, called by setup, the update engine and /pnp:roles before any write, and by the self-check's `review-row-shape`. engine=codex: any non-empty engine atom." },
             "effort": { "type": "string", "minLength": 1, "description": "Any non-empty string, exactly like roles.*.effort: THE ENGINE OWNS THIS VOCABULARY, not this schema. A closed list here would reject efforts the external engine already accepts and would have to be reopened at every engine release - so the only VALUE refused here is the empty one. Only meaningful on a CODEX row, where the wrapper passes the value to the engine as `-c model_reasoning_effort=<value>`: a value that engine does not know is rejected VISIBLY by it at call time (docs/CODEX_REVIEW_QA_RECIPE.md says the same about roles), so the failure is loud rather than silently coerced here. A claude row shares the ONE rendered reviewer agent file, whose frontmatter effort is roles.reviewer.effort - the Agent tool has no per-invocation effort - so `/pnp:roles --set <row>.effort=...` refuses on a claude row (exit 1). That refusal is not expressible here without `not`, which this project's schema interpreter does not implement; the self-check assertion `review-row-shape` is the second half of the gate." }
           },
           "allOf": [
             { "$comment": "a host is engine+model together - an engine with no model would resolve to nothing.", "if": { "required": ["engine"] }, "then": { "required": ["model"] } },
-            { "$comment": "a codex row carries its own effort: the wrapper hands it to the external engine as an argv atom.", "if": { "required": ["engine"], "properties": { "engine": { "const": "codex" } } }, "then": { "required": ["model", "effort"] } },
-            { "$comment": "the tier-alias conditional, identical to roles.reviewer's.", "if": { "required": ["engine"], "properties": { "engine": { "const": "claude" } } }, "then": { "properties": { "model": { "enum": ["fable", "opus", "sonnet", "haiku"] } } } }
+            { "$comment": "a codex row carries its own effort: the wrapper hands it to the external engine as an argv atom.", "if": { "required": ["engine"], "properties": { "engine": { "const": "codex" } } }, "then": { "required": ["model", "effort"] } }
           ]
         },
         "code": {
@@ -403,8 +375,7 @@
           },
           "allOf": [
             { "if": { "required": ["engine"] }, "then": { "required": ["model"] } },
-            { "if": { "required": ["engine"], "properties": { "engine": { "const": "codex" } } }, "then": { "required": ["model", "effort"] } },
-            { "if": { "required": ["engine"], "properties": { "engine": { "const": "claude" } } }, "then": { "properties": { "model": { "enum": ["fable", "opus", "sonnet", "haiku"] } } } }
+            { "if": { "required": ["engine"], "properties": { "engine": { "const": "codex" } } }, "then": { "required": ["model", "effort"] } }
           ]
         },
         "docs": {
@@ -420,8 +391,7 @@
           },
           "allOf": [
             { "if": { "required": ["engine"] }, "then": { "required": ["model"] } },
-            { "if": { "required": ["engine"], "properties": { "engine": { "const": "codex" } } }, "then": { "required": ["model", "effort"] } },
-            { "if": { "required": ["engine"], "properties": { "engine": { "const": "claude" } } }, "then": { "properties": { "model": { "enum": ["fable", "opus", "sonnet", "haiku"] } } } }
+            { "if": { "required": ["engine"], "properties": { "engine": { "const": "codex" } } }, "then": { "required": ["model", "effort"] } }
           ]
         }
       }

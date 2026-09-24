@@ -12,5 +12,6 @@
   { "id": "0011_transfer-surface", "targetPluginVersion": "0.2.7" },
   { "id": "0012_orchestrator-role", "targetPluginVersion": "0.2.8" },
   { "id": "0013_preflight-and-word-gate", "targetPluginVersion": "0.2.9" },
-  { "id": "0014_open-effort", "targetPluginVersion": "0.2.10" }
+  { "id": "0014_open-effort", "targetPluginVersion": "0.2.10" },
+  { "id": "0015_exact-model-pin", "targetPluginVersion": "0.2.11" }
 ]

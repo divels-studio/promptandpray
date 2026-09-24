@@ -23,11 +23,14 @@ engine, model, effort and `passes` in one snapshot. The factory table inherits t
 all three rows, with 2 passes for `plan` and 1 for `code` and `docs`, and `/pnp:roles` shows the
 whole table and changes it - so "documentation goes to a Claude host" is a value you can see rather
 than a rule this page carries (`docs/WORKFLOW.md` § Routes). A Claude-hosted row dispatches the
-project's rendered `reviewer` agent (`subagent_type: "reviewer"`, `model: <the row's model>`); that
-file is rendered whenever the Reviewer role OR any row is Claude-hosted, so there is no ad-hoc
-reviewer and no model pinned in a document. Before every reviewer pass above the scan tier - a Codex
-pass, or a Claude reviewer on `opus`/`fable` - `/pnp:review` Step 2b runs the cheap fact-check gate
-over the prose of the diff, or of the plan.
+project's rendered `reviewer` agent (`subagent_type: "reviewer"`), passing the row's model as
+`model` when it is a tier alias and omitting it for an exact model id, whose run is the agent file's
+own pin (§ Role boundaries, the dispatch contract); that file is rendered whenever the Reviewer role
+OR any row is Claude-hosted, so there is no ad-hoc reviewer and no model pinned in a document.
+Before every reviewer pass above the scan tier - a Codex pass, or a Claude reviewer on anything but
+a scan-tier alias (`haiku`/`sonnet`): `opus`, `fable` or any exact model id, which PnP does not
+rank - `/pnp:review` Step 2b runs the cheap fact-check gate over the prose of the diff, or of the
+plan.
 
 `/pnp:loop` states this sequence as a convention. There is **no runtime state machine and no
 counters** - the loop is convention + the native click-based permission gates only.
@@ -44,13 +47,18 @@ counters** - the loop is convention + the native click-based permission gates on
   acceptance or invent ledger content; it performs the Git PLAN write only when the COO explicitly
   delegates that specific mutation (the initial PLAN write, an accepted-closeout section).
   **Dispatch contract - do NOT pass `model` to the Agent tool for the Writer.** The Writer's model
-  is pinned in its frontmatter (an exact model id is valid there); the Agent tool's `model` override
-  takes precedence over frontmatter and accepts only the tier aliases
-  (`sonnet|opus|haiku|fable`), so passing one silently discards the pin. To change the Writer's
-  model, change `roles.writer.model` in the config and re-render - that is the single source of
-  truth. The Reviewer/QA roles are the opposite case - `/pnp:review` always passes the resolved
-  ROW's model and `/pnp:qa` passes `model: $role.model`, so the model values in `roles.json` and in
-  every Claude-hosted review row must stay tier aliases.
+  is pinned in its frontmatter (a tier alias or an exact model id); the Agent tool's `model`
+  override takes precedence over frontmatter and takes a tier alias (`sonnet|opus|haiku|fable`) -
+  an exact id is not in its enum - so passing one silently discards the pin. To change the
+  Writer's model, change `roles.writer.model` in the config and re-render - that is the single
+  source of truth. A Claude-hosted Reviewer, QA or review row takes a tier alias or an exact model
+  id too, and its dispatch is decided by which one it is: `/pnp:review` and `/pnp:qa` pass `model`
+  ONLY for a tier alias, and omit it for an exact id so the rendered agent's frontmatter pin
+  applies - the Writer's pattern. The Reviewer has ONE agent file with ONE pin, shared by every
+  Claude-hosted row, so such a row takes a tier alias or exactly `roles.reviewer.model` (a tier
+  alias when the Reviewer is Codex-hosted and the file carries `fable`): setup, `/pnp:update` and
+  `/pnp:roles` refuse anything else before writing, and `/pnp:review` fails closed at dispatch when
+  the row's exact id and the file's pin disagree.
 - **Reviewer** - read-only, **engine-neutral** (Codex or Claude per
   `.claude/aiwf-native/roles.json`, resolved by the role resolver of this project's OS channel -
   `scripts/native/ps/aiwf-roles.ps1` on `windows`, `scripts/native/sh/aiwf-roles.sh` on

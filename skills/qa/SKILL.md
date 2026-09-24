@@ -315,15 +315,24 @@ arrangement removes; the next dispatch overwrites the file.
 
 ### claude branch (`$role.engine -eq 'claude'`) - dispatch the qa subagent
 
-Invoke the **Agent tool** with `subagent_type: "qa"`, `model: <$role.model>`, and the completed
-Step-3 brief as the task - with the **absolute artifact paths** embedded (the Claude QA agent has
-only Read/Grep/Glob and reads those paths directly; Gate 1 blocks any Edit/Write). It returns the
-verdict; it never fixes.
+Invoke the **Agent tool** with `subagent_type: "qa"`, the role's model per the dispatch contract
+below, and the completed Step-3 brief as the task - with the **absolute artifact paths** embedded
+(the Claude QA agent has only Read/Grep/Glob and reads those paths directly; Gate 1 blocks any
+Edit/Write). It returns the verdict; it never fixes.
+
+**The `model` dispatch contract - two halves, decided by `$role.model`:**
+
+- **a tier alias (`fable|opus|sonnet|haiku`) is passed as the Agent tool's `model`** - that
+  parameter takes precedence over the agent file's frontmatter, so the role's alias is what runs;
+- **an exact model id is NOT passed - `model` is omitted.** The Agent tool's `model` takes a tier
+  alias and nothing else, so an exact id is not a value it can carry; with `model` omitted, the pin
+  in the rendered qa agent's frontmatter (rendered from `roles.qa.model`) is what runs - the
+  Writer's pattern (`docs/LOOP.md` § Role boundaries).
 
 **Effort (Claude branch):** the Agent tool has **no per-invocation `effort` parameter**, so QA's
 reasoning effort comes from its **agent frontmatter** (`effort:` in the rendered qa agent), kept in
-sync with `roles.json`'s `qa.effort` - the selfcheck engine asserts they match. Pass only
-`model: <$role.model>`; do **not** try to pass `effort` to the Agent tool.
+sync with `roles.json`'s `qa.effort` - the selfcheck engine asserts they match. Pass `model` only as
+the dispatch contract above says; do **not** try to pass `effort` to the Agent tool.
 
 ## Step 4 - Relay the verdict to the COO
 

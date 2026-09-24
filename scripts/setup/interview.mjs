@@ -62,9 +62,9 @@ import {
   existingPlansWarning, formatReport, generateProject, makeAdoptResolver, readMemorySeeds,
   resolveProjectRoot,
 } from './generate.mjs';
+import { TIER_ALIASES } from './role-rules.mjs';
 import { finishWithSelfCheck } from '../selfcheck/run-selfcheck.mjs';
 
-const TIERS = ['fable', 'opus', 'sonnet', 'haiku'];
 // A disabled QAL still renders into roles.json, and inventing a plausible codex model id would be
 // worse than saying nothing: this placeholder is visibly not a model, and /pnp:qal is fail-closed on
 // `enabled` anyway. Enabling QAL means supplying the real id.
@@ -170,7 +170,7 @@ export async function runInterview({ schema, ask, installed = null, projectRoot 
   for (const role of ['reviewer', 'qa']) {
     const engine = await choice(`roles.${role}.engine`, `${role}: host engine`, ['claude', 'codex']);
     await text(`roles.${role}.model`, engine === 'claude'
-      ? `${role}: model (claude host - a TIER ALIAS: ${TIERS.join(' | ')})`
+      ? `${role}: model (claude host - a tier alias: ${TIER_ALIASES.join(' | ')}, or an exact model id pinned in the agent file)`
       : `${role}: model (codex host - the engine's own model id)`, { allowEmpty: false });
     await text(`roles.${role}.effort`, `${role}: reasoning effort`, { allowEmpty: false });
   }

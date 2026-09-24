@@ -99,6 +99,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { previewLines, promptSync } from './dialog.mjs';
 import { collectDefaults, formatErrors, loadSchema, validate } from './validate-config.mjs';
+import { REVIEW_CLASSES, claudePinErrors } from './role-rules.mjs';
 import { validatePayload } from '../update/validate-payload.mjs';
 import { finishWithSelfCheck } from '../selfcheck/run-selfcheck.mjs';
 
@@ -305,9 +306,10 @@ export function templateContext(config, resolvedRoot) {
   return context;
 }
 
-// The three review classes, in the order /pnp:roles prints them. ONE definition: the schema, the
-// resolver contract, the renderer and the table all mean the same three words.
-export const REVIEW_CLASSES = ['plan', 'code', 'docs'];
+// The three review classes, in the order /pnp:roles prints them. ONE definition, and it lives in
+// role-rules.mjs (the Claude pin rule walks the same three rows and must not import this engine
+// back); it is re-exported here so every existing importer keeps reading it from the generator.
+export { REVIEW_CLASSES };
 
 /**
  * The EFFECTIVE row for one review class: `{ passes, engine, model, effort }`.
@@ -351,10 +353,12 @@ export function reviewRows(config) {
 
 /**
  * ONE Claude agent file per role, so `reviewer.md` carries ONE model and ONE effort:
- *   model  = the Reviewer's own model when the Reviewer is claude-hosted, otherwise `fable` - the
- *            top tier, because a claude-hosted ROW still dispatches through this file and an auditor
- *            below the author is not an audit. `/pnp:review` passes the ROW's model as the Agent
- *            tool's `model` override at dispatch time.
+ *   model  = the Reviewer's own model (a tier alias or an exact id) when the Reviewer is
+ *            claude-hosted, otherwise `fable` - the top tier, because a claude-hosted ROW still
+ *            dispatches through this file and an auditor below the author is not an audit.
+ *            `/pnp:review` passes the ROW's model as the Agent tool's `model` override only when it
+ *            is a tier alias; an exact id is omitted and THIS pin runs, which is why a Claude row
+ *            may carry an exact id only when it is exactly this one (role-rules.mjs claudePinErrors).
  *   effort = roles.reviewer.effort, always. There is no per-invocation effort to override it with.
  */
 export function reviewerAgentFrontmatter(config) {
@@ -1532,6 +1536,10 @@ export function planInstall({
   });
   const errors = validate(config, activeSchema);
   if (errors.length) blockers.push(`the resulting config does not satisfy the schema:\n${formatErrors(errors)}`);
+  // The one rule the schema subset cannot express (it compares two fields): a Claude review row runs
+  // through the ONE reviewer agent file, so its exact id must be the id that file carries.
+  const pinErrors = claudePinErrors(config);
+  if (pinErrors.length) blockers.push(`the resulting config breaks the Claude pin rule:\n${pinErrors.map((e) => `  ${e}`).join('\n')}`);
 
   const configContent = jsonText(config);
   if (existingRaw === null || lf(existingRaw) !== lf(configContent)) {

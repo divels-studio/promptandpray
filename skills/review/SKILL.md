@@ -197,12 +197,14 @@ itself a finding.
 ## Step 2b - Fact-check gate before every pass above the scan tier
 
 **Before dispatching any reviewer pass whose model is above the scan tier - a codex pass, or a
-claude reviewer on `opus`/`fable` - the COO runs ONE cheap read-only scan agent over the PROSE of
-the diff.** Such a pass costs the operator either external quota or top-tier tokens, and the
-Reviewer's job is to verify DECISIONS - not to discover that a path, a line number,
-a count or a command in the text does not exist. Those are checkable by anything that can read the
-tree, and finding them at review price is the most expensive way to find them
-(`docs/WORKFLOW.md` § "COO-authored text is reviewed like the Writer's").
+claude reviewer on anything but a scan-tier alias: `opus`, `fable`, or ANY exact model id - the COO
+runs ONE cheap read-only scan agent over the PROSE of the diff.** An exact id (e.g.
+`claude-opus-5-5`) always counts as above the scan tier: PnP does not rank exact ids against the
+tiers, so it takes the safe direction and runs the gate. Such a pass costs the operator either
+external quota or top-tier tokens, and the Reviewer's job is to verify DECISIONS - not to discover
+that a path, a line number, a count or a command in the text does not exist. Those are checkable by
+anything that can read the tree, and finding them at review price is the most expensive way to find
+them (`docs/WORKFLOW.md` § "COO-authored text is reviewed like the Writer's").
 
 Dispatch it with the **Agent tool**, `subagent_type: "Explore"` (or whichever read-only scan agent
 this harness ships), `model: sonnet`, and exactly this task - written here so it is reusable
@@ -228,7 +230,8 @@ or render-or-DB-write surfaces, chains start at the entry point`.
 Then: the COO fixes every returned claim, and **only then** dispatches the pass, over the
 corrected tree. The gate may be skipped only when the reviewer itself runs on a scan-tier model
 (`haiku`/`sonnet`) - there is nothing more expensive than the gate to protect - and even then it is
-cheap enough to be worth running on a prose-heavy diff.
+cheap enough to be worth running on a prose-heavy diff. That skip is read off a scan-tier ALIAS,
+never off an exact model id.
 
 The fact-check agent is **not** a review: it returns no verdict, and it never replaces the
 Reviewer's pass.
@@ -429,10 +432,27 @@ not alternatives: never invoke the `.sh` wrapper on a windows install or the `.p
 
 ### Step 3 - claude branch (`$row.engine -eq 'claude'`) - dispatch the rendered reviewer
 
-Invoke the **Agent tool** with `subagent_type: "reviewer"`, `model: <$row.model>`, the completed
-Step-2 brief as the task, and the **FULL diff pasted in** (the Claude reviewer cannot run git).
-There is **one** Claude host and it is the project's rendered `reviewer` agent - no ad-hoc subagent,
-and no model named in this document.
+Invoke the **Agent tool** with `subagent_type: "reviewer"`, the ROW's model per the dispatch
+contract below, the completed Step-2 brief as the task, and the **FULL diff pasted in** (the Claude
+reviewer cannot run git). There is **one** Claude host and it is the project's rendered `reviewer`
+agent - no ad-hoc subagent, and no model named in this document.
+
+**The `model` dispatch contract - two halves, decided by `$row.model`:**
+
+- **a tier alias (`fable|opus|sonnet|haiku`) is passed as the Agent tool's `model`** - that
+  parameter takes precedence over the agent file's frontmatter, so the row's alias is what runs;
+- **an exact model id is NOT passed - `model` is omitted.** The Agent tool's `model` takes a tier
+  alias and nothing else, so an exact id is not a value it can carry; with `model` omitted, the
+  pin in the rendered agent's frontmatter is what runs - the Writer's pattern (`docs/LOOP.md`
+  § Role boundaries).
+
+**Fail closed on a pin mismatch.** The reviewer agent file carries ONE pin for every Claude-hosted
+row, so before dispatching a row whose model is an exact id, read the `model:` line of
+`.claude/agents/reviewer.md`: if it is not exactly `$row.model`, STOP and report the two values -
+do not dispatch, and do not pass the id as `model` to force it. Every writer of the config already
+refuses such a row (a Claude row takes a tier alias or exactly `roles.reviewer.model`), so a
+mismatch here means the file or the config was edited by hand: `/pnp:roles` re-renders the file
+from the config.
 
 The agent file is rendered whenever the Reviewer role **OR any row of the audit table** is
 Claude-hosted (`templates/agents/reviewer.md.tmpl`), so a Claude-hosted row always has a real agent
@@ -451,8 +471,8 @@ reviewer's reasoning effort comes from its **agent frontmatter** (`effort:` in t
 drift fails it. One file, one effort, shared by every Claude-hosted row: that is why a Claude row
 carries no `effort` of its own, why `/pnp:roles --show` prints it as
 `the Reviewer's - Claude rows share the agent file`, and why `--set <row>.effort=...` on a Claude
-row refuses with exit 1. Pass only the `model` above; do **not** try to pass `effort` to the Agent
-tool.
+row refuses with exit 1. Pass `model` only as the dispatch contract above says; do **not** try to
+pass `effort` to the Agent tool.
 
 ## Step 4 - Relay the verdict to the COO
 

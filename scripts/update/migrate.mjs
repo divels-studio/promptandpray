@@ -86,6 +86,7 @@ import {
   jsonText, lf, orderConfig, planAskRules, renderTemplate, sha256, templateContext,
 } from '../setup/generate.mjs';
 import { formatErrors, loadSchema, validate } from '../setup/validate-config.mjs';
+import { claudePinErrors } from '../setup/role-rules.mjs';
 import { compareVersions, parseVersion, validatePayload } from './validate-payload.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -470,6 +471,18 @@ export function preflight({ pluginRoot, projectRoot }) {
     throw new UpdateError(`the migration payload is not coherent, so nothing was applied:\n  - ${payload.errors.join('\n  - ')}`);
   }
   const { file: configFile, config } = loadProjectConfig(projectRoot);
+  // The Claude pin rule, before anything else is judged and whatever the pending operations are: a
+  // Claude review row whose exact id the ONE reviewer agent file does not carry would dispatch a
+  // model other than the one it records, and no update carries a config like that forward. It lives
+  // in ONE function that every writer of the config calls (scripts/setup/role-rules.mjs).
+  const pinErrors = claudePinErrors(config);
+  if (pinErrors.length) {
+    throw new UpdateError(
+      `invariant violated: a Claude review row cannot run on the model it records, so nothing was applied:\n  - ${pinErrors.join('\n  - ')}\n`
+      + 'Set that row to a tier alias or to exactly roles.reviewer.model (node <plugin>/scripts/setup/aiwf-roles.mjs '
+      + '--set <row>.model=<value>, or --reset <row>), then run the update again.',
+    );
+  }
   const bk = config._aiwf;
 
   if (typeof bk.installedPluginVersion !== 'string' || !parseVersion(bk.installedPluginVersion)) {

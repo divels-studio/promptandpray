@@ -148,7 +148,9 @@ scan tier, returning only the false or unverifiable claims with `file:line` and 
 The COO fixes those, and only then dispatches the review. The gate guards the EXPENSIVE pass,
 whichever engine hosts it: a Claude reviewer on `opus`/`fable` costs top-tier tokens exactly as a
 Codex pass costs external quota, and only a reviewer that itself runs on a scan-tier model
-(`haiku`/`sonnet`) has nothing more expensive than the gate to protect.
+(`haiku`/`sonnet`) has nothing more expensive than the gate to protect. That skip is read off the
+tier ALIAS alone: a Claude reviewer pinned to an exact model id always gets the gate, because PnP
+does not rank exact ids against the tiers, and running the gate is the safe direction.
 
 ## The operator does not arbitrate engineering decisions
 

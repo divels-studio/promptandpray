@@ -1182,6 +1182,30 @@ section('10 - a dry run writes nothing, and preflight refuses an incoherent proj
   check('nothing was written', diffSnapshots(before, snapshot(p)).length === 0);
 }
 {
+  // The Claude pin rule, in the update engine's preflight: a Claude review row shares the ONE
+  // reviewer agent file, so an exact id there must be that file's pin. A config carrying a foreign
+  // one (a hand edit - every writer refuses it) is refused BEFORE the first mutation, whatever the
+  // pending operations are, and the config is left byte for byte as it was.
+  const p = project('preflight-pin');
+  install(p);
+  const cfg = readJson(at(p, CONFIG_REL));
+  cfg.review.docs = { passes: 1, engine: 'claude', model: 'claude-sonnet-5' };
+  writeJson(at(p, CONFIG_REL), cfg);
+  const before = snapshot(p);
+  const r = update(p, ['--apply', '--resolution-file', resolutionFile('pin', FULL_RESOLUTIONS)], { payload: P020 });
+  check('a Claude review row on a foreign exact id stops the update in preflight with exit 1', r.status === 1, why(r));
+  check('the message names the row and the rule', r.out.includes('review.docs') && r.out.includes('claude-sonnet-5')
+    && r.out.includes('cannot run on the model it records'), why(r));
+  check('the config is unchanged and nothing else was written', diffSnapshots(before, snapshot(p)).length === 0,
+    diffSnapshots(before, snapshot(p)).join(', '));
+  // The pair: the same project with the row on a tier alias is not refused by this rule.
+  cfg.review.docs = { passes: 1, engine: 'claude', model: 'sonnet' };
+  writeJson(at(p, CONFIG_REL), cfg);
+  const ok = update(p, ['--check'], { payload: P020 });
+  check('...while the same row on a tier alias passes preflight (--check reports pending, exit 1, WITHOUT the pin refusal)',
+    ok.status === 1 && !ok.out.includes('cannot run on the model it records') && ok.out.includes('0002_fixture'), why(ok));
+}
+{
   const p = project('mismatch');
   install(p);
   const cfg = readJson(at(p, CONFIG_REL));
