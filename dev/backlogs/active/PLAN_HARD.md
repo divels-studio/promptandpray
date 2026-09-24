@@ -60,6 +60,7 @@
 | HARD-014 | — ОТПАДНАЛ (2026-09-16; темата „одитор с resume" — след консолидацията) | — |
 | HARD-015 | — (двете врати не казват за рендерираната роля, роден 2026-09-21) | 0.2.9 |
 | HARD-016 | — (seed-ът печата отменено четене на guard (b), роден 2026-09-21) | 0.2.9 |
+| HARD-017 | — (effort на редовете на одитната таблица е по-тесен от engine-а, роден 2026-09-23) | 0.2.10 |
 
 ## Context (discovery 2026-09-12: 4× Explore/sonnet + claude-code-guide; котви проверявани при диспач)
 
@@ -1875,6 +1876,88 @@ guard (g)/word-gate механизмът хвана първия си реале
 **Останал дълг: няма.** Планът остава АКТИВЕН (HARD-011 отложен открит за 0.3.0, операторска
 дума 2026-09-22); route-state `{}` при този запис.
 
+## 0.2.10 — effort по engine-а (роден 2026-09-23 от A/B експеримента на одитора в Silerax; СПЕШЕН)
+
+### HARD-017 [R2 code-class] — редовете на одитната таблица приемат всеки effort, който engine-ът приема
+
+**Произход и решение.** В Silerax (CAP-003, 2026-09-23) `/pnp:roles --set code.effort=xhigh` беше
+отказан: `/review/code/effort: must be one of "low", "medium", "high", found "xhigh"`. Измерената
+най-добра конфигурация на одитора (`gpt-6-sol` на xhigh) не може да се запише, а заобиколката
+минава покрай wrapper-а и губи session id. **Операторска дума (2026-09-23): PnP ЗАДЪЛЖИТЕЛНО
+поддържа всичко, което Codex и Claude поддържат като модели и effort; ограничение, по-тясно от
+engine-а, е продуктов бъг.** Това обръща решението, записано в описанието на схемата при
+`review.plan.effort` („A CLOSED set here, deliberately…“). Ескалационен тригер 1 (обръща записано
+решение) е задействан и е решен от оператора, който е второто мнение по конструкция; редът в Ruling
+ledger се пише при затварянето. **Решение на COO:** свободен низ като `roles.*.effort`, НЕ по-широк
+enum, защото нов списък би повторил бъга при следващото издание на engine-а. Речникът е на
+engine-а: измерено 2026-09-23, Codex `models_cache.json` дава `low|medium|high|xhigh|max|ultra`
+за `gpt-6-sol`/`gpt-6-astra`/`gpt-5.6-sol` (без `ultra` за `gpt-6-luna`), а Claude агентските
+файлове приемат `low|medium|high|xhigh|max` (code.claude.com/docs/en/sub-agents).
+
+**Discovery (Explore/sonnet + claude-code-guide, 2026-09-23; котвите четени от COO):**
+- Затвореният списък е САМО на три места: `schema/aiwf.config.schema.json:385` (`review.plan.effort`,
+  с дългото обяснение), `:402` (`review.code.effort`), `:419` (`review.docs.effort`). Грешката идва
+  от общия enum handler `scripts/setup/validate-config.mjs:163-164` (не се пипа).
+- Вече свободни, не се пипат: `roles.writer/reviewer/qa/qal.effort` (схема `:170`, `:189-193`,
+  `:221`, `:250`), resolver-ите `scripts/native/ps/aiwf-roles.ps1` / `scripts/native/sh/aiwf-roles.sh`
+  (изрично „effort has NO enum“), wrapper-ите `codex-review|qa|qal` (`-c model_reasoning_effort=`
+  като argv атом), агентските шаблони `templates/agents/{writer,reviewer,qa}.md.tmpl`.
+- Тестът, който заковава стария списък: `scripts/selfcheck/aiwf-selfcheck.js:4241-4251`
+  (`docs.effort=wat` → очаква `must be one of "low", "medium", "high"`).
+- Съседен договор: `docs/CODEX_REVIEW_QA_RECIPE.md:21-27` вече казва „лош effort се отхвърля видимо
+  от engine-а при извикване“ и след промяната става вярно и за редовете. `schema/README.md:19-22`
+  се проверява и се пипа само ако твърди, че редовете са затворен списък.
+
+**Обхват:**
+1. Схемата, трите реда `:385`, `:402`, `:419`: `enum` отпада, остава `{"type":"string","minLength":1}`,
+   както е при `roles.*.effort`. Описанието на `review.plan.effort` се пренаписва. Остава частта за
+   claude ред (effort-ът е `roles.reviewer.effort`, `--set <row>.effort` на claude ред отказва с
+   exit 1, self-check `review-row-shape`). Пада аргументът „затворен списък“ и параграфът „Consequence…
+   copy fail schema validation“, защото копирането на effort от Одитора вече не може да падне.
+   Описанията на `code` и `docs` сочат новия текст.
+2. Self-check `:4241-4251` се заменя с три проверки, всяка способна да падне:
+   (а) `docs.effort=` (празно) на codex ред → exit 1 и config-ът непроменен (`minLength`);
+   (б) `docs.effort=xhigh` → exit 0 и `rowOf(root,'docs').effort === 'xhigh'`;
+   (в) Одитор на codex с `reviewer.effort=xhigh`, после `--set docs.engine=codex` → exit 0 и редът
+   носи `effort: 'xhigh'` (старият провал при копиране е изчезнал).
+   Всяка от трите се вижда червена поне веднъж, преди да ѝ се вярва: (б) и (в) срещу временно
+   върнатия стар enum, (а) срещу временно махнатия `minLength`. След това схемата се връща в
+   крайния вид, а трите червени изхода отиват в handoff-а.
+3. Release 0.2.10: bump в `.claude-plugin/plugin.json`; миграция `migrations/0014_open-effort/`
+   само с `note` op (няма рендериран артефакт, който да се променя) + `NOTES.md`; запис в
+   `migrations/index.json`; блок в `CHANGELOG.md` (`### Fixed`, English). Всичко по образеца на
+   release commit-а на 0.2.9 (`git show --stat 9f62b4c`), вкл. поредния `_example-bump` fixture,
+   ако валидаторът го изисква.
+
+**Извън обхват:** какъвто и да е друг enum в схемата (`passes`, `engine`, claude model tier
+алиасите); resolver-ите и wrapper-ите; setup интервюто; README (т.8 на HARD-011).
+**Acceptance:**
+- `git grep -n '"enum": \["low", "medium", "high"\]' -- schema` → празно. Първо трябва да удари 3
+  реда преди промяната.
+- `git grep -n 'must be one of "low"' -- scripts` → празно. Преди промяната удря `aiwf-selfcheck.js:4246`.
+- `node scripts/setup/aiwf-roles.mjs --set code.effort=xhigh` върху self-check fixture минава с exit 0
+  (покрито от 2(б)).
+- VERIFY Portion 1, осемте Windows команди от `dev/PROJECT_OVERRIDES.md` § Test policy, като ЕДИН
+  паралелен batch → exit 0 всички. Portion 2 (WSL) СЛЕД това, по `dev/VERIFY_RUNBOOK.md` → exit 0.
+  Точни кодове в handoff-а.
+- `git grep -nP "[\x{0400}-\x{04FF}]" -- docs skills templates scripts schema hooks migrations` →
+  празно.
+- Диф гард: котва = `git rev-parse HEAD` при диспач. Пипнатите файлове са подмножество на
+  {`schema/aiwf.config.schema.json`, `schema/README.md`, `scripts/selfcheck/aiwf-selfcheck.js`,
+  `.claude-plugin/plugin.json`, `migrations/index.json`, `migrations/0014_open-effort/**`,
+  `CHANGELOG.md`, `examples/**`}.
+**Risk threshold:** блокира: валиден днес config, който след промяната е невалиден; оставен enum на
+effort в редовете; self-check проверка, която не може да падне; bump без миграция (или обратното);
+всяка промяна по посоката на провал на hook/gate.
+**Stop condition:** acceptance зелен → стоп.
+**Review:** `Class: code` → по таблицата (`review.code`); fact-check преди паса. Readiness пас няма:
+тикетът е малък и discovery-то е затворено (решение на COO).
+**Release бележка:** консуматорите четат локалния marketplace (това repo), така че commit + bump е
+достатъчен за `/pnp:update` при тях. Tag и push са отделни думи и не са на пътя на спешността.
+**Assignee:** Колега. Branch `main`. **Одит: 1 пас, Codex `gpt-6-sol` / `xhigh`** (операторска дума
+2026-09-24: „да минава на sol-6 xhigh“). Редът `code` се превключва на този host след кодовата
+промяна, защото преди нея схемата не приема `xhigh`. Това е самият тест на поправката в употреба.
+
 ## 0.2.7 — Environment correctness · tag `v0.2.7` (операторска дума 2026-09-16: HARD-013; ЗАМРАЗЕНО до края на консолидацията. HARD-014 ОТПАДНА — беше „Одитор с resume на сесията"; темата отива където консолидационното решение я прати)
 
 ### HARD-013 [R2 code-class] — self-check-ът хваща кой да е `bash` от PATH; на WSL bash пада 52 пъти и `--apply` връща 1 въпреки приложените миграции (роден 2026-09-15 от консуматорски рън, ЧАКА ОПЕРАТОРСКА ДУМА)
@@ -1924,8 +2007,9 @@ re-apply, naming assertion). Одиторът е Codex на всички → „
 изданието)** → [ЗАМРАЗЕНО ОТТУК: HARD-013 → HARD-010 → HARD-011 (+release 0.2.8); HARD-014
 отпадна] — редът след замразяването се потвърждава от консолидационното решение. Вторите
 имена — в таблицата под header-а. **[2026-09-22, операторска дума] Финален ред:** HARD-015 →
-HARD-016 (+release 0.2.9, изцяло) → [пауза; планът остава активен] → HARD-011 в цикъла на 0.3.0 →
-архивиране на плана с последния затворен тикет.
+HARD-016 (+release 0.2.9, изцяло) → [пауза; планът остава активен] → **HARD-017 (+release 0.2.10,
+роден 2026-09-23, спешен — операторска дума)** → HARD-011 в цикъла на 0.3.0 → архивиране на плана
+с последния затворен тикет.
 
 Гейтове: всеки тикет — собствена дума за диспач; commit — клик (стейдж по изрични пътища,
 едноредово съобщение, нула trailers, PLAN файлът и трите EOL-дрейфащи `.ps1` извън кодовия
