@@ -6,8 +6,8 @@
     "migrationJournal": null,
     "managedRegions": {
       ".claude/aiwf-native/roles.json": {
-        "upstream": "e48e19f67177736a20c47448b7ab03dd9f92275ce25f264655960599631d5fb6",
-        "local": "e48e19f67177736a20c47448b7ab03dd9f92275ce25f264655960599631d5fb6",
+        "upstream": "04dc06874d1352ee37e74d95dc18ea2c566b0472ac54002047633306aa407625",
+        "local": "04dc06874d1352ee37e74d95dc18ea2c566b0472ac54002047633306aa407625",
         "override": false
       },
       ".claude/agents/writer.md": {
@@ -247,7 +247,10 @@
       "Every operator gate that can be a native dialog is a native dialog"
     ],
     "plan": {
-      "passes": 2
+      "passes": 2,
+      "engine": "codex",
+      "model": "gpt-6-sol",
+      "effort": "xhigh"
     },
     "code": {
       "passes": 1,
