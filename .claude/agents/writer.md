@@ -6,7 +6,7 @@ description: >-
   the policy-required tests, and run VERIFY. Never approves its own work; hands the
   diff + tests + VERIFY output (with exact exit codes) back to the COO for review.
 tools: Read, Grep, Glob, Edit, Write, Bash
-model: claude-opus-5[1m]
+model: claude-opus-5-5[1m]
 effort: high
 ---
 

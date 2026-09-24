@@ -11,8 +11,8 @@
         "override": false
       },
       ".claude/agents/writer.md": {
-        "upstream": "89f9a4e5d64498b9ede463c0c113a580d7f5d0524cffd412d8756cc5db65da66",
-        "local": "89f9a4e5d64498b9ede463c0c113a580d7f5d0524cffd412d8756cc5db65da66",
+        "upstream": "8f99ff0cf6af8d9ef56fe2dfa1f0e797750156f540c18b2fdf96fd13eb7ad907",
+        "local": "8f99ff0cf6af8d9ef56fe2dfa1f0e797750156f540c18b2fdf96fd13eb7ad907",
         "override": false
       },
       "CLAUDE.md#aiwf-core": {
@@ -172,7 +172,7 @@
       "effort": "high"
     },
     "writer": {
-      "model": "claude-opus-5[1m]",
+      "model": "claude-opus-5-5[1m]",
       "effort": "high"
     }
   },

@@ -1416,6 +1416,38 @@ own commit, so what was audited and what is a note after it stay distinguishable
    `codex exec -m <model> -s read-only --skip-git-repo-check "Reply with exactly: OK"`.
    README-то описва механизма и проверката, без да заковава конкретни model id-та като
    препоръка, защото те остаряват. Payload правилата важат (английски, без абсолютни пътища).
+
+**[ДОПИСАНО 2026-09-24, операторска дума: „в 011 влиза анализа на ГПТ“]**
+9. **Външният анализ на GPT (2026-09-24) е вход за тикета.** Операторът го донесе в сесията;
+   записът тук е същината му, не дословен текст. Кое от него е README обхват и кое е отделна
+   работа, се решава при планирането на 0.3.0.
+   - **Силното, което трябва да излезе напред:** разликата между „правило в prompt“ и „реално
+     наложено ограничение“ (OS read-only sandbox на Codex одитора, hook-овете, честните лимити, като
+     Gate 4 и „accident-grade, не adversary-proof“). Идеята „четири AI роли“ сама вече не е уникална.
+     Уникалното е, че ролите са физически ограничени. Същото важи за lifecycle-а на install/update
+     (plan-before-write, managed regions, hashes, миграции) и за self-check-а с негативни контроли.
+   - **README-то е писано от гледната точка на автора.** Gate 1–4, resolver, journal и пр. се
+     появяват преди „защо ми трябва това“. Предложен ред за първите ~100 реда: проблем → философия →
+     диаграма (You → Orchestrator → Writer → независим Reviewer → optional QA → You) → първи тикет
+     за 5 минути → инсталация. R1/R2/R3 идват след това, Gate 1–4 след тях. Цялата техническа
+     информация остава, но по-надолу.
+   - **Езиков данък:** PromptAndPray / pnp / AIWF, плюс COO, Writer, Reviewer, QA, QAL, Arbiter,
+     R1–R3, Gate 1–4, audit table, PLAN, risk threshold, stop condition. Не се преименува сега, но
+     AIWF не се показва на нов потребител, освен където наистина му трябва.
+   - **Quickstart-ът доказва update engine-а, не продукта.** Показва install → bump → update →
+     conflict → self-check. Липсва истински потребителски quickstart: малък R2 тикет от начало до
+     commit (класификация, PLAN, Writer, Reviewer намира blocker, корекция, pass, commit диалог).
+   - **Setup-ът е тежък за първа среща.** Предложено е `/pnp:setup --quick` с безопасни defaults
+     (OS, Reviewer Claude/Codex, stack, auto-detect на VERIFY). Днешният setup остава като advanced,
+     а донастройката става през `/pnp:roles`.
+   - **Доктрината е повторена на много места и се пази с проверки между тях.** Цената вече се вижда:
+     цялото 0.2.9 беше поправка на такива разминавания. Посоката е генериране от по-малко
+     canonical източници. Операторът и COO са съгласни, че това е най-силният кандидат за 0.3.0.
+   - **Липсва чист uninstall.** `/pnp:uninstall --dry-run` върху съществуващото ownership
+     bookkeeping би повишил доверието непропорционално.
+   - **Външна валидация.** Анализът е прочел „един консуматор“ от README-то. Операторската поправка:
+     консуматорите са два и са ежедневни (Furnissimo, нов; Silerax, заварен код). Самото README-то
+     трябва да го казва вярно.
 **Acceptance:** всяко от 14-те payload README-та отваря с ориентиращо изречение (списъкът
 файл-по-файл в handback-а; броят се проверява:
 `git ls-files "*README.md" ":(exclude)dev" | Measure-Object -Line` → 14); `git grep -nP
