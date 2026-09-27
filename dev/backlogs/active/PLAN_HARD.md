@@ -63,6 +63,7 @@
 | HARD-017 | — (effort на редовете на одитната таблица е по-тесен от engine-а, роден 2026-09-23) | 0.2.10 |
 | HARD-018 | — (Claude-хостнат Одитор/QA не може да се закове на точен модел, роден 2026-09-24) | 0.2.11 |
 | HARD-019 | — (примерният bump fixture се преименува при всяко издание, роден 2026-09-24) | 0.2.11 |
+| HARD-020 | — (шестте readiness проверки стават трета стояща инструкция на fact-check гейта, роден 2026-09-27) | 0.2.12 (преди 0.3.0, операторска дума) |
 
 ## Context (discovery 2026-09-12: 4× Explore/sonnet + claude-code-guide; котви проверявани при диспач)
 
@@ -2377,6 +2378,323 @@ spikes 318/0, plugin validate). Portion 2 W1: exit 0 (7 крака, self-check C
 операции, нула конфликти, self-check PASS 1351/1351. Още не е комитнат там: влиза в един commit
 със смяната на моделите.
 
+## 0.2.12 — readiness пропуските се търсят от fact-check агента (роден 2026-09-27, операторска дума „това ми трябва преди 0.3.0“)
+
+### HARD-020 [R2 docs-class] — шестте readiness проверки стават ТРЕТАТА стояща инструкция на fact-check гейта: списък с пропуски A/B/C, без вердикт; release 0.2.12
+
+**Контекст:** readiness пас 1 на Codex връща предимно АВТОРСКИ блокери на двата консуматора
+(Silerax PLAN_RST 11, RST-004 7, PLAN_TAL 10; Furnissimo PLAN_SCHEMES_RUNS 8). Разпит с факти
+(2026-09-27): от 17-те итемизирани всичките 17 са под вече написано правило, нула класове без
+правило — пропуските са прескочени или сгънати стъпки на COO (собствен проход не в отделен ход,
+dry run без доказателство, инструменти върху stub-ове). Операторски вердикт: авторските блокери са
+вина на COO и се докладват като негови; НОВ гейт няма. Проба на Silerax: sonnet агент с шестте
+readiness проверки върху ВЕЧЕ ревизиран план → 13 пропуска, 12 приети, 5 реални изпълнимостни
+(172,265 токена, 17.5 мин; пас 2 не е вървял — непотвърдено). Ruling на PnP COO по операторска
+делегация („ПНП ще арбитрира“) за реда в паметта на Silerax (одобрен с редакция; ruling редът е в
+ledger-а на Silerax, изпълняващата сесия) и същият ред, одобрен за Furnissimo: редът влиза в
+паметите на двата консуматора с уговорката „не е собственият проход, не се брои за пас“. Тук:
+COO решение по операторска дума 2026-09-27 („това ми трябва преди 0.3.0“). Две копия на едно
+правило извън payload-а са дрейфът, за който 0.2.9 плати — payload-ът е единственият дом. Пълният
+запис, данните от пробата и промптът дословно: `dev/backlogs/CANDIDATES.md` § „Readiness pre-read“.
+
+**Outcome:** COO, който пуска fact-check гейта преди readiness пас, получава от СЪЩИЯ агент, в
+СЪЩИЯ рън, освен списъка с невярни твърдения и списък с ПРОПУСКИ по шестте readiness проверки —
+A (Writer-ът не може да изпълни / проверката не може да падне или да мине), B (невярно или
+непроверимо твърдение), C (консистентност) — без вердикт; A и B се затварят преди пас 1;
+текстът казва изрично, че това не е собственият проход на COO, не го замества и не се брои за пас;
+инструментите (acceptance блокове, guard-ове, grep-ове) се пускат върху реалното дърво, не върху
+stub — една клауза в изречението за собствения проход, с указател към клаузата на tripwire 4
+„every new or changed evidentiary instrument is made to fail on purpose before it is trusted“
+(`docs/WORKFLOW.md:100-101`): инструмент, доказан върху stub, не е бил накаран да падне там,
+където ще работи — това е мостът, не копие на tripwire-а.
+
+**Обхват (котвите проверени първолично на 2026-09-27 върху `79c287a` + inventory скан, sonnet):**
+1. `skills/review/SKILL.md` Step 2b. Днес `:223-228` — едно изречение: „for a readiness pass the
+   task carries two extra lines“ + двете като inline код. Става: „three extra lines“, и след абзаца
+   идва ВТОРИ fenced блок (образецът на `:213-221`) със заглавие „for a readiness pass, append
+   these three lines to the task“, съдържащ дословно: (1) `every acceptance command exists and can
+   fail`; (2) `verify the chain table - every Outcome sentence has a row, every link resolves at its
+   file:line, endpoints are source or render-or-DB-write surfaces, chains start at the entry point`
+   — БАЙТ ПО БАЙТ както днес на `:226-228` (self-check пин `DOCTRINE_PASS_CHAIN_TABLE`,
+   `aiwf-selfcheck.js:6144-6146`, се проверява като whitespace-collapsed substring в ДВАТА файла и
+   не се пипа); (3) новата, с точно този текст:
+   `apply the six readiness checks adversarially to every ticket and decision: (1) repo-match - open
+   every pointer you doubt; (2) scope - is every boundary between in and out of scope stated, and
+   does any worklist item fall outside it; (3) hidden discovery - for each ticket, what the Writer
+   would still have to DECIDE or DISCOVER that the plan does not fix (a name, a grant, a layout, a
+   flag, an order of operations); (4) dependency order and the gate dry-run - any command that needs
+   a dialog or gate the plan does not name, any step assuming state a prior step leaves different;
+   (5) acceptance - for each block, whether it can pass on broken work, fail on correct work, and
+   observe every Risk-threshold item; (6) branch, worktree and git prerequisites, and anything the
+   Writer contract forbids or requires that a block or worklist violates; and contradictions between
+   two places in the plan. Return the gaps as a second list beside the false claims, one line each -
+   <plan line> | <ticket or decision> | <gap, one sentence> | <what closes it, one sentence> - grouped
+   A (the Writer cannot execute, or the check cannot fail or cannot pass), B (false or unverifiable
+   claim), C (consistency), ending with GAPS: A=<n> B=<n> C=<n>. No verdict.`
+   (Fact-check гейт 3, пропуск A1: първата редакция изброяваше само три от шестте проверки —
+   scope и git prerequisites липсваха; сега всичките шест са номерирани в текста.)
+   След блока — две изречения, дословно: `For a readiness pass the agent returns two lists: the
+   false or unverifiable claims exactly as above, and the gaps. The "what closes it" cell names the
+   missing decision, fact or command and never a redesign - that is what "no suggestions" keeps
+   meaning - and the COO closes every A and B item before the pass.` (Одиторски блокер p1 №1: без
+   това стоящата задача `:214-217` — „Return ONLY … No verdict, no review, no suggestions“ —
+   противоречи на третата инструкция.) Уговорката отива
+   в `:236-237`: „The fact-check agent is **not** a review: it returns no verdict, it is not the
+   COO's own pass and does not stand in for it, it is never counted as a pass, and it never replaces
+   the Reviewer's pass.“ Литералът `Verify every factual claim in the prose of this diff` (`:214`,
+   пин `doctrine-review-factcheck`, `aiwf-selfcheck.js:6465-6470`) остава непокътнат.
+2. `docs/WORKFLOW.md` § Plan readiness review, абзацът `:383-394`. WORKFLOW НЕ повтаря fenced
+   блока байт по байт (само chain-table фразата е пинната в двата файла); носи ЕДНО изречение,
+   с точно този текст на мястото на `:387-390` („The fact-check agent is dispatched with two extra
+   instructions … entry point".“):
+   `The fact-check agent is dispatched with three extra instructions alongside its standing task -
+   "every acceptance command exists and can fail", "verify the chain table - every Outcome sentence
+   has a row, every link resolves at its file:line, endpoints are source or render-or-DB-write
+   surfaces, chains start at the entry point", and the six readiness checks applied adversarially,
+   returned as a second list of gaps beside the false claims (A - the Writer cannot execute, or the
+   check cannot fail or cannot pass; B - a false or unverifiable claim; C - consistency) with no
+   verdict, every A and B closed by the COO before the pass; that list is not the COO's own pass and
+   does not stand in for it, and it is never counted as a pass.`
+   Chain-table фразата вътре остава байт по байт (пин `aiwf-selfcheck.js:6203-6207`). В същия абзац
+   изречението за собствения проход `:383-387` — клаузата „every command executable on the OS channel
+   the plan records“ (`:385-386`) става: `every command executable on the OS channel the plan records
+   and run on the real tree, never on a stub (an instrument proven on a stub has not been made to fail
+   where it will run - tripwire 4 of § COO owns broad scans)` — това е домът на „инструментите върху
+   реалното дърво“, не fact-check инструкцията (агентът не пуска инструменти, проверява ги).
+   Още две места в WORKFLOW стават неверни с третата инструкция и влизат в диффа (одиторски
+   блокери p1 №1 и №2): (а) `:147` „returning only the false or unverifiable claims with `file:line`
+   and the correct value.“ → `returning only the false or unverifiable claims with `file:line` and the
+   correct value - and, before a readiness pass, the gaps list of § Plan readiness review beside them.`;
+   (б) абзацът `:396-407` — първото изречение `:396` „**The PROCESS gets its own dry run, and it is
+   the half the fact-check gate cannot see.**“ → `**The PROCESS gets its own dry run, and it is the
+   half the fact-check gate can read but cannot walk.**`, и клаузата `:399` „because the fact-check
+   gate catches facts, not process defects.“ → `because the fact-check gate's gaps list names the
+   gates and orders the plan omits, while only a trace walks the sequence as it will actually run.`
+   Абзацът завършва (`:406-407`) с „and every sentence around it can be true while the sequence is
+   wrong, which is exactly what a gate that verifies claims returns clean.“ — и това изречение също
+   става невярно с третата инструкция (одиторски блокер p2 №1): заменя се дословно с `and every
+   sentence around it can be true while the sequence is wrong - a gap the gate's third instruction
+   can NAME when the plan omits a gate or misplaces a step, and only the trace can PROVE by walking
+   it.` Останалото в абзаца (`:400-405`: списъкът на гейтовете, които trace-ът обхожда) остава вярно
+   и не се пипа. Нито една от четирите фрази не е пин в self-check-а
+   (grep 2026-09-27: `catches facts, not process defects`, `returning only the false`, `cannot see` —
+   нула удара в `scripts/`).
+3. Затварящ grep: `two extra` удря днес точно `docs/WORKFLOW.md:387` и `skills/review/SKILL.md:225`
+   (проверено 2026-09-27) и нищо друго в repo-то; след промяната → нула. `templates/memory-seeds/**`
+   не споменава fact-check (проверено) и НЕ влиза в диффа. Другите преразкази на гейта
+   (`docs/LOOP.md:30-33`, `docs/REVIEW_CHECKLIST.md:27-29`, `skills/roles/SKILL.md:134-136`,
+   `README.md:218-219`, `aiwf-roles.mjs:609-611`) не броят инструкциите и остават верни — не се пипат.
+   Self-check пиновете върху Step 2b не броят „две/три“ (проверено: `aiwf-selfcheck.js` 5578-5581,
+   6144-6146, 6198-6207, 6318-6333, 6465-6470) — ако Колегата все пак намери пин, който трябва да се
+   мести, тикетът се РЕКЛАСИФИЦИРА в code-class и това се докладва, не се решава тихо.
+4. Release 0.2.12 по образеца на HARD-016 (docs-class + издание, commit `9f62b4c`): миграция
+   `migrations/0016_readiness-gaps-instruction/` с `ops.json` (един `note` op; `docRefs` са точно
+   трите редактирани дома, дословно в т.5(а) — единствената стойност) и `NOTES.md` — в NOTES гейтът се споменава само в
+   квалифицираната форма („before every pass above the scan tier“; негативният скан
+   `DOCTRINE_FACTCHECK_NOTES_UNQUALIFIED`, `aiwf-selfcheck.js:6342-6359`, брани всяко
+   `migrations/**/NOTES.md`); `migrations/index.json` запис 16 (`targetPluginVersion` 0.2.12;
+   `validate-payload.mjs:262-269` иска последен запис == версия, note-only е легален); `version` в
+   `.claude-plugin/plugin.json:3`; `CHANGELOG.md` блок `## [0.2.12] - <дата на тага>` с `### Changed`
+   (датата == денят на тага — ако тагът е друг ден, датата се поправя преди него, HARD-016 образец);
+   `README.md:21` (`**v0.2.12. Public since 0.2.0.**`); `examples/` не се пипа (HARD-019, проверено:
+   няма `0.2.11` под `examples/`). Самоинсталацията: `node scripts/update/aiwf-update.mjs --apply
+   --project-root .` (1 note операция, 0 диалога; ражда `CHANGES_0.2.11-to-0.2.12.md` в root, който
+   се комитва, и мести `installedPluginVersion`/`lastMigrationApplied` в
+   `.claude/aiwf-native/aiwf.config.json`) — както при 0.2.9 и 0.2.11. Tag — дума; push — дума +
+   диалог; после CI и consumer proof на двата консуматора (операторски relay) — тогава редът в
+   паметите им става указател към payload-а.
+5. **Текстовете, които Колегата НЕ съчинява (fact-check преди пас 2, пропуски A1–A3, C2):**
+   (а) `migrations/0016_readiness-gaps-instruction/ops.json`: `migration` = `0016_readiness-gaps-instruction`,
+   `targetPluginVersion` = `0.2.12`, една операция `{ "op": "note", "id": "readiness-gaps-instruction",
+   "text": <текстът на CHANGELOG bullet-а от (в), без водещото тире и без bold маркерите>, "docRefs":
+   ["CHANGELOG.md", "skills/review/SKILL.md", "docs/WORKFLOW.md"] }` (и трите редактирани дома, C2).
+   (б) `NOTES.md` дословно (ако негативният скан на self-check-а за неквалифицираната фраза удари,
+   Колегата НЕ променя смисъла — докладва и спира):
+   ```markdown
+   # 0016_readiness-gaps-instruction
+
+   **A readiness pass was being paid to find the author's own gaps.** The fact-check gate of
+   `/pnp:review` Step 2b - one scan-tier agent, run before every reviewer pass above the scan tier,
+   over a diff or over a plan - verified facts: paths, line numbers, counts, commands. A plan whose
+   facts were all true could still hand the paid readiness pass a design the Writer could not
+   execute: a check that could not fail, a decision left open, a gate the process never named, two
+   places in the plan contradicting each other. Those are the six readiness checks, and the author's
+   own pass was the only thing reading for them.
+
+   ## What changes
+
+   - For a readiness pass the fact-check agent's task now carries THREE extra instructions: the
+     acceptance-command line and the chain-table line as before, and the six readiness checks applied
+     adversarially, returned as a second list of gaps - A (the Writer cannot execute, or the check
+     cannot fail or cannot pass), B (a false or unverifiable claim), C (consistency) - beside the
+     false-claims list, with no verdict. The COO closes every A and B item before the pass.
+   - The gaps list is not the COO's own pass and does not stand in for it, and it is never counted as
+     a pass. The own pass in a separate turn, the process dry run and the chain table stay the COO's
+     duties exactly as `docs/WORKFLOW.md` § Plan readiness review states them; that paragraph now also
+     says the own pass runs every command on the real tree, never on a stub.
+   - Two sentences in `docs/WORKFLOW.md` that described the gate as returning only claims, or as
+     unable to see process, are corrected to match.
+
+   ## What this migration does
+
+   Nothing to your project files: a `note` operation only. The change is in the plugin payload
+   (`skills/review/SKILL.md`, `docs/WORKFLOW.md`) and is read from there. Nothing that was valid
+   before this release becomes invalid.
+   ```
+   (в) `CHANGELOG.md` — новият блок над `## [0.2.11] - 2026-09-24`, дословно (датата = денят на
+   тага, виж acceptance):
+   ```markdown
+   ## [0.2.12] - <YYYY-MM-DD>
+
+   The fact-check gate now hands the COO the readiness gaps a paid pass would otherwise be spent on.
+
+   ### Changed
+
+   - **The fact-check gate reads a plan for readiness gaps, not only for false facts (HARD-020)** -
+     before a readiness pass, the scan-tier fact-check agent now applies the six readiness checks
+     adversarially and returns a second list of gaps (A: the Writer cannot execute, or the check
+     cannot fail or cannot pass; B: a false or unverifiable claim; C: consistency) beside the false
+     claims, with no verdict; the COO closes every A and B item before the paid pass. The list is not
+     the COO's own pass and is never counted as a pass: `docs/WORKFLOW.md` § Plan readiness review
+     says so, adds that the own pass runs every command on the real tree rather than on a stub, and
+     no longer describes the gate as returning only claims or as unable to see process.
+   ```
+   (г) Subject на release commit-а, дословно (образецът на `9f62b4c`/`85153fe`): `HARD-020: the
+   fact-check gate returns the readiness gaps beside the false claims (six checks as the third
+   standing instruction, not the COO's own pass, never a counted pass), released as 0.2.12`.
+   `README.md:21` → `**v0.2.12. Public since 0.2.0.**`.
+**Извън обхват:** нов гейт или нов агент; промяна в таблицата/pass count; Step 2b над
+implementation diff (остава каквото е — данните са само за readiness); преписване на tripwire 4;
+паметите на консуматорите (техни са); HARD-011; `examples/`, `templates/`, `scripts/`.
+
+**Acceptance (литерални, всяка може да падне):**
+- след `git add -N` на новите файлове (миграцията, `CHANGES_0.2.11-to-0.2.12.md`) затварящият grep
+  покрива ВСИЧКО, където промяната може да кацне (одиторски блокер p1 №6): `git grep -n "two extra"
+  -- . ":(exclude)dev" ":(exclude).aiwf"` → празно (контрол: на `79c287a` удря точно
+  `docs/WORKFLOW.md:387` и `skills/review/SKILL.md:225` и нищо друго в repo-то, проверено 2026-09-27);
+  `git grep -n "catches facts, not process defects" -- docs` → празно; `git grep -n "can read but
+  cannot walk" -- docs/WORKFLOW.md` → един удар; `git grep -n "the gaps list of § Plan readiness review
+  beside them" -- docs/WORKFLOW.md` → един удар;
+  `git grep -n "for a readiness pass the task carries three extra lines" -- skills/review/SKILL.md`
+  → един удар; `git grep -n "dispatched with three extra instructions alongside its standing task"
+  -- docs/WORKFLOW.md` → един удар (и двата на `79c287a` — празно, проверено);
+- `git grep -n "ending with GAPS: A=<n> B=<n> C=<n>. No verdict." -- skills/review/SKILL.md` → един
+  удар; `git grep -n "is not the COO's own pass and does not stand in for it" -- skills/review/SKILL.md
+  docs/WORKFLOW.md` → точно два удара, един във всеки файл; `git grep -n "run on the real tree, never
+  on a stub" -- docs/WORKFLOW.md` → един удар;
+- `git grep -nP "[\x{0400}-\x{04FF}]" -- docs skills templates scripts schema hooks migrations examples README.md` → празно;
+- числата на пробата не влизат в payload-а (история, не факт за системата): `git grep -nE
+  "172,265|172265|17\.5 min|13 gaps|A=5" -- migrations/0016_readiness-gaps-instruction CHANGELOG.md`
+  → празно;
+- VERIFY по docs реда: `selfcheck`, `validate-payload`, `plugin-validate` — една паралелна партида,
+  всяка exit 0 (runbook `dev/VERIFY_RUNBOOK.md` § Portion 1); validate-payload печата 16 миграции и
+  0.2.12; пълният набор (Portion 1 всичките осем + Portion 2 WSL, § Portion 2 на runbook-а) преди tag;
+- дифф гард (котва `A` = `git rev-parse HEAD` при диспача, вписана в брифа; `dev/**` и `.aiwf/**`
+  са изключени и като tracked, и като untracked — PLAN и CANDIDATES се редактират от COO по време на
+  тикета; „изпълним артефакт“ не се брани с черен списък от разширения, а с БЯЛ: НАВСЯКЪДЕ,
+  включително под `dev/` и в миграцията, минават само `.md`, `.json` и `.txt` — всяко друго
+  разширение или файл без разширение е изпълним по подразбиране и пада; това е Risk threshold-ът
+  „изпълним артефакт → code-class“, наблюдаван от самия гард — одиторски блокери p1 №3 и p2 №2;
+  миграцията е позволена само като точно двата файла `ops.json` и `NOTES.md`):
+  `node -e "const{execSync}=require('child_process');const sh=c=>execSync(c).toString().trim();const A='<КОТВА>';const ch=sh('git diff --name-only '+A).split(/\r?\n/).filter(Boolean);const un=sh('git status --porcelain').split(/\r?\n/).filter(l=>l.startsWith('??')).map(l=>l.slice(3));const doc=/\.(md|json|txt)$/i;const own=f=>f.startsWith('dev/')||f.startsWith('.aiwf/');const ok=f=>doc.test(f)&&(own(f)||['skills/review/SKILL.md','docs/WORKFLOW.md','README.md','CHANGELOG.md','.claude-plugin/plugin.json','migrations/index.json','.claude/aiwf-native/aiwf.config.json','CHANGES_0.2.11-to-0.2.12.md','migrations/0016_readiness-gaps-instruction/ops.json','migrations/0016_readiness-gaps-instruction/NOTES.md'].includes(f));const bad=ch.concat(un).filter(f=>!ok(f));if(bad.length){console.error(bad);process.exit(1)}"`
+  → exit 0; всеки друг път → exit 1 с имената. Контроли, пуснати от COO на 2026-09-27 върху
+  текущото дърво (некомитнати PLAN + CANDIDATES): позитивен с `A='79c287a'` → exit 0; негативен с
+  `A='183c21d'` (котвата на HARD-018 — диффът дотам носи `docs/LOOP.md`, `scripts/**`,
+  `templates/**`) → exit 1 с 21 имена; предикатен контрол върху имената `dev/zz-control.mjs`,
+  `dev/zz-control.exe`, `.aiwf/zz-control` (без разширение), `dev/zz-control.md` → първите три
+  REJECTED, четвъртото ALLOWED. Колегата повтаря позитивния (с котвата на брифа), негативния
+  (`183c21d`) и предикатния контрол (същите четири имена, подадени на `ok` в `node -e`, без да се
+  създава файл) и записва изходите в handback-а;
+- тагът има НАЗОВАНА цел (одиторски блокер p1 №4): `v0.2.12` ляга на RELEASE commit-а — кодовият
+  commit с payload-а, bump-а и миграцията — никога на completion-record commit-а след него;
+  формата е `git tag v0.2.12 <release-hash>` (лек, като v0.2.9–v0.2.11), и проверката е
+  `git rev-parse "v0.2.12^{commit}"` == `<release-hash>` от completion record-а (днес командата пада
+  с exit 128 „unknown revision“ — и това е „счупено“, не само различен hash), плюс
+  `git show --stat --format=%s v0.2.12` → subject-ът е ТОЧНО редът от Обхват т.5(г) и stat-ът носи
+  `skills/review/SKILL.md` — ИЛИ, само по датовия клон долу, subject-ът е точно `HARD-020: CHANGELOG
+  date set to the tag day (release 0.2.12)` и `git show --stat --format=%s "v0.2.12^"` е release
+  commit-ът с реда от т.5(г); всяка друга комбинация, нерезолвиращ таг или друг hash = счупено;
+- датата на CHANGELOG-а == ДЕНЯТ НА ТАГА, проверена в ДЪРВОТО, КОЕТО ТАГЪТ СОЧИ, не в работното
+  (одиторски блокери p1 №5 и p2 №3; лекият таг няма собствена дата, `%ad` е авторска дата): денят е
+  `Get-Date -Format yyyy-MM-dd` — ЛОКАЛНИЯТ ден на машината на оператора, без UTC преобразуване, както
+  са датирани блоковете на v0.2.9–v0.2.11 (етикет, не timestamp). Непосредствено ПРЕДИ `git tag`, в
+  същия ход: `git show "<целеви-hash>:CHANGELOG.md" | Select-String -Pattern "^## \[0.2.12\] - $(Get-Date -Format yyyy-MM-dd)$"`
+  → точно един ред; празно = тагът НЕ се слага. Тогава датата се поправя с docs micro-round, който
+  става ОТДЕЛЕН commit (клик) със subject дословно `HARD-020: CHANGELOG date set to the tag day
+  (release 0.2.12)`, и целта на тага става ТОЗИ commit (дървото му носи payload-а от release
+  commit-а плюс вярната дата) — completion record-ът записва и двата hash-а; проверката се повтаря
+  срещу новата цел преди тага. След тага: `git show "v0.2.12:CHANGELOG.md" | Select-String -Pattern
+  "^## \[0.2.12\] - "` → редът носи записания ден на тага; друг ден = счупено;
+- `D:\pnp-live` е опреснен на двете места от Процес (стъпки 2 и 9): от repo root-а `git worktree
+  list` → редът `D:/pnp-live` носи същия hash като `git rev-parse HEAD` (без `-C`); различен hash =
+  консуматорите и auto mode работят срещу стар payload = счупено;
+- след release: `git ls-remote --tags origin v0.2.12` → изходът е ТОЧНО един ред
+  `<release-hash>\trefs/tags/v0.2.12` (командата излиза с 0 и при липсващ таг — сигналът е изходът,
+  празен изход или друг hash = счупено); `git rev-list --left-right --count origin/main...main` →
+  `0	0` (днес `0	4`, четирите dev-record комита тръгват със същия push).
+**Risk threshold:** блокира формулировка, която оставя инструкцията да мине за собствения проход
+или за пас; какъвто и да е изпълним файл в диффа (→ code-class); счупен вместо прочетен пин в
+self-check-а; невярна претенция за цената или ефекта на пробата (N=1, непотвърдена — пише се така);
+CHANGELOG дата, различна от деня на тага.
+**Stop condition:** acceptance зелен → стоп.
+**Процес (dry run по гейтовете, 2026-09-27):** (1) readiness: дума дадена; consumer inventory → COO
+проход (този запис) → fact-check с трите инструкции → Codex пас 1 (`Class: plan`, coverage line с
+думата); пас 2 само с отделна дума. (2) Преди диспач: PLAN_HARD.md + CANDIDATES.md са
+НЕКОМИТНАТИ на `79c287a` — докс commit (клик) ги приземява ПРЕДИ Колегата, котвата на брифа е HEAD
+след него; след commit — refresh на `D:\pnp-live` (checkout в чужд worktree: дума + диалог). (3)
+Диспач на Колегата на своя дума, route-state `{"ticket":"HARD-020","route":"R2"}`. (4) Колегата:
+редакции, миграция, bump, apply на самоинсталацията, VERIFY docs ред, дифф гард. (5) fact-check над
+диффа → Codex docs пас (`gpt-5.6-sol`/high, 1, на думата за тикета); корекционен рунд само проза →
+без платен верификационен пас; cap 2. (6) Пълен VERIFY (Portion 1, после Portion 2) преди commit-а
+на изданието, по каданса на 0.2.9/0.2.11. (7) Commit клик — кодовият commit носи payload + release
+файловете + `aiwf.config.json` + `CHANGES_*`; PLAN извън него. (8) Completion record — отделен докс
+commit, същата сесия — записва release hash-а. (9) Датова проверка срещу ДЪРВОТО на
+`<release-hash>` (`git show <hash>:CHANGELOG.md`); при разминаване — датов micro-round като отделен
+commit (клик), той става целта, и completion record-ът получава ДОПЪЛНИТЕЛЕН докс commit с втория
+hash (никога amend); → tag `v0.2.12` върху целта, НЕ върху HEAD — дума; push main + tag — дума +
+диалог; refresh `D:\pnp-live` (checkout в чужд worktree: дума + диалог, както в стъпка 2). (10) CI три крака; consumer proof ×2 по релей на оператора. **Одит p1 (2026-09-27,
+студен, `gpt-6-sol`/xhigh, session `01a0e302-27ee-7cb2-b7e7-b8c5c5592204`, 87,928 токена):
+NEEDS-FIX, 6 блокера — и шестте АВТОРСКИ (стояща задача „ONLY … no suggestions“ срещу третата
+инструкция + `:147`; `:396-407` „catches facts, not process defects“ противоречи; гардът пускаше
+изпълним файл под `dev/` и в миграцията; тагът без назована цел — щеше да легне на record commit-а;
+`%ad` не е денят на тага; затварящият grep не покриваше миграция/CHANGELOG/CHANGES). Причината,
+назована: собственият проход отвори цитираните редове, но не прочете WORKFLOW-а като ЦЯЛО срещу
+новата инструкция (две противоречащи места в същия документ), и process dry run-ът назова стъпките,
+без да назове целта на тага. Всичко е затворено в този текст; пас 2 — само с отделна операторска
+дума.** **Одит p2 (2026-09-27, студен, дума „пускай“, session
+`01a0e31d-83d4-7bb3-b92a-61d1389aade6`, 77,495 токена): NEEDS-FIX, 4 блокера — и четирите
+авторски: №2 от p1 полузатворен (обявих `:400-407` за „вярно“, без да го препрочета — последното
+изречение противоречи); №3 от p1 полузатворен (черен списък разширения вместо бял — `.exe`
+минаваше); датовият repair поправяше работното дърво, а тагът сочеше старото; двете мои редакции
+дадоха два различни `docRefs`. Затворени в този текст (`:406-407` дословно; бял списък `.md|.json|.txt`
+с предикатен контрол; датата се проверява в дървото на целта, repair-ът става целта; един `docRefs`).
+Конфигурираните 2 паса са изчерпани — пас 3 е `passes + 1`, твърдият максимум, само с отделна
+операторска дума.** **Readiness затворен на 2 паса без PASS вердикт — операторска дума 2026-09-27
+„без пас 3“ (по COO препоръка: трети пас би проверявал само поправките на четирите авторски
+блокера). Вместо него: fact-check гейт (sonnet, трите инструкции) над ревизията; остатъчен дефект
+на плана излиза като корекционен рунд при Колегата. Платеният одит на тикета остава docs пасът
+върху реалния диф. Fact-check гейт 3 над ревизията: 0 неверни котви, всички команди пуснати с
+очаквания изход, пропуски A=1 C=2 (третата инструкция изброяваше три от шестте проверки; редът на
+record commit-а спрямо датовия repair; гейтът на втория refresh) — затворени в текста.** Chain таблица: Outcome
+изречение 1 (списък с пропуски от същия агент) → вход `/pnp:review` → `skills/review/SKILL.md:197`
+Step 2b → `:209-228` задачата → endpoint: прозата е механизмът (source surface); изречение 2
+(A/B се затварят преди паса) → `:230` „Then: the COO fixes …“; изречение 3 (не е собственият проход,
+не се брои за пас) → `:236-237` (днес казва само „not a review / no verdict / never replaces the
+Reviewer's pass“ — клаузите за собствения проход и за паса ги ДОБАВЯ т.1) + `docs/WORKFLOW.md:370`
+(„never one of the passes“, вече вярно днес); изречение 4 (инструментите на реалното дърво) →
+`docs/WORKFLOW.md:383-386` (изречението за собствения проход; клаузата на `:385-386`) → tripwire 4
+`:96-101`, клаузата `:100-101`; изданието → `plugin.json:3` → `migrations/index.json` (днес 15 записа,
+последният на ред 16; новият 0016 ляга на ред 17) → `0016/ops.json` → `validate-payload.mjs:262-269`
+→ `CHANGELOG.md:7` → `README.md:21` → `aiwf-update.mjs --apply` → `aiwf.config.json:4-5`. Всеки линк
+отворен на 2026-09-27; fact-check (sonnet, трите инструкции) върна 5 неверни котви и пропуски
+A=5 B=2 C=2 — всички затворени в този текст преди пас 1.
+**Review:** `Class: docs` → Codex `gpt-5.6-sol`/high, 1 пас, fact-check преди; cap 2. Readiness пас
+над тази секция преди диспач: **ДА — операторска дума 2026-09-27 „пускай рединес сега“** (пас 1 на
+тази дума по `review.plan` реда; всеки следващ пас — отделна дума). Ред: consumer-inventory скан →
+собствен проход на COO в ОТДЕЛЕН ход по шестте проверки → chain таблица → process dry run →
+fact-check (двете стоящи инструкции + шестте проверки като допълнителна) → Codex пас 1.
+**Assignee:** Колега. Branch `main`. Route-state `{"ticket":"HARD-020","route":"R2"}` при диспач.
+
 ## 0.2.7 — Environment correctness · tag `v0.2.7` (операторска дума 2026-09-16: HARD-013; ЗАМРАЗЕНО до края на консолидацията. HARD-014 ОТПАДНА — беше „Одитор с resume на сесията"; темата отива където консолидационното решение я прати)
 
 ### HARD-013 [R2 code-class] — self-check-ът хваща кой да е `bash` от PATH; на WSL bash пада 52 пъти и `--apply` връща 1 въпреки приложените миграции (роден 2026-09-15 от консуматорски рън, ЧАКА ОПЕРАТОРСКА ДУМА)
@@ -2428,7 +2746,8 @@ re-apply, naming assertion). Одиторът е Codex на всички → „
 имена — в таблицата под header-а. **[2026-09-22, операторска дума] Финален ред:** HARD-015 →
 HARD-016 (+release 0.2.9, изцяло) → [пауза; планът остава активен] → **HARD-017 (+release 0.2.10,
 роден 2026-09-23, спешен — операторска дума)** → **HARD-019 → HARD-018 (+release 0.2.11; ред по
-операторска дума 2026-09-24: 019 преди 018)** → HARD-011 в цикъла на 0.3.0 → архивиране на плана с
+операторска дума 2026-09-24: 019 преди 018)** → **HARD-020 (+release 0.2.12; роден 2026-09-27,
+операторска дума „това ми трябва преди 0.3.0“)** → HARD-011 в цикъла на 0.3.0 → архивиране на плана с
 последния затворен тикет.
 
 Гейтове: всеки тикет — собствена дума за диспач; commit — клик (стейдж по изрични пътища,

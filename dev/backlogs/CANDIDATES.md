@@ -58,6 +58,100 @@ case, зависещ от тайминг. Одиторът работи в read-
 още дублиране, а един ред в абзаца за evidence pack в `skills/review/SKILL.md`, който сочи
 съществуващия формат за кодовите пасове. **Условие за тръгване:** още данни от Фурнисимо. **Чака дума.**
 
+## Readiness pre-read — scan-tier агент прилага шестте readiness проверки адверсариално преди пас 1 (роден 2026-09-27, от Silerax 004 по операторска насока)
+
+Кандидат без ref. Наблюдение от два консуматора, същият модел на провал: readiness пас 1 на
+Codex връща предимно АВТОРСКИ блокери — Silerax PLAN_RST 11, RST-004 7, PLAN_TAL 10; Furnissimo
+PLAN_SCHEMES_RUNS 8 (числата са от съобщението на Silerax 004; източници: Silerax
+`dev/backlogs/PNP_CANDIDATES.md` § Pass statistics и § Event ledger 2026-09-27,
+`dev/backlogs/archive/007_PLAN_RST_2026-09-27.md` § RST-004 completion record; Furnissimo
+`docs/backlogs/PNP_CANDIDATES.md` § Event ledger 2026-09-27). Същото е записано и тук: WORKFLOW
+§ Plan readiness review носи 8 от 10 авторски блокера на плана за одитната таблица. Класовете са
+ДИЗАЙН пропуски: проверка, която не може да падне; обхватен guard, сляп за `git mv`; асъртиран
+списък с несъществуващи функции; доказателство без позитивна проба; правило без крайния случай;
+противоречие с контракта на Writer-а. Fact-check гейтът по конструкция не ги хваща — той проверява
+факти (файл:ред, бройки, съществуващи команди), не решения; днес ги намира само платеният одитор.
+**Предложение:** в payload-а, до fact-check гейта (`/pnp:review` Step 2b), задължителен pre-read
+преди пас 1 на всеки план и на всеки R2/R3 бриф: един `sonnet` агент прилага шестте readiness
+проверки адверсариално върху целия документ и връща САМО пропуски в три групи — A (Writer-ът не
+може да изпълни / проверката не може да падне или да мине), B (невярно или непроверимо твърдение),
+C (консистентност) — без вердикт; COO затваря A и B преди паса. Не е одитор и не се брои за пас
+(както fact-check гейтът); допълва собствения проход на COO с чужди очи. Промптът от пробата на
+Silerax (върху ревизираната PLAN_TAL, преди пас 2) е готов за шаблон — поискан дословно заедно с
+резултата от пробата.
+**Разпит с факти (2026-09-27, операторска дума „разпитай го с факти защо се стигна до тук“;
+отговорите на Silerax 004 са по неговите ledger-и):** от 17-те итемизирани блокера (RST-004 7 +
+PLAN_TAL 10) ВСИЧКИТЕ 17 попадат под вече написано правило (fact-check обхват 3; „must be able to
+fail“/tripwire 4: 5; brief precision 5; process dry run 2; § Routes „изпълним артефакт свършва R1“ 1;
+без exit-суфикс 1) — класове без правило: 0. Причината не е липсващо правило, а: (а) собственият
+проход на COO в ОТДЕЛЕН ход — без доказателство в PLAN_RST, сгънат в чертожния ход при RST-004
+(операторска корекция в Event ledger), от същия автор при PLAN_TAL; (б) process dry run — без
+доказателство / един ред в същия ход / пропуснал `git mv` и R1-маршрута; (в) инструментите са
+симулирани върху stub-ове (grep върху stub README, scope блок без staged rename), не пуснати на
+реалното дърво; (г) fact-check гейтът е вървял всеки път, но обхватът му е „факти в дървото“ —
+семантична осъществимост (несъществуващи функции зад вярно изречение), placeholder литерал и
+„какво остава на Writer-а“ са извън него; един негов finding („vacuous pass“) е бил под-поправен от
+COO. PLAN_RST 11 и Furnissimo 8 не са итемизирани никъде. Двойки на брояча не са записвани от
+2026-09-22 — цената е само в токени (пас 1: PLAN_RST 188k, RST-004 109k, PLAN_TAL 173k по wrapper).
+Пробата на pre-read-а: резултат чакащ; потвърждение от пас 2 — няма (PLAN_TAL спрян преди пас 2).
+**Стеснено предложение (Silerax 004 е съгласен):** без втори гейт — Step 2b получава шестте
+readiness проверки + „какво остава Writer-ът да решава“ и връща втори списък (пропуски A/B/C) до
+списъка с невярни твърдения; същият scan-tier агент, един гейт. Остава отворено дали инструмент
+може да замести проход, който е бил прескачан — доказателството е пробата плюс потвърждение от
+платен пас.
+**ЗАТВОРЕН БЕЗ ПРОМЯНА В PAYLOAD-А (COO решение по операторска дума 2026-09-27: „кодекс не трябва
+да ни казва, че 3+5 е равно на 8“; 10 авторски блокера са вина на COO, не липса на механизъм).**
+Фактите горе го доказват: нула класове без правило, всички пропуски са прескочени или сгънати
+стъпки, които доктрината вече командва. Поправката е изпълнението им — собствен проход в отделен
+ход, инструменти пуснати на реалното дърво, dry run написан, верига авторствана — и авторските
+блокери на пас 1 се докладват от COO като негов собствен резултат с името на прескочената стъпка.
+**Данни от пробата (Silerax 004, 2026-09-27, върху ВЕЧЕ ревизираната PLAN_TAL след затворените 10
+блокера):** sonnet, 172,265 токена, 17.5 мин, 14 tool uses → 13 пропуска (A=5, B=5, C=3), 12
+приети, 1 шум; петте A са реални изпълнимостни дупки (anchor вътре в чуждо тяло на секция; env
+променлива, заредена веднъж и ползвана през отделни tool извиквания; изискване за точен низ `Result:
+FAIL` без записан FAIL изход; очакван grep брой сгрешен с едно; plan-landing commit-ът липсва от
+dry run-а). Пас 2 не е вървял (операторски стоп) — потвърждение няма. Промптът на пробата,
+дословно както е пуснат от Silerax 004 (Agent tool, `general-purpose`, `model: sonnet`):
+
+```text
+ADVERSARIAL READINESS PRE-READ (read-only; no edits; no supabase/npm/npx/pwsh -File/git-mutating
+commands). You are NOT the auditor and return NO verdict — only GAPS. Target: <plan file> (read in
+full). Context: <repo root(s)>, <sibling repos READ-ONLY>, PnP payload <root> (read docs/WORKFLOW.md
+§ Plan readiness review, § Ticket brief contract, § Routes; docs/REVIEW_CHECKLIST.md). <If a prior
+paid pass exists: its blocker classes, all now revised.> Assume the next paid pass will look for the
+SAME classes plus anything else.
+
+Apply the six readiness checks adversarially to EVERY ticket and every decision: (1) repo-match —
+open pointers you doubt; (2) scope boundaries; (3) hidden discovery / unresolved decision — for each
+ticket list concretely what the Writer would still have to DECIDE or DISCOVER (a column name, a role
+grant, a file layout, a command flag, an order of operations) that the plan does not fix; (4)
+dependency order + the gate dry-run: any command that needs a dialog/gate the plan does not name; any
+step assuming state a prior step leaves different; (5) acceptance — for each block: can it pass on
+broken work? can it fail on correct work? does it observe every Risk-threshold item? are the expected
+outputs consistent with the tool's real output (…examples…); (6) git prerequisites and what the
+Writer contract (.claude/agents/writer.md) forbids or requires that a block or worklist violates.
+Also: contradictions between two places in the plan (a decision vs a ticket, a worklist vs an
+acceptance, ticket N vs ticket N+1), language/command mismatches, and anything a Codex reviewer with
+the sibling tree open would call a false statement.
+
+OUTPUT: a numbered list of GAPS only, each: `<draft line(s)> | <ticket/decision> | <gap in one
+sentence> | <what would close it, one sentence>`. Group by severity: A = the Writer cannot execute or
+the check cannot fail/pass; B = false or unverifiable claim; C = wording/consistency. No praise, no
+summary of what is fine. End with `GAPS: A=<n> B=<n> C=<n>`.
+```
+
+Използване без промяна в payload-а: WORKFLOW § Plan
+readiness review вече позволява допълнителни инструкции към fact-check агента — шестте проверки
+могат да се качат като такава инструкция в конкретен readiness цикъл; не заместват собствения проход.
+**Какво от това влиза в PnP (COO решение 2026-09-27):** нов гейт — не. Едно изречение — да, в
+цикъла на 0.3.0: шестте проверки + списъкът с пропуски стават ТРЕТАТА стояща допълнителна
+инструкция към fact-check агента в `/pnp:review` Step 2b (и абзацът в WORKFLOW § Plan readiness
+review, който днес изброява две), със същата уговорка „не е собственият проход, не се брои за
+пас“. Мотив: правилото вече стои дословно в паметите на двата консуматора — две копия на едно
+правило извън payload-а са точно дрейфът, за който 0.2.9 плати; payload-ът е единственият дом, от
+който консуматорите го получават без преписване. Всичко останало (разпитът, ledger редовете за
+авторските блокери, ruling-ът) остава в паметите и ledger-ите на двата проекта — за това са.
+
 ## RENAME-001 [R3] — пълен rename AIWF → pnp (роден 2026-09-03)
 
 Изваден от `active/PLAN_PNP_PUBLIC.md` по операторско решение 2026-09-11 — не е част от тази
@@ -464,6 +558,9 @@ xhigh) излиза по-скъп от студен. Решава се само 
 Методологични бележки от цикъла: resume икономията се разпада след компакт на сесията
 (−5→−8→−12пп крива; retire-при-компакт); двата A/B: форматите комплементарни на суров план,
 схождащи се на зрял; пп/turn ~стабилно срещу пп/токен ±50% (гросс-обемният модел).
+
+| HARD-020 readiness p1 (`gpt-6-sol`/xhigh, session `01a0e302-27ee-7cb2-b7e7-b8c5c5592204`) | plan | студен | 87,928 | брояч: чака двойката от оператора | — | NEEDS-FIX (6 блокера, всичките авторски — PLAN_HARD § HARD-020 „Одит p1“) |
+| HARD-020 readiness p2 (`gpt-6-sol`/xhigh, session `01a0e31d-83d4-7bb3-b92a-61d1389aade6`, операторска дума „пускай“) | plan | студен | 77,495 | брояч: чака двойката от оператора | — | NEEDS-FIX (4: два полузатворени от p1 — WORKFLOW `:406-407`, гард с черен вместо бял списък; два родени от ревизията — датов repair на грешното дърво, два `docRefs`; всичките авторски) |
 
 ## Event ledger (D16 формат: | дата | правило | violation|catch|operator-correction | указател |)
 
