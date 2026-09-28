@@ -64,6 +64,7 @@
 | HARD-018 | — (Claude-хостнат Одитор/QA не може да се закове на точен модел, роден 2026-09-24) | 0.2.11 |
 | HARD-019 | — (примерният bump fixture се преименува при всяко издание, роден 2026-09-24) | 0.2.11 |
 | HARD-020 | — (шестте readiness проверки стават трета стояща инструкция на fact-check гейта, роден 2026-09-27) | 0.2.12 (преди 0.3.0, операторска дума) |
+| HARD-021 | — („доктринният текст не е код“: пиновете върху проза падат, docs промяна = validate-payload + provenance, изданието без локален пълен VERIFY; роден 2026-09-28, операторска дума) | 0.2.12 (заедно с HARD-020: един commit, един code пас) |
 
 ## Context (discovery 2026-09-12: 4× Explore/sonnet + claude-code-guide; котви проверявани при диспач)
 
@@ -2695,6 +2696,137 @@ A=5 B=2 C=2 — всички затворени в този текст пред�
 fact-check (двете стоящи инструкции + шестте проверки като допълнителна) → Codex пас 1.
 **Assignee:** Колега. Branch `main`. Route-state `{"ticket":"HARD-020","route":"R2"}` при диспач.
 
+### HARD-021 [R2 code-class] — доктринният текст не е код: пиновете върху проза падат, docs промяна минава за секунди, изданието без локален пълен VERIFY (роден 2026-09-28, операторска дума; в 0.2.12 заедно с HARD-020)
+
+**Контекст (операторска дума 2026-09-27/28):** пет изречения доктрина струваха два платени паса, три
+fact-check гейта и осем контрола, а един преместен пин направи прозата code-class. „Това е плъгин, не
+операционна система за банка.“ Факти (inventory 2026-09-28, sonnet): self-check-ът носи 96 доктринни
+проверки в един самостоятелен блок `scripts/selfcheck/aiwf-selfcheck.js:5486-7046` (константи
+`:5499-6409`, runner `payloadDoctrineFindings` `:6445-6733`, control-copy машинария `:6735-6778`,
+`DOCTRINE_CONTROLS` `:6779-7014`, `sectionPayloadDoctrine` `:7016-7046`); помощниците `collapseWs`,
+`phraseRe`, `doctrinePhrase`, `copyDoctrineFiles` се ползват само вътре в блока (grep извън него:
+нула). Никой файл не заковава броя на assertion-ите (`test-update.mjs:1622,1628,1663` са regex-и;
+`test-setup.mjs:817,827` е синтетична fixture). Кешът на Claude Code е по низа на версията
+(code.claude.com/docs/en/plugins/loading § "Versions and updates"; host-marketplace § "Release a new
+version") — без bump консуматорите не получават файлове, затова bump-ът остава, като един ред.
+`docs/**` и `skills/**` никога не се рендерират в проект (`generate.mjs`: само `templates/**`).
+
+**Outcome (четири резки, всяка обратима с един commit):**
+1. **Self-check-ът пази изпълнимото, не изреченията.** От 96-те доктринни проверки остават ТОЧНО 9:
+   пет операторски гейта, по ЕДИН дом всеки — `doctrine-one-word-per-pass-workflow` (`:5665-5669`),
+   `doctrine-cons-audit-pass-question-workflow` (`:5887-5891`), `doctrine-cons-doctrine-write-gate`
+   (`:5912-5916`), `doctrine-cons-host-precedence` (`:5907-5911`), `doctrine-pass-compensations`
+   (`:6259-6263`) — и четири механични — `doctrine-no-blanket-git-c` (`:6718-6723`),
+   `doctrine-git-c-project-forms` (`:6724-6731`), `doctrine-orchestrator-model-agnostic`
+   (`:6613-6632`), `doctrine-shipped-commands-structure` (`:6660-6672`). Всичко останало в блока —
+   87 проверки, техните константи, техните редове в `DOCTRINE_CONTROLS`, `DOCTRINE_RETIRED_PATTERNS`
+   sweep-ът, NOTES негативният скан, two-homes броячите — се ИЗТРИВА (не коментира). Деветте пазят
+   саботажните си контроли и се виждат червени в рънa. Мъртвите помощници след изтриването също падат.
+2. **Docs промяна минава за секунди.** `dev/PROJECT_OVERRIDES.md` § Test policy, редът „docs / skills
+   prose“ → `validate-payload` + provenance grep (`git grep -nP "[\x{0400}-\x{04FF}]" -- docs skills
+   templates scripts schema hooks migrations examples README.md`); `selfcheck` само когато диффът пипа
+   `scripts/`, `hooks/`, `templates/`, `schema/`. Одитната таблица: `docs.passes` → 0 („no auditor“;
+   fact-check гейтът остава) — `node scripts/setup/aiwf-roles.mjs --set docs.passes=0 --project-root .
+   --plugin-root .` (рендерира `roles.json`; операторска дума 2026-09-28 в списъка със стъпки).
+3. **Изданието без локален пълен VERIFY.** Пълният набор се маха от локалната церемония: § Test policy
+   „The full set … runs once per release, before the tag“ → „CI runs the full set on the pushed commit;
+   the tag lands only on a commit CI has proven green on `windows` and `ubuntu`“; Portion 2 (WSL) се
+   ПЕНСИОНИРА локално (CI `ubuntu`/`macos` краката са POSIX доказателството; `ci.yml:68-151` вече пускат
+   self-check-а на трите крака) — параграфите за WSL в § Test policy и `dev/VERIFY_RUNBOOK.md`
+   § Portion 2 остават като история под един ред „RETIRED 2026-09-28 (HARD-021): CI is the POSIX
+   proof“. § Hard rules „Release discipline“ получава изречението: a prose-only release is the version
+   bump, the CHANGELOG block and a note-only migration - nothing else runs locally; the tag follows a
+   green CI on `main`. Редът на церемонията става: commit клик → push `main` (дума + диалог) → CI зелен
+   → tag (дума) → push tag (диалог). Consumer proof не е стъпка — операторът обновява, когато обновява.
+4. **Payload огледалото на изречението.** `docs/WORKFLOW.md` § Tests не се пипа (то сочи overrides
+   документа). `CLAUDE.md` § „This repository is the plugin“ (операторската зона под managed region-а —
+   Колегата проверява маркерите `aiwf-core` и НЕ пипа вътре в тях; ако изречението е вътре — докладва):
+   „any change under … is R2 (Writer + Reviewer)“ → „is R2 through the Writer; the auditor is the audit
+   table's row for the class (docs row 0 = none)“.
+5. **Изданието:** същото 0.2.12 — `migrations/0016_readiness-gaps-instruction/ops.json` получава ВТОРИ
+   `note` op `{ "id": "doctrine-text-not-code", "text": <CHANGELOG bullet-ът от т.6 без тире и bold>,
+   "docRefs": ["CHANGELOG.md"] }`; `NOTES.md` на 0016 — нов раздел `## Also in this release` с две
+   изречения: the self-check no longer pins doctrine SENTENCES (it keeps five operator-gate sentences and
+   four mechanical checks); a prose-only change ships as bump + CHANGELOG + note migration, verified by
+   CI. Версията и README:21 вече са 0.2.12 (HARD-020).
+6. **CHANGELOG** блок 0.2.12, `### Changed`, втори bullet дословно: `- **The self-check stops pinning
+   doctrine sentences (HARD-021)** - of 96 doctrine checks it keeps 9: five operator-gate sentences, one
+   home each (one word per pass, the audit-pass question for a newborn ticket, the doctrine-write gate,
+   host-directive precedence, a warm readiness pass only on the operator's word) and four mechanical
+   checks (the two `git -C` ruleset forms, the model-agnostic Orchestrator template, the shipped-commands
+   index). Prose in `docs/` and `skills/` is read in place by the installed skills and is never rendered
+   into a project, so a prose change is a version bump, a CHANGELOG line and a note-only migration -
+   verified by CI on the pushed commit, not by a local run of every suite.`
+**Извън обхват:** hooks/, ruleset-ът, resolver-ите, wrapper-ите (нищо изпълнимо не сменя поведение);
+readiness пасовете за планове (таблицата ги държи); update engine-ът (bump без миграция би искал
+промяна в `validate-payload.mjs:262-269` и в `--check` — не сега); HARD-011.
+
+**Acceptance (литерални):** `node scripts/selfcheck/aiwf-selfcheck.js --plugin-root . --project-fixture .`
+→ exit 0 и в изхода `Select-String -Pattern "\[doctrine-[a-z0-9-]+\]" -AllMatches | % { $_.Matches.Value }
+| Sort-Object -Unique` → точно деветте id-та по-горе, нито едно друго (контрол: на текущото дърво
+списъкът е ~96); `git grep -c "DOCTRINE_" -- scripts/selfcheck/aiwf-selfcheck.js` → числото, което
+Колегата отчита, и всяка оцеляла константа е една от ползваните от деветте; `node
+scripts/update/validate-payload.mjs --plugin-root .` → exit 0, `16 migration(s)`, `0.2.12`; `claude
+plugin validate .` → exit 0; `node scripts/setup/aiwf-roles.mjs --show --project-root . --plugin-root .`
+→ ред `docs (R2)` с `0` и `no auditor`; `git grep -n "no auditor" -- .claude/aiwf-native/roles.json`
+→ празно (roles.json носи `"passes": 0`, етикетът е на --show); provenance grep → празно; `git grep -n
+"before the tag" -- dev/PROJECT_OVERRIDES.md` → само в „RETIRED“/историческо изречение или празно;
+`git grep -n "RETIRED 2026-09-28" -- dev/PROJECT_OVERRIDES.md dev/VERIFY_RUNBOOK.md` → по един удар
+всеки; дифф гард на HARD-020 с `A='6770fab…'` → exit 1 с точно `scripts/selfcheck/aiwf-selfcheck.js`,
+`dev/...` файловете са изключени (code-class сигналът, приет); след издание: `git ls-remote --tags origin
+v0.2.12` → един ред с hash на release commit-а; CI три рънa `success` на `windows`+`ubuntu` ПРЕДИ тага.
+**Risk threshold:** блокира изтриване на една от деветте или контрол, който вече не се вижда червен;
+промяна в `hooks/`, `templates/settings.ask-ruleset.json` или в resolver/wrapper; проза, която още казва
+„пълен VERIFY локално преди tag“; Cyrillic в payload-а.
+**Stop condition:** acceptance зелен → стоп.
+**Review:** `Class: code`, ЕДИН пас (`gpt-6-sol`/xhigh) над ОБЩИЯ диф на HARD-020 + HARD-021 срещу
+котвата `6770fab` — операторска дума 2026-09-28 „ще минем одит“; fact-check преди него; cap 2.
+Readiness пас — няма (операторски думи „довърши 020 и след това се заеми с 021“ след представените
+стъпки; тикетът е изтриване + проза върху измерени факти). VERIFY локално: `selfcheck`,
+`validate-payload`, `plugin-validate` — една партида; всичко друго е работа на CI след push.
+**Assignee:** Колега. Branch `main`. Route-state `{"ticket":"HARD-021","route":"R2"}`. Commit: ЕДИН за
+двата тикета, subject дословно `HARD-020/HARD-021: the fact-check gate returns the readiness gaps, and
+the self-check stops pinning doctrine sentences - released as 0.2.12`; PLAN и CANDIDATES извън него.
+
+#### HARD-020 + HARD-021 — Completion record (2026-09-28)
+
+**Commit `51dd2ce`** върху котвата `6770fab` (15 файла, +257/−1357; release commit на 0.2.12 — целта
+на тага). Колегата на `claude-opus-5-5[1m]`/high, три рънa: 020 (спрян от оператора на пина, довършен
+след рестарта), 021, микро-рунд + корекционен рунд 1.
+**HARD-020:** `skills/review/SKILL.md` Step 2b носи трите допълнителни инструкции във fenced блок +
+двете изречения за двата списъка + „не е собственият проход, не се брои за пас“; `docs/WORKFLOW.md`
+`:147`, `:385-386`, `:387-390`, `:396`, `:399`, `:406-407` пренаписани дословно по т.2. Пинът
+`DOCTRINE_PLAN_PROCESS_TRACE` беше преместен (рекласификация в code-class, докладвана) и после
+изтрит от HARD-021 заедно с останалите — chain-table фразата остава договор на текста, не assertion.
+Отклонение от т.1: fenced блокът няма отделно заглавие, встъпва с „three extra lines, appended
+verbatim:“ (COO решение). Readiness: 2 Codex паса (10 авторски блокера, всичките затворени), без пас 3
+(операторска дума), три fact-check гейта.
+**HARD-021:** self-check `:5486-7046` → девет проверки (5 гейт-изречения по един дом + 4 механични), 14
+контрола, всичките видяни червени; изтрити 87 проверки, техните константи, контроли, retired sweep-ът,
+NOTES сканът и мъртвите помощници; резюмето в main() пренаписано; `DOCTRINE_COPY_DIRS` =
+`['docs','skills','templates']`. Броят на assertion-ите: 1347 → 1162. Docs ред → 0 (`aiwf-roles.mjs
+--set docs.passes=0`; `roles.json` и `aiwf.config.json` пре-рендерирани). § Test policy: docs проза =
+validate-payload + provenance grep; пълният набор е работа на CI, тагът след зелен CI; Portion 2 (WSL)
+RETIRED, историята стои. § Hard rules: Release discipline + Provenance пренаписани (корекционен рунд 1).
+`CLAUDE.md` операторска зона: „is R2 through the Writer; the auditor is the audit table's row“.
+Издание: миграция 0016 с два `note` op-а, `index.json` запис 16, `plugin.json` 0.2.12, CHANGELOG блок
+(две bullet-а, дата 2026-09-27 — проверява се при тага), `README.md:21`, `CHANGES_0.2.11-to-0.2.12.md`
+разширен ръчно във формата на генератора.
+**Одит:** fact-check над общия диф — чисто. Codex code пас 1, студен, `gpt-6-sol`/xhigh, session
+`01a0e6aa-d2cc-7d23-a31b-aebd0fb07595`, 95,055 токена → **fail, 2 блокера, двата проза** (§ Hard rules
+„Writer + Reviewer“ срещу docs ред 0; § Provenance сочеше self-check секцията като гейт преди всеки
+commit) + бележка (заглавието на Portion 1). Кодът чист: „nine retained checks and 14 controls
+present; no removed executable assertion or dead reference“. Корекционен рунд 1 — само проза, три
+редакции; без платен верификационен пас; проверен първолично от COO (фактите docs 0 / code 1 /
+§ Test policy — проверени в сесията), без отделен fact-check агент над трите изречения (COO решение
+по операторската посока за церемонията; отклонение от буквата на § Loop shape, записано).
+**VERIFY (пропорционален, точни кодове):** self-check exit 0, 1162/1162 (преди: 1347/1347);
+validate-payload exit 0, `16 migration(s)`, `0.2.12`; `claude plugin validate .` exit 0; `--check`
+up to date 0.2.12. Пълният набор — в CI след push (новото правило). Без WSL.
+**Церемония нататък:** push `main` (дума + диалог) → CI зелен на `windows`+`ubuntu` → датова проверка в
+дървото на `51dd2ce` → tag `v0.2.12` на `51dd2ce` (дума) → push tag (диалог) → refresh `D:\pnp-live`.
+**Останал дълг: няма.** Route-state `{}`. Планът остава активен заради HARD-011 (0.3.0).
+
 ## 0.2.7 — Environment correctness · tag `v0.2.7` (операторска дума 2026-09-16: HARD-013; ЗАМРАЗЕНО до края на консолидацията. HARD-014 ОТПАДНА — беше „Одитор с resume на сесията"; темата отива където консолидационното решение я прати)
 
 ### HARD-013 [R2 code-class] — self-check-ът хваща кой да е `bash` от PATH; на WSL bash пада 52 пъти и `--apply` връща 1 въпреки приложените миграции (роден 2026-09-15 от консуматорски рън, ЧАКА ОПЕРАТОРСКА ДУМА)
@@ -2747,8 +2879,9 @@ re-apply, naming assertion). Одиторът е Codex на всички → „
 HARD-016 (+release 0.2.9, изцяло) → [пауза; планът остава активен] → **HARD-017 (+release 0.2.10,
 роден 2026-09-23, спешен — операторска дума)** → **HARD-019 → HARD-018 (+release 0.2.11; ред по
 операторска дума 2026-09-24: 019 преди 018)** → **HARD-020 (+release 0.2.12; роден 2026-09-27,
-операторска дума „това ми трябва преди 0.3.0“)** → HARD-011 в цикъла на 0.3.0 → архивиране на плана с
-последния затворен тикет.
+операторска дума „това ми трябва преди 0.3.0“)** → **HARD-021 (същото издание 0.2.12, един commit и
+един code пас за двата; роден 2026-09-28, операторски думи „довърши 020 и след това се заеми с 021“,
+„ще минем одит“)** → HARD-011 в цикъла на 0.3.0 → архивиране на плана с последния затворен тикет.
 
 Гейтове: всеки тикет — собствена дума за диспач; commit — клик (стейдж по изрични пътища,
 едноредово съобщение, нула trailers, PLAN файлът и трите EOL-дрейфащи `.ps1` извън кодовия
