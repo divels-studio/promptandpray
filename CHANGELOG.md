@@ -4,7 +4,7 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
-## [0.2.12] - 2026-09-27
+## [0.2.12] - 2026-09-28
 
 The fact-check gate now hands the COO the readiness gaps a paid pass would otherwise be spent on, and the self-check stops pinning doctrine sentences.
 
