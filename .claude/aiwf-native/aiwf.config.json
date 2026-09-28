@@ -1,13 +1,13 @@
 {
   "$schema": "D:/promptandpray/schema/aiwf.config.schema.json",
   "_aiwf": {
-    "installedPluginVersion": "0.2.11",
-    "lastMigrationApplied": "0015_exact-model-pin",
+    "installedPluginVersion": "0.2.12",
+    "lastMigrationApplied": "0016_readiness-gaps-instruction",
     "migrationJournal": null,
     "managedRegions": {
       ".claude/aiwf-native/roles.json": {
-        "upstream": "04dc06874d1352ee37e74d95dc18ea2c566b0472ac54002047633306aa407625",
-        "local": "04dc06874d1352ee37e74d95dc18ea2c566b0472ac54002047633306aa407625",
+        "upstream": "e3cd71579afc6a9aa532a921aba8b9554fd38fdf65b99a2709ff987f09bd46ab",
+        "local": "e3cd71579afc6a9aa532a921aba8b9554fd38fdf65b99a2709ff987f09bd46ab",
         "override": false
       },
       ".claude/agents/writer.md": {
@@ -259,7 +259,7 @@
       "effort": "xhigh"
     },
     "docs": {
-      "passes": 1
+      "passes": 0
     }
   }
 }

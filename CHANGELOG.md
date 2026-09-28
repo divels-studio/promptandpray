@@ -4,6 +4,29 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.2.12] - 2026-09-27
+
+The fact-check gate now hands the COO the readiness gaps a paid pass would otherwise be spent on, and the self-check stops pinning doctrine sentences.
+
+### Changed
+
+- **The fact-check gate reads a plan for readiness gaps, not only for false facts (HARD-020)** -
+  before a readiness pass, the scan-tier fact-check agent now applies the six readiness checks
+  adversarially and returns a second list of gaps (A: the Writer cannot execute, or the check
+  cannot fail or cannot pass; B: a false or unverifiable claim; C: consistency) beside the false
+  claims, with no verdict; the COO closes every A and B item before the paid pass. The list is not
+  the COO's own pass and is never counted as a pass: `docs/WORKFLOW.md` § Plan readiness review
+  says so, adds that the own pass runs every command on the real tree rather than on a stub, and
+  no longer describes the gate as returning only claims or as unable to see process.
+- **The self-check stops pinning doctrine sentences (HARD-021)** - of 96 doctrine checks it keeps
+  9: five operator-gate sentences, one home each (one word per pass, the audit-pass question for a
+  newborn ticket, the doctrine-write gate, host-directive precedence, a warm readiness pass only on
+  the operator's word) and four mechanical checks (the two `git -C` ruleset forms, the
+  model-agnostic Orchestrator template, the shipped-commands index). Prose in `docs/` and `skills/`
+  is read in place by the installed skills and is never rendered into a project, so a prose change
+  is a version bump, a CHANGELOG line and a note-only migration - verified by CI on the pushed
+  commit, not by a local run of every suite.
+
 ## [0.2.11] - 2026-09-24
 
 A Claude-hosted Reviewer or QA can be pinned to an exact model id, the way the Writer always could,

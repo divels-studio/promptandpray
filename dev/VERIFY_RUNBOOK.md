@@ -7,7 +7,7 @@
 > Sources: `dev/backlogs/archive/005_PLAN_CONS_2026-09-21.md` (line pointers per item),
 > `dev/backlogs/CANDIDATES.md`, PROJECT_OVERRIDES § Test policy.
 
-## Portion 1 - the eight Windows commands (gates every ticket close)
+## Portion 1 - the eight Windows commands (a ticket runs only the rows its diff can break - dev/PROJECT_OVERRIDES.md § Test policy; CI runs the full set)
 
 - The eight = `verify.commands` in `aiwf.config.json`, listed verbatim in § Test policy.
 - ONE parallel batch: `Start-Process` per command, logs redirected OUTSIDE the repo, exit codes
@@ -20,6 +20,8 @@
   run, not POSIX proof (CANDIDATES :834-843). POSIX proof = Portion 2 or CI.
 
 ## Portion 2 - WSL POSIX legs (release tickets; NEVER concurrent with Portion 1)
+
+**RETIRED 2026-09-28 (HARD-021): CI is the POSIX proof; this section is history.**
 
 - Starts only after Portion 1 has finished: both at once = memory kill by the harness (2026-09-19,
   event ledger; the incident behind the PORTIONS rule).
@@ -65,6 +67,8 @@
   replaced `process.exit(...)` with `process.exitCode` in the four `finishWithSelfCheck` callers
   (POSIX stdout truncation; macOS had shown the class since 0.2.0). Archive :679-710, :983-992,
   :1298-1300.
+- Since HARD-021 the tag is placed AFTER the CI run on the pushed `main` commit is green on
+  `windows` and `ubuntu`; there is no local full run before it.
 
 ## Environment failure = stop and ask
 

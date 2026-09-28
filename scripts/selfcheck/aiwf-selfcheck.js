@@ -5485,347 +5485,59 @@ function setupFlagFindings(skillText, cliSources) {
 }
 
 // ---------------------------------------------------------------------------
-// PAYLOAD DOCTRINE - the rules that exist ONLY as text, and can therefore rot silently
+// PAYLOAD DOCTRINE - the operator gates that exist ONLY as text, plus four mechanical checks
 // ---------------------------------------------------------------------------
 // A gate that can be a hook IS a hook in this plugin; what is left over is doctrine carried by the
-// skill and template text, and text has no compiler. Each rule below was written because it was
-// VIOLATED in a real session, so "the sentence is still in the file" is the only regression test
-// there is. Findings take the plugin root as an argument, so the controls can run the same function
-// over a sabotaged copy - the marketplace section's pattern, for the same reason.
+// skill and template text, and text has no compiler. This section no longer pins doctrine SENTENCES
+// in general: prose in docs/ and skills/ is read in place by the installed skills and is never
+// rendered into a project, so a reworded sentence is a prose change, not a regression. What stays
+// is NINE checks - five operator-gate sentences, ONE home each, and four mechanical checks (the two
+// `git -C` ruleset forms, the model-agnostic Orchestrator template, and the shipped-commands index
+// read structurally against the directory). Findings take the plugin root as an argument, so the
+// controls can run the same function over a sabotaged copy - the marketplace section's pattern, for
+// the same reason.
 //
-// The Read/Grep/Glob rule is asserted as ONE canonical sentence in every session skill rather than
-// as a per-skill paraphrase: eight wordings drift into eight meanings, and a check that accepts any
-// of them proves nothing about the eighth.
-const DOCTRINE_READING_SENTENCE =
-  '**Reading is not a shell job.** Read or inspect files with the Read/Grep/Glob tools - never '
-  + '`cat`/`grep`/`ls`/`head`/`node -e` through the shell for reading; the shell is for execution '
-  + '(tests, git, build).';
-const DOCTRINE_READING_SKILLS = ['mission', 'work', 'setup', 'review', 'qa', 'loop', 'update', 'roles', 'arbiter'];
-const DOCTRINE_NEWBORN_SENTENCE =
-  'A NEWLY BORN ticket - one that is not in the PLAN\'s recorded execution order - is written into '
-  + 'the PLAN, announced in ONE sentence, and STOPS the same way.';
-const DOCTRINE_NEWBORN_SKILLS = ['mission', 'work'];
 // The refusal of a blanket `git -C` rule is doctrine, and doctrine is per TOOL now that the ask list
 // is mirrored: re-adding it on PowerShell alone would gate every read-only `git -C <other repo> log`
 // on a Windows session while the Bash half stayed correct, which is the same defect wearing the
 // other tool's name. Both spellings are held, and so are both tools' rendered `<projectRoot>` forms.
 const BLANKET_GIT_C_RULES = ['Bash(git -C:*)', 'PowerShell(git -C:*)'];
 const GIT_C_PROJECT_TOOLS = ['Bash', 'PowerShell'];
-// Step 0b/0c is THREE claims, and each rots on its own: that the brief carries the class at all,
-// that the class is resolved as a ROW of the audit table through the resolver's `-Class` flag, and
-// that the Claude host it can select is a DISPATCHABLE agent. The last one is not decoration.
-// Until 0.2.0 the docs class was a rule with a hardcoded model - an ad-hoc `general-purpose`
-// subagent on a pinned tier - because `.claude/agents/reviewer.md` was rendered only for a
-// claude-hosted ROLE. It is now rendered whenever the role OR any review row is claude-hosted
-// (scripts/setup/generate.mjs), so the row has a real agent and the skill names no model at all.
-// A wording that drifts back to a hardcoded host or a hardcoded model re-invents the thing the
-// audit table replaced, which is why all three are pinned as text.
-const DOCTRINE_REVIEW_CLASS_ROW = 'The class names a ROW of the **audit table**';
-const DOCTRINE_REVIEW_CLASS_RESOLVER = '-Role reviewer -Class <class> -RolesPath';
-const DOCTRINE_REVIEW_CLASS_HOST =
-  'Invoke the **Agent tool** with `subagent_type: "reviewer"`, the ROW\'s model per the dispatch contract below';
-// THE `model` DISPATCH CONTRACT, two halves, held in BOTH dispatching skills (/pnp:review and
-// /pnp:qa). Until 0.2.11 both skills passed `model` unconditionally, which only worked because every
-// claude-hosted model was a tier alias. A claude-hosted Reviewer/QA/row may now be an exact id, and
-// the Agent tool's `model` takes a tier alias and nothing else - so the alias is passed and the exact
-// id is omitted (the rendered agent's frontmatter pin applies, the Writer's pattern). Losing EITHER
-// half is a defect with money behind it: without the first, an alias row stops overriding the file
-// and runs whatever the file pins; without the second, an exact id is handed to a parameter that
-// cannot carry it. Each half is therefore asserted per skill, each with its own control.
-const DOCTRINE_DISPATCH_ALIAS_HALF = 'a tier alias (`fable|opus|sonnet|haiku`) is passed as the Agent tool\'s `model`';
-const DOCTRINE_DISPATCH_EXACT_HALF = 'an exact model id is NOT passed - `model` is omitted.';
-const DOCTRINE_DISPATCH_SKILLS = ['review', 'qa'];
-// The reviewer's ONE agent file carries ONE pin for every Claude row, so /pnp:review compares the
-// row's exact id with that pin before dispatching and stops on a mismatch rather than running a
-// model the row does not name.
-const DOCTRINE_REVIEW_PIN_FAIL_CLOSED = '**Fail closed on a pin mismatch.**';
-// The fourth claim, and the one with money behind it: plan readiness is the `review.plan` row, and
-// its pass count is `review.plan.passes` rather than a number written into a document. A wording
-// that re-hardcodes the count silently removes the operator's control over how much a plan costs.
-const DOCTRINE_REVIEW_READINESS_SENTENCE =
-  'the `review.plan` row - Step 0b resolved it with `-Class plan`';
-// The /pnp:update conflict rule. Until 0.1.2 it took TWO predicates, joined by "or": a payload change
-// to an artifact the operator had never touched raised a dialog, and the operator answered take-new
-// to a question about content that was not theirs. The rule is now one predicate (the operator edited
-// it, or it is gone), and a skill that drifts back to the old wording describes an engine that no
-// longer exists. The control below rewords it back, which is the only way to prove this is a check.
-const DOCTRINE_UPDATE_CONFLICT_SENTENCE =
-  'a conflict is raised **only when you edited** the artifact (`actual != local`) or it is GONE from '
-  + 'the project; a payload change to an artifact you never touched is NOT a conflict - it is applied '
-  + 'without a dialog and listed in the CHANGES report.';
 // Line breaks are formatting, not meaning: the payload wraps at 100 columns and a re-wrap must not
 // read as a missing rule. Whitespace is collapsed on BOTH sides before comparing.
 const collapseWs = (s) => String(s).replace(/\s+/g, ' ').trim();
 
 // ---------------------------------------------------------------------------
-// THE AUDIT TABLE IN THE DOCTRINE - one assertion per surface, one control each
+// THE WORD THAT BUYS A PASS - one home
 // ---------------------------------------------------------------------------
-// "Who audits what" used to be spread over a dozen documents as prose: two passes, a third pass, a
-// docs-class Claude host, a pinned model. It is now `review.<class>` in the config, and every
-// surface that used to STATE the rule must POINT AT the table instead. Grouping them into one
-// finding was rejected: a single "the doctrine reads the table" check that goes red names no file,
-// and the file is the whole diagnosis. So each surface carries one stable sentence, asserted on its
-// own id, whitespace-collapsed (the payload wraps at 100 columns and a re-wrap is not a rot).
-const DOCTRINE_TABLE_SURFACES = [
-  { id: 'doctrine-table-review-class-row',
-    file: 'skills/review/SKILL.md',
-    phrase: DOCTRINE_REVIEW_CLASS_ROW,
-    what: '/pnp:review reads the ticket class as a ROW of the audit table' },
-  { id: 'doctrine-table-review-resolver',
-    file: 'skills/review/SKILL.md',
-    phrase: DOCTRINE_REVIEW_CLASS_RESOLVER,
-    what: '/pnp:review resolves that row through the resolver\'s -Class flag' },
-  { id: 'doctrine-table-review-factcheck-plan',
-    file: 'skills/review/SKILL.md',
-    phrase: 'fact-check before every pass above the scan tier, over a diff or over a plan',
-    what: '/pnp:review states the fact-check gate as ONE rule - diff or plan, above the scan tier' },
-  { id: 'doctrine-table-workflow-class',
-    file: 'docs/WORKFLOW.md',
-    phrase: 'The engine, the model, the effort and `passes` all come from `review.<class>`',
-    what: 'WORKFLOW routes a review by `review.<class>` instead of stating a host rule' },
-  { id: 'doctrine-table-workflow-selfpass',
-    file: 'docs/WORKFLOW.md',
-    phrase: 'The COO\'s own pass comes first, and it is not one of the counted ones.',
-    what: 'WORKFLOW requires the COO\'s own readiness pass before any auditor is dispatched' },
-  { id: 'doctrine-table-workflow-tripwires',
-    file: 'docs/WORKFLOW.md',
-    phrase: '**Four countable tripwires.**',
-    what: 'WORKFLOW carries the fourth tripwire (an enumeration is closed by a grep)' },
-  { id: 'doctrine-table-loop',
-    file: 'docs/LOOP.md',
-    phrase: 'The review ENGINE and the pass count come from the ticket\'s class',
-    what: 'the one-page native mapping names the table rather than a docs-class rule' },
-  { id: 'doctrine-table-checklist',
-    file: 'docs/REVIEW_CHECKLIST.md',
-    phrase: 'the Reviewer performs `review.plan.passes` full read-only passes',
-    what: 'the verdict rules take the readiness pass count from `review.plan.passes`' },
-  { id: 'doctrine-table-operator-protocol',
-    file: 'docs/OPERATOR_PROTOCOL.md',
-    phrase: '`/pnp:roles` prints the **audit table**',
-    what: 'the operator\'s entrance page points at the one command that shows the table' },
-  { id: 'doctrine-table-reviewer-agent',
-    file: 'templates/agents/reviewer.md.tmpl',
-    phrase: 'How many passes a plan gets is this project\'s `review.plan.passes`',
-    what: 'the rendered Claude reviewer reads its readiness contract from the table' },
-  { id: 'doctrine-table-overrides-template',
-    file: 'templates/PROJECT_OVERRIDES.md.tmpl',
-    phrase: 'Plan readiness runs `review.plan.passes` passes',
-    what: 'the seeded overrides document states the readiness contract as the table' },
-  { id: 'doctrine-table-claude-template',
-    file: 'templates/CLAUDE.md.tmpl',
-    phrase: 'is the audit table: `/pnp:roles`',
-    what: 'the managed CLAUDE.md region sends the orchestrator to the table' },
-  { id: 'doctrine-table-claude-template-tripwires',
-    file: 'templates/CLAUDE.md.tmpl',
-    phrase: 'Four countable tripwires, because categories do not stop mid-work',
-    what: 'the managed CLAUDE.md region carries the fourth tripwire too' },
-  { id: 'doctrine-table-work-skill',
-    file: 'skills/work/SKILL.md',
-    phrase: 'that row of the audit table - not a rule in a document - decides the host and the pass count',
-    what: '/pnp:work summarises the route with the table, not with a hardcoded host' },
-  { id: 'doctrine-table-readme',
-    file: 'README.md',
-    phrase: 'Which host reviews a given ticket is the **audit table**, not a rule in a document',
-    what: 'the README describes the product as it is' },
-];
-
-// ---------------------------------------------------------------------------
-// WHAT HAPPENS AROUND A PASS - the report of its verdict, and the word that buys the next one
-// ---------------------------------------------------------------------------
-// Two rules that are not about WHO audits (that is the table above) but about what surrounds a
-// pass, and both were learned from a live operator correction rather than from a design:
-//   - the verdict REACHES the operator in substance, before the COO moves on. A verdict summarised
-//     as "pass, moving on" hides the audit the operator paid for, which is the observed violation.
-//   - every auditor pass AFTER THE FIRST is dispatched on a word of its own. The revoked default -
-//     "the passes the route already prescribes run on the ticket's standing word" - let a paid pass
-//     be spent without asking, and the phrase that replaces it has to be greppable or the next COO
-//     reinvents the default.
-// Same shape as the table surfaces (one file, one phrase, whitespace-collapsed), so the generic
-// assertion and the generated control cover them; each entry carries the REPLACEMENT its control
-// sabotages with, because the honest regression differs per rule - the report collapses back into
-// a half-line, and the pass goes back to riding the standing word.
-const DOCTRINE_VERDICT_SUBSTANCE = 'the verdict plus one or two sentences of its substance, before the next dispatch';
+// Every auditor pass AFTER THE FIRST is dispatched on a word of its own. The revoked default - "the
+// passes the route already prescribes run on the ticket's standing word" - let a paid pass be spent
+// without asking, and the phrase that replaces it has to be greppable or the next COO reinvents the
+// default. One file, one phrase, whitespace-collapsed; the entry carries the REPLACEMENT its control
+// sabotages with, because the honest regression is the pass going back to riding the standing word.
 const DOCTRINE_ONE_WORD_PER_PASS = 'one word per pass';
 const DOCTRINE_PASS_SURFACES = [
-  { id: 'doctrine-verdict-substance-workflow',
-    file: 'docs/WORKFLOW.md',
-    phrase: DOCTRINE_VERDICT_SUBSTANCE,
-    replacement: 'a one-line status',
-    what: 'WORKFLOW requires every Reviewer/QA verdict to be reported in substance before the next dispatch' },
-  { id: 'doctrine-verdict-substance-review',
-    file: 'skills/review/SKILL.md',
-    phrase: DOCTRINE_VERDICT_SUBSTANCE,
-    replacement: 'a one-line status',
-    what: '/pnp:review hands the COO the reporting duty together with the verdict' },
-  { id: 'doctrine-verdict-substance-qa',
-    file: 'skills/qa/SKILL.md',
-    phrase: DOCTRINE_VERDICT_SUBSTANCE,
-    replacement: 'a one-line status',
-    what: '/pnp:qa hands the COO the same reporting duty' },
   { id: 'doctrine-one-word-per-pass-workflow',
     file: 'docs/WORKFLOW.md',
     phrase: DOCTRINE_ONE_WORD_PER_PASS,
     replacement: 'on the ticket\'s standing word',
     what: 'WORKFLOW dispatches every auditor pass after the first on a word of its own' },
-  { id: 'doctrine-one-word-per-pass-claude-template',
-    file: 'templates/CLAUDE.md.tmpl',
-    phrase: DOCTRINE_ONE_WORD_PER_PASS,
-    replacement: 'on the ticket\'s standing word',
-    what: 'the managed CLAUDE.md region states the same rule in the operator-gates paragraph' },
 ];
 
 // ---------------------------------------------------------------------------
-// THREE CONTRACTS STATED IN MORE THAN ONE DOCUMENT, each pinned with the regression it exists against
-// ---------------------------------------------------------------------------
-// None of these is about who audits or about what surrounds a pass, so they do not belong in
-// either table above; what they share is the failure mode: a sentence that carries a MECHANISM,
-// repeated across documents, which a well-meaning edit shortens back into the weaker statement it
-// replaced. Structurally identical to the tables above (one file, one phrase, whitespace-collapsed,
-// one replacement per entry), so the same generic assertion and the same generated control cover
-// them.
-//   - The readiness carry contract. Fail aggregation used to be a BAN ("a later round may not raise
-//     a blocker that was already visible earlier") and nothing but a ban, which was measured to fail
-//     twice; the rule that replaces it is a mechanism - the next pass is HANDED the previous list -
-//     and it has to be greppable at all three sites that dispatch or judge a readiness pass, or the
-//     next edit collapses it back into the ban.
-//   - The honest limit of the commit click. Nothing binds the click to content, and the sentence
-//     that says so is the only thing standing between an operator and the belief that the approved
-//     tree is the tree that lands. It carried no pin until now, which is exactly how a sentence
-//     rots silently. (The `[NOTE]` of the commit-automation section states the same limit in its
-//     own words for a project that carries such a hook; this pin is about the DOC sites, and the
-//     two texts are deliberately not the same string.)
-//   - The consumer inventory before the first draft. The mechanism is the SPECIFIC one - every
-//     touched column, permission, command or contract, its consumers and the adjacent contracts,
-//     harvested at scan tier before a line of the plan is written - while the generic discovery
-//     rule already stands in § COO owns broad scans, which runs the cheap-agent discovery whenever
-//     the delegation triggers are met. An edit that merges the two keeps a true sentence and loses
-//     the requirement, which is why each control here replaces the specific rule with exactly that
-//     generic one (DOCTRINE_CONSUMER_INVENTORY_GENERIC below).
-const DOCTRINE_READINESS_CARRY =
-  'the pass N+1 brief carries pass N\'s blocker list verbatim, and every NEW blocker declares why '
-  + 'it was not visible on the previous pass - a blocker with no declaration is a contract '
-  + 'violation, reported separately from the verdict';
-const DOCTRINE_COMMIT_CLICK_LIMIT = 'The click approves the invocation, not the final tree content';
-const DOCTRINE_CONSUMER_INVENTORY =
-  'before the first draft, a consumer-inventory scan: for every touched column, permission, '
-  + 'command or contract, the consumers and adjacent contracts, harvested at scan tier';
-const DOCTRINE_CONSUMER_INVENTORY_GENERIC = 'a cheap discovery scan when the delegation triggers are met';
-const DOCTRINE_CONTRACT_SURFACES = [
-  { id: 'doctrine-readiness-carry-review',
-    file: 'skills/review/SKILL.md',
-    phrase: DOCTRINE_READINESS_CARRY,
-    replacement: 'a later round may not raise a blocker that was already visible earlier',
-    what: '/pnp:review plan-readiness mode makes the pass N+1 brief carry pass N\'s blocker list' },
-  { id: 'doctrine-readiness-carry-workflow',
-    file: 'docs/WORKFLOW.md',
-    phrase: DOCTRINE_READINESS_CARRY,
-    replacement: 'a later round may not raise a blocker that was already visible earlier',
-    what: 'WORKFLOW states fail aggregation as a mechanism (handing the list), not only as a ban' },
-  { id: 'doctrine-readiness-carry-checklist',
-    file: 'docs/REVIEW_CHECKLIST.md',
-    phrase: DOCTRINE_READINESS_CARRY,
-    replacement: 'a later round may not raise a blocker that was already visible earlier',
-    what: 'the verdict rules put the origin declaration on the Reviewer from pass 2 on' },
-  { id: 'doctrine-commit-click-limit-loop',
-    file: 'docs/LOOP.md',
-    phrase: DOCTRINE_COMMIT_CLICK_LIMIT,
-    replacement: 'The click approves the final tree content that lands',
-    what: 'the commit gate states the honest limit of the click' },
-  { id: 'doctrine-commit-click-limit-workflow',
-    file: 'docs/WORKFLOW.md',
-    phrase: DOCTRINE_COMMIT_CLICK_LIMIT,
-    replacement: 'The click approves the final tree content that lands',
-    what: 'Commit & Push Authority states the same limit where the commit rule itself lives' },
-  { id: 'doctrine-consumer-inventory-workflow',
-    file: 'docs/WORKFLOW.md',
-    phrase: DOCTRINE_CONSUMER_INVENTORY,
-    replacement: DOCTRINE_CONSUMER_INVENTORY_GENERIC,
-    what: '§ Plan readiness review requires the consumer inventory before the first draft of a plan' },
-  { id: 'doctrine-consumer-inventory-review',
-    file: 'skills/review/SKILL.md',
-    phrase: DOCTRINE_CONSUMER_INVENTORY,
-    replacement: DOCTRINE_CONSUMER_INVENTORY_GENERIC,
-    what: '/pnp:review plan-readiness mode states the inventory as a precondition of the draft' },
-];
-
-// ---------------------------------------------------------------------------
-// THREE RULES OF PLAN PRECISION, each stated in exactly ONE document
-// ---------------------------------------------------------------------------
-// Deliberately NOT in the contract table above: that family exists for a sentence repeated across
-// documents, and these three are stated once each, in `docs/WORKFLOW.md`, because that is where a
-// plan is written and judged. What makes them worth a pin is not repetition but how they dissolve:
-// each replaces a WEAKER rule that still reads perfectly well, so the regression is an edit that
-// keeps a true sentence and loses the requirement. They were paid for in correction rounds on a
-// real consumer proof, and the replacement per entry is that weaker rule, not a nonsense string.
-//   - A verify command in a PLAN is literal. "Real and sufficient" was read as "described", and a
-//     proof nobody can write as a command is a discovery item that reached acceptance.
-//   - The process gets its own dry trace. The fact-check gate reads CLAIMS; an order of gates can
-//     be wrong while every sentence around it is true, so folding the trace into that gate loses
-//     exactly the defect class it exists for.
-//   - Adjacency is scope. "Keep the scope tight" is the advice that drops the lockfile a dependency
-//     pin needs, and the partner artifact is then found out of step by the review.
-const DOCTRINE_PLAN_VERIFY_LITERAL =
-  'this holds for the PLAN document itself: a proof without a writable command is a discovery row, '
-  + 'not acceptance';
-const DOCTRINE_PLAN_PROCESS_TRACE =
-  'before every paid readiness pass, a dry process trace of the ticket\'s PROCESS against the '
-  + 'gates - commit/push/QA order, the state of the tree - because the fact-check gate catches '
-  + 'facts, not process defects';
-const DOCTRINE_PLAN_ADJACENT_CONTRACT =
-  'an adjacent contract rides with the change it depends on: a dependency pin pulls the lockfile '
-  + 'into the worklist, a deploy change pulls the deployment canon into scope';
-const DOCTRINE_PLAN_PRECISION_SURFACES = [
-  { id: 'doctrine-plan-verify-literal',
-    file: 'docs/WORKFLOW.md',
-    phrase: DOCTRINE_PLAN_VERIFY_LITERAL,
-    replacement: 'in a plan a proof may still be described rather than written as a command',
-    what: '§ Proof-surface feasibility carries the fail-capable verify rule into the PLAN document' },
-  { id: 'doctrine-plan-process-trace',
-    file: 'docs/WORKFLOW.md',
-    phrase: DOCTRINE_PLAN_PROCESS_TRACE,
-    replacement: 'the fact-check gate before the pass covers the process as well',
-    what: '§ Plan readiness review requires a dry trace of the ticket PROCESS against the gates' },
-  { id: 'doctrine-plan-adjacent-contract',
-    file: 'docs/WORKFLOW.md',
-    phrase: DOCTRINE_PLAN_ADJACENT_CONTRACT,
-    replacement: 'keep the scope tight and name only what the ticket is about',
-    what: 'the brief-authoring failures include the adjacent contract that rides with the change' },
-];
-
-// ---------------------------------------------------------------------------
-// THE CONSOLIDATED DOCTRINE - eight rules that had no authoritative home until they were adopted
+// THREE OPERATOR GATES ADOPTED FROM A CONSUMER'S NOTES - one home each
 // ---------------------------------------------------------------------------
 // These were live in one or another consumer's local notes, where a rule survives exactly as long as
-// the session that wrote it. Adopting them into the payload is what makes them checkable at all, and
-// what each one is worth is visible in its REPLACEMENT: not a nonsense string and not a generic
-// rewording, but the weaker rule that was in force BEFORE it - the sentence a well-meaning edit
-// lands on, which still reads perfectly true and quietly returns the old behaviour.
-//   - One executing session per tree, and the "one live auditor" clause SCOPED to measurement. The
-//     unscoped reading of that clause is a general work ban nobody can keep, and the scoped one is
-//     the only version that is both true and enforceable by the operator who holds it.
+// the session that wrote it. What each one is worth is visible in its REPLACEMENT: not a nonsense
+// string and not a generic rewording, but the weaker rule that was in force BEFORE it - the sentence
+// a well-meaning edit lands on, which still reads perfectly true and quietly returns the old
+// behaviour.
 //   - A newborn ticket's announcement carries ONE question. The regression is an announcement that
 //     ANSWERS it - the ticket is told it has a pass, and the operator pays for a pass they were
-//     never asked about. Stated in all four places a session reads before dispatching.
+//     never asked about.
 //   - Host directives yield to project canon; host safety and permission rules never do.
 //   - Rule-bearing writes are shown before they land; factual statuses are not. The regression is a
 //     COO that records rules as it goes and reports them afterwards.
-//   - Doctrine born in another home leaves a pointer row at the same moment. "Somebody will carry it
-//     over later" is exactly how the rules above got lost in the first place.
-//   - Archiving CHECKS for rule-class points without a pointer row; the regression is archiving as a
-//     bare `git mv`.
-//   - Enumeration ends on a closing grep that first HITS the known list, and a new instrument is
-//     made to fail on purpose before it is trusted. "It looks complete" is the weaker rule.
-//   - The record about a ticket is its own commit, so what was audited stays distinguishable from
-//     the note written after it.
-const DOCTRINE_CONS_ONE_EXECUTING_SESSION =
-  'on one working tree exactly ONE executing session; non-executing sessions may READ - zero repo '
-  + 'writes, zero DB operations, zero paid auditor passes.';
-const DOCTRINE_CONS_AUDITOR_SCOPED =
-  'The machine-wide "exactly one live auditor" clause is SCOPED TO MEASUREMENT (operator '
-  + 'clarification 2026-09-16): it holds while a pass\'s counter start/stop pair is being recorded - '
-  + 'otherwise the pair is not attributable - and is NOT a general work restriction. It is an '
-  + 'OPERATOR-HELD invariant (no hook can see sibling sessions), written in the honest-limits '
-  + 'register.';
 const DOCTRINE_CONS_AUDIT_PASS_QUESTION =
   'the announcement carries ONE question - does this ticket get an audit pass - and the answer lands '
   + 'in the ticket\'s PLAN entry; a question, never an automatic pass';
@@ -5837,72 +5549,12 @@ const DOCTRINE_CONS_HOST_PRECEDENCE =
 const DOCTRINE_CONS_DOCTRINE_WRITE_GATE =
   'a rule-bearing write - memory or file - is shown to the operator and lands only on approval; '
   + 'purely factual statuses are exempt';
-const DOCTRINE_CONS_OTHER_HOME =
-  'doctrine born in any other home gets a same-moment one-line pointer row on the transfer surface, '
-  + 'shown and approved together with the text; when the multi-session window is closed, it queues '
-  + 'with the approved text frozen and lands right after the executing ticket\'s commit';
-const DOCTRINE_CONS_ARCHIVE_GREP =
-  'archiving greps the plan\'s process sections for rule-class points without a pointer row - '
-  + 'fail-capable, with a positive control';
-const DOCTRINE_CONS_CLOSING_GREP =
-  'enumeration ends when the closing grep - for the symbol itself, for the phrase or count the '
-  + 'change invalidates, and for the bare pointer form - returns zero outside the list; the grep '
-  + 'must first HIT the known list. Every new or changed evidentiary instrument is made to fail on '
-  + 'purpose before it is trusted; retro-proofing existing instruments is a deliberate ticket, '
-  + 'never an ambient duty.';
-const DOCTRINE_CONS_DOCS_COMMIT =
-  'the docs commit is separate from the code commit: the code commit carries only the ticket\'s '
-  + 'work, and the record about it lands in its own commit, so what was audited and what is a note '
-  + 'after it stay distinguishable';
-// The four rules the rendered Orchestrator role has to STATE, not reference. Everything else in that
-// artifact points at a payload section and quotes nothing; these four are the COO's own working
-// rules, and a rendered file that loses one of them loses it for every installation at once.
-const DOCTRINE_CONS_ORCH_DATA =
-  'every sentence with a number carries its source; data only the operator can see is ASKED for, '
-  + 'never promised; arithmetic over two measurements is not a measurement';
-const DOCTRINE_CONS_ORCH_VERDICT =
-  'a verdict and the next dispatch never share one message';
-const DOCTRINE_CONS_ORCH_FORM_CHECK =
-  'the form check verifies coverage and resolution, never attention';
-const DOCTRINE_CONS_ORCH_DUALS =
-  'every obligation that COMMANDS an action ships with its suppression dual';
-// The event-ledger ROW, pinned as the literal it is: rule health is read off these rows and nothing
-// else, so the row's shape is the whole instrument. The type column is the part that carries the
-// signal (a violation and a catch are opposite evidence about the same rule), which is why the
-// control below is the row WITHOUT it rather than a rewording.
-const DOCTRINE_CONS_ORCH_LEDGER_ROW =
-  '| <date> | <rule or D-id> | violation|catch|operator-correction | <pointer> |';
 const DOCTRINE_CONSOLIDATION_SURFACES = [
-  { id: 'doctrine-cons-one-executing-session',
-    file: 'docs/WORKFLOW.md',
-    phrase: DOCTRINE_CONS_ONE_EXECUTING_SESSION,
-    replacement: 'several sessions may share a working tree as long as they stay out of each other\'s files',
-    what: '§ Branch policy states the one-executing-session invariant (the others read only)' },
-  { id: 'doctrine-cons-auditor-scoped',
-    file: 'docs/WORKFLOW.md',
-    phrase: DOCTRINE_CONS_AUDITOR_SCOPED,
-    replacement: 'Exactly one auditor pass may be live on the machine at any time, always.',
-    what: '§ Branch policy scopes the one-live-auditor clause to measurement, as an operator-held invariant' },
   { id: 'doctrine-cons-audit-pass-question-workflow',
     file: 'docs/WORKFLOW.md',
     phrase: DOCTRINE_CONS_AUDIT_PASS_QUESTION,
     replacement: DOCTRINE_CONS_AUDIT_PASS_ANSWERED,
     what: 'guard (b): a newborn ticket\'s announcement ASKS whether it gets an audit pass' },
-  { id: 'doctrine-cons-audit-pass-question-claude-template',
-    file: 'templates/CLAUDE.md.tmpl',
-    phrase: DOCTRINE_CONS_AUDIT_PASS_QUESTION,
-    replacement: DOCTRINE_CONS_AUDIT_PASS_ANSWERED,
-    what: 'the managed CLAUDE.md region carries the audit-pass question in its newborn-ticket paragraph' },
-  { id: 'doctrine-cons-audit-pass-question-mission',
-    file: 'skills/mission/SKILL.md',
-    phrase: DOCTRINE_CONS_AUDIT_PASS_QUESTION,
-    replacement: DOCTRINE_CONS_AUDIT_PASS_ANSWERED,
-    what: '/pnp:mission carries it beside the newborn-ticket rule it already states' },
-  { id: 'doctrine-cons-audit-pass-question-work',
-    file: 'skills/work/SKILL.md',
-    phrase: DOCTRINE_CONS_AUDIT_PASS_QUESTION,
-    replacement: DOCTRINE_CONS_AUDIT_PASS_ANSWERED,
-    what: '/pnp:work carries the same question beside the same rule' },
   { id: 'doctrine-cons-host-precedence',
     file: 'docs/WORKFLOW.md',
     phrase: DOCTRINE_CONS_HOST_PRECEDENCE,
@@ -5913,273 +5565,28 @@ const DOCTRINE_CONSOLIDATION_SURFACES = [
     phrase: DOCTRINE_CONS_DOCTRINE_WRITE_GATE,
     replacement: 'the COO records a rule as it goes and reports it to the operator afterwards',
     what: 'guard (g): a rule-bearing write is shown before it lands; a factual status is not' },
-  { id: 'doctrine-cons-other-home',
-    file: 'docs/WORKFLOW.md',
-    phrase: DOCTRINE_CONS_OTHER_HOME,
-    replacement: 'doctrine born elsewhere is carried over the next time somebody opens the transfer surface',
-    what: 'guard (h): doctrine born in another home leaves its pointer row at the same moment' },
-  { id: 'doctrine-cons-archive-grep',
-    file: 'docs/WORKFLOW.md',
-    phrase: DOCTRINE_CONS_ARCHIVE_GREP,
-    replacement: 'archiving is the `git mv` once every ticket carries its completion record',
-    what: '§ Durable development history: archiving CHECKS for rule-class points without a pointer row' },
-  { id: 'doctrine-cons-closing-grep',
-    file: 'docs/WORKFLOW.md',
-    phrase: DOCTRINE_CONS_CLOSING_GREP,
-    replacement: 'enumeration ends when the list looks complete',
-    what: 'the fourth tripwire: the closing grep, and an instrument made to fail before it is trusted' },
-  { id: 'doctrine-cons-docs-commit',
-    file: 'docs/WORKFLOW.md',
-    phrase: DOCTRINE_CONS_DOCS_COMMIT,
-    replacement: 'the completion record is committed together with the work it describes',
-    what: 'the docs commit stands apart from the code commit (both homes lose it here)' },
-  // The four rules the rendered Orchestrator role states in its own words rather than by reference,
-  // because each is a rule ABOUT how the COO works rather than a pointer to a payload section. Each
-  // replacement below is the practice the rule replaced - a number with no source, a verdict folded
-  // into the next dispatch, a form check sold as proof of attention, an obligation shipped alone -
-  // so a sabotage leaves a sentence that still reads perfectly true.
-  { id: 'doctrine-cons-orchestrator-data-discipline',
-    file: 'templates/ORCHESTRATOR.md.tmpl',
-    phrase: DOCTRINE_CONS_ORCH_DATA,
-    replacement: 'numbers are quoted from the best source available and estimated where none is',
-    what: 'the rendered Orchestrator role states data discipline: a source per number, operator-only data asked for, no arithmetic passed off as measurement' },
-  { id: 'doctrine-cons-orchestrator-verdict-dispatch',
-    file: 'templates/ORCHESTRATOR.md.tmpl',
-    phrase: DOCTRINE_CONS_ORCH_VERDICT,
-    replacement: 'a verdict is reported together with the next step it leads to',
-    what: 'the rendered Orchestrator role keeps a verdict and the next dispatch in separate messages' },
-  { id: 'doctrine-cons-orchestrator-form-check',
-    file: 'templates/ORCHESTRATOR.md.tmpl',
-    phrase: DOCTRINE_CONS_ORCH_FORM_CHECK,
-    replacement: 'a complete chain table is evidence that the chains were really followed',
-    what: 'the rendered Orchestrator role states the honest limit of the chain-table form check' },
-  { id: 'doctrine-cons-orchestrator-duals',
-    file: 'templates/ORCHESTRATOR.md.tmpl',
-    phrase: DOCTRINE_CONS_ORCH_DUALS,
-    replacement: 'an obligation is written with its scope and the reviewer judges where it stops',
-    what: 'the rendered Orchestrator role states the duals law for every obligation that commands an action' },
-  { id: 'doctrine-cons-orchestrator-ledger-row',
-    file: 'templates/ORCHESTRATOR.md.tmpl',
-    phrase: DOCTRINE_CONS_ORCH_LEDGER_ROW,
-    replacement: '| <date> | <rule or D-id> | <pointer> |',
-    what: 'the rendered Orchestrator role carries the event-ledger row with its type column (violation|catch|operator-correction)' },
 ];
 
 // ---------------------------------------------------------------------------
-// THE DOCTRINE PREFLIGHT ENUMERATION - one list of documents, stated in three homes
+// THE WORD THAT BUYS A WARM READINESS PASS - one home
 // ---------------------------------------------------------------------------
-// A family of its own rather than a row of the table above: that one holds rules ADOPTED from a
-// consumer's notes, while this is a LIST whose members have to agree across every file that states
-// it. The failure mode is the third instance of the one CONS-005 and CONS-009 were paid for - an
-// enumeration with several homes, updated in one of them. The managed `CLAUDE.md` region took the
-// rendered Orchestrator role as its FOURTH preflight document; the two operator doors
-// (`/pnp:mission`, `/pnp:work`) went on listing three, and a consumer session that entered through a
-// door worked a whole day on a preflight the region had already replaced (measured 2026-09-20/21).
-// One fragment held identically in all three homes is what makes the list ONE list, so the pin is
-// the member that was lost rather than the whole paragraph, which is worded per home. Whitespace is
-// collapsed on both sides, so the template's line wrap through the middle of the fragment is not a
-// missing rule - and a line-based grep for it is not an instrument here, which is exactly why the
-// identity of the wording is held by this check instead.
-// The replacement per entry is the sentence the list collapses into when the role is dropped: it
-// closes on the overrides document and still reads perfectly true with three documents in it, which
-// is what the edit that caused this actually looked like.
-const DOCTRINE_PREFLIGHT_PHRASE =
-  '`.claude/aiwf-native/ORCHESTRATOR.md` (your rendered standing rules)';
-const DOCTRINE_PREFLIGHT_SURFACES = [
-  { id: 'doctrine-preflight-claude-template',
-    file: 'templates/CLAUDE.md.tmpl',
-    phrase: DOCTRINE_PREFLIGHT_PHRASE,
-    replacement: 'the overrides document',
-    what: 'the managed CLAUDE.md region names the rendered standing rules as the fourth preflight document' },
-  { id: 'doctrine-preflight-mission',
-    file: 'skills/mission/SKILL.md',
-    phrase: DOCTRINE_PREFLIGHT_PHRASE,
-    replacement: 'the overrides document',
-    what: '/pnp:mission preflight lists the same four documents as the managed region' },
-  { id: 'doctrine-preflight-work',
-    file: 'skills/work/SKILL.md',
-    phrase: DOCTRINE_PREFLIGHT_PHRASE,
-    replacement: 'the overrides document',
-    what: '/pnp:work preflight lists the same four documents as the managed region' },
-];
-
-// ---------------------------------------------------------------------------
-// ESCALATION, THE ARBITER AND COO ROUTING - the rules that decide WHO decides
-// ---------------------------------------------------------------------------
-// The family that governs the moment a decision stops being the COO's own. Each of these was a
-// judgment call before it was a rule, and each rots in the same direction: back into a judgment
-// call. So the replacements below are not nonsense - they are the discretionary version of the same
-// sentence, which is what an edit written in good faith actually lands on.
-//   - The four triggers are COUNTABLE. "Escalate when it feels big enough" is the rule they replaced,
-//     and it reads perfectly reasonable while handing the decision back to the party with a reason
-//     to skip it.
-//   - A fired trigger obliges the escalation with NO word gating it, for the same reason.
-//   - The naming is "COO routing". "COO tier" collides with the model vocabulary (scan tier, top
-//     tier) and was retired by an operator decision; the negative sweep below is its other half.
-//   - The routing moves the COO and NOTHING else. The regression is a "cheap ticket" that also buys
-//     a cheaper Writer and a cheaper auditor - which removes the net that makes cheap survivable.
-//   - The arbiter REFUSES without a parked brief. A session that reconstructs the case from the
-//     conversation is judging a case it wrote itself.
-const DOCTRINE_ESC_TRIGGERS =
-  '1. the decision reverses a plan-recorded decision; '
-  + '2. it touches access policy / tenancy / security-definer surfaces; '
-  + '3. its blast radius crosses the current ticket\'s boundary; '
-  + '4. two sessions/roles disagree in writing.';
-const DOCTRINE_ESC_MANDATORY = 'A fired trigger makes escalation MANDATORY - no word gates it.';
-const DOCTRINE_COO_ROUTING_TERM =
-  'The term is **COO routing**: "tier" stays reserved for the model vocabulary - the scan tier, the '
-  + 'top tier - because a routing decision is not a model decision.';
-const DOCTRINE_COO_ROUTING_INVARIANT =
-  'The Writer\'s model stays pinned in its agent frontmatter and the audit table stays exactly as '
-  + '`/pnp:roles` shows it - a cheap COO does not buy a cheaper Writer or a cheaper auditor.';
-// The hardening principle, pinned on the clause that makes it NON-NORMATIVE. Read the trap before
-// the instances: every wrong version of this sentence asserted a CONTAINMENT - it enumerated the
-// world and was refuted by the case it left out. Three died that way. (1) As a condition beside the
-// four checks ("all four no AND the plan is hardened") it manufactured a branch nothing could
-// decide. (2) As an EQUIVALENCE ("hardening is what check 2 counts") it was false: readiness also
-// reads the plan against the repository, its scope, its dependency order, its acceptance and
-// verification commands and its Git prerequisites, so a plan can answer "no" on check 2 and still be
-// unhardened. (3) As a SEQUENCE claim ("a plan-borne ticket is routed after readiness") it was false
-// too: R2/R3 work takes a ticket in a plan, while the readiness cycle is for durable plans, so
-// plan-borne work without readiness exists. What the authority actually states is economics - where
-// a saving comes from and where it evaporates - and the binding word "only" in front of
-// "downstream", sitting next to a routing rule, is what turned a note into a condition. So the pin
-// is the clause that refuses the condition, and the control puts that binding back.
-const DOCTRINE_COO_ROUTING_HARDENING =
-  'it changes no answer of the four checks and names no kind of work';
-const DOCTRINE_ARBITER_REFUSAL =
-  'no parked escalation brief found at <path> - the COO parks the brief before /pnp:arbiter is '
-  + 'opened';
-// The retired naming, held as a NEGATIVE over the same three directories the acceptance grep reads.
-// An assertion that "COO routing" is present cannot catch a payload that says both.
-const DOCTRINE_RETIRED_ROUTING_NAME = 'COO tier';
-const DOCTRINE_ESCALATION_SURFACES = [
-  { id: 'doctrine-esc-triggers',
-    file: 'docs/WORKFLOW.md',
-    phrase: DOCTRINE_ESC_TRIGGERS,
-    replacement: 'a decision escalates when it is big enough to be worth a second view.',
-    what: '§ Escalation and the arbiter lists the four countable triggers' },
-  { id: 'doctrine-esc-mandatory',
-    file: 'docs/WORKFLOW.md',
-    phrase: DOCTRINE_ESC_MANDATORY,
-    replacement: 'A fired trigger is escalated when the COO judges the case worth the operator\'s time.',
-    what: 'a fired trigger obliges the escalation, with no word gating it' },
-  { id: 'doctrine-coo-routing-term',
-    file: 'docs/WORKFLOW.md',
-    phrase: DOCTRINE_COO_ROUTING_TERM,
-    replacement: 'The term is **COO tier**: a ticket picks the tier its COO runs at.',
-    what: '§ Routes names the rule "COO routing" and keeps "tier" for the model vocabulary' },
-  { id: 'doctrine-coo-routing-invariant',
-    file: 'docs/WORKFLOW.md',
-    phrase: DOCTRINE_COO_ROUTING_INVARIANT,
-    replacement: 'A cheap ticket runs cheap throughout - the Writer and the auditor follow the COO down.',
-    what: 'COO routing moves the COO alone: the Writer pin and the audit table do not follow it' },
-  { id: 'doctrine-coo-routing-hardening',
-    file: 'docs/WORKFLOW.md',
-    phrase: DOCTRINE_COO_ROUTING_HARDENING,
-    replacement: 'a cheap COO is coherent only DOWNSTREAM of expensive readiness, so an unhardened ticket does not take that route',
-    what: 'the hardening principle is an economics note: it binds the cheap route to no condition beyond the four checks' },
-  { id: 'doctrine-arbiter-refusal',
-    file: 'skills/arbiter/SKILL.md',
-    phrase: DOCTRINE_ARBITER_REFUSAL,
-    replacement: 'no brief was parked, so reconstruct the case from the conversation and rule on it',
-    what: '/pnp:arbiter refuses to rule without the brief the COO parked, in the exact words' },
-];
-
-// The one rule of this family that stands in TWO FILES, asserted by COUNT and by home: the rendered
-// Orchestrator role is where the COO reads it, the review skill is where the finding arrives, and a
-// substring test over the pair would be satisfied by either one alone. Two occurrences, one per
-// home - a second copy inside one file would be a count of 2 with a home still empty, which is why
-// the per-home counts are checked as well as the total.
-const DOCTRINE_DISPUTED_BLOCKER = 'disputed blocker';
-const DOCTRINE_DISPUTED_BLOCKER_HOMES = ['templates/ORCHESTRATOR.md.tmpl', 'skills/review/SKILL.md'];
-
-// ---------------------------------------------------------------------------
-// THE CONDUCT OF A PASS - thirteen rules about what a pass is HANDED and when it may RESUME
-// ---------------------------------------------------------------------------
-// A family of its own rather than an addition to the tables above, for two reasons. By subject:
-// those tables answer WHO audits (the audit table), what SURROUNDS a pass (its verdict report, the
-// word that buys the next one), which contracts are stated in more than one document, how a PLAN is
-// made precise, and which loose rules were adopted from a consumer's notes - none of them is about
-// the inputs a pass is given or the session it runs in. By construction: each of those headers
-// enumerates its exact members ("Two rules", "THREE CONTRACTS", "eight rules"), so appending here
-// would leave a comment that no longer describes its own array, which is the quiet kind of rot this
-// whole section exists against.
-// What the thirteen share is one failure mode: each states how a pass is CONDUCTED, and each
-// replaces a looser practice that still reads perfectly true - which is why every replacement below
-// is that practice, not a nonsense string. A rule stated in two files gets one entry per FILE, which
-// the generic loop expresses exactly: a sabotage of one home leaves the other standing.
-//
-// (a) WHAT A PASS IS HANDED - five rules
-//   - The readiness fact-check carries the chain-table line - in the skill that dispatches the gate
-//     and in the doctrine that describes it. Without it the gate verifies claims one at a time and
-//     nobody checks that the chains are a complete, resolving structure.
-//   - The brief hands the previous pass's blockers over VERBATIM, and their absence from pass 2 on
-//     is a reportable contract violation. "Add them if you still have them" is the practice that
-//     makes the carry mechanism (§ Fail aggregation) optional again. The literal lives in the
-//     plan-readiness brief shape, which is the contract's one home; the diff template points at it.
-//   - A first code-class pass CARRIES an evidence pack, and the claim for it is qualitative - never
-//     that it makes a pass cheaper. Two separate regressions, so two entries: a pack that becomes
-//     optional, and a cost promise nobody measured.
-//   - The pack is a selection made by the AUDITED side, so the Reviewer keeps the right and the duty
-//     to look past it. The regression is the pack read as the scope of the pass - the audited side
-//     choosing what its own audit sees.
-//
-// (b) WHEN A PASS MAY RESUME - eight rules, and the reason they are pinned one clause at a time is
-//     that each clause is independently deletable while the passage still reads whole.
-//   - A plan-readiness pass 1 is always cold. Pinned as TWO entries because the headline and its
-//     rationale are separately loseable and markdown puts a bold marker between them: the rule, and
-//     the argument from INDEPENDENCE rather than economy (a budget-shaped rewrite of the second
-//     keeps the first and turns the guarantee that pass buys into a saving).
-//   - A verification pass after a correction round resumes by default.
-//   - A round that RE-ARCHITECTED reverts that verification to cold or to the operator's call.
-//   - A readiness pass after the first resumes only with its compensations AND the operator's word.
-//   - A warm session is retired at its first compaction.
-//   - Resume/cold is decided by the QUESTION being asked, not by whether a session happens to still
-//     be around - the sentence stands in both skills that carry the resume mechanics.
-//   - An interrupted pass is recovered by a bare resume plus a short continuation prompt. The weaker
-//     rule is the fatalism that a killed pass is simply spent, which pays for the same reading twice.
-//     Its other half is an ABSENCE and is instrumented as one: the retired wording is in
-//     DOCTRINE_RETIRED_PATTERNS below, so the sweep refuses it if it ever creeps back.
-const DOCTRINE_PASS_CHAIN_TABLE =
-  'verify the chain table - every Outcome sentence has a row, every link resolves at its file:line, '
-  + 'endpoints are source or render-or-DB-write surfaces, chains start at the entry point';
-const DOCTRINE_PASS_PREVIOUS_BLOCKERS =
-  'PREVIOUS PASS BLOCKERS (verbatim; absent or empty on pass \u22652 is a contract violation the '
-  + 'Reviewer reports separately)';
-const DOCTRINE_PASS_EVIDENCE_PACK =
-  'the pack is a SELECTION MADE BY THE AUDITED SIDE, so the Reviewer keeps the right and the duty '
-  + 'to read the tree beyond it, to run its own probes, and to raise what the pack does not mention '
-  + '- a pack that turns out to be incomplete is itself a finding';
-const DOCTRINE_PASS_PACK_MANDATE =
-  'A first `code`-class pass carries an evidence pack: the `file:line` evidence the COO already '
-  + 'holds from authoring the ticket';
-const DOCTRINE_PASS_PACK_NO_COST =
-  'That claim is qualitative and it stops there: the pack is not a cost promise, and nothing here '
-  + 'says a pass that carries one is cheaper or shorter than a pass that does not.';
-const DOCTRINE_PASS_READINESS_COLD = 'A plan-readiness pass 1 is ALWAYS cold';
-const DOCTRINE_PASS_READINESS_WHY =
-  'The argument is INDEPENDENCE, not economy: the independent full reading IS the guarantee that '
-  + 'pass buys, and a warm auditor defends the verdict it already gave instead of deriving it again.';
-const DOCTRINE_PASS_VERIFICATION_DEFAULT =
-  'A verification pass after a correction round resumes by default';
-const DOCTRINE_PASS_REARCHITECTED =
-  'A correction round that RE-ARCHITECTED rather than closed the blockers re-poses the whole '
-  + 'question, so its verification reverts to cold or to the operator\'s call';
+// A readiness pass after the first may resume only with its compensations AND on the operator's
+// word. The weaker rule it replaced - a later readiness pass that resumes like any other - still
+// reads true, which is why the replacement below is that practice, not a nonsense string.
 const DOCTRINE_PASS_COMPENSATIONS =
   'A readiness pass after the first may resume only with its compensations, and only on the '
   + 'operator\'s word';
-const DOCTRINE_PASS_COMPACTION = 'Retire a warm session at its first compaction.';
-const DOCTRINE_PASS_DELTA_WHOLE =
-  'resume answers "is the DELTA sound"; cold answers "is the WHOLE still sound"';
-const DOCTRINE_PASS_INTERRUPTION =
-  'the DEFAULT recovery is a bare resume plus a SHORT continuation prompt - "continue - you already '
-  + 'have the brief and your progress; produce the verdict" - never a fresh dispatch carrying the '
-  + 'full brief again';
-// The index line of skills/, pinned outside the conduct family (see its assertion for why), and
-// pinned TWICE over: once as this literal, which catches a rewording, and once structurally against
-// the directory listing, which catches a skill that shipped without ever being written into the
-// line. Neither instrument sees what the other sees, so neither replaces the other.
+const DOCTRINE_PASS_CONDUCT_SURFACES = [
+  { id: 'doctrine-pass-compensations',
+    file: 'skills/review/SKILL.md',
+    phrase: DOCTRINE_PASS_COMPENSATIONS,
+    replacement: 'A readiness pass after the first resumes like any other',
+    what: 'a later readiness pass resumes only with its compensations AND the operator\'s word' },
+];
+
+// The index line of skills/, read STRUCTURALLY against the directory listing - the check catches a
+// skill that shipped without ever being written into the line, and a name in the line that is not a
+// skill directory. The literal below is not asserted; it is the line the second control rewrites.
 const DOCTRINE_SHIPPED_COMMANDS =
   'Shipped: loop, review, qa, qal, brief, mission, work, roles, arbiter, setup, update, selfcheck.';
 // The structural reading of the SAME line: the names it lists, taken as data.
@@ -6194,415 +5601,18 @@ const skillDirNames = (root) => {
       .filter((e) => e.isDirectory()).map((e) => e.name).sort();
   } catch (e) { return []; }
 };
-const DOCTRINE_PASS_CONDUCT_SURFACES = [
-  { id: 'doctrine-pass-chain-table',
-    file: 'skills/review/SKILL.md',
-    phrase: DOCTRINE_PASS_CHAIN_TABLE,
-    replacement: 'the fact-check gate reads each claim, which covers the chain table too',
-    what: 'Step 2b gives a readiness fact-check the chain-table line beside the acceptance-command one' },
-  { id: 'doctrine-pass-chain-table-workflow',
-    file: 'docs/WORKFLOW.md',
-    phrase: DOCTRINE_PASS_CHAIN_TABLE,
-    replacement: 'the fact-check gate reads each claim, which covers the chain table too',
-    what: '§ Plan readiness review names the chain-table instruction beside the acceptance-command one' },
-  { id: 'doctrine-pass-previous-blockers',
-    file: 'skills/review/SKILL.md',
-    phrase: DOCTRINE_PASS_PREVIOUS_BLOCKERS,
-    replacement: 'PREVIOUS PASS BLOCKERS (optional; add the earlier pass\'s findings if you still have them)',
-    what: 'the plan-readiness brief shape carries the previous pass\'s blockers verbatim, and says what their absence is' },
-  { id: 'doctrine-pass-pack-mandate',
-    file: 'skills/review/SKILL.md',
-    phrase: DOCTRINE_PASS_PACK_MANDATE,
-    replacement: 'A pass gets whatever evidence the COO happened to paste into the brief',
-    what: 'a first code-class pass CARRIES an evidence pack - it is not whatever the brief happened to include' },
-  { id: 'doctrine-pass-pack-no-cost',
-    file: 'skills/review/SKILL.md',
-    phrase: DOCTRINE_PASS_PACK_NO_COST,
-    replacement: 'That is what makes the pass cheaper.',
-    what: 'the claim for the pack is qualitative - the skill refuses to promise a cheaper pass' },
-  { id: 'doctrine-pass-evidence-pack',
-    file: 'skills/review/SKILL.md',
-    phrase: DOCTRINE_PASS_EVIDENCE_PACK,
-    replacement: 'the pack is the evidence this pass needs, so the Reviewer can start from it',
-    what: 'the evidence pack is the audited side\'s selection - the Reviewer still reads past it' },
-  { id: 'doctrine-pass-readiness-cold',
-    file: 'skills/review/SKILL.md',
-    phrase: DOCTRINE_PASS_READINESS_COLD,
-    replacement: 'a readiness pass may resume like any other when the budget is tight',
-    what: 'a plan-readiness pass 1 is cold at any budget' },
-  { id: 'doctrine-pass-readiness-cold-why',
-    file: 'skills/review/SKILL.md',
-    phrase: DOCTRINE_PASS_READINESS_WHY,
-    replacement: 'The argument is economy: a cold pass costs more, so spend one where the budget allows it.',
-    what: 'and it is cold for INDEPENDENCE rather than for economy - the rationale is the rule\'s other half' },
-  { id: 'doctrine-pass-verification-default-review',
-    file: 'skills/review/SKILL.md',
-    phrase: DOCTRINE_PASS_VERIFICATION_DEFAULT,
-    replacement: 'Every verification pass is a fresh cold read',
-    what: '/pnp:review resumes a verification pass after a correction round by default' },
-  { id: 'doctrine-pass-verification-default-qa',
-    file: 'skills/qa/SKILL.md',
-    phrase: DOCTRINE_PASS_VERIFICATION_DEFAULT,
-    replacement: 'Every verification pass is a fresh cold read',
-    what: '/pnp:qa states the same default beside its own resume mechanics' },
-  { id: 'doctrine-pass-rearchitected-review',
-    file: 'skills/review/SKILL.md',
-    phrase: DOCTRINE_PASS_REARCHITECTED,
-    replacement: 'A verification pass resumes whatever the correction round did to the design',
-    what: '/pnp:review reverts the verification of a re-architecting round to cold or to the operator' },
-  { id: 'doctrine-pass-rearchitected-qa',
-    file: 'skills/qa/SKILL.md',
-    phrase: DOCTRINE_PASS_REARCHITECTED,
-    replacement: 'A verification pass resumes whatever the correction round did to the design',
-    what: '/pnp:qa carries the same exception' },
-  { id: 'doctrine-pass-compensations',
-    file: 'skills/review/SKILL.md',
-    phrase: DOCTRINE_PASS_COMPENSATIONS,
-    replacement: 'A readiness pass after the first resumes like any other',
-    what: 'a later readiness pass resumes only with its compensations AND the operator\'s word' },
-  { id: 'doctrine-pass-compaction-review',
-    file: 'skills/review/SKILL.md',
-    phrase: DOCTRINE_PASS_COMPACTION,
-    replacement: 'Keep a warm session for as long as the wrapper will still resume it.',
-    what: '/pnp:review retires a warm session at its first compaction' },
-  { id: 'doctrine-pass-compaction-qa',
-    file: 'skills/qa/SKILL.md',
-    phrase: DOCTRINE_PASS_COMPACTION,
-    replacement: 'Keep a warm session for as long as the wrapper will still resume it.',
-    what: '/pnp:qa retires a warm session at the same moment' },
-  { id: 'doctrine-pass-delta-whole-review',
-    file: 'skills/review/SKILL.md',
-    phrase: DOCTRINE_PASS_DELTA_WHOLE,
-    replacement: 'resume whenever the previous session is still there, and run cold when it is not',
-    what: '/pnp:review decides resume vs cold by the question the pass asks' },
-  { id: 'doctrine-pass-delta-whole-qa',
-    file: 'skills/qa/SKILL.md',
-    phrase: DOCTRINE_PASS_DELTA_WHOLE,
-    replacement: 'resume whenever the previous session is still there, and run cold when it is not',
-    what: '/pnp:qa states the same rule beside its own resume mechanics' },
-  { id: 'doctrine-pass-interruption-review',
-    file: 'skills/review/SKILL.md',
-    phrase: DOCTRINE_PASS_INTERRUPTION,
-    replacement: 'a killed pass is spent - dispatch a fresh one carrying the full brief again',
-    what: '/pnp:review recovers an interrupted pass by a bare resume plus a short continuation prompt' },
-  { id: 'doctrine-pass-interruption-qa',
-    file: 'skills/qa/SKILL.md',
-    phrase: DOCTRINE_PASS_INTERRUPTION,
-    replacement: 'a killed pass is spent - dispatch a fresh one carrying the full brief again',
-    what: '/pnp:qa carries the same recovery, off its own state file' },
-];
-
-// The count is the assertion for the rule above that lives in TWO places inside ONE file - the
-// completion record and Commit & Push Authority. The generic loop cannot express that: it is a
-// substring test, so a second entry with the same file and phrase would pass on one occurrence and
-// prove nothing about the other. Counting runs on the whitespace-collapsed text, the same
-// projection the loop uses, so a re-wrap is still not a missing rule.
-const countPhrase = (text, phrase) => {
-  const flat = collapseWs(text || '');
-  const needle = collapseWs(phrase);
-  if (!needle) return 0;
-  let n = 0;
-  let i = flat.indexOf(needle);
-  while (i >= 0) { n += 1; i = flat.indexOf(needle, i + needle.length); }
-  return n;
-};
-
-// THE FACT-CHECK QUALIFIER, asserted per site. The gate is stated in more than one document, and
-// an unqualified statement of it is not a paraphrase - it is a DIFFERENT rule. "Before every pass"
-// reads as unconditional; the rule is "before every pass ABOVE THE SCAN TIER", with exactly one
-// skip (a reviewer that itself runs on a scan-tier model, where there is nothing more expensive
-// than the gate to protect). The wording was wrong in the other direction once already - it used
-// to skip the gate whenever the CLAUDE branch resolved, which stopped being true the moment a
-// Claude auditor became the expensive host. So each site pins the QUALIFIED sentence, and each
-// control replaces it with the unqualified variant - the exact regression this is here to catch.
-const DOCTRINE_FACTCHECK_SITES = [
-  { id: 'doctrine-factcheck-qualified-review',
-    file: 'skills/review/SKILL.md',
-    phrase: 'the fact-check gate runs before every one of these passes above the scan tier (Step 2b - skipped only when the reviewer itself runs on a scan-tier model)',
-    unqualified: 'the fact-check gate runs before every one of these passes',
-    what: '/pnp:review plan-readiness mode qualifies the gate (above the scan tier, one skip)' },
-  { id: 'doctrine-factcheck-qualified-checklist',
-    file: 'docs/REVIEW_CHECKLIST.md',
-    phrase: 'fact-check gate runs before every one of these passes above the scan tier - it is skipped only when the reviewer itself runs on a scan-tier model',
-    unqualified: 'fact-check gate runs before every one of these passes',
-    what: 'the verdict rules qualify the gate the same way' },
-  { id: 'doctrine-factcheck-qualified-workflow',
-    file: 'docs/WORKFLOW.md',
-    phrase: 'fact-check gate runs before every one of these passes above the scan tier, over the plan exactly as it runs over a diff, and is skipped only when the reviewer itself runs on a scan-tier model',
-    unqualified: 'fact-check gate runs before every one of these passes, over the plan exactly as it runs over a diff',
-    what: 'WORKFLOW Plan readiness qualifies the gate over a plan as it does over a diff' },
-];
-
-// The same rule as it reaches the OPERATOR, in the migration notes - asserted as a NEGATIVE over
-// every migration's NOTES.md instead of as a sentence in one named file. A payload is legitimately
-// RECONSTRUCTED with a different set of migrations (the update suite and the example cycle both
-// build one that way), so "0004 must contain X" would go red on a payload that is not wrong, only
-// different. "No NOTES file may state the gate unqualified" is true of every payload, and it is
-// still exactly the regression the control below reproduces.
-const DOCTRINE_FACTCHECK_NOTES_QUALIFIED =
-  'it runs before every pass above the scan tier, over a diff or over a plan, and it is not configurable';
-const DOCTRINE_FACTCHECK_NOTES_UNQUALIFIED =
-  'it runs before every pass, over a diff or over a plan, and it is not configurable';
-
-function doctrineNotesFiles(root) {
-  const out = [];
-  const walk = (dir) => {
-    let entries;
-    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return; }
-    for (const e of entries.sort((a, b) => a.name.localeCompare(b.name))) {
-      const p = path.join(dir, e.name);
-      if (e.isDirectory()) walk(p); else if (e.name === 'NOTES.md') out.push(p);
-    }
-  };
-  walk(path.join(root, 'migrations'));
-  return out;
-}
-
-// The other half of the same guarantee. The assertions above prove the NEW sentences are present;
-// this proves the OLD ones are gone - a doctrine can carry both and contradict itself in silence.
-// Every pattern here is a phrase that stated as a rule something the audit table now decides, or
-// pinned a model, or named the fact-check gate's skip clause by the engine instead of by the cost -
-// plus, since the interruption rule landed, the FATALISM it replaced. That one is a removal rather
-// than a rewrite, so an assertion that some new sentence is present could never catch its return;
-// the honest instrument for "this must not come back" is the sweep. Two patterns, because the three
-// background-run paragraphs did not word it identically: the review skill and the Codex recipe both
-// said a killed pass is "lost *and already paid for*", while /pnp:qa said it "spends the operator's
-// paid quota and returns no verdict". Neither matches any current payload text - the recipe's
-// surviving "spends the operator's budget and returns no verdict" is a different string, and
-// /pnp:qal's "spending the operator's paid quota for nothing" is a DIFFERENT and still-true claim,
-// because the QAL wrapper has no resume surface to recover through.
-// Paths are deliberate: `scripts/` is excluded because a selfcheck fixture legitimately contains a
-// pinned model, `CHANGELOG.md` because history is not edited, `examples/` because the committed
-// example project is data, not doctrine.
-const DOCTRINE_RETIRED_PATTERNS = [
-  'model: "?opus"?',
-  'pre-pass',
-  'whatever `roles\\.reviewer\\.engine` says',
-  'Two countable tripwires',
-  'Three countable',
-  'two full passes',
-  'two full read-only passes',
-  'two-pass',
-  'third pass',
-  'third readiness pass',
-  'two readiness passes',
-  'pass two',
-  'standard two',
-  'minimum of two',
-  'Three passes are the hard maximum',
-  'Four brief-authoring',
-  'Five brief-authoring',
-  'no paid pass to protect',
-  'paid external engine \\(the codex branch\\)',
-  'lost \\*and already paid for\\*',
-  'paid quota and returns no verdict',
-];
-const DOCTRINE_SWEEP_DIRS = ['docs', 'skills', 'templates'];
-const DOCTRINE_SWEEP_FILES = ['README.md'];
-// Copied into a control copy but deliberately NOT swept: a migration's NOTES QUOTE the retired
-// wording as the history they exist to explain (0004 says the doctrine used to read "plan
-// readiness has two passes", "a third pass needs your word"), so sweeping them would fail on
-// text that is correct. The rule they must NOT break is asserted separately, as a negative scan
-// over every NOTES.md (doctrine-factcheck-qualified-notes).
-const DOCTRINE_COPY_DIRS = [...DOCTRINE_SWEEP_DIRS, 'migrations'];
-const doctrineRetiredRe = () => new RegExp(DOCTRINE_RETIRED_PATTERNS.join('|'));
-
-function doctrineSweepFiles(root) {
-  const out = [];
-  const walk = (dir) => {
-    let entries;
-    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return; }
-    for (const e of entries.sort((a, b) => a.name.localeCompare(b.name))) {
-      const p = path.join(dir, e.name);
-      if (e.isDirectory()) walk(p); else out.push(p);
-    }
-  };
-  for (const d of DOCTRINE_SWEEP_DIRS) walk(path.join(root, d));
-  for (const f of DOCTRINE_SWEEP_FILES) {
-    const p = path.join(root, f);
-    if (fs.existsSync(p)) out.push(p);
-  }
-  return out;
-}
-
-// The same sweep the ticket's acceptance runs as `git grep -nE`, executed here over the payload
-// tree so it also runs on a sabotaged COPY (git grep cannot - a control copy is not a work tree).
-function doctrineRetiredHits(root) {
-  const re = doctrineRetiredRe();
-  const hits = [];
-  for (const file of doctrineSweepFiles(root)) {
-    const text = readText(file);
-    if (text == null) continue;
-    const lines = text.split('\n');
-    for (let i = 0; i < lines.length; i += 1) {
-      if (re.test(lines[i])) hits.push(`${path.relative(root, file).split(path.sep).join('/')}:${i + 1}`);
-    }
-  }
-  return hits;
-}
 
 function payloadDoctrineFindings(pluginRoot) {
   const out = [];
   const add = (id, name, ok, detail) => out.push({ id, name, ok: !!ok, detail: detail || '' });
-  const skillText = (name) => readText(path.join(pluginRoot, 'skills', name, 'SKILL.md'));
 
-  const missingReading = DOCTRINE_READING_SKILLS.filter(
-    (n) => !collapseWs(skillText(n) || '').includes(collapseWs(DOCTRINE_READING_SENTENCE)),
-  );
-  add('doctrine-reading-not-shell',
-    `all ${DOCTRINE_READING_SKILLS.length} session skills carry the identical "reading is not a shell job" instruction`,
-    missingReading.length === 0,
-    missingReading.length ? `missing in: ${missingReading.join(', ')}` : DOCTRINE_READING_SKILLS.join(', '));
-
-  const missingNewborn = DOCTRINE_NEWBORN_SKILLS.filter(
-    (n) => !collapseWs(skillText(n) || '').includes(collapseWs(DOCTRINE_NEWBORN_SENTENCE)),
-  );
-  add('doctrine-newborn-ticket',
-    'the two session skills carry the newborn-ticket rule (write it into the PLAN, announce it in ONE sentence, STOP)',
-    missingNewborn.length === 0,
-    missingNewborn.length ? `missing in: ${missingNewborn.join(', ')}` : DOCTRINE_NEWBORN_SKILLS.join(', '));
-
-  const review = skillText('review') || '';
-  add('doctrine-review-factcheck',
-    '/pnp:review carries Step 2b - the fact-check gate that runs before every pass above the scan tier',
-    /##\s*Step 2b\b/.test(review) && /fact-check/i.test(review)
-    && review.includes('Verify every factual claim in the prose of this diff'),
-    /##\s*Step 2b\b/.test(review) ? 'Step 2b present' : 'no Step 2b heading');
-  const reviewFlat = collapseWs(review);
-  const classMissing = [];
-  if (!review.includes('Class: plan | code | docs')) classMissing.push('no "Class: plan | code | docs" line in the brief template');
-  if (!/##\s*Step 0c\b/.test(review)) classMissing.push('no Step 0c heading');
-  if (!reviewFlat.includes(collapseWs(DOCTRINE_REVIEW_CLASS_ROW))) {
-    classMissing.push(`the class is not resolved as a row of the audit table ("${DOCTRINE_REVIEW_CLASS_ROW}")`);
-  }
-  if (!reviewFlat.includes(collapseWs(DOCTRINE_REVIEW_CLASS_RESOLVER))) {
-    classMissing.push(`no resolver call carrying the class (${DOCTRINE_REVIEW_CLASS_RESOLVER})`);
-  }
-  if (!reviewFlat.includes(collapseWs(DOCTRINE_REVIEW_CLASS_HOST))) {
-    classMissing.push('the Claude host is not the rendered `reviewer` agent dispatched with the ROW\'s model per the dispatch contract');
-  }
-  if (!reviewFlat.includes(collapseWs(DOCTRINE_REVIEW_READINESS_SENTENCE))) {
-    classMissing.push('plan readiness is not the `review.plan` row resolved with -Class plan');
-  }
-  add('doctrine-review-class',
-    '/pnp:review takes the ticket class as an explicit brief input (Class: plan | code | docs), resolves it as a ROW of the audit table through the resolver\'s -Class, dispatches a Claude row to the rendered `reviewer` agent with the ROW\'s model (no ad-hoc subagent, no model pinned in the doctrine), and takes plan readiness from the `review.plan` row',
-    classMissing.length === 0,
-    classMissing.length ? classMissing.join('; ') : 'the Class line, Step 0c, the row lookup, the -Class resolver call, the rendered Claude host and the readiness row are all present');
-
-  // The `model` dispatch contract, per dispatching skill: both halves, each on its own.
-  for (const name of DOCTRINE_DISPATCH_SKILLS) {
-    const flat = collapseWs(skillText(name) || '');
-    const missing = [];
-    if (!flat.includes(collapseWs(DOCTRINE_DISPATCH_ALIAS_HALF))) missing.push(`the alias half ("${DOCTRINE_DISPATCH_ALIAS_HALF}")`);
-    if (!flat.includes(collapseWs(DOCTRINE_DISPATCH_EXACT_HALF))) missing.push(`the exact-id half ("${DOCTRINE_DISPATCH_EXACT_HALF}")`);
-    if (name === 'review' && !flat.includes(collapseWs(DOCTRINE_REVIEW_PIN_FAIL_CLOSED))) {
-      missing.push(`the fail-closed pin comparison ("${DOCTRINE_REVIEW_PIN_FAIL_CLOSED}")`);
-    }
-    add(`doctrine-dispatch-model-${name}`,
-      `/pnp:${name} states the \`model\` dispatch contract in both halves: a tier alias is passed as \`model\`, an exact id is omitted so the rendered agent's frontmatter pin applies${name === 'review' ? ' - and it fails closed when the row\'s exact id and the one agent file\'s pin disagree' : ''}`,
-      missing.length === 0, missing.length ? `missing: ${missing.join('; ')}` : 'both halves present');
-  }
-
-  for (const s of DOCTRINE_TABLE_SURFACES) {
+  // The five operator-gate sentences, one home each: one file, one phrase, whitespace-collapsed.
+  for (const s of [...DOCTRINE_PASS_SURFACES, ...DOCTRINE_CONSOLIDATION_SURFACES, ...DOCTRINE_PASS_CONDUCT_SURFACES]) {
     const text = readText(path.join(pluginRoot, ...s.file.split('/')));
     const present = text != null && collapseWs(text).includes(collapseWs(s.phrase));
     add(s.id, `${s.file}: ${s.what}`, present,
       text == null ? 'the file is missing' : (present ? `"${collapseWs(s.phrase)}"` : `the sentence is missing or reworded: "${collapseWs(s.phrase)}"`));
   }
-
-  for (const s of DOCTRINE_PASS_SURFACES) {
-    const text = readText(path.join(pluginRoot, ...s.file.split('/')));
-    const present = text != null && collapseWs(text).includes(collapseWs(s.phrase));
-    add(s.id, `${s.file}: ${s.what}`, present,
-      text == null ? 'the file is missing' : (present ? `"${collapseWs(s.phrase)}"` : `the sentence is missing or reworded: "${collapseWs(s.phrase)}"`));
-  }
-
-  for (const s of DOCTRINE_CONTRACT_SURFACES) {
-    const text = readText(path.join(pluginRoot, ...s.file.split('/')));
-    const present = text != null && collapseWs(text).includes(collapseWs(s.phrase));
-    add(s.id, `${s.file}: ${s.what}`, present,
-      text == null ? 'the file is missing' : (present ? `"${collapseWs(s.phrase)}"` : `the sentence is missing or reworded: "${collapseWs(s.phrase)}"`));
-  }
-
-  for (const s of DOCTRINE_PLAN_PRECISION_SURFACES) {
-    const text = readText(path.join(pluginRoot, ...s.file.split('/')));
-    const present = text != null && collapseWs(text).includes(collapseWs(s.phrase));
-    add(s.id, `${s.file}: ${s.what}`, present,
-      text == null ? 'the file is missing' : (present ? `"${collapseWs(s.phrase)}"` : `the sentence is missing or reworded: "${collapseWs(s.phrase)}"`));
-  }
-
-  for (const s of DOCTRINE_CONSOLIDATION_SURFACES) {
-    const text = readText(path.join(pluginRoot, ...s.file.split('/')));
-    const present = text != null && collapseWs(text).includes(collapseWs(s.phrase));
-    add(s.id, `${s.file}: ${s.what}`, present,
-      text == null ? 'the file is missing' : (present ? `"${collapseWs(s.phrase)}"` : `the sentence is missing or reworded: "${collapseWs(s.phrase)}"`));
-  }
-
-  for (const s of DOCTRINE_PREFLIGHT_SURFACES) {
-    const text = readText(path.join(pluginRoot, ...s.file.split('/')));
-    const present = text != null && collapseWs(text).includes(collapseWs(s.phrase));
-    add(s.id, `${s.file}: ${s.what}`, present,
-      text == null ? 'the file is missing' : (present ? `"${collapseWs(s.phrase)}"` : `the sentence is missing or reworded: "${collapseWs(s.phrase)}"`));
-  }
-
-  for (const s of DOCTRINE_ESCALATION_SURFACES) {
-    const text = readText(path.join(pluginRoot, ...s.file.split('/')));
-    const present = text != null && collapseWs(text).includes(collapseWs(s.phrase));
-    add(s.id, `${s.file}: ${s.what}`, present,
-      text == null ? 'the file is missing' : (present ? `"${collapseWs(s.phrase)}"` : `the sentence is missing or reworded: "${collapseWs(s.phrase)}"`));
-  }
-
-  // The retired naming, as a negative over docs/, skills/ and templates/ - the same three
-  // directories the ticket's acceptance grep reads. "COO routing is stated" and "COO tier is gone"
-  // are two different facts, and a payload can hold both wordings while contradicting itself.
-  const cooTierHits = [];
-  for (const file of doctrineSweepFiles(pluginRoot)) {
-    const rel = path.relative(pluginRoot, file).split(path.sep).join('/');
-    if (!DOCTRINE_SWEEP_DIRS.some((d) => rel.startsWith(`${d}/`))) continue;
-    const lines = (readText(file) || '').split('\n');
-    for (let i = 0; i < lines.length; i += 1) {
-      if (lines[i].includes(DOCTRINE_RETIRED_ROUTING_NAME)) cooTierHits.push(`${rel}:${i + 1}`);
-    }
-  }
-  add('doctrine-coo-routing-naming',
-    `the retired name "${DOCTRINE_RETIRED_ROUTING_NAME}" survives nowhere in ${DOCTRINE_SWEEP_DIRS.join('/, ')}/ - the doctrine term is "COO routing"`,
-    cooTierHits.length === 0,
-    cooTierHits.length ? `still present at: ${cooTierHits.join(', ')}` : 'not one occurrence');
-
-  // The BINDING, as a negative over one file. The pin above holds the clause that refuses the
-  // condition; this holds the wording that would reinstate it. "only" in front of "downstream",
-  // standing next to a routing rule, is the mechanism that turned the hardening note into a
-  // condition three times over, and a paragraph can be rewritten around thirteen pinned words while
-  // putting that binding back somewhere else in it. Case-free and tolerant of a line break between
-  // the two words, because the regression IS a rewrite and a rewrite re-wraps: "only" at the end of
-  // one line and "downstream" at the start of the next is the same defect, and a substring test
-  // would miss exactly the version that actually gets written. Scoped to docs/WORKFLOW.md alone -
-  // this is a claim about one paragraph, not about a phrase another document may legitimately use.
-  const bindingText = readText(path.join(pluginRoot, 'docs', 'WORKFLOW.md'));
-  const bindingHits = [];
-  if (bindingText != null) {
-    const re = /only\s+downstream/gi;
-    for (let m = re.exec(bindingText); m; m = re.exec(bindingText)) {
-      bindingHits.push(`docs/WORKFLOW.md:${bindingText.slice(0, m.index).split('\n').length}`);
-    }
-  }
-  add('doctrine-coo-routing-no-binding',
-    'docs/WORKFLOW.md: the binding "only ... downstream" appears nowhere - the hardening principle is an economics note, and that one word in front of it is what made it a condition',
-    bindingText != null && bindingHits.length === 0,
-    bindingText == null ? 'the file is missing'
-      : (bindingHits.length ? `still present at: ${bindingHits.join(', ')}`
-        : 'not one occurrence (case-free, and tolerant of a line break between the two words)'));
-
-  // The disputed-decision rule, by COUNT and by home (see the constant for why both).
-  const disputedCounts = DOCTRINE_DISPUTED_BLOCKER_HOMES.map((f) => ({
-    file: f,
-    n: countPhrase(readText(path.join(pluginRoot, ...f.split('/'))), DOCTRINE_DISPUTED_BLOCKER),
-  }));
-  const disputedTotal = disputedCounts.reduce((a, c) => a + c.n, 0);
-  add('doctrine-disputed-blocker-two-homes',
-    'the disputed-decision rule stands in BOTH of its homes - the rendered Orchestrator role (where the COO reads it) and /pnp:review Step 4 (where the finding arrives)',
-    disputedTotal === 2 && disputedCounts.every((c) => c.n === 1),
-    disputedCounts.map((c) => `${c.file}: ${c.n}`).join(', ') + ` (1 each, ${disputedTotal} total)`);
 
   // The rendered Orchestrator role is a RULES document, not an agent definition, and the one way it
   // could quietly become the second kind is a model. Asserted as a negative over the template, in
@@ -6630,32 +5640,10 @@ function payloadDoctrineFindings(pluginRoot) {
         : (problems.length ? problems.join('; ') : `${tmpl.length} bytes, none of the three spellings present`));
   }
 
-  for (const s of DOCTRINE_PASS_CONDUCT_SURFACES) {
-    const text = readText(path.join(pluginRoot, ...s.file.split('/')));
-    const present = text != null && collapseWs(text).includes(collapseWs(s.phrase));
-    add(s.id, `${s.file}: ${s.what}`, present,
-      text == null ? 'the file is missing' : (present ? `"${collapseWs(s.phrase)}"` : `the sentence is missing or reworded: "${collapseWs(s.phrase)}"`));
-  }
-
-  // Deliberately NOT an entry of the conduct array above: that family is about how a PASS is
-  // conducted, and this is an index line - a header that no longer describes its own array is the
-  // rot this whole section exists against, and the same applies to a family that quietly acquires a
-  // member it does not describe. It is pinned all the same, because the line is contract text: the
-  // directory's own index disagreeing with the directory is how a command ships and stays invisible.
+  // The index line is contract text: the directory's own index disagreeing with the directory is
+  // how a command ships and stays invisible. Read structurally, in BOTH directions: every directory
+  // under skills/ is named, and every name is a directory.
   const skillsIndex = readText(path.join(pluginRoot, 'skills', 'README.md'));
-  const indexPresent = skillsIndex != null
-    && collapseWs(skillsIndex).includes(collapseWs(DOCTRINE_SHIPPED_COMMANDS));
-  add('doctrine-shipped-commands-line',
-    'skills/README.md: the index line names every shipped command, in the authoritative wording',
-    indexPresent,
-    skillsIndex == null ? 'the file is missing'
-      : (indexPresent ? `"${DOCTRINE_SHIPPED_COMMANDS}"` : `the line is missing or reworded: "${DOCTRINE_SHIPPED_COMMANDS}"`));
-
-  // The second instrument on the same line, and it exists because the first one CANNOT see this:
-  // a literal pin catches a rewording and nothing else, so a twelfth skill that nobody wrote into
-  // the line ships perfectly green - the index disagreeing with the directory it indexes, which is
-  // the one thing the line is for. Read structurally, in BOTH directions: every directory under
-  // skills/ is named, and every name is a directory.
   const indexed = shippedIndexNames(skillsIndex);
   const dirs = skillDirNames(pluginRoot);
   const unlisted = indexed == null ? dirs : dirs.filter((n) => !indexed.includes(n));
@@ -6669,50 +5657,6 @@ function payloadDoctrineFindings(pluginRoot) {
           strangers.length ? `listed but not a skill directory: ${strangers.join(', ')}` : null]
           .filter(Boolean).join('; ')
         : `${dirs.length} directories, ${indexed.length} names, one to one`));
-
-  // The one rule of that family stated TWICE in one file, asserted by COUNT rather than by presence:
-  // the record's own commit belongs both where the completion record is defined and where the commit
-  // rule itself lives, and a substring test would be satisfied by either one alone.
-  const workflowText = readText(path.join(pluginRoot, 'docs', 'WORKFLOW.md'));
-  const docsCommitHomes = countPhrase(workflowText, DOCTRINE_CONS_DOCS_COMMIT);
-  add('doctrine-cons-docs-commit-two-homes',
-    'docs/WORKFLOW.md: the separate docs commit stands in BOTH of its homes - the completion record (§ Durable development history) and § Commit & Push Authority',
-    docsCommitHomes === 2,
-    workflowText == null ? 'the file is missing' : `${docsCommitHomes} occurrence(s), 2 required`);
-
-  const notesFiles = doctrineNotesFiles(pluginRoot);
-  const bareNotes = notesFiles
-    .filter((f) => collapseWs(readText(f) || '').includes(collapseWs(DOCTRINE_FACTCHECK_NOTES_UNQUALIFIED)))
-    .map((f) => path.relative(pluginRoot, f).split(path.sep).join('/'));
-  add('doctrine-factcheck-qualified-notes',
-    'no migration NOTES states the fact-check gate without its "above the scan tier" qualifier',
-    bareNotes.length === 0,
-    bareNotes.length ? 'unqualified in: ' + bareNotes.join(', ')
-      : notesFiles.length + ' NOTES file(s) checked');
-
-  for (const s of DOCTRINE_FACTCHECK_SITES) {
-    const text = readText(path.join(pluginRoot, ...s.file.split('/')));
-    const flat = text == null ? '' : collapseWs(text);
-    const qualified = text != null && flat.includes(collapseWs(s.phrase));
-    // Being unqualified is not merely "the sentence changed": it is the OTHER rule. Reported as
-    // its own detail so a red line says which of the two the file now states.
-    const bare = text != null && !qualified && flat.includes(collapseWs(s.unqualified));
-    add(s.id, s.file + ': ' + s.what, qualified,
-      text == null ? 'the file is missing'
-        : (qualified ? 'qualified' : (bare ? 'states the UNQUALIFIED gate ("' + collapseWs(s.unqualified) + '")' : 'the sentence is missing or reworded')));
-  }
-
-  const retired = doctrineRetiredHits(pluginRoot);
-  add('doctrine-retired-phrases',
-    `no retired "who audits what" phrasing survives anywhere in docs/, skills/, templates/ or README.md (${DOCTRINE_RETIRED_PATTERNS.length} patterns)`,
-    retired.length === 0,
-    retired.length ? `still present at: ${retired.join(', ')}` : `${doctrineSweepFiles(pluginRoot).length} files swept, 0 hits`);
-
-  const update = collapseWs(skillText('update') || '');
-  add('doctrine-update-conflict-rule',
-    '/pnp:update states the one-predicate conflict rule (a dialog only where YOU edited or the artifact is gone; a payload change to an untouched artifact is applied and reported)',
-    update.includes(collapseWs(DOCTRINE_UPDATE_CONFLICT_SENTENCE)),
-    update.includes(collapseWs(DOCTRINE_UPDATE_CONFLICT_SENTENCE)) ? 'the rule is stated verbatim' : 'the sentence is missing or reworded');
 
   const ruleset = readJson(path.join(pluginRoot, 'templates', 'settings.ask-ruleset.json'));
   const ask = (ruleset && ruleset.permissions && Array.isArray(ruleset.permissions.ask)) ? ruleset.permissions.ask : null;
@@ -6731,32 +5675,25 @@ function payloadDoctrineFindings(pluginRoot) {
   return out;
 }
 
-// The files the doctrine findings read - the only ones a control copy needs. Since the retired-
-// phrase sweep walks whole directories, the copy takes those directories whole: a control copy that
-// held only the files the per-surface assertions name would sweep a smaller tree than production
-// and report a clean result the production tree does not have.
+// The files the doctrine findings read live in three directories, and a control copy takes them
+// whole: the structural index check lists skills/ itself, so a copy that held only the files the
+// assertions name would index a smaller directory than production.
+const DOCTRINE_COPY_DIRS = ['docs', 'skills', 'templates'];
 function copyDoctrineFiles(from, to) {
   for (const dir of DOCTRINE_COPY_DIRS) {
     const src = path.join(from, dir);
     if (fs.existsSync(src)) copyTree(src, path.join(to, dir));
   }
-  for (const file of DOCTRINE_SWEEP_FILES) {
-    const src = path.join(from, file);
-    if (!fs.existsSync(src)) continue;
-    fs.mkdirSync(path.dirname(path.join(to, file)), { recursive: true });
-    fs.copyFileSync(src, path.join(to, file));
-  }
 }
 
-// Sabotage by RELATIVE PAYLOAD PATH, not by skill name: the doctrine now lives in docs/, templates/
-// and README.md as well, and a control that could only reach a skill could not prove those.
+// Sabotage by RELATIVE PAYLOAD PATH: the checks read docs/, skills/ and templates/, and a control
+// that could only reach a skill could not prove the others.
 const doctrineFile = (root, rel, fn) => {
   const p = path.join(root, ...rel.split('/'));
   const before = readText(p);
   if (before == null) throw new Error(`the control copy has no ${rel}`);
   fs.writeFileSync(p, fn(before));
 };
-const doctrineSkill = (root, name, fn) => doctrineFile(root, `skills/${name}/SKILL.md`, fn);
 const doctrineRuleset = (root, fn) => {
   const p = path.join(root, 'templates', 'settings.ask-ruleset.json');
   const j = JSON.parse(readText(p));
@@ -6776,50 +5713,14 @@ const doctrinePhrase = (root, rel, phrase, replacement) => doctrineFile(root, re
   return t.replace(phraseRe(phrase), replacement);
 });
 const DOCTRINE_CONTROLS = [
-  { id: 'doctrine-reading-not-shell', label: 'the reading rule dropped from one of the session skills',
-    apply: (r) => doctrineSkill(r, 'qa', (t) => t.split('**Reading is not a shell job.**').join('**Reading is fine in a shell.**')) },
-  { id: 'doctrine-reading-not-shell', label: 'the reading rule REWORDED in one skill (a paraphrase per skill is not one rule)',
-    apply: (r) => doctrineSkill(r, 'loop', (t) => t.split('`cat`/`grep`/`ls`/`head`/`node -e`').join('shell commands')) },
-  { id: 'doctrine-reading-not-shell', label: 'the reading rule missing from the newest skill to carry it (/pnp:update)',
-    apply: (r) => doctrineSkill(r, 'update', (t) => t.split('**Reading is not a shell job.**').join('**Reading is fine in a shell.**')) },
-  { id: 'doctrine-newborn-ticket', label: 'the newborn-ticket rule dropped from /pnp:work',
-    apply: (r) => doctrineSkill(r, 'work', (t) => t.split('A NEWLY BORN ticket').join('A ticket')) },
-  { id: 'doctrine-review-factcheck', label: 'Step 2b (the fact-check gate) removed from /pnp:review',
-    apply: (r) => doctrineSkill(r, 'review', (t) => t.split('## Step 2b').join('## Step 2c-removed')) },
-  { id: 'doctrine-review-factcheck', label: 'Step 2b kept as a heading but its reusable prompt text gone',
-    apply: (r) => doctrineSkill(r, 'review', (t) => t.split('Verify every factual claim in the prose of this diff').join('Do a quick sanity pass')) },
-  { id: 'doctrine-review-class', label: 'the Class input line removed from the review brief template',
-    apply: (r) => doctrineSkill(r, 'review', (t) => t.split('Class: plan | code | docs').join('Class: whatever')) },
-  { id: 'doctrine-review-class', label: 'Step 0c kept, but the class is a hardcoded rule again instead of a row of the audit table',
-    apply: (r) => doctrinePhrase(r, 'skills/review/SKILL.md', DOCTRINE_REVIEW_CLASS_ROW, 'The class decides the host by the rule below') },
-  { id: 'doctrine-review-class', label: 'the resolver call loses its class - every review resolves the Reviewer role and the table is decoration',
-    apply: (r) => doctrinePhrase(r, 'skills/review/SKILL.md', DOCTRINE_REVIEW_CLASS_RESOLVER, '-Role reviewer -RolesPath') },
-  { id: 'doctrine-review-class', label: 'the Claude host goes back to an ad-hoc subagent on a model pinned in the doctrine',
-    apply: (r) => doctrinePhrase(r, 'skills/review/SKILL.md', DOCTRINE_REVIEW_CLASS_HOST, 'Invoke the **Agent tool** with `subagent_type: "general-purpose"`, `model: "opus"`') },
-  // One control per HALF per skill, because the assertion reads each on its own and a control for
-  // one would leave the other free to vanish while the check still passed.
-  { id: 'doctrine-dispatch-model-review', label: '/pnp:review loses the alias half - an alias row would stop overriding the one agent file',
-    apply: (r) => doctrinePhrase(r, 'skills/review/SKILL.md', DOCTRINE_DISPATCH_ALIAS_HALF, 'a tier alias is left to the agent file') },
-  { id: 'doctrine-dispatch-model-review', label: '/pnp:review loses the exact-id half - an exact id would be handed to the Agent tool\'s `model`',
-    apply: (r) => doctrinePhrase(r, 'skills/review/SKILL.md', DOCTRINE_DISPATCH_EXACT_HALF, 'an exact model id is passed as `model` too.') },
-  { id: 'doctrine-dispatch-model-review', label: '/pnp:review drops the fail-closed comparison of the row\'s exact id with the agent file\'s pin',
-    apply: (r) => doctrinePhrase(r, 'skills/review/SKILL.md', DOCTRINE_REVIEW_PIN_FAIL_CLOSED, '**Dispatch anyway.**') },
-  { id: 'doctrine-dispatch-model-qa', label: '/pnp:qa loses the alias half - an alias would stop overriding the qa agent file',
-    apply: (r) => doctrinePhrase(r, 'skills/qa/SKILL.md', DOCTRINE_DISPATCH_ALIAS_HALF, 'a tier alias is left to the agent file') },
-  { id: 'doctrine-dispatch-model-qa', label: '/pnp:qa loses the exact-id half - an exact id would be handed to the Agent tool\'s `model`',
-    apply: (r) => doctrinePhrase(r, 'skills/qa/SKILL.md', DOCTRINE_DISPATCH_EXACT_HALF, 'an exact model id is passed as `model` too.') },
-  { id: 'doctrine-review-class', label: 'plan readiness stops being the `review.plan` row - the pass count returns to a number in a document',
-    apply: (r) => doctrinePhrase(r, 'skills/review/SKILL.md', DOCTRINE_REVIEW_READINESS_SENTENCE, 'the engine the Reviewer role names, always') },
-  // One control per SPELLING, because the assertion reads two and a single control would leave the
-  // other able to pass while the model is really there.
+  // One control per SPELLING, because the assertion reads three and a single control would leave the
+  // others able to pass while the model is really there.
   { id: 'doctrine-orchestrator-model-agnostic', label: 'the Orchestrator template given a model frontmatter field',
     apply: (r) => doctrineFile(r, 'templates/ORCHESTRATOR.md.tmpl', (t) => `model: a-model-id\n${t}`) },
   { id: 'doctrine-orchestrator-model-agnostic', label: 'the Orchestrator template made to render the writer role\'s model',
     apply: (r) => doctrineFile(r, 'templates/ORCHESTRATOR.md.tmpl', (t) => `${t}\nRun this role on {{config.roles.writer.model}}.\n`) },
   { id: 'doctrine-orchestrator-model-agnostic', label: 'the Orchestrator template turned into an agent file by a frontmatter fence',
     apply: (r) => doctrineFile(r, 'templates/ORCHESTRATOR.md.tmpl', (t) => `---\nname: orchestrator\n---\n${t}`) },
-  { id: 'doctrine-update-conflict-rule', label: '/pnp:update reworded back to the two-predicate rule - a dialog for an artifact the operator never touched',
-    apply: (r) => doctrinePhrase(r, 'skills/update/SKILL.md', 'a conflict is raised **only when you edited** the artifact', 'a conflict is raised when you edited the artifact OR the payload changed it') },
   // One control per TOOL on each of the two rules: a doctrine that is only enforced on Bash is the
   // half-enforcement this ticket removed, and only a per-tool control can tell the two apart.
   ...BLANKET_GIT_C_RULES.map((rule) => ({
@@ -6834,128 +5735,36 @@ const DOCTRINE_CONTROLS = [
       j.permissions.ask = j.permissions.ask.filter((x) => x !== `${tool}(git -C <projectRoot> push:*)`);
     }),
   })),
-  // One control per surface, generated from the same table the assertions come from: a surface
-  // added to the table without a control would be a check nobody proved can fail, and the runner
-  // reports exactly that as a [NOTE] at the end of the section.
-  ...DOCTRINE_TABLE_SURFACES.map((s) => ({
-    id: s.id,
-    label: `${s.file}: the audit-table sentence reworded away ("${collapseWs(s.phrase).slice(0, 60)}...")`,
-    apply: (r) => doctrinePhrase(r, s.file, s.phrase, 'the rule below decides it'),
-  })),
-  // One control per pass surface, sabotaged with the regression the rule exists against rather than
-  // with a generic rewording: the verdict report shrinks to a one-line status, and the pass goes
-  // back to riding the ticket's standing word - the two defaults this doctrine revoked.
+  // One control per operator-gate sentence, generated from the same tables the assertions come from
+  // (a surface added without a control would be a check nobody proved can fail, and the runner
+  // reports exactly that as a [NOTE] at the end of the section), each sabotaged with the regression
+  // the rule exists against rather than with a generic rewording: the pass goes back to riding the
+  // ticket's standing word, the announcement ANSWERS the audit-pass question instead of asking it,
+  // the host's ergonomic directives outrank the canon, the COO records rules as it goes, and a later
+  // readiness pass resumes like any other.
   ...DOCTRINE_PASS_SURFACES.map((s) => ({
     id: s.id,
     label: `${s.file}: the rule reworded away ("${collapseWs(s.phrase).slice(0, 60)}" -> "${s.replacement}")`,
     apply: (r) => doctrinePhrase(r, s.file, s.phrase, s.replacement),
   })),
-  // One control per contract surface, and each sabotages with the REAL regression rather than with a
-  // generic rewording: the readiness contract collapses back into the bare ban it replaced, the
-  // commit click goes back to approving the tree that actually lands, and the consumer inventory
-  // dissolves into the generic discovery rule - the beliefs these sentences exist to prevent.
-  ...DOCTRINE_CONTRACT_SURFACES.map((s) => ({
-    id: s.id,
-    label: `${s.file}: the contract reworded away ("${collapseWs(s.phrase).slice(0, 60)}" -> "${s.replacement}")`,
-    apply: (r) => doctrinePhrase(r, s.file, s.phrase, s.replacement),
-  })),
-  // One control per plan-precision rule, sabotaged with the WEAKER rule each one replaced - a
-  // verify requirement that no longer has to be writable, a process trace folded back into the
-  // fact-check gate, adjacency dropped back to "keep the scope tight". Those are the edits that
-  // actually happen: each leaves a sentence that still reads true and takes the requirement with it.
-  ...DOCTRINE_PLAN_PRECISION_SURFACES.map((s) => ({
-    id: s.id,
-    label: `${s.file}: the plan-precision rule weakened back ("${collapseWs(s.phrase).slice(0, 60)}" -> "${s.replacement}")`,
-    apply: (r) => doctrinePhrase(r, s.file, s.phrase, s.replacement),
-  })),
-  // One control per consolidated-doctrine surface, sabotaged with the rule that was in force BEFORE
-  // the adoption: a shared tree with no executing session, an unscoped "one live auditor, always", an
-  // announcement that ANSWERS the audit-pass question instead of asking it, a host whose ergonomic
-  // directives outrank the canon, a COO that records rules as it goes, doctrine carried over "later",
-  // archiving as a bare `git mv`, an enumeration that ends when the list looks complete, and a
-  // completion record riding in the commit of the work it describes.
   ...DOCTRINE_CONSOLIDATION_SURFACES.map((s) => ({
     id: s.id,
     label: `${s.file}: the adopted rule reverted ("${collapseWs(s.phrase).slice(0, 60)}" -> "${s.replacement}")`,
     apply: (r) => doctrinePhrase(r, s.file, s.phrase, s.replacement),
   })),
-  // One control per HOME of the preflight enumeration, sabotaged the way a list actually loses a
-  // member: the rendered role is dropped and the sentence closes on the overrides document - three
-  // documents, a sentence still true of itself, and no longer the region's list. One entry per file
-  // is the whole point here, because the defect this pin exists against is exactly the list updated
-  // in one home and left standing in the other two.
-  ...DOCTRINE_PREFLIGHT_SURFACES.map((s) => ({
-    id: s.id,
-    label: `${s.file}: the fourth preflight document dropped from the list ("${collapseWs(s.phrase).slice(0, 60)}" -> "${s.replacement}")`,
-    apply: (r) => doctrinePhrase(r, s.file, s.phrase, s.replacement),
-  })),
-  // One control per pass-conduct surface, sabotaged with the looser practice each rule replaced: the
-  // chain table folded back into the per-claim fact-check, the carried blocker list made optional,
-  // the evidence pack read as the scope of the pass, a readiness pass 1 resumed to save budget,
-  // resume decided by whether a session survived rather than by the question being asked, and a
-  // killed pass written off as spent, a pack that is optional and then sold as a saving, a
-  // verification that is always cold, a re-architecting round resumed anyway, a later readiness pass
-  // that resumes like any other, and a warm session kept until the wrapper refuses it. Six of the
-  // thirteen stand in TWO FILES, and there the generic loop says it exactly right - two entries, two
-  // files, so a sabotage of one leaves the other standing.
   ...DOCTRINE_PASS_CONDUCT_SURFACES.map((s) => ({
     id: s.id,
     label: `${s.file}: the conduct rule loosened back ("${collapseWs(s.phrase).slice(0, 60)}" -> "${s.replacement}")`,
     apply: (r) => doctrinePhrase(r, s.file, s.phrase, s.replacement),
   })),
-  // One control per escalation surface, and each sabotage is the DISCRETIONARY version of the rule
-  // rather than a rewording: triggers that fire on a feeling, an escalation the COO decides is worth
-  // it, the retired "COO tier" naming back in place, a cheap ticket that takes the Writer and the
-  // auditor down with it, and an arbiter that reconstructs the case it then rules on. Each one reads
-  // perfectly sensible, which is exactly why the text alone is not evidence that the rule survived.
-  ...DOCTRINE_ESCALATION_SURFACES.map((s) => ({
-    id: s.id,
-    label: `${s.file}: the rule handed back to judgment ("${collapseWs(s.phrase).slice(0, 60)}" -> "${s.replacement}")`,
-    apply: (r) => doctrinePhrase(r, s.file, s.phrase, s.replacement),
-  })),
-  // The negative's control is the retired name arriving where it is most plausible - in the routing
-  // section itself, in a sentence that reads like an explanation.
-  { id: 'doctrine-coo-routing-naming',
-    label: 'docs/WORKFLOW.md: the retired "COO tier" naming creeps back beside the rule that replaced it',
-    apply: (r) => doctrineFile(r, 'docs/WORKFLOW.md', (t) => `${t}\nThe COO tier for a ticket is read off the same four checks.\n`) },
-  // The binding's control is the binding coming back where it is most plausible - inside the
-  // hardening note itself - and it arrives RE-WRAPPED, with the two words split across a line break.
-  // One control, two guarantees: that the check sees the phrase at all, and that it sees the form a
-  // real rewrite produces rather than only the form written on one line.
-  { id: 'doctrine-coo-routing-no-binding',
-    label: 'docs/WORKFLOW.md: "only" put back in front of "downstream" inside the hardening note, split across a line break',
-    apply: (r) => doctrinePhrase(r, 'docs/WORKFLOW.md',
-      'The saving a cheap COO brings is real downstream of expensive readiness',
-      'The saving a cheap COO brings is real only\ndownstream of expensive readiness') },
-  // Two controls for the two-homes count, one per home, because the count is the whole claim: each
-  // drops exactly ONE occurrence, leaving the rule perfectly present in the other file - which is
-  // the regression this check exists for, a consolidation that keeps the sentence where it reads
-  // best and quietly loses the other home.
-  { id: 'doctrine-disputed-blocker-two-homes',
-    label: 'templates/ORCHESTRATOR.md.tmpl: the disputed-decision rule kept only in the review skill',
-    apply: (r) => doctrinePhrase(r, 'templates/ORCHESTRATOR.md.tmpl',
-      'A disputed DESIGN decision is a disputed blocker, and it stops the loop.',
-      'A disputed DESIGN decision stops the loop.') },
-  { id: 'doctrine-disputed-blocker-two-homes',
-    label: 'skills/review/SKILL.md: the disputed-decision rule kept only in the rendered role',
-    apply: (r) => doctrinePhrase(r, 'skills/review/SKILL.md',
-      'a disputed blocker is parked for the operator, not implemented in a correction round',
-      'a design dispute is settled by the correction round like any other finding') },
-  // The index line's control is the regression itself: the line as it stood before `/pnp:arbiter`
-  // was added to it - eleven names, perfectly well-formed, and one command short of the directory
-  // it indexes.
-  { id: 'doctrine-shipped-commands-line',
-    label: 'skills/README.md: the index line reverts to the eleven-name list that omits `arbiter`',
-    apply: (r) => doctrinePhrase(r, 'skills/README.md', DOCTRINE_SHIPPED_COMMANDS,
-      'Shipped: loop, review, qa, qal, brief, mission, work, roles, setup, update, selfcheck.') },
   // The structural check gets one control per DIRECTION, because the two directions fail on
   // opposite mutations and a single control would prove only the half it happened to pick: a skill
-  // that ships without being written into the line (the literal pin above stays green through it),
-  // and a name in the line that is NOT a skill directory - the state a rename or a removal leaves
-  // behind, and the one a name added by hand produces directly. The sabotage below is that second
-  // form, `telemetry` - a name that never had a directory in the base copy - because it is the one a
-  // throwaway copy can perform cleanly: deleting a real skill directory would also take its SKILL.md
-  // out from under the generic skills loop, a second mutation this control never intended to make.
+  // that ships without being written into the line, and a name in the line that is NOT a skill
+  // directory - the state a rename or a removal leaves behind, and the one a name added by hand
+  // produces directly. The sabotage for the second is `telemetry` - a name that never had a
+  // directory in the base copy - because it is the one a throwaway copy can perform cleanly:
+  // deleting a real skill directory would also take its SKILL.md away, a second mutation this
+  // control never intended to make.
   { id: 'doctrine-shipped-commands-structure',
     label: 'a twelfth skill ships without being written into the index line',
     apply: (r) => {
@@ -6967,49 +5776,6 @@ const DOCTRINE_CONTROLS = [
     label: 'the index line names `telemetry`, which is not a skill directory (a rename, a removal, or a name added by hand)',
     apply: (r) => doctrinePhrase(r, 'skills/README.md', DOCTRINE_SHIPPED_COMMANDS,
       'Shipped: loop, review, qa, qal, brief, mission, work, roles, arbiter, setup, update, selfcheck, telemetry.') },
-  // The count check needs a control the generic one cannot give it: the spread above replaces EVERY
-  // occurrence (the sabotage regex is global), which takes both homes at once and would prove only
-  // that zero is not two. This one drops exactly ONE home - the first - so the count falls to 1 with
-  // the rule still perfectly present in the file, which is the regression this check exists for: a
-  // consolidation that keeps the sentence where it reads best and quietly loses the other home.
-  { id: 'doctrine-cons-docs-commit-two-homes',
-    label: 'docs/WORKFLOW.md: the separate docs commit kept in ONE home only (the completion record loses it)',
-    apply: (r) => doctrineFile(r, 'docs/WORKFLOW.md', (t) => {
-      const first = new RegExp(phraseRe(DOCTRINE_CONS_DOCS_COMMIT).source);
-      if (!first.test(t)) throw new Error('the two-homes phrase is not in docs/WORKFLOW.md');
-      return t.replace(first, 'the record lands with the work it describes');
-    }) },
-  // One control per fact-check site, and it is the regression itself rather than a generic rewording:
-  // it replaces the qualified sentence with the UNQUALIFIED one, which is what a well-meaning edit
-  // actually produces.
-  ...DOCTRINE_FACTCHECK_SITES.map((s) => ({
-    id: s.id,
-    label: s.file + ': the fact-check gate stated WITHOUT "above the scan tier"',
-    apply: (r) => doctrinePhrase(r, s.file, s.phrase, s.unqualified),
-  })),
-  { id: 'doctrine-factcheck-qualified-notes',
-    label: 'a migration NOTES drops "above the scan tier" and tells the operator the gate is unconditional',
-    // The one control with a SKIP condition, and the reason is structural: this engine is also run
-    // against payloads assembled for a test, whose migrations are fixtures that say nothing about
-    // the fact-check gate. There the assertion passes because there is nothing to be wrong, and a
-    // control has nothing to sabotage - which is a NOTE, not a failed control. On the real payload
-    // the skip never fires, so the guarantee here is unchanged.
-    skipWhen: (r) => (doctrineNotesFiles(r)
-      .some((p) => collapseWs(readText(p) || '').includes(collapseWs(DOCTRINE_FACTCHECK_NOTES_QUALIFIED)))
-      ? null
-      : 'no migration in this payload states the fact-check gate, so there is nothing to strip a qualifier from'),
-    apply: (r) => {
-      const hit = doctrineNotesFiles(r)
-        .find((p) => collapseWs(readText(p) || '').includes(collapseWs(DOCTRINE_FACTCHECK_NOTES_QUALIFIED)));
-      if (!hit) throw new Error('no migration NOTES states the qualified gate - there is nothing to sabotage');
-      doctrinePhrase(r, path.relative(r, hit).split(path.sep).join('/'),
-        DOCTRINE_FACTCHECK_NOTES_QUALIFIED, DOCTRINE_FACTCHECK_NOTES_UNQUALIFIED);
-    } },
-  // The sweep's control is the mirror image of the assertions': it puts a RETIRED phrase back. The
-  // target is /pnp:loop, which carries none of the per-surface sentences, so this control proves
-  // the sweep alone - not one of the assertions above catching it first.
-  { id: 'doctrine-retired-phrases', label: 'a retired phrasing creeps back into the payload ("two-pass" in /pnp:loop)',
-    apply: (r) => doctrineFile(r, 'skills/loop/SKILL.md', (t) => `${t}\nPlan readiness keeps its own two-pass contract.\n`) },
 ];
 
 function sectionPayloadDoctrine(tmpRoot) {
@@ -8850,27 +7616,15 @@ function main() {
   console.log('reports the same "0 hits" as a clean payload. What is NOT proven: that the three name');
   console.log('digests have the preimages they claim - a payload that must not contain those names cannot');
   console.log('carry the proof, so the controls prove the mechanism and the digests are stated data.');
-  console.log('PAYLOAD DOCTRINE: the rules that exist only as TEXT are asserted as text, because text has no');
-  console.log('compiler and every one of them was written after a real violation - the identical');
-  console.log('"reading is not a shell job" instruction in every session skill (one canonical sentence, not');
-  console.log('a paraphrase each), the newborn-ticket rule (write it into the PLAN, announce it in ONE sentence,');
-  console.log('STOP) in /pnp:mission and /pnp:work, Step 2b of /pnp:review with its reusable fact-check prompt,');
-  console.log('the "Class: plan | code | docs" brief input with its Step 0b/0c host branch - asserted as all five');
-  console.log('of its claims: the brief line, the class resolved as a ROW of the audit table, the resolver call');
-  console.log('that carries -Class, the Claude host being the RENDERED reviewer agent dispatched with the row\'s');
-  console.log('model (no ad-hoc subagent and no model pinned in the doctrine), and plan readiness taken from the');
-  console.log('review.plan row - one sentence per surface that stopped hardcoding who audits what (WORKFLOW,');
-  console.log('LOOP, REVIEW_CHECKLIST, OPERATOR_PROTOCOL, the reviewer/overrides/CLAUDE.md templates, /pnp:work,');
-  console.log('the README), each with its own control - the fact-check gate pinned at every site that states');
-  console.log('it, QUALIFIED ("above the scan tier", one skip), with a control per site that strips the');
-  console.log('qualifier back to the unconditional wording - plus the sweep that proves the RETIRED phrasings are gone');
-  console.log('from docs/, skills/, templates/ and README.md - the one-predicate conflict rule of /pnp:update (a');
-  console.log('dialog only where the operator edited the artifact or it is gone; a payload change to an untouched');
-  console.log('artifact is applied without one) - and the factory ruleset\'s');
-  console.log('freedom from the blanket git -C rule while the three rendered <projectRoot> push/merge/rebase');
-  console.log('forms stay. Each has its own control on a sabotaged copy of those files, including one that only');
-  console.log('REWORDS a rule rather than deleting it. What is NOT proven, and cannot be from here: that a');
-  console.log('session actually OBEYS any of them - only that the instruction is present and intact.');
+  console.log('PAYLOAD DOCTRINE: nine checks, and no more - prose is read in place and is not pinned sentence by');
+  console.log('sentence. Five operator-gate sentences, each pinned in ONE home: one word per pass, the audit-pass');
+  console.log('question for a newborn ticket, the doctrine-write gate, host-directive precedence, and a warm');
+  console.log('readiness pass only on the operator\'s word. Four mechanical checks: no blanket git -C ask rule on');
+  console.log('either shell tool, the rendered git -C <projectRoot> push/merge/rebase forms on both tools, the');
+  console.log('model-agnostic Orchestrator template, and the shipped-commands index matching the directories');
+  console.log('under skills/. Each has a sabotage control on a copy of those files that must go red. What is NOT');
+  console.log('proven, and cannot be from here: that a session actually OBEYS any of them - only that the');
+  console.log('instruction is present and intact.');
   console.log('MARKETPLACE: the repository is its own marketplace (local checkout or GitHub) - the');
   console.log('manifest exists, parses, names itself and its owner, carries exactly one plugin entry');
   console.log('whose name matches plugin.json, whose source is "./" and which carries NO version');

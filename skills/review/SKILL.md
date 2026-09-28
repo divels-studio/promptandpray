@@ -222,10 +222,34 @@ DIFF:
 
 **Over a plan, this is the same gate with the plan document in place of the diff** - one rule, not
 two: fact-check before every pass above the scan tier, over a diff or over a plan. There is no
-second, plan-only variant of this step, and for a readiness pass the task carries two extra lines -
-`every acceptance command exists and can fail`, and `verify the chain table -
-every Outcome sentence has a row, every link resolves at its file:line, endpoints are source
-or render-or-DB-write surfaces, chains start at the entry point`.
+second, plan-only variant of this step, and for a readiness pass the task carries three extra lines,
+appended verbatim:
+
+```
+every acceptance command exists and can fail
+
+verify the chain table - every Outcome sentence has a row, every link resolves at its file:line,
+endpoints are source or render-or-DB-write surfaces, chains start at the entry point
+
+apply the six readiness checks adversarially to every ticket and decision: (1) repo-match - open
+every pointer you doubt; (2) scope - is every boundary between in and out of scope stated, and
+does any worklist item fall outside it; (3) hidden discovery - for each ticket, what the Writer
+would still have to DECIDE or DISCOVER that the plan does not fix (a name, a grant, a layout, a
+flag, an order of operations); (4) dependency order and the gate dry-run - any command that needs
+a dialog or gate the plan does not name, any step assuming state a prior step leaves different;
+(5) acceptance - for each block, whether it can pass on broken work, fail on correct work, and
+observe every Risk-threshold item; (6) branch, worktree and git prerequisites, and anything the
+Writer contract forbids or requires that a block or worklist violates; and contradictions between
+two places in the plan. Return the gaps as a second list beside the false claims, one line each -
+<plan line> | <ticket or decision> | <gap, one sentence> | <what closes it, one sentence> - grouped
+A (the Writer cannot execute, or the check cannot fail or cannot pass), B (false or unverifiable
+claim), C (consistency), ending with GAPS: A=<n> B=<n> C=<n>. No verdict.
+```
+
+For a readiness pass the agent returns two lists: the false or unverifiable claims exactly as
+above, and the gaps. The "what closes it" cell names the missing decision, fact or command and
+never a redesign - that is what "no suggestions" keeps meaning - and the COO closes every A and B
+item before the pass.
 
 Then: the COO fixes every returned claim, and **only then** dispatches the pass, over the
 corrected tree. The gate may be skipped only when the reviewer itself runs on a scan-tier model
@@ -233,8 +257,9 @@ corrected tree. The gate may be skipped only when the reviewer itself runs on a 
 cheap enough to be worth running on a prose-heavy diff. That skip is read off a scan-tier ALIAS,
 never off an exact model id.
 
-The fact-check agent is **not** a review: it returns no verdict, and it never replaces the
-Reviewer's pass.
+The fact-check agent is **not** a review: it returns no verdict, it
+is not the COO's own pass and does not stand in for it, it is never counted as a pass, and it never
+replaces the Reviewer's pass.
 
 ## Plan-readiness mode (durable R2/R3 plans, before execution)
 

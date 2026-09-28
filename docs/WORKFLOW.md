@@ -144,7 +144,8 @@ how an engine or a hook behaves - those are checkable against the tree by anythi
 it, and paying a review pass to find them buys at the most expensive tier what the cheapest one
 proves. They are caught by the **fact-check gate** (`/pnp:review` Step 2b): one cheap read-only
 scan agent over the prose of the diff - or of the plan - run BEFORE every reviewer pass above the
-scan tier, returning only the false or unverifiable claims with `file:line` and the correct value.
+scan tier, returning only the false or unverifiable claims with `file:line` and the correct
+value - and, before a readiness pass, the gaps list of § Plan readiness review beside them.
 The COO fixes those, and only then dispatches the review. The gate guards the EXPENSIVE pass,
 whichever engine hosts it: a Claude reviewer on `opus`/`fable` costs top-tier tokens exactly as a
 Codex pass costs external quota, and only a reviewer that itself runs on a scan-tier model
@@ -383,28 +384,37 @@ the cheapest one proves.
 **The COO's own pass comes first, and it is not one of the counted ones.** Once the draft is
 "finished", the COO re-reads it in a SEPARATE turn against the six readiness checks below, before
 any auditor is dispatched: every `file:line` opened, every command executable on the OS channel the
-plan records, not one "if the Writer finds ...", every promise of a guarantee checked against the
-code that gives it. The fact-check agent is dispatched with two extra instructions alongside its
-standing task - "every acceptance command exists and can fail", and "verify the chain table -
-every Outcome sentence has a row, every link resolves at its file:line, endpoints are source or
-render-or-DB-write surfaces, chains start at the entry point". This is not ceremony: on the plan
+plan records and run on the real tree, never on a stub (an instrument proven on a stub has not been
+made to fail where it will run - tripwire 4 of § COO owns broad scans), not one "if the Writer
+finds ...", every promise of a guarantee checked against the code that gives it. The fact-check
+agent is dispatched with three extra instructions alongside its standing task - "every acceptance
+command exists and can fail", "verify the chain table - every Outcome sentence has a row, every
+link resolves at its file:line, endpoints are source or render-or-DB-write surfaces, chains start
+at the entry point", and the six readiness checks applied adversarially, returned as a second list
+of gaps beside the false claims (A - the Writer cannot execute, or the check cannot fail or cannot
+pass; B - a false or unverifiable claim; C - consistency) with no verdict, every A and B closed by
+the COO before the pass; that list is not the COO's own pass and does not stand in for it, and it
+is never counted as a pass. This is not ceremony: on the plan
 that introduced the audit table, the first readiness pass returned 10 blockers of which 8 were the
 author's own (shortcuts, a decision left open, code not read), and the pass after it returned 14, of
 which 11 had been visible in the first. A paid pass verifies decisions; precision is paid for on the
 COO's own account.
 
-**The PROCESS gets its own dry run, and it is the half the fact-check gate cannot see.** The pass
-above reads what the plan SAYS; this one walks what executing it would DO: before every paid
-readiness pass, a dry process trace of the ticket's PROCESS against the gates - commit/push/QA
-order, the state of the tree - because the fact-check gate catches facts, not process defects. The
+**The PROCESS gets its own dry run, and it is the half the fact-check gate
+can read but cannot walk.** The pass above reads what the plan SAYS; this one walks what executing
+it would DO: before every paid readiness pass, a dry process trace of the ticket's PROCESS against
+the gates - commit/push/QA order, the state of the tree - because the fact-check gate's gaps list
+names the gates and orders the plan omits, while only a trace walks the sequence as it will
+actually run. The
 trace walks the gates in the order the ticket will hit them: the operator's word that starts the
 ticket, the branch and tree state its commands assume, each review pass and which of them needs a
 word of its own, the QA pass when the ticket declares observable behavior, the commit click, and
 the tag and push words when the ticket carries a release. A defect there is an ORDER rather than
 a claim - a tag before the commit that carries it, a diff guard anchored to a tree the Writer will
 not be standing on, an acceptance step assuming a clean tree the previous ticket leaves dirty - and
-every sentence around it can be true while the sequence is wrong, which is exactly what a gate
-that verifies claims returns clean.
+every sentence around it can be true while the sequence is wrong - a gap the gate's third
+instruction can NAME when the plan omits a gate or misplaces a step, and only the trace can PROVE
+by walking it.
 
 The same Reviewer performs `review.plan.passes` full passes, and it is a CYCLE rather than a fixed
 pair: each pass adversarially reads the COMPLETE plan - not only the lines that changed - and

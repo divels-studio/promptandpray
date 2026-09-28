@@ -1,0 +1,18 @@
+{
+  "migration": "0016_readiness-gaps-instruction",
+  "targetPluginVersion": "0.2.12",
+  "operations": [
+    {
+      "op": "note",
+      "id": "readiness-gaps-instruction",
+      "text": "The fact-check gate reads a plan for readiness gaps, not only for false facts (HARD-020) - before a readiness pass, the scan-tier fact-check agent now applies the six readiness checks adversarially and returns a second list of gaps (A: the Writer cannot execute, or the check cannot fail or cannot pass; B: a false or unverifiable claim; C: consistency) beside the false claims, with no verdict; the COO closes every A and B item before the paid pass. The list is not the COO's own pass and is never counted as a pass: `docs/WORKFLOW.md` § Plan readiness review says so, adds that the own pass runs every command on the real tree rather than on a stub, and no longer describes the gate as returning only claims or as unable to see process.",
+      "docRefs": ["CHANGELOG.md", "skills/review/SKILL.md", "docs/WORKFLOW.md"]
+    },
+    {
+      "op": "note",
+      "id": "doctrine-text-not-code",
+      "text": "The self-check stops pinning doctrine sentences (HARD-021) - of 96 doctrine checks it keeps 9: five operator-gate sentences, one home each (one word per pass, the audit-pass question for a newborn ticket, the doctrine-write gate, host-directive precedence, a warm readiness pass only on the operator's word) and four mechanical checks (the two `git -C` ruleset forms, the model-agnostic Orchestrator template, the shipped-commands index). Prose in `docs/` and `skills/` is read in place by the installed skills and is never rendered into a project, so a prose change is a version bump, a CHANGELOG line and a note-only migration - verified by CI on the pushed commit, not by a local run of every suite.",
+      "docRefs": ["CHANGELOG.md"]
+    }
+  ]
+}

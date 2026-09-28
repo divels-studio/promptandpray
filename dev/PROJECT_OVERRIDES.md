@@ -64,19 +64,24 @@ PromptAndPray is **not**:
 - Do not start long-running services. There are none in this project; a `claude` session started
   to observe a gate live is the operator's, never an agent's.
 - **The payload is code.** Every change under `skills/`, `docs/`, `templates/`, `scripts/`,
-  `schema/`, `hooks/`, `migrations/`, `examples/` or `.claude-plugin/` is **R2** at least - Writer +
-  Reviewer pass, never a direct edit from the main session. `dev/` and the self-install layer
+  `schema/`, `hooks/`, `migrations/`, `examples/` or `.claude-plugin/` is **R2** at least - through the
+  Writer, never a direct edit from the main session; the auditor is the audit table's row for the
+  class (docs row 0 = none, code row 1). `dev/` and the self-install layer
   (`.claude/`, root `CLAUDE.md`) are R1 docs unless the ticket says otherwise.
 - **Release discipline.** A managed artifact (anything `templates/` renders, the ask-ruleset, the
   managed `CLAUDE.md` region) never changes silently: the change ships as a migration under
   `migrations/NNNN_<slug>/` + a `version` bump in `.claude-plugin/plugin.json` + a `CHANGELOG.md`
   block. The tag is a separate operator word; so is the push. A consumer project picks the new
-  version up only through `/plugin update` + `/pnp:update` - that path is the product, and it is
-  proven on the consumer before anything is called released.
+  version up only through `/plugin update` + `/pnp:update` - that path is the product; a version is
+  called released when CI is green on the pushed commit, and a consumer proves it on its own next
+  update. A prose-only release (docs/, skills/) is the version bump, the CHANGELOG block and a
+  note-only migration - nothing else runs locally; the tag follows a green CI on `main` (commit
+  click -> push main -> CI green -> tag word -> push tag).
 - **Provenance.** `git grep -nP "[\x{0400}-\x{04FF}]" -- docs skills templates scripts schema hooks
-  migrations` is empty before every commit; the self-check's provenance section (origin names as
-  digests, e-mail, Cyrillic by code point, drive-letter paths per allowlist) is the gate, and a new
-  allowlist entry needs the one file that justifies it.
+  migrations` is empty before every commit - for a prose-only diff that grep IS the gate; the
+  self-check's provenance section (origin names as digests, e-mail, Cyrillic by code point,
+  drive-letter paths per allowlist) runs when the diff touches scripts/, hooks/, templates/ or
+  schema/ (§ Test policy), and a new allowlist entry needs the one file that justifies it.
 
 ## Execution discipline
 
@@ -186,10 +191,10 @@ break, and the brief names them:
 - update engine / migrations / examples -> `update-suite`, `validate-payload`,
   `example-cycle-windows`, `selfcheck`;
 - hooks / gates -> `selfcheck`, `spikes`;
-- docs / skills prose -> `selfcheck`, `validate-payload`, `plugin-validate`.
-A diff that spans several rows runs their union. The full set (Portion 1 plus the WSL Portion 2
-below) runs once per release, before the tag, not per ticket.
+- docs / skills prose -> `validate-payload` + the provenance grep (`git grep -nP "[\x{0400}-\x{04FF}]" -- docs skills templates scripts schema hooks migrations examples README.md`); `selfcheck` only when the diff also touches `scripts/`, `hooks/`, `templates/` or `schema/`.
+A diff that spans several rows runs their union. CI runs the full set on the pushed commit; the tag lands only on a commit CI has proven green on `windows` and `ubuntu` - nothing beyond the ticket's own row runs locally (HARD-021, 2026-09-28).
 
+**RETIRED 2026-09-28 (HARD-021): CI is the POSIX proof. The Portion 2 (WSL) paragraphs below are history, kept for the incidents they record; nothing runs under WSL locally any more.**
 **VERIFY runs in PORTIONS, each portion ONE PARALLEL batch** (operator words 2026-09-17 and
 2026-09-19). Portion 1: the eight Windows commands above as one parallel batch (~10.4 min wall
 measured). Portion 2: the POSIX suites under WSL (non-root user `pnp`) as their own batch, AFTER the
