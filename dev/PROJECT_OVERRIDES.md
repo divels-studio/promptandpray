@@ -194,7 +194,7 @@ break, and the brief names them:
 - docs / skills prose -> `validate-payload` + the provenance grep (`git grep -nP "[\x{0400}-\x{04FF}]" -- docs skills templates scripts schema hooks migrations examples README.md`); `selfcheck` only when the diff also touches `scripts/`, `hooks/`, `templates/` or `schema/`.
 A diff that spans several rows runs their union. CI runs the full set on the pushed commit; the tag lands only on a commit CI has proven green on `windows` and `ubuntu` - nothing beyond the ticket's own row runs locally (HARD-021, 2026-09-28).
 
-**RETIRED 2026-09-28 (HARD-021): CI is the POSIX proof. The Portion 2 (WSL) paragraphs below are history, kept for the incidents they record; nothing runs under WSL locally any more.**
+**NOT A GATE since 2026-09-28 (HARD-021; operator word the same day): CI is the POSIX proof before a tag, and the Portion 2 (WSL) paragraphs below never run as a release condition. They stay as the LOCAL REPRODUCTION path: when a POSIX CI leg goes red, WSL is how the failure is reproduced and diagnosed on this machine instead of blind from CI logs.**
 **VERIFY runs in PORTIONS, each portion ONE PARALLEL batch** (operator words 2026-09-17 and
 2026-09-19). Portion 1: the eight Windows commands above as one parallel batch (~10.4 min wall
 measured). Portion 2: the POSIX suites under WSL (non-root user `pnp`) as their own batch, AFTER the

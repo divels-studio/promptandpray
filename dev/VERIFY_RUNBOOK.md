@@ -21,7 +21,7 @@
 
 ## Portion 2 - WSL POSIX legs (release tickets; NEVER concurrent with Portion 1)
 
-**RETIRED 2026-09-28 (HARD-021): CI is the POSIX proof; this section is history.**
+**NOT A GATE since 2026-09-28 (HARD-021; operator word the same day): CI is the POSIX proof before a tag. This section is the LOCAL REPRODUCTION path - run it when a POSIX CI leg goes red, never as a release condition.**
 
 - Starts only after Portion 1 has finished: both at once = memory kill by the harness (2026-09-19,
   event ledger; the incident behind the PORTIONS rule).

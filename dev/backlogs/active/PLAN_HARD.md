@@ -2825,6 +2825,12 @@ validate-payload exit 0, `16 migration(s)`, `0.2.12`; `claude plugin validate .`
 up to date 0.2.12. Пълният набор — в CI след push (новото правило). Без WSL.
 **Церемония нататък:** push `main` (дума + диалог) → CI зелен на `windows`+`ubuntu` → датова проверка в
 дървото на `51dd2ce` → tag `v0.2.12` на `51dd2ce` (дума) → push tag (диалог) → refresh `D:\pnp-live`.
+**Операторска корекция 2026-09-28, след commit-а:** WSL НЕ се пенсионира тотално — спира да е гейт
+преди тага, но остава пътят за локално възпроизвеждане, когато POSIX крак в CI гръмне (иначе дебъгът е
+на сляпо по логове). Двата „RETIRED“ реда в `dev/PROJECT_OVERRIDES.md` § Test policy и
+`dev/VERIFY_RUNBOOK.md` § Portion 2 са пренаписани като „NOT A GATE … LOCAL REPRODUCTION path“ в
+отделен докс commit (dev/ не е payload; release commit-ът `51dd2ce` не се пипа); acceptance grep-ът
+„RETIRED 2026-09-28“ от Outcome т.3 е обезсилен от тази корекция и не се брои.
 **Останал дълг: няма.** Route-state `{}`. Планът остава активен заради HARD-011 (0.3.0).
 
 ## 0.2.7 — Environment correctness · tag `v0.2.7` (операторска дума 2026-09-16: HARD-013; ЗАМРАЗЕНО до края на консолидацията. HARD-014 ОТПАДНА — беше „Одитор с resume на сесията"; темата отива където консолидационното решение я прати)
