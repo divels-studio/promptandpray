@@ -2831,6 +2831,15 @@ up to date 0.2.12. Пълният набор — в CI след push (новот
 `dev/VERIFY_RUNBOOK.md` § Portion 2 са пренаписани като „NOT A GATE … LOCAL REPRODUCTION path“ в
 отделен докс commit (dev/ не е payload; release commit-ът `51dd2ce` не се пипа); acceptance grep-ът
 „RETIRED 2026-09-28“ от Outcome т.3 е обезсилен от тази корекция и не се брои.
+**Изданието 0.2.12 (2026-09-28, операторски думи „имаш дума за 1 и 2“, „имаш дума за тага и пуша“):**
+push `main` `37b80f3..2deccea` → CI рън `36387601057` **success** на трите крака (`windows`, `ubuntu`,
+`macos`) — първото издание без локален пълен VERIFY, по новото правило → датова поправка `deb2bf0`
+(CHANGELOG `2026-09-27` → `2026-09-28`, проверена в committed дървото с `git show HEAD:CHANGELOG.md`)
+→ tag `v0.2.12` на `deb2bf0` (лек, `cat-file -t` = commit; целта е датовият commit, както планът
+предвижда) → push `main` + tag (`2deccea..deb2bf0`, `[new tag] v0.2.12`); `git ls-remote --tags
+origin v0.2.12` → `deb2bf0…`; `origin/main...main` → `0 0`; `D:\pnp-live` на `deb2bf0`. Consumer proof
+не е стъпка на церемонията (HARD-021): консуматорите вземат 0.2.12 при следващия си ъпдейт. Паметите
+на Silerax/Furnissimo носят реда (2а) като преразказ — операторска дума: нищо не им се праща още.
 **Останал дълг: няма.** Route-state `{}`. Планът остава активен заради HARD-011 (0.3.0).
 
 ## 0.2.7 — Environment correctness · tag `v0.2.7` (операторска дума 2026-09-16: HARD-013; ЗАМРАЗЕНО до края на консолидацията. HARD-014 ОТПАДНА — беше „Одитор с resume на сесията"; темата отива където консолидационното решение я прати)
