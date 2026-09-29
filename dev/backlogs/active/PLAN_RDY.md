@@ -1,0 +1,415 @@
+# PromptAndPray Readiness — behavior ledger + per-claim fact-check (PLAN_RDY) · release 0.2.13
+
+> Роден 2026-09-29 с операторска дума („давай, отваряй плановата сесия“) след разпит на двата
+> консуматора — сесиите „Silerax Plan LIV“ (план PLAN_LIV, Stratex) и „Furnissimo Fix“ (план
+> PLAN_TUNE) — по операторско искане. Докладите им са съобщения от 2026-09-29; което има файл на
+> диска, е цитирано с файл (PLAN_LIV.draft.md, PLAN_TUNE.md, архивите), а корпусът от класове,
+> честотите и „6–8 от 10“ съществуват само в докладите и са маркирани „по доклада“. **Ревизия r1 (2026-09-29): планът е ПРЕСКОПИРАН**
+> след readiness пас 1 (NEEDS-FIX, 13 блокера, 11 авторски по одитора) — r0 предлагаше нов скил
+> `/pnp:plan` с 9 стъпки и 7 артефакта; ръчният му рън върху самия план не помръдна метриката (RDY 13
+> срещу LIV 11 / TUNE 10). Операторска дума за прескопирането: „приемам предложението с особено мнение,
+> на следващото планиране ще кажа дали работи … кодекс пас студен“ — особеното мнение е записано тук;
+> проверката е следващото планиране на консуматор. Readiness: `review.plan` реда (codex
+> `gpt-6-sol`/xhigh, 2 паса); пас 2 е СТУДЕН по думата (прескопирана ревизия — `skills/review/SKILL.md`
+> Step 3: „a correction round that RE-ARCHITECTED … reverts to cold“); брифът носи листата на пас 1
+> дословно с диспозиция (`.aiwf/plan/RDY/revisions.md`; r0 текстът е `PLAN_RDY.r0.md`). Guard (e):
+> копие в `dev/backlogs/active/PLAN_RDY.md` в мига на одобрението. Един префикс: `RDY`.
+
+## Context (discovery 2026-09-29: 2× Explore/sonnet + двата консуматорски доклада + ръчният рън r0; котви HEAD `ac83496`)
+
+**Проблемът, в числа (източник: докладите на двете сесии и техните ledger-и).**
+
+| План | Пас 1 | Пас 2 | Пас 3 | Авторски | Design | Инструменти в цикъла |
+|---|---|---|---|---|---|---|
+| Stratex PLAN_LIV | 11 | 6 (3 незатворени + 3 нови) | NEEDS-FIX, 5/6 затворени, hard cap (`PLAN_LIV.draft.md:817-825`) | 17/17 | 0 | инвентар (3 sonnet), собствен проход в отделен ход, fact-check ×3 (1 преди пас 1, 2 между пасовете; gaps 12/10/19), chain tables, process trace |
+| Furnissimo PLAN_TUNE | 10 | — | — | 10/10 (3 повторени класа) | 0 | инвентар (5+1 sonnet), собствен проход (хвана 12), fact-check с gaps (2+5), chain table (`readiness-chains.md`, 38 реда днес), process trace |
+| Stratex PLAN_TAL (27.09) | 10 | 6 | 6 | „всички авторски“ | — | собственият проход не бил отделен ход |
+| Furnissimo 017_CUTP (25.09) | 13 | 4+4 нови | — | 13/13 („0 продуктови спора“, архив `:689`) | 0 | fact-check (2 дефекта) |
+| Furnissimo 018_SCHEMES_RUNS (27.09) | 8 | 4 | PASS (+1) | 8/8 | 0 | fact-check ×2 (8 дефекта) |
+| **PromptAndPray PLAN_RDY r0 (29.09, този план, 9-стъпковият процес на ръка)** | **13** | — | — | **11/13 (по одитора)** | **2** | инвентар (2 sonnet), behavior ledger (1 sonnet, 38 звена), собствен проход (12 находки), replay (8 PRESENT), симулация (40 команди, 1 дефект), fact-check per claim ×3 (200 твърдения, 11 грешни, 20 пропуска) |
+
+**Двата проблема, разделени (изводът от r0, който прескопира плана).**
+
+**(а) Моделът в главата на автора се разминава с кода.** LIV #1, #2, #4, #5, #12, #13
+(`D:\Stratex\.aiwf\PLAN_LIV.draft.md:790-792` + доклад); TUNE B1–B5, B7, B9 (доклад); RDY r0: managed
+регионът на `CLAUDE.md`, семантиката на `ifRecorded`, пиновете на self-check-а, интро редовете на
+шаблона — 5 от 12-те находки на собствения проход дойдоха от **един** инструмент: отделен sonnet
+контекст, който чете всяко звено като поведение (`chains.md`, 38 реда). На пас 1 на RDY одиторът върна
+**2** от този клас (#3 — поведение, проверено срещу документ вместо срещу hook кода; #6 — семантика на
+`git ls-files`/`git diff` при untracked файлове). При консуматорите бяха 6–8 от 10.
+
+**(б) Консистентност и процесен ред в дълъг документ.** RDY #4, #5, #8, #9, #10, #11, #13; LIV #9,
+#10; TUNE B9, B10. Трима sonnet fact-check агента минаха през същите редове и не видяха
+противоречията; gpt-6-sol ги видя. Това е работата, за която платеният пас съществува; броят му расте с
+дължината на плана и евтин инструмент не го маха — деветте стъпки на r0 бяха насочени срещу (б) и не
+го помръднаха.
+
+**Изводът:** метриката „авторски блокери на пас 1“ събира (а) и (б) и затова е сгрешена. (а) се маха с
+инструмент; (б) се плаща. Консуматорите не са забравяли стъпките — изпълниха ги и не сработиха, защото
+инструментите проверяват СЪЩЕСТВУВАНЕ (указателят резолвира, командата съществува), не ПОВЕДЕНИЕ (какво
+звеното валидира, отхвърля, презаписва, над какво се затваря, какво прави при N и при конкуренция,
+какво прави библиотеката в `node_modules`). Fact-check гейтът прави sampling („deeply on 001/002/004,
+spot-checked on 003/005/006 … everything else resolved exactly“ — TUNE доклад) и при RDY r0 провери
+твърдение за hook поведение срещу текста на WORKFLOW вместо срещу `scripts/engine/pretooluse-mutation-guard.js`
+(пас 1 #3). Дефектът е в дефиницията на инструментите, не в дисциплината; дефиниционен дефект се
+поправя с дефиниция, не с процедура.
+
+**Корпус от блокер-класове** (~54 итемизирани блокера от 5 плана в 2 проекта по докладите; 63 класови тага — един блокер може да носи повече от един клас; честотите са тагове):
+state-enumeration 9 · command-not-literal/cannot-fail 7 · test-cannot-prove (mock) 6 ·
+unread-consumer 5 · data-shape-admitted-by-read-path 5 · process-order/actor 5 ·
+concurrency/lock-order 5 · acceptance-misses-risk-item 5 · unread-library-behavior 4 ·
+permission/render-gate consistency 4 · open-decision 3 · closure/memo-lifecycle 1 ·
+identifier-does-not-exist 1 · other 3. Отделно, **родени от ревизия между пасове**: LIV пас 2 — 3,
+CUTP пас 2 — 4, HARD-020 пас 2 — 2 от 4 (`dev/backlogs/CANDIDATES.md:160`) = 9. Всички класове
+освен два (closure, identifier — по един път, Stratex) се повтарят в двата проекта — основанието
+списъкът да живее в payload-а, не в паметите (Furnissimo: паметта `pre-dispatch-scan-blocker-ledger` не
+бе изпълнена — „нищо не ме подсеща“; `plan-proofs-are-literal-commands` бе нарушена в B10 въпреки нея).
+
+**Payload реалност (скан + ledger + fact-check r0; котви на HEAD `ac83496`):**
+- Fact-check гейтът: `skills/review/SKILL.md:197-262`; задачата към агента `:214-221` („Verify every
+  factual claim… Return ONLY the list of claims that are FALSE or UNVERIFIABLE“); трите readiness реда
+  `:229-246`, вторият е „verify the chain table“ (`:231`); диспач `subagent_type: "Explore"`, `model:
+  sonnet` (`:209-211`); `:260-262` („не е одитор, не се брои“). Няма изход, който да докаже, че агентът
+  е отворил всяко твърдение. Plan-readiness mode `:264-318`, precondition bullet `:269-273`. Пинът на
+  self-check-а в този файл: изречението на `:423-424` („A readiness pass after the first may resume only
+  with its compensations, and only on the operator's word“ — `scripts/selfcheck/aiwf-selfcheck.js:5576-5578`,
+  `doctrine-pass-compensations`) — извън пипаните редове.
+- Текстът, който описва изхода на гейта: `docs/WORKFLOW.md:145-148` („returning only the false or
+  unverifiable claims with `file:line` and the correct value - and, before a readiness pass, the gaps
+  list“); собственият проход `:384-401` (fact-check агентът с три инструкции; „verify the chain table“
+  на `:391-393`); цикълът `:419-432`; „at `0` … the COO's own reading plus the fact-check gate is the
+  whole contract“ `:436-437`; шестте проверки `:450-458`. `docs/LOOP.md:30-33`, `README.md:219`,
+  `docs/REVIEW_CHECKLIST.md:28` споменават гейта без форма на изхода — не се пипат.
+- `templates/ORCHESTRATOR.md.tmpl`: § Chain-trace duty `:163-175` (`{ behavior | ordered file:line
+  links | endpoint class }`; „the form check verifies coverage and resolution, never attention“ `:170`;
+  „a plan that buys no auditor pass owes no chain table“ `:174-175`); интро редовете `:15` и `:40`
+  изброяват „the chain-trace duty“ като правило на файла. Managed artifact
+  (`.claude/aiwf-native/ORCHESTRATOR.md`, записан на всяка инсталация от `0012`, което го е създало с
+  `createIfAbsent`). Self-check пин: model-agnostic (`aiwf-selfcheck.js:5624-5630`: пада на
+  `config.roles.`, на ред, започващ с `model:`/`effort:`, на първи ред `---`; контроли `:5718-5723`).
+- Rerender op: `scripts/update/validate-payload.mjs:105-137` (полета), `:376-396` (двата флага не пътуват
+  заедно; `createIfAbsent` иска `region: null`); `scripts/update/migrate.mjs:619-727` planRerender: при
+  запис → нередактиран → тих take-new, редактиран → conflict диалог, held → само upstream hash; без
+  запис → `ifRecorded` skip / `createIfAbsent` render / без флаг THROW. Образец:
+  `migrations/0012_orchestrator-role/ops.json:13-18`.
+- Издание: `migrations/index.json` = JSON масив, последен `0016_readiness-gaps-instruction` → `0.2.12`;
+  `validate-payload.mjs:262-329` — тройно съвпадение (plugin.json, последен запис, `ops.json`
+  `targetPluginVersion`), директория ↔ запис 1:1, `ops.migration` == dir id;
+  `.claude-plugin/plugin.json:3` (17 реда); `CHANGELOG.md:7-28` образец; `README.md:21` версия;
+  `examples/` не се пипа (HARD-019, `CHANGELOG.md:37-42`); self-update на repo-то е част от release
+  commit-а (прецедент `51dd2ce`: `.claude/aiwf-native/aiwf.config.json`, `roles.json`, `CLAUDE.md`),
+  защото `selfcheck` пази `installedPluginVersion == payload` (`aiwf-selfcheck.js:4906-4911`) и Step 0
+  на всеки скил тук спира при pending миграция.
+- `docs/README.md:6-15` индексира docs/ файловете (нов документ → нов ред). Нищо в scripts/ не пинва
+  списъка на docs/.
+- Untracked файлове: `git ls-files` и `git diff` не ги виждат (пас 1 #6) → нов файл се обявява с
+  `git add -N <path>` (intent-to-add; `git add` не е ask-class verb — няма го в
+  `templates/settings.ask-ruleset.json`) преди acceptance, fact-check и кодовия пас.
+- Странична находка (кандидат без ref, извън обхват): `skills/loop/SKILL.md:4` `allowed-tools` без
+  Bash, а `:18` инструктира `git rev-parse` — единствен от 12-те.
+
+## Mission goal
+
+Readiness пас 1 спира да връща блокери от клас **(а)**: планът пристига при одитора с ПРОЧЕТЕНО
+поведение на всяко звено (от отделен контекст) и с fact-check ledger per твърдение, който отказва
+sampling и проверява поведение в код. **Метрика:** блокери от клас (а) на пас 1 — несъществуващ
+указател/идентификатор/команда, непрочетен consumer, поведение на код/библиотека/hook, твърдяно от
+памет — → 0 при следващите readiness цикли на консуматорите (записва се в completion record-а, когато
+данните дойдат; операторът съди на следващото планиране). Броят на клас (б) НЕ е метрика.
+
+**Обхват (4 промени, един тикет, издание 0.2.13):** (1) Step 2b на `/pnp:review` → per-claim ledger;
+(2) § Chain-trace duty → § Behavior ledger duty в ORCHESTRATOR шаблона + Step 2a в review скила с
+дословната агентна задача; (3) нов `docs/READINESS_CLASSES.md` (14 класа) като инструкция към
+fact-check агента; (4) едно изречение в WORKFLOW — поправката след пас затваря и не добавя (кандидат
+`dev/backlogs/CANDIDATES.md:155-161`). Миграция `0017` с един rerender op + note, bump, CHANGELOG,
+self-update.
+**Извън обхват:** нов скил; артефактен договор в `.aiwf/`; `--revise` режим; врата в
+OPERATOR_PROTOCOL; managed региона на `CLAUDE.md`; seed; симулация преди имплементация (лимит:
+доказва само „командата работи и пада днес“ — пас 1 #2); промяна в одитната таблица/броя пасове;
+HARD-011 (остава 0.3.0 в PLAN_HARD, както е записано); `skills/loop` дефектът.
+
+## Решения (COO; едноредово „защо“)
+
+1. **Без нов скил.** Нула доказателство от r0, че някоя от 9-те стъпки мести клас (а) освен ledger-ът
+   и per-claim fact-check-ът; всяка добавена стъпка е място, където доктрината се повтаря (GPT анализ
+   в PLAN_HARD т.9; 0.2.9), и COO контекст, изхабен в оркестрация. Операторско особено мнение —
+   записано в header-а.
+2. **Един тикет RDY-001 [R2 code-class], издание 0.2.13.** Шаблонът е managed → миграция + bump;
+   review скилът и WORKFLOW трябва да описват един и същ изход на гейта → един диф, един кодов пас.
+   HARD-011 остава 0.3.0 (думата за 0.3.0 от 29.09 беше за скила; без скил първата запис остава).
+3. **Behavior ledger-ът се пълни от ОТДЕЛЕН контекст** — един `sonnet` Explore агент per тикет, ред per
+   звено; COO записва редовете и ги чете в собствения проход. Explore е read-only по allowlist
+   (без Edit/Write; Gate 1 пази Edit/Write класа от не-Writer субагенти — shell запис не е покрит от
+   hook, което е още една причина агентът да е Explore, а не general-purpose). Top tier не се
+   делегира за сканове (WORKFLOW § COO owns broad scans); при противоречие — COO чете сам или
+   ре-диспачва един tier нагоре. Файл, който планът СЪЗДАВА, е ред `NEW <path>`, не `UNREAD` (пас 1 #1).
+4. **Агентната задача има един дом:** `skills/review/SKILL.md`, нова Step 2a непосредствено преди
+   Step 2b — скилът, който COO отваря преди всеки пас и който вече носи диспач образеца. ORCHESTRATOR
+   § Behavior ledger duty сочи натам, не преразказва.
+5. **Fact-check per claim, без sampling, поведение в код.** Ledger с ред за всяко твърдение и ред с
+   бройки; над план — един агент per тикет секция + един за споделените; „spot-checked“ / „everything
+   else resolved“ / липсващ `CLAIMS:` ред = нарушение → ре-диспач на секцията; hook/engine поведение се
+   проверява в `scripts/engine/*.js` и `scripts/native/**`, библиотечно — в `node_modules`, никога в
+   документ за него (пас 1 #3, TUNE B3/B6/B10).
+6. **`docs/READINESS_CLASSES.md` е инструкция, не стъпка:** Step 2b подава документа на агента с един
+   ред. Replay като отделна стъпка (r0 Step 6) не намери нищо, което собственият проход не бе намерил.
+7. **Ledger-ът се дължи преди всеки платен readiness пас — и при `review.plan.passes: 0`.** Обръща „a
+   plan that buys no auditor pass owes no chain table“ (`ORCHESTRATOR.md.tmpl:174-175`): при 0 паса
+   собственият проход над ledger-а + fact-check-ът СА договорът (WORKFLOW `:436-437` се допълва).
+8. **Rerender op без `ifRecorded`/`createIfAbsent`** (chains.md ред 15): артефактът е записан на всяка
+   инсталация след `0012`; флагът би бил мъртъв клон с обърната семантика.
+9. **Self-update на repo-то в кодовия commit** (`51dd2ce`); новите файлове се обявяват с `git add -N`
+   преди VERIFY/acceptance/review (пас 1 #6).
+10. **VERIFY пропорционален** (`dev/PROJECT_OVERRIDES.md:190-194`): docs/skills → `validate-payload` +
+    provenance; templates → `selfcheck`; migrations → `update-suite`, `validate-payload`,
+    `example-cycle-windows`, `selfcheck`; по COO преценка извън четирите реда: `setup-suite` (шаблонът
+    се рендира от setup engine-а) и `plugin-validate` (манифестен bump). Шест, Порция 1, един паралелен
+    batch; WSL не е гейт (HARD-021).
+11. **Consumer proof — три команди**, `/plugin marketplace update promptandpray` → `/reload-plugins` →
+    `/pnp:update`: измерено на операторски екран 2026-09-21 („Updated 1 marketplace (1 plugin
+    bumped)“, `dev/backlogs/active/PLAN_HARD.md:1360-1369`); `README.md:27-29` носи четиристъпковата
+    форма — поправката ѝ е HARD-011 т.1, не този тикет (пас 1 #12 — затворен по факт).
+
+## Спецификация на промените (договорът, който Колегата изписва)
+
+### A. `skills/review/SKILL.md` — Step 2a (нова) и Step 2b (пренаписана)
+
+**Step 2a — Behavior ledger before a readiness pass** (вмъква се между `:195` „itself a finding.“ и
+`:197` „## Step 2b“). Съдържание: преди първия платен readiness пас (и преди всеки пас при `passes:
+0`) COO диспачва един `sonnet` агент per тикет — `subagent_type: "Explore"` „(or whichever read-only
+scan agent this harness ships)“, `model: sonnet` изричен — с точно тази задача, дословно:
+
+```
+You read CODE, not the plan's claims. Input: one ticket's Outcome sentences and its worklist
+pointers, below. For EVERY link a chain from the entry point to the endpoint passes through -
+every function, action, hook, query, component, template, test the pointers name or that the code
+at a pointer calls - open it and return ONE row:
+<#> | <behavior sentence> | <link file:line> | DOES: what it validates / rejects / overwrites /
+reads / writes / renders with the plan's input | CLOSES OVER: what state it captures and when it
+is recreated (memo deps, refs, module scope) | STATES: what happens at empty / one / N rows,
+concurrent callers, error path, rerun | LIB: node_modules path:line for any library behavior the
+plan relies on | NOTE: anything the plan assumes that the code does not do
+A link the plan CREATES (a file that does not exist yet) is one row with `NEW <path>` in DOES and
+the contract it must satisfy in NOTE. A link you cannot open is one row with `UNREAD <reason>` in
+DOES. A chain that ends before a source or a render-or-DB-write surface is reported as
+`CHAIN ENDS EARLY at <file:line>`. No verdict, no suggestions, no summary; every link is a row.
+
+TICKET:
+<the ticket's Outcome and worklist, pasted>
+```
+
+и след него: COO записва редовете под header `| # | behavior | link (file:line) | DOES | CLOSES OVER |
+STATES | LIB | NOTE |` (къде — негова работа; `{{config.paths.scratchDir}}` е gitignored и е
+естественото място); празна клетка DOES или `UNREAD` = прочит от COO или ре-диспач преди паса; NOTE
+редовете са входът на собствения проход (WORKFLOW § Plan readiness review); ledger-ът не е одитор, не
+връща вердикт, не се брои за пас. Дуал: R1 и non-durable R2 не дължат ledger (WORKFLOW `:352-354`).
+
+**Step 2b** — задачата `:213-221` (code fence-inclusive; съдържанието е `:214-220`) се заменя дословно с:
+
+```
+Verify EVERY factual claim in the prose of this document - path, line number, count, command,
+identifier, engine/hook behavior, library behavior - against the tree as it is now. A claim about
+a hook or an engine is verified in the code that implements it (scripts/, hooks/), never in a
+document that describes it; a claim about a library is verified in node_modules (or the installed
+package), never from memory. Return a LEDGER with one row per claim, in document order:
+<doc line> | <claim, shortened> | VERIFIED <file:line> | FALSE <correct value> | UNVERIFIABLE <why>
+No sampling, no spot-checking, no "everything else resolved": a claim you did not open is
+UNVERIFIABLE with the reason "not opened". End with
+CLAIMS: total=<n> verified=<n> false=<n> unverifiable=<n>. No verdict, no review, no suggestions.
+
+DOCUMENT:
+<the diff the review brief carries, or the plan section this agent is given>
+```
+
+Абзацът след него казва: (а) над план документът се РАЗДЕЛЯ — един агент per тикет секция плюс един
+за споделените секции, всеки с раздела с решенията като контекст; (б) изход със „spot-checked“,
+„deeply on“, „the rest is fine“ или без `CLAIMS:` ред е нарушение на договора → същият раздел се
+ре-диспачва; (в) трите readiness реда `:229-246` остават — вторият става „verify the behavior ledger
+(Step 2a): every link resolves at its file:line and its DOES cell matches the code; a chain that ends
+before a source or a render-or-DB-write surface is a gap; a NEW row names the contract the new file
+must satisfy“, а третият получава едно изречение в началото: „apply every class of
+`docs/READINESS_CLASSES.md` to every ticket - a class present in the plan is a gap, named by class
+number“; (г) `:260-262` остава. Plan-readiness mode `:269-273` (precondition bullet) добавя: „…and,
+before this pass, the behavior ledger of Step 2a“. **Не се пипа** `:423-424` (self-check пин).
+
+### B. `templates/ORCHESTRATOR.md.tmpl` — § Chain-trace duty → § Behavior ledger duty
+
+`:15` и `:40`: „the chain-trace duty“ → „the behavior ledger duty“. `:163-175` се заменят с: heading
+`## Behavior ledger duty`; текст: преди първия платен readiness пас — и преди всеки пас при 0
+конфигурирани — за всяко звено на всяка верига от Outcome-а има ред, произведен от ОТДЕЛЕН scan-tier
+контекст (`/pnp:review` Step 2a носи задачата), който казва какво звеното прави с входа на плана, над
+какво се затваря, какво прави при N и при конкуренция, и какво прави библиотеката; COO чете редовете,
+не указателите, и действа преди диспача. Честният лимит: „a ledger proves that a second context read
+the link, not that the COO acted on it - the plan lines that changed are where acting is visible; the
+catch-share was measured on one plan by its author“. Дължи се винаги, когато има платен пас или
+`passes: 0`; R1 и non-durable R2 не дължат нищо. Без `model:`/`effort:` в начало на ред, без
+`config.roles.`, без `---` на първи ред (self-check `:5624-5630`).
+
+### C. `docs/READINESS_CLASSES.md` (нов, английски)
+
+Заглавие; два абзаца: откъде идват — „measured on the readiness cycles of consumer projects: the
+first thirteen classes were each a paid pass-1 blocker at least once, most of them in more than one
+project; the fourteenth was measured between passes, on the blockers a revision itself created“ (без
+бройки — за читателя на payload-а са непроверими); как се ползват — „`/pnp:review` Step 2b hands this
+file to the fact-check agent; a class present in a plan is a gap, named by number; the list grows with
+a release, never with a session“. Таблица `| # | class | the question to ask of every ticket |` с
+точно 14 реда, всеки във формата `| <N> | <class> | <question> |` — пайп, интервал, число, интервал,
+пайп (acceptance grep-ът брои този формат): 1 unread consumer · 2 library or hook behavior asserted from memory · 3 closure / memo /
+lifecycle · 4 concurrency / lock order · 5 state enumeration (empty / one / N / error / rerun /
+open-closed) · 6 data shape the read path already admits · 7 identifier that does not exist ·
+8 command not literal or cannot fail · 9 test that cannot prove (a mock stands in for the property) ·
+10 permission / render-gate consistency across surfaces · 11 process order / actor · 12 open decision
+left to the Writer · 13 acceptance misses a risk-threshold item · 14 fix after a pass adds new
+surface. Затваря с честния лимит: „a corpus, not a theory - a class not listed is not proven absent“.
+
+### D. `docs/WORKFLOW.md` — четири изречения
+
+- `:145-148`: „returning only the false or unverifiable claims with `file:line` and the correct value
+  - and, before a readiness pass, the gaps list“ → „returning a per-claim ledger - every claim
+  verified, false or unverifiable, with `file:line` and a count line - and, before a readiness pass,
+  the gaps list“.
+- `:384-401` (собственият проход): „verify the chain table - …“ (`:391-393`) → „verify the behavior
+  ledger - every link resolves and its DOES cell matches the code“; в началото на абзаца едно
+  изречение: „The own pass reads the behavior ledger (`/pnp:review` Step 2a) - what each link does
+  with the plan's input, read by a second context - not the pointers alone.“
+- `:419-432` (цикълът), след „the COO revises between passes“: „The revision after a pass closes the
+  blockers it was handed and adds nothing new: a change that opens new surface is a candidate for the
+  next plan, not a line in this one - the next pass would only find what the revision created.“
+- `:436-437`: „the COO's own reading plus the fact-check gate is the whole contract“ → „the COO's own
+  pass over the behavior ledger plus the fact-check gate is the whole contract“.
+
+### E. Издание
+
+`migrations/0017_behavior-ledger/ops.json`: `"migration": "0017_behavior-ledger"`,
+`"targetPluginVersion": "0.2.13"`, operations: `rerender-managed-region` за
+`.claude/aiwf-native/ORCHESTRATOR.md` (`region: null`, `template: "templates/ORCHESTRATOR.md.tmpl"`,
+без флагове) + `note` (`id: behavior-ledger`, `docRefs: ["CHANGELOG.md", "skills/review/SKILL.md",
+"docs/READINESS_CLASSES.md"]`, текст: какво се променя и кои консуматорски памети стават указатели —
+own pass over the ledger, chain-trace evidence pack за readiness, blocker-class replay — без имена на
+проекти). `NOTES.md` по образеца на `migrations/0016_readiness-gaps-instruction/NOTES.md`.
+`migrations/index.json` нов последен запис `{ "id": "0017_behavior-ledger", "targetPluginVersion":
+"0.2.13" }`. `.claude-plugin/plugin.json:3` → `0.2.13`. `CHANGELOG.md` нов блок `## [0.2.13] - <дата
+на тага>`: `### Added` (READINESS_CLASSES.md; Step 2a), `### Changed` (Step 2b ledger; Behavior ledger
+duty; WORKFLOW изреченията). `README.md:21` → `v0.2.13`. `docs/README.md:6-15` нов ред: „-
+`READINESS_CLASSES.md` - the blocker classes a readiness pass keeps finding, one question per class;
+the fact-check gate applies them to every ticket before the paid pass.“ Self-update: `node
+scripts/update/aiwf-update.mjs --apply --project-root .` след bump-а (ORCHESTRATOR.md ре-рендиран
+тихо, `installedPluginVersion` → `0.2.13`, `lastMigrationApplied` → `0017_behavior-ledger`); conflict
+диалог → СТОП и доклад.
+
+## Тикет
+
+### RDY-001 [R2 code-class] — behavior ledger + per-claim fact-check; release 0.2.13
+
+**Outcome:** (1) `/pnp:review` Step 2a носи дословната ledger задача и Step 2b връща ledger per
+твърдение с `CLAIMS:` ред, отказва sampling, проверява hook/engine/библиотека в код и прилага
+`docs/READINESS_CLASSES.md`; (2) ORCHESTRATOR шаблонът казва „Behavior ledger duty“ на трите места и
+консуматорите го получават с rerender; (3) `docs/READINESS_CLASSES.md` съществува с 14 класа и е
+индексиран; (4) WORKFLOW описва същия изход и носи изречението за ревизията; (5) 0.2.13 е издадена по
+церемонията.
+
+**Worklist (котва при диспач = `git rev-parse HEAD`, литерално в брифа):**
+1. `skills/review/SKILL.md` — Step 2a между `:195` и `:197`; Step 2b `:213-221` (fence-inclusive) и абзаците `:223-252`
+   по § A; `:269-273` едно изречение; `:423-424` непипнато.
+2. `templates/ORCHESTRATOR.md.tmpl:15`, `:40`, `:163-175` по § B.
+3. `docs/READINESS_CLASSES.md` — НОВ по § C; `git add -N docs/READINESS_CLASSES.md` веднага след
+   създаването.
+4. `docs/WORKFLOW.md:145-148`, `:384-401` (вкл. `:391-393`), `:419-432`, `:436-437` по § D.
+5. `docs/README.md:6-15` нов ред (§ E).
+6. `migrations/0017_behavior-ledger/{ops.json,NOTES.md}` — НОВИ по § E; `git add -N` на двата;
+   `migrations/index.json` нов последен запис.
+7. `.claude-plugin/plugin.json:3` → `0.2.13`; `CHANGELOG.md` нов блок; `README.md:21` → `v0.2.13`.
+8. Self-update `--apply` (§ E) — пише `.claude/aiwf-native/aiwf.config.json` и
+   `.claude/aiwf-native/ORCHESTRATOR.md` (ако engine-ът пипне и `roles.json` bookkeeping — допустимо).
+   **Ред:** т.8 се изпълнява СЛЕД т.7 и ПРЕДИ VERIFY и acceptance — между bump-а и `--apply`
+   `selfcheck` пада на `version-stamp` (`aiwf-selfcheck.js:4906-4911`), а Step 0 на всеки скил тук спира.
+
+**Извън worklist-а, изрично:** `skills/` освен review; `examples/`; `hooks/`; `schema/`; `scripts/`;
+`templates/` освен ORCHESTRATOR шаблона; `CLAUDE.md`; `.claude/agents/`; `.claude/settings.json`;
+`dev/**` (COO, docs commit); `.github/`.
+
+**Acceptance (Bash на Колегата, литерални; изходът вдясно е „добре“, всичко друго — „счупено“;
+всяка grep форма долу без етикет „regression guard“ пада на днешното дърво — проверено при fact-check r1):**
+- `grep -c "^## Step 2a" skills/review/SKILL.md` → `1`; `grep -c "You read CODE, not the plan's claims." skills/review/SKILL.md` → `1`; `grep -c "NEW <path>" skills/review/SKILL.md` → `1`; `grep -c "CHAIN ENDS EARLY at" skills/review/SKILL.md` → `1`.
+- `grep -c "CLAIMS: total=" skills/review/SKILL.md` → `1`; `grep -c "Return ONLY the list of claims that are" skills/review/SKILL.md` → `0`; `grep -c "No sampling, no spot-checking" skills/review/SKILL.md` → `1`; `grep -c 'UNVERIFIABLE with the reason "not opened"' skills/review/SKILL.md` → `1`; `grep -c "never in a document that describes it" skills/review/SKILL.md` → `1`; `grep -c "READINESS_CLASSES.md" skills/review/SKILL.md` → `1`; `grep -c "may resume only with its compensations" skills/review/SKILL.md` → `1` (regression guard — минава и днес).
+- `grep -c "Behavior ledger duty" templates/ORCHESTRATOR.md.tmpl` → `1`; `grep -ci "chain-trace\|chain table" templates/ORCHESTRATOR.md.tmpl` → `0`; `grep -cE "^(model|effort):" templates/ORCHESTRATOR.md.tmpl` → `0`; `sed -n '1p' templates/ORCHESTRATOR.md.tmpl | grep -c "^---"` → `0` (двете са regression guard-ове — минават и днес; пазят self-check пина `:5624-5630`).
+- **Позитивен контрол на шаблона, преди да се брои документът** (пас 2 #1 — голият `|` в ERE е алтернация с празен низ и брои всички редове; пайпът стои в скоби `[|]`): `printf '| # | class | q |\n|---|---|---|\n| 1 | a | q |\n| 14 | b | q |\n' | grep -cE "^[|][[:space:]]*[0-9]+[[:space:]]*[|]"` → `2` (`4` = шаблонът е счупен; header и разделителят не се броят). Проверено на 2026-09-29 върху този sample: `2`; негативен контрол (header + разделител без номерирани редове) → `0`.
+- `test -f docs/READINESS_CLASSES.md && grep -cE "^[|][[:space:]]*[0-9]+[[:space:]]*[|]" docs/READINESS_CLASSES.md` → `14` (пас 1 #7: брои само номерираните редове, не header/разделител; § C фиксира формата); `grep -cE "^[|][[:space:]]*14[[:space:]]*[|]" docs/READINESS_CLASSES.md` → `1`; `grep -c "READINESS_CLASSES.md" docs/README.md` → `1`.
+- `grep -c "chain table" docs/WORKFLOW.md skills/review/SKILL.md templates/ORCHESTRATOR.md.tmpl | grep -vc ":0$"` → `0`; `grep -c "only the false or unverifiable claims" docs/WORKFLOW.md` → `0`; `grep -c "per-claim ledger" docs/WORKFLOW.md` → `1`; `grep -c "adds nothing new" docs/WORKFLOW.md` → `1`; `grep -c "own pass over the behavior ledger" docs/WORKFLOW.md` → `1`; `grep -c "Step 2a" docs/WORKFLOW.md` → `1`.
+- `node -e "const i=require('./migrations/index.json');const l=i[i.length-1];if(l.id!=='0017_behavior-ledger'||l.targetPluginVersion!=='0.2.13')process.exit(1)"` → exit 0; `grep -c '"version": "0.2.13"' .claude-plugin/plugin.json` → `1`; `test -f migrations/0017_behavior-ledger/ops.json && grep -c '"targetPluginVersion": "0.2.13"' migrations/0017_behavior-ledger/ops.json` → `1`; `grep -c "ifRecorded\|createIfAbsent" migrations/0017_behavior-ledger/ops.json` → `0`; `grep -c '"op": "rerender-managed-region"' migrations/0017_behavior-ledger/ops.json` → `1`; `test -f migrations/0017_behavior-ledger/NOTES.md` → exit 0.
+- `grep -c '"installedPluginVersion": "0.2.13"' .claude/aiwf-native/aiwf.config.json` → `1`; `grep -c '"lastMigrationApplied": "0017_behavior-ledger"' .claude/aiwf-native/aiwf.config.json` → `1`; `grep -c "Behavior ledger duty" .claude/aiwf-native/ORCHESTRATOR.md` → `1`.
+- `grep -c "^## \[0.2.13\] - " CHANGELOG.md` → `1`; `grep -c "v0.2.13" README.md` → `1`.
+- Untracked обявени (пас 1 #6): `git ls-files --others --exclude-standard -- docs migrations | grep -c .` → `0` (regression guard — минава и днес на чисто дърво; доказва само, че нищо не е останало необявено; пас 2 #3); `git diff --name-only | grep -c "READINESS_CLASSES\|0017_behavior-ledger"` → `3`.
+- Дифф гард (котва `<КОТВА>` = HEAD при диспач; regression guard на чисто дърво):
+  `node -e "const{execSync}=require('child_process');const sh=c=>execSync(c).toString().trim();const A='<КОТВА>';const ch=sh('git diff --name-only '+A).split(/\r?\n/).filter(Boolean);const un=sh('git status --porcelain').split(/\r?\n/).filter(l=>l.startsWith('??')).map(l=>l.slice(3));const ok=f=>f==='skills/review/SKILL.md'||f==='templates/ORCHESTRATOR.md.tmpl'||f==='docs/READINESS_CLASSES.md'||f==='docs/WORKFLOW.md'||f==='docs/README.md'||f==='migrations/index.json'||f==='migrations/0017_behavior-ledger/ops.json'||f==='migrations/0017_behavior-ledger/NOTES.md'||f==='README.md'||f==='CHANGELOG.md'||f==='.claude-plugin/plugin.json'||f==='.claude/aiwf-native/aiwf.config.json'||f==='.claude/aiwf-native/ORCHESTRATOR.md'||f==='.claude/aiwf-native/roles.json';const bad=ch.filter(f=>!ok(f)).concat(un.filter(f=>!(ok(f)||f.startsWith('dev/')||f.startsWith('.aiwf/'))));if(bad.length){console.error(bad);process.exit(1)}"` → exit 0.
+- Provenance (regression guard): `git grep -nP "[\x{0400}-\x{04FF}]" -- docs skills templates scripts schema hooks migrations examples README.md` → празно.
+- VERIFY (Решение 10; регресионен backstop, не доказателство за новото), Порция 1, един паралелен
+  batch: `validate-payload`, `selfcheck`, `update-suite`, `example-cycle-windows`, `setup-suite`,
+  `plugin-validate` → exit 0 всяка, точните кодове в handback-а; runbook `dev/VERIFY_RUNBOOK.md`.
+- След издание (record, не acceptance): CI зелен на windows+ubuntu на тагнатия hash; `git ls-remote
+  --tags origin v0.2.13` → hash; `origin/main...main` → `0 0`; консуматорите — `/pnp:update` чист,
+  ORCHESTRATOR.md ре-рендиран без диалог.
+
+**Risk threshold:** блокира — файл извън allowlist-а; Cyrillic/абсолютен път/име на проект в payload;
+агентен task текст, който позволява sampling, връща вердикт или проверява поведение срещу документ;
+флаг на rerender op-а; ръчна редакция на `.claude/aiwf-native/ORCHESTRATOR.md` вместо `--apply`
+(наблюдаемо: `selfcheck` сравнява hash-а с `_aiwf.managedRegions`); пипнато `:423-424`; нов файл без
+`git add -N` при диспача на паса; невярно твърдение в prose. Не блокира — стил, дължина.
+**Stop condition:** acceptance зелен + един кодов пас `pass`/`pass-with-notes` → стоп; cap 2 рунда.
+**Review:** `Class: code` → `review.code` (codex `gpt-6-sol`/xhigh, 1 пас); преди него fact-check per
+claim над дифа (COO, по новата форма — на ръка, защото скилът още не е инсталиран) и behavior ledger
+на промените (Step 2a на ръка). QA — не.
+**Assignee:** Колега. Branch `main`. Един кодов commit (worklist 1–8 по изрични пътища); docs commit
+отделно (PLAN record, CANDIDATES редове, бележка в PLAN_HARD, архивиране — вж. Процес).
+
+## Верига (Outcome → payload звена; behavior ledger r0 `chains.md` редове 9–20, 22, 29, 31–34 остават валидни; ред 15 се чете с `migrate.mjs:619-727`, ред 21 (Door 4) е отпаднал със скила, ред 30 се чете с `0.2.13` вместо `0.3.0`)
+
+| # | behavior | links | endpoint |
+|---|---|---|---|
+| 1 | Step 2a/2b се четат от COO преди пас | `skills/review/SKILL.md:195-262` → `:269-273` → агентен изход → COO | текст, четен от COO |
+| 2 | Behavior ledger duty стига до консуматора | `templates/ORCHESTRATOR.md.tmpl:15,40,163-175` → `migrations/0017_behavior-ledger/ops.json` (NEW) (1 rerender, без флаг) → `validate-payload.mjs:105-137,376-396` → `migrate.mjs:619-727` (запис + нередактиран → тих take-new) → `.claude/aiwf-native/ORCHESTRATOR.md` (консуматор; това repo чрез `--apply`) | рендиран файл |
+| 3 | класовете стигат до fact-check агента | `docs/READINESS_CLASSES.md` (NEW) → `skills/review/SKILL.md` Step 2b трети ред → агентна задача | текст |
+| 4 | WORKFLOW описва същия изход | `docs/WORKFLOW.md:145-148`, `:384-401`, `:419-432`, `:436-437` | текст |
+| 5 | изданието е валидно | `.claude-plugin/plugin.json:3` → `migrations/index.json` → `migrations/0017_behavior-ledger/ops.json` (NEW) → `validate-payload.mjs:262-329` → CI → tag | CI + tag (тагът е операторска стъпка — веригата свършва тук по конструкция) |
+| 6 | self-check остава зелен | `aiwf-selfcheck.js:5624-5630` (model-agnostic), `:5576-5578` (`:423` пин), `:4906-4911` (version stamp) | selfcheck exit |
+
+## Процес
+
+1. **Readiness на този план (r1):** ревизия по `revisions.md` (13 блокера с диспозиция: 7 затворени,
+   5 отпаднали със скила, 1 затворен по факт) → behavior ledger r0 остава валиден за звената, които
+   оцеляха (редове 9–20, 22, 29, 31–34; трите остарели бележки са в заглавието на § Верига), плюс `NEW`
+   редове за READINESS_CLASSES.md и 0017 (договорът им: `validate-payload.mjs:262-329` — `ops.migration`
+   == името на директорията, `targetPluginVersion` == записа в манифеста, `NOTES.md` задължителен;
+   таблицата на класовете във фиксирания формат от § C) → fact-check per
+   claim над r1 (2 sonnet агента: Context+Решения; Спецификация+Тикет+Процес; новият task текст, вкл.
+   „поведение в код“) → **студен Codex пас 2** по думата („кодекс пас студен“), брифът с листата на пас
+   1 дословно + диспозиция и origin duty → при NEEDS-FIX: пас 3 иска отделна дума (hard max).
+2. **Изпълнение:** guard (e) при одобрението — копие в `dev/backlogs/active/PLAN_RDY.md`, `git add
+   dev/backlogs/active/PLAN_RDY.md`, **commit клик** (docs commit „PLAN_RDY approved“; образецът
+   PLAN_HARD `:2926-2927` „планът се копира … и се комитва сам преди първия тикет“; пас 2 #2 — без него
+   `git mv` при архивирането няма проследен източник) → котвата HEAD за брифа е СЛЕД този commit → дума
+   за RDY-001 → route-state `{ticket: RDY-001, route: R2}` → Writer бриф
+   (`Ticket: RDY-001` на свой ред; котва HEAD; worklist; „`git add -N` на всеки нов файл“; VERIFY
+   редовете; runbook; без `model`) → handback → behavior ledger над промените + fact-check per claim над
+   `git diff` (COO, на ръка) → `/pnp:review` `Class: code` (1 пас; корекционен рунд с код →
+   верификационен пас само с дума) → **commit клик** (кодов commit: worklist 1–8 по изрични пътища,
+   вкл. self-update артефактите — прецедент `51dd2ce` за самите артефакти; PLAN и `dev/` не влизат по
+   WORKFLOW `:599-603` „the docs commit is separate from the code commit“ — `51dd2ce` носеше и два `dev/`
+   файла, тоест не е прецедент за разделянето, доктрината е) → route-state `{}` →
+   **docs commit (клик):** completion record в PLAN_RDY + бележка в PLAN_HARD (HARD-011 остава 0.3.0;
+   RDY = 0.2.13) + CANDIDATES редове (pass statistics, event ledger, кандидатът `:155` затворен) +
+   **архивиране в същия commit** (пас 1 #13): проверката за rule-class точки без pointer row —
+   `grep -nE "from now on|от сега|винаги|never|правило" dev/backlogs/active/PLAN_RDY.md | grep -vE "CANDIDATES|pointer|указател"` → всеки ред се чете и или има ред в CANDIDATES § D2 pointer rows, или го получава; положителен контрол: същият grep над `dev/backlogs/archive/005_PLAN_CONS_2026-09-21.md` → `≥1` (план, за който се знае, че носи такива точки; `0` = инструментът е счупен, стоп) — после `git mv dev/backlogs/active/PLAN_RDY.md dev/backlogs/archive/006_PLAN_RDY_<YYYY-MM-DD>.md` (датата на архивиране) → **push `main` (дума + диалог)** → CI windows+ubuntu зелени на пушнатия hash → датата в CHANGELOG срещу деня на тага, В ТОЗИ hash; ако не съвпада: поправка + commit (клик) + push (дума + диалог) + CI зелен на новия hash (пас 1 #10) → **tag `v0.2.13` на hash-а, който CI е доказал (назован в чата преди командата; дума)** → **push tag (дума + диалог)** → worktree: `git -C D:\pnp-live status --porcelain` → празно, после **дума** за `git -C D:\pnp-live checkout --detach main` (външна мутация — WORKFLOW `:824-831`; пас 1 #11; плюс Gate 4 диалог) → consumer proof: съобщение до двете сесии с трите команди (Решение 11) → record в архивирания план (R1 docs, клик).
+3. **Гейтове, изброени:** commit клик за landing-а на плана (guard (e)); дума за RDY-001; commit клик
+   ×2 (код, docs) + евентуален ×1 (дата) + ×1 (record след издание); push дума + диалог (+ ×1 при дата); tag дума; push tag дума + диалог;
+   worktree дума + диалог; readiness пас 3 / кодов рунд над cap 2 / верификационен пас след кодов рунд
+   — дума всеки. Нищо друго не пита.
+4. **Измерване (record, не acceptance):** следващият readiness цикъл на всеки консуматор след 0.2.13 —
+   блокери от клас (а) на пас 1, по доклада на сесията; операторът съди на следващото планиране.
+
+## Verification (края на мисията)
+
+- `node scripts/update/aiwf-update.mjs --check --project-root .` → „up to date … 0.2.13“.
+- `git ls-remote --tags origin v0.2.13` → hash, равен на CI-зеления; `origin/main...main` → `0 0`.
+- Двата консуматора на 0.2.13 с чист `/pnp:update` (record).
+- PLAN_RDY в `dev/backlogs/archive/006_PLAN_RDY_<дата>.md`, с completion record; PLAN_HARD активен.
