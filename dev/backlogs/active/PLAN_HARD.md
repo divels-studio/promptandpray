@@ -65,6 +65,7 @@
 | HARD-019 | — (примерният bump fixture се преименува при всяко издание, роден 2026-09-24) | 0.2.11 |
 | HARD-020 | — (шестте readiness проверки стават трета стояща инструкция на fact-check гейта, роден 2026-09-27) | 0.2.12 (преди 0.3.0, операторска дума) |
 | HARD-021 | — („доктринният текст не е код“: пиновете върху проза падат, docs промяна = validate-payload + provenance, изданието без локален пълен VERIFY; роден 2026-09-28, операторска дума) | 0.2.12 (заедно с HARD-020: един commit, един code пас) |
+| HARD-022 | — (вердиктът получава свое съобщение, не свой ход; роден 2026-09-30) | 0.2.14 (дума 2026-09-30 „пускай тикета“; без одит пас; commit `1bc1bfa`) |
 
 ## Context (discovery 2026-09-12: 4× Explore/sonnet + claude-code-guide; котви проверявани при диспач)
 
@@ -2853,6 +2854,126 @@ self-check PASS 1165/1165; CHANGES отчетът преместен в `docs/ai
 чистене: редът (2а) в `own-pass-separate-turn.md` става указател към Step 2b, по неговата guard (g).
 **Останал дълг: няма.** Route-state `{}`. Планът остава активен заради HARD-011 (0.3.0).
 
+## 0.2.14 — вердиктът не е стоп (роден 2026-09-30; записан и СПРЯН — диспач след операторска дума)
+
+### HARD-022 [R2 code-class] — вердиктът получава свое съобщение, не свой ход; release 0.2.14
+
+**Контекст:** правилото `templates/ORCHESTRATOR.md.tmpl:87` („a verdict and the next dispatch never
+share one message“, § Verdict and dispatch `:85-93`) се чете като „спри след вердикт“: в Claude Code
+отговор, който завършва без tool call, завършва хода, затова „отделно съобщение“ мълчаливо става
+„спри и чакай“. Три записани операторски корекции: тук 2026-09-22 (`dev/backlogs/CANDIDATES.md:624`,
+„защо всички спирате след 1ви пас“) и 2026-09-24 (`:631`, HARD-019 p1 — корекционният рунд не беше
+пуснат, „И ТИ ЩО СПРЯ“); консуматор Silerax 2026-09-30 (LIV-002: след `pass` на одиторски пас 1 COO
+докладва и приключи хода, макар QA там да не иска дума — „защо спираш … спираш без причина“;
+повторение на Silerax CAP-002 2026-09-23; кандидатът им: „отделно съобщение, същият ход — loop-ът
+продължава до следващия гейт“, по доклад на сесията Silerax LIV 004). Коренът по собствения закон на
+файла (§ The duals law): правилото КОМАНДВА действие (докладвай вердикта отделно), но е написано като
+забрана и няма suppression dual. Surface (scan 2026-09-30, sonnet): нито един self-check пин върху
+изречението или раздела (HARD-021 ги изтри; остава само `doctrine-orchestrator-model-agnostic`,
+`scripts/selfcheck/aiwf-selfcheck.js:5617-5642`, който не чете раздела); рендерът е тестван байт в
+байт срещу шаблона (`scripts/setup/test-setup.mjs:225-228`); `docs/WORKFLOW.md:189-194`,
+`skills/review/SKILL.md:571-575`, `skills/qa/SKILL.md:344-348` казват „before the next dispatch“ и
+„two sentences, then the next step“ — съвместими с новия текст, не се пипат.
+
+**Outcome:** § Verdict and dispatch в шаблона гласи ДОСЛОВНО текста по-долу (правилен запис —
+показан на оператора по guard (g), влиза само след одобрение); консуматорите го получават с
+rerender през миграция 0018; самоинсталацията е на 0.2.14.
+
+```text
+## Verdict and dispatch
+
+a verdict gets its own message, not its own turn
+
+The verdict reaches the operator on its own, with one or two sentences of its substance - what the
+pass confirmed, or what its blockers and notes are - and the next dispatch comes after it, never
+inside it. A verdict carried as a subordinate clause on the way to the next step hides what the
+operator paid for, and the report that follows a pass is the only place that purchase becomes
+visible. Full text: payload `docs/WORKFLOW.md` § How the COO speaks to the operator.
+
+**Its suppression dual.** Reporting a verdict is not a stop. When the next step needs no operator
+word, the COO writes the verdict message and goes on in the same turn: in Claude Code a reply that
+ends without a tool call ends the turn, so the verdict text is followed by the next tool call, not
+by silence. A correction round within the cap, the COO's own work and the Writer's commit attempt up
+to its dialog are such steps. The loop halts where the doctrine puts a halt - a dialog, a word the
+doctrine requires, an escalation, an operator stop, the stop condition - and never because a
+verdict was reported.
+```
+
+**Worklist:**
+1. `templates/ORCHESTRATOR.md.tmpl:85-93` → блокът по-горе, дословно (заглавието остава; `:14` и
+   `:39-40` вече казват „verdict and dispatch“ — без промяна).
+2. `migrations/0018_verdict-own-turn/ops.json` по образеца `migrations/0017_behavior-ledger/ops.json:1-18`:
+   `rerender-managed-region` за `.claude/aiwf-native/ORCHESTRATOR.md` (`region: null`, template
+   `templates/ORCHESTRATOR.md.tmpl`) + `note` op `verdict-own-turn` — текстът казва: докладваният
+   вердикт вече не е стоп (HARD-022); YOUR ORCHESTRATOR RULES — първата операция ре-рендерира
+   ORCHESTRATOR.md, където § Verdict and dispatch носи новия ред и дуала; редактиран файл → update-ът
+   пита, override → новият рендер се записва като upstream; SUPERSEDED LOCAL RULES — локална памет
+   или правило „loop-ът не спира след вердикт“ може да стане едноредов указател към този раздел.
+   Без имена на проекти. `docRefs: ["CHANGELOG.md"]`. `NOTES.md` по образеца на 0017.
+3. `migrations/index.json:18` → нов последен запис `{ "id": "0018_verdict-own-turn",
+   "targetPluginVersion": "0.2.14" }`.
+4. `.claude-plugin/plugin.json:3` → `0.2.14`; `README.md:21` → `v0.2.14`.
+5. `CHANGELOG.md` нов блок над `:7`: `## [0.2.14] - <дата на тага>`, `### Changed`, bullet дословно:
+   `- **A verdict gets its own message, not its own turn (HARD-022)** - the Orchestrator rule "a
+   verdict and the next dispatch never share one message" was read as "stop after a verdict" and
+   halted the loop at steps that need no operator word; it now says the verdict is reported on its
+   own, the COO goes on in the same turn, and the loop halts only where the doctrine puts a halt.`
+6. Self-update след bump-а: `node scripts/update/aiwf-update.mjs --apply --project-root .`
+   (ORCHESTRATOR.md ре-рендериран, `installedPluginVersion` → `0.2.14`, `lastMigrationApplied` →
+   `0018_verdict-own-turn`, `CHANGES_0.2.13-to-0.2.14.md`); conflict диалог → СТОП и доклад.
+
+**Извън обхват:** `docs/WORKFLOW.md`, `skills/**` (съвместими, виж контекста); дали QA иска дума
+(дуалът казва „when the next step needs no operator word“ и не решава кой я иска);
+`CHANGELOG.md:141-145` (остаряло твърдение за пиновете в блока 0.2.8 — история, не се пренаписва);
+HARD-011.
+
+**Acceptance (литерални):** `git grep -n "never share one message" -- templates .claude/aiwf-native`
+→ празно (контрол: на котвата удря `:87` и `:66`); `git grep -n "not its own turn" --
+templates/ORCHESTRATOR.md.tmpl .claude/aiwf-native/ORCHESTRATOR.md` → точно по един удар;
+`git grep -c "suppression dual" -- templates/ORCHESTRATOR.md.tmpl` → `templates/ORCHESTRATOR.md.tmpl:5`
+(на котвата 4); `node scripts/update/validate-payload.mjs --plugin-root .` → exit 0, `18 migration(s)`,
+`0.2.14`; `node scripts/update/aiwf-update.mjs --check --project-root .` → „up to date … 0.2.14“;
+provenance grep → празно; `git diff --name-only <HEAD при диспач>` → точно файловете от worklist-а +
+`.claude/aiwf-native/ORCHESTRATOR.md`, `.claude/aiwf-native/aiwf.config.json`,
+`CHANGES_0.2.13-to-0.2.14.md`.
+**VERIFY (Test policy: templates + migrations):** `validate-payload`, `selfcheck`, `setup-suite`,
+`update-suite`, `example-cycle-windows`, `plugin-validate` — ЕДНА паралелна партида, точни exit
+кодове; pointer `dev/VERIFY_RUNBOOK.md`. Пълният набор — CI след push.
+**Risk threshold:** блокира текст, различен от одобрения; дуал, който разрешава платен пас без дума
+или диспач преди вердикта; Cyrillic/имена на проекти в payload-а; миграция без rerender op; промяна
+извън worklist-а.
+**Stop condition:** acceptance зелен → стоп.
+**Review:** `Class: code` по класификация (миграцията носи rerender op), но **БЕЗ одит пас** —
+операторска дума 2026-09-30 „не искам кодекс, за проза, пускай тикета“ (отговорът на въпроса при
+раждането; същата дума одобрява текста по guard (g)). Проверката е COO-то: пълният диф, прочетен
+от първа ръка, + VERIFY и acceptance по-долу. Readiness — няма.
+**Assignee:** Колега. Branch `main`. Route-state `{"ticket":"HARD-022","route":"R2"}` при диспач.
+Commit: ЕДИН, subject `HARD-022: a verdict gets its own message, not its own turn - released as
+0.2.14`; PLAN и CANDIDATES извън него. Издание: commit клик → push `main` (дума + диалог) → CI зелен
+→ tag дума → push tag → `D:\pnp-live` опресняване.
+
+#### HARD-022 — Completion record (2026-09-30)
+
+**Commit `1bc1bfa`** върху котвата `b7a5e01` (10 файла, +113/−17): § Verdict and dispatch в шаблона
+дословно по одобрения текст (Колегата сравни раздела байт по байт с блока в този план: 1159 = 1159
+знака); миграция `0018_verdict-own-turn` (rerender на ORCHESTRATOR.md + note `verdict-own-turn`),
+`migrations/index.json` запис 18, `plugin.json` 0.2.14, `README.md:21`, CHANGELOG блок 0.2.14;
+self-update `--apply` (ORCHESTRATOR.md ре-рендериран тихо, `installedPluginVersion` 0.2.14,
+`lastMigrationApplied` 0018), `CHANGES_0.2.13-to-0.2.14.md`. Колегата на `claude-opus-5-5[1m]`/high:
+един рън + един микро-рунд. Отклонение (COO решение): CHANGELOG блокът получи увод и пренасяне на
+100 колони за консистентност с блока 0.2.13; думите на bullet-а са непроменени.
+**VERIFY** (една паралелна партида, след self-update): validate-payload 0 (`valid: 18 migration(s) …
+payload version 0.2.14`), selfcheck 0 (`1162/1162 assertions passed`), setup-suite 0 (`checks: 463,
+failures: 0`), update-suite 0 (`checks: 605, failures: 0`), example-cycle-windows 0 (`checks: 47,
+failures: 0`), plugin-validate 0. Acceptance: старият ред — празно; новият — по един удар в шаблона и
+в рендера; `suppression dual` 4 → 5; `--check` → up to date 0.2.14; provenance — празно; дифф гардът
+— точно 10-те файла.
+**Одит:** без пас — операторска дума „не искам кодекс, за проза“. COO прочете целия диф от първа ръка
+(шаблон, рендер, миграция + NOTES, CHANGELOG, CHANGES, bookkeeping в config-а).
+**`D:\pnp-live`** на `1bc1bfa`. **Издание:** чака — push `main` (дума + диалог) → CI зелен → tag
+`v0.2.14` (дума) → push tag.
+**Останал дълг: няма.** Route-state `{}`.
+
 ## 0.2.7 — Environment correctness · tag `v0.2.7` (операторска дума 2026-09-16: HARD-013; ЗАМРАЗЕНО до края на консолидацията. HARD-014 ОТПАДНА — беше „Одитор с resume на сесията"; темата отива където консолидационното решение я прати)
 
 ### HARD-013 [R2 code-class] — self-check-ът хваща кой да е `bash` от PATH; на WSL bash пада 52 пъти и `--apply` връща 1 въпреки приложените миграции (роден 2026-09-15 от консуматорски рън, ЧАКА ОПЕРАТОРСКА ДУМА)
@@ -2907,7 +3028,8 @@ HARD-016 (+release 0.2.9, изцяло) → [пауза; планът остав
 операторска дума 2026-09-24: 019 преди 018)** → **HARD-020 (+release 0.2.12; роден 2026-09-27,
 операторска дума „това ми трябва преди 0.3.0“)** → **HARD-021 (същото издание 0.2.12, един commit и
 един code пас за двата; роден 2026-09-28, операторски думи „довърши 020 и след това се заеми с 021“,
-„ще минем одит“)** → HARD-011 в цикъла на 0.3.0 → архивиране на плана с последния затворен тикет.
+„ще минем одит“)** → **HARD-022 (+release 0.2.14; роден 2026-09-30, дума същия ден „пускай тикета“, без одит пас)** → HARD-011 в цикъла
+на 0.3.0 → архивиране на плана с последния затворен тикет.
 
 Гейтове: всеки тикет — собствена дума за диспач; commit — клик (стейдж по изрични пътища,
 едноредово съобщение, нула trailers, PLAN файлът и трите EOL-дрейфащи `.ps1` извън кодовия
