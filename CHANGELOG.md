@@ -4,6 +4,17 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.2.14] - 2026-09-30
+
+A reported verdict is no longer a stop: the COO reports it on its own and goes on in the same turn.
+
+### Changed
+
+- **A verdict gets its own message, not its own turn (HARD-022)** - the Orchestrator rule "a verdict
+  and the next dispatch never share one message" was read as "stop after a verdict" and halted the
+  loop at steps that need no operator word; it now says the verdict is reported on its own, the COO
+  goes on in the same turn, and the loop halts only where the doctrine puts a halt.
+
 ## [0.2.13] - 2026-09-30
 
 A readiness pass stops paying for what the plan's author remembered wrong about the code: the code

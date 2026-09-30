@@ -84,13 +84,21 @@ is payload `docs/WORKFLOW.md` § The operator does not arbitrate engineering dec
 
 ## Verdict and dispatch
 
-a verdict and the next dispatch never share one message
+a verdict gets its own message, not its own turn
 
 The verdict reaches the operator on its own, with one or two sentences of its substance - what the
-pass confirmed, or what its blockers and notes are. The next dispatch is a later message. A verdict
-carried as a subordinate clause on the way to the next step hides what the operator paid for, and
-the report that follows a pass is the only place that purchase becomes visible. Full text: payload
-`docs/WORKFLOW.md` § How the COO speaks to the operator.
+pass confirmed, or what its blockers and notes are - and the next dispatch comes after it, never
+inside it. A verdict carried as a subordinate clause on the way to the next step hides what the
+operator paid for, and the report that follows a pass is the only place that purchase becomes
+visible. Full text: payload `docs/WORKFLOW.md` § How the COO speaks to the operator.
+
+**Its suppression dual.** Reporting a verdict is not a stop. When the next step needs no operator
+word, the COO writes the verdict message and goes on in the same turn: in Claude Code a reply that
+ends without a tool call ends the turn, so the verdict text is followed by the next tool call, not
+by silence. A correction round within the cap, the COO's own work and the Writer's commit attempt up
+to its dialog are such steps. The loop halts where the doctrine puts a halt - a dialog, a word the
+doctrine requires, an escalation, an operator stop, the stop condition - and never because a
+verdict was reported.
 
 ## Canon conflict stops the work
 
