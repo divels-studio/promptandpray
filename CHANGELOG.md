@@ -4,6 +4,36 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.2.13] - 2026-09-30
+
+A readiness pass stops paying for what the plan's author remembered wrong about the code: the code
+is read by a second context before the pass, and the fact-check gate reports on every claim.
+
+### Added
+
+- **Readiness classes (RDY-001)** - `docs/READINESS_CLASSES.md` lists fourteen blocker classes a
+  readiness pass keeps finding, one question each; the fact-check agent applies every class to
+  every ticket before a readiness pass and names a gap by class number.
+- **Behavior ledger (RDY-001)** - `/pnp:review` Step 2a: before the first paid readiness pass (and,
+  with no auditor pass configured, before execution approval) one scan-tier agent per ticket reads
+  every link of the ticket's chains in the code and returns one row per link - what it does with
+  the plan's input, what it closes over, what it does at N rows and under concurrency, what the
+  library underneath does; a link the plan creates is a `NEW` row, an unopened one an `UNREAD` row.
+
+### Changed
+
+- **The fact-check gate returns a ledger per claim (RDY-001)** - `/pnp:review` Step 2b now returns
+  one row per claim (verified, false or unverifiable) and a `CLAIMS:` count line; sampling is a
+  contract violation that re-dispatches the section, a claim not opened is unverifiable, and a hook,
+  engine or library claim is verified in code, never in a document that describes it. Over a plan
+  the document is split into one agent per ticket section plus one for the shared sections.
+- **Behavior ledger duty replaces the chain-trace duty (RDY-001)** - the rendered
+  `.claude/aiwf-native/ORCHESTRATOR.md` (re-rendered by migration `0017_behavior-ledger`) now owes
+  the ledger of Step 2a before a paid readiness pass, and also when no auditor pass is configured.
+- **WORKFLOW describes the same gate (RDY-001)** - `docs/WORKFLOW.md` names the per-claim ledger,
+  the own pass over the behavior ledger, and one new rule: the revision after a pass closes the
+  blockers it was handed and adds nothing new.
+
 ## [0.2.12] - 2026-09-28
 
 The fact-check gate now hands the COO the readiness gaps a paid pass would otherwise be spent on, and the self-check stops pinning doctrine sentences.

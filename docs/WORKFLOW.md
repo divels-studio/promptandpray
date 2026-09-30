@@ -142,10 +142,11 @@ not the Writer's half of it. Blockers cluster precisely where COO-written prose 
 A wrong path, a wrong line number, a wrong count, a command that does not exist, a claim about
 how an engine or a hook behaves - those are checkable against the tree by anything that can read
 it, and paying a review pass to find them buys at the most expensive tier what the cheapest one
-proves. They are caught by the **fact-check gate** (`/pnp:review` Step 2b): one cheap read-only
-scan agent over the prose of the diff - or of the plan - run BEFORE every reviewer pass above the
-scan tier, returning only the false or unverifiable claims with `file:line` and the correct
-value - and, before a readiness pass, the gaps list of § Plan readiness review beside them.
+proves. They are caught by the **fact-check gate** (`/pnp:review` Step 2b): cheap read-only scan
+agents over the prose - one agent over a diff; over a plan, one agent per ticket section plus one
+for the shared sections - run BEFORE every reviewer pass above the scan tier, each returning a
+per-claim ledger - every claim verified, false or unverifiable, with `file:line` and a count line -
+and, before a readiness pass, the gaps list of § Plan readiness review beside it.
 The COO fixes those, and only then dispatches the review. The gate guards the EXPENSIVE pass,
 whichever engine hosts it: a Claude reviewer on `opus`/`fable` costs top-tier tokens exactly as a
 Codex pass costs external quota, and only a reviewer that itself runs on a scan-tier model
@@ -366,9 +367,10 @@ irreversible outcome and cannot be resolved from the repo.
 **Readiness runs on the `review.plan` row.** Which engine and model audits a plan is the audit
 table's answer, not this document's: `/pnp:review` resolves `review.plan` through the role
 resolver's `-Class plan` and dispatches that host, and `/pnp:roles` shows it and changes it. The
-fact-check gate runs before every one of these passes above the scan tier, over the plan exactly as
-it runs over a diff, and is skipped only when the reviewer itself runs on a scan-tier model - it
-returns no verdict and it is never one of the passes.
+fact-check gate runs before every one of these passes above the scan tier, over the plan as it runs
+over a diff - split into one agent per ticket section plus one for the shared sections - and is
+skipped only when the reviewer itself runs on a scan-tier model - it returns no verdict and it is
+never one of the passes.
 
 **The inventory comes before the draft.** § COO owns broad scans puts discovery before a ticket
 brief ("Discovery precedes dispatch"); a durable plan gets the same move one step earlier, ahead of
@@ -381,17 +383,18 @@ consumer the draft had never opened, an adjacent contract that had to move with 
 each of them was a grep away. A paid pass that discovers them buys at the most expensive tier what
 the cheapest one proves.
 
-**The COO's own pass comes first, and it is not one of the counted ones.** Once the draft is
-"finished", the COO re-reads it in a SEPARATE turn against the six readiness checks below, before
-any auditor is dispatched: every `file:line` opened, every command executable on the OS channel the
-plan records and run on the real tree, never on a stub (an instrument proven on a stub has not been
-made to fail where it will run - tripwire 4 of § COO owns broad scans), not one "if the Writer
-finds ...", every promise of a guarantee checked against the code that gives it. The fact-check
-agent is dispatched with three extra instructions alongside its standing task - "every acceptance
-command exists and can fail", "verify the chain table - every Outcome sentence has a row, every
-link resolves at its file:line, endpoints are source or render-or-DB-write surfaces, chains start
-at the entry point", and the six readiness checks applied adversarially, returned as a second list
-of gaps beside the false claims (A - the Writer cannot execute, or the check cannot fail or cannot
+**The COO's own pass comes first, and it is not one of the counted ones.** The own pass reads the
+behavior ledger (`/pnp:review` Step 2a) - what each link does with the plan's input, read by a
+second context - not the pointers alone. Once the draft is "finished", the COO re-reads it in a
+SEPARATE turn against the six readiness checks below, before any auditor is dispatched: every
+`file:line` opened, every command executable on the OS channel the plan records and run on the real
+tree, never on a stub (an instrument proven on a stub has not been made to fail where it will run -
+tripwire 4 of § COO owns broad scans), not one "if the Writer finds ...", every promise of a
+guarantee checked against the code that gives it. Each fact-check agent over the plan is
+dispatched with three extra instructions alongside its standing task - "every acceptance command
+exists and can fail", "verify the behavior ledger - every link resolves and its DOES cell matches
+the code", and the six readiness checks applied adversarially, returned as a second list
+of gaps beside the claims ledger (A - the Writer cannot execute, or the check cannot fail or cannot
 pass; B - a false or unverifiable claim; C - consistency) with no verdict, every A and B closed by
 the COO before the pass; that list is not the COO's own pass and does not stand in for it, and it
 is never counted as a pass. This is not ceremony: on the plan
@@ -418,11 +421,13 @@ by walking it.
 
 The same Reviewer performs `review.plan.passes` full passes, and it is a CYCLE rather than a fixed
 pair: each pass adversarially reads the COMPLETE plan - not only the lines that changed - and
-returns all visible material gaps at once; the COO revises between passes; this repeats until
-`review.plan.passes` is exhausted. The FIRST of those configured passes runs on the ticket's
-standing word; EVERY further one - configured or not - is dispatched only on the operator's own
-explicit word, one word per pass, whatever the number is. With the factory value of 2 the cycle
-is exactly:
+returns all visible material gaps at once; the COO revises between passes. The revision after a
+pass closes the blockers it was handed and adds nothing new: a change that opens new surface is a
+candidate for the next plan, not a line in this one - the next pass would only find what the
+revision created. This repeats until `review.plan.passes` is exhausted. The FIRST of those
+configured passes runs on the ticket's standing word; EVERY further one - configured or not - is
+dispatched only on the operator's own explicit word, one word per pass, whatever the number is.
+With the factory value of 2 the cycle is exactly:
 
 1. adversarially review the complete draft and return all visible material gaps at once;
 2. after the COO revises the plan, review the complete plan again - not only the changed lines.
@@ -434,8 +439,8 @@ remember it.
 That numbered pair is the factory-2 illustration, not the contract - and the second of the two is
 already a pass the operator is asked for. At `review.plan.passes: 3` one further configured pass
 is available on a word of its own; at `1` only the first runs; at `0` the plan gets no auditor at
-all and the COO's own reading plus the fact-check gate is the whole contract - a configuration
-`/pnp:roles` prints as `no auditor`, never a shortcut taken silently.
+all and the COO's own pass over the behavior ledger plus the fact-check gate is the whole
+contract - a configuration `/pnp:roles` prints as `no auditor`, never a shortcut taken silently.
 
 Only once the CONFIGURED passes are exhausted and blockers remain may the COO revise once more and -
 with the **operator's explicit permission**, requested before dispatch - run one final extra pass. A

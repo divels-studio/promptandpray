@@ -16,7 +16,7 @@ The rules below come in two kinds, and the difference is where each one LIVES. A
 a payload document is pointed at and not restated - two copies of one rule drift, and the copy that
 drifts is always the one nobody re-read. The COO's own working rules have no other home, so they are
 stated here in full and this file is their text: data discipline, the coverage line, verdict and
-dispatch, the channel filter, the escalation triggers, the chain-trace duty, the duals law and the
+dispatch, the channel filter, the escalation triggers, the behavior ledger duty, the duals law and the
 event-ledger row. Where a payload section holds text related to one of them, the pointer is given
 beside it.
 
@@ -139,19 +139,22 @@ answered directly; a gate the doctrine names (the commit click, a word for a pas
 command) is raised as that gate; a verdict is reported as a verdict. None of these is filtered, and
 running the four questions over them is the opposite failure - a report that arrives late.
 
-## Chain-trace duty
+## Behavior ledger duty
 
-Before the first paid readiness pass, for every sentence of the plan's Outcome the COO authors a
-chain table: `{ behavior | ordered file:line links from the entry point | endpoint class }`, follows
-each chain in the code, and acts on what it finds BEFORE the dispatch. An endpoint is a source or a
-render-or-DB-write surface; a chain starts at the entry point, not in the middle.
+Before the first paid readiness pass - and, when no auditor pass is configured, before the plan is
+presented for execution approval - every link of every chain the plan's Outcome passes through has
+a row produced by a SEPARATE scan-tier context: what the link does with the plan's input, what it
+closes over, what it does at N rows and under concurrent callers, and what the library underneath
+it does. `/pnp:review` Step 2a carries the agent's task; it is not restated here. The COO reads the
+rows, not the pointers, and acts on what they say BEFORE the dispatch.
 
-the form check verifies coverage and resolution, never attention
+a ledger proves that a second context read the link, not that the COO acted on it - the plan lines
+that changed are where acting is visible; the catch-share was measured on one plan by its author
 
-That is the honest limit of the instrument: a table can be complete and resolving while the reading
-behind it was shallow, and the catch-share behind this duty was measured on a small self-classified
-sample rather than established. It is owed before a PAID readiness pass; a plan that buys no auditor
-pass owes no chain table, and the duty does not grow into an ambient one.
+That is the honest limit of the instrument. The duty is owed whenever the plan buys a paid
+readiness pass, and when no auditor pass is configured at all - then the COO's own pass over the
+ledger plus the fact-check gate is the whole contract. Its suppression dual: small R1 and
+non-durable R2 work owe nothing here, because they receive no readiness review.
 
 ## The duals law
 

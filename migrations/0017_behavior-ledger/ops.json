@@ -1,0 +1,18 @@
+{
+  "migration": "0017_behavior-ledger",
+  "targetPluginVersion": "0.2.13",
+  "operations": [
+    {
+      "op": "rerender-managed-region",
+      "file": ".claude/aiwf-native/ORCHESTRATOR.md",
+      "region": null,
+      "template": "templates/ORCHESTRATOR.md.tmpl"
+    },
+    {
+      "op": "note",
+      "id": "behavior-ledger",
+      "text": "The readiness author's model of the code is now read against the code by a second context, and the fact-check gate stops sampling (RDY-001). BEHAVIOR LEDGER: before the first paid readiness pass - and, when no auditor pass is configured, before the plan is presented for execution approval - the COO dispatches one scan-tier agent per ticket with the task in `/pnp:review` Step 2a: one row per link of every chain the ticket's Outcome passes through, saying what the link does with the plan's input, what it closes over, what it does at N rows and under concurrent callers, and what the library underneath it does. The COO's own pass reads those rows, not the pointers. YOUR ORCHESTRATOR RULES: the first operation re-renders `.claude/aiwf-native/ORCHESTRATOR.md`, where the chain-trace duty is replaced by the behavior ledger duty; if you edited that file, the update asks you, and an artifact you hold through an override is not applied - the new render is recorded as upstream. PER-CLAIM FACT-CHECK: the fact-check gate of `/pnp:review` Step 2b now returns a ledger with one row per claim - verified, false or unverifiable - and a `CLAIMS:` count line; no sampling, no spot-checking, a claim not opened is unverifiable; a claim about a hook or an engine is verified in its code and a claim about a library in the installed package, never in a document that describes it. Over a plan, one agent per ticket section plus one for the shared sections. READINESS CLASSES: the new `docs/READINESS_CLASSES.md` lists fourteen blocker classes, one question each, and the fact-check agent applies every class to every ticket before a readiness pass. `docs/WORKFLOW.md` says the same and adds that the revision after a pass closes the blockers it was handed and adds nothing new. SUPERSEDED LOCAL RULES: a local memory or rule for an own pass over the ledger, a chain-trace evidence pack for readiness, or a blocker-class replay before a pass can become a one-line pointer to these payload homes.",
+      "docRefs": ["CHANGELOG.md", "skills/review/SKILL.md", "docs/READINESS_CLASSES.md"]
+    }
+  ]
+}

@@ -194,6 +194,49 @@ SIDE, so the Reviewer keeps the right and the duty to read the tree beyond it, t
 probes, and to raise what the pack does not mention - a pack that turns out to be incomplete is
 itself a finding.
 
+## Step 2a - Behavior ledger before a readiness pass
+
+**Before the first paid readiness pass of a durable plan, the COO dispatches ONE scan-tier agent
+per ticket that reads the CODE every chain of the ticket's Outcome passes through** - what each link
+does with the plan's input, read by a second context rather than remembered by the plan's author. At
+`review.plan.passes: 0`, where no auditor pass runs, the ledger is owed all the same, before the
+plan is presented for execution approval: the COO's own pass over it plus the fact-check gate is
+then the whole contract (`docs/WORKFLOW.md` § Plan readiness review).
+
+Dispatch it with the **Agent tool**, `subagent_type: "Explore"` (or whichever read-only scan agent
+this harness ships), `model: sonnet` - named explicitly, never inherited - one agent per ticket,
+with exactly this task, verbatim:
+
+```
+You read CODE, not the plan's claims. Input: one ticket's Outcome sentences and its worklist
+pointers, below. For EVERY link a chain from the entry point to the endpoint passes through -
+every function, action, hook, query, component, template, test the pointers name or that the code
+at a pointer calls - open it and return ONE row:
+<#> | <behavior sentence> | <link file:line> | DOES: what it validates / rejects / overwrites /
+reads / writes / renders with the plan's input | CLOSES OVER: what state it captures and when it
+is recreated (memo deps, refs, module scope) | STATES: what happens at empty / one / N rows,
+concurrent callers, error path, rerun | LIB: node_modules path:line for any library behavior the
+plan relies on | NOTE: anything the plan assumes that the code does not do
+A link the plan CREATES (a file that does not exist yet) is one row with `NEW <path>` in DOES and
+the contract it must satisfy in NOTE. A link you cannot open is one row with `UNREAD <reason>` in
+DOES. A chain that ends before a source or a render-or-DB-write surface is reported as
+`CHAIN ENDS EARLY at <file:line>`. No verdict, no suggestions, no summary; every link is a row.
+
+TICKET:
+<the ticket's Outcome and worklist, pasted>
+```
+
+The COO records the rows under the header
+`| # | behavior | link (file:line) | DOES | CLOSES OVER | STATES | LIB | NOTE |` - where they live is
+the COO's call, and `{{config.paths.scratchDir}}` is gitignored and the natural place. An empty
+DOES cell or an `UNREAD` row is closed before the pass: the COO reads that link itself, or
+re-dispatches. The NOTE cells are the input of the COO's own pass (`docs/WORKFLOW.md` § Plan
+readiness review). The ledger is not an auditor: it returns no verdict and it is never counted as a
+pass.
+
+**Its suppression dual.** Small R1 and non-durable R2 work owe no ledger - they receive no
+readiness review at all (`docs/WORKFLOW.md` § Plan readiness review).
+
 ## Step 2b - Fact-check gate before every pass above the scan tier
 
 **Before dispatching any reviewer pass whose model is above the scan tier - a codex pass, or a
@@ -211,51 +254,65 @@ this harness ships), `model: sonnet`, and exactly this task - written here so it
 verbatim:
 
 ```
-Verify every factual claim in the prose of this diff - path, line number, count, command,
-engine/hook behavior - against the tree as it is now. Return ONLY the list of claims that are
-FALSE or UNVERIFIABLE, each with file:line and the correct value. No verdict, no review, no
-suggestions, no summary of what is correct.
+Verify EVERY factual claim in the prose of this document - path, line number, count, command,
+identifier, engine/hook behavior, library behavior - against the tree as it is now. A claim about
+a hook or an engine is verified in the code that implements it (scripts/, hooks/),
+never in a document that describes it; a claim about a library is verified in node_modules (or the
+installed package), never from memory. Return a LEDGER with one row per claim, in document order:
+<doc line> | <claim, shortened> | VERIFIED <file:line> | FALSE <correct value> | UNVERIFIABLE <why>
+No sampling, no spot-checking, no "everything else resolved": a claim you did not open is
+UNVERIFIABLE with the reason "not opened". End with
+CLAIMS: total=<n> verified=<n> false=<n> unverifiable=<n>. No verdict, no review, no suggestions.
 
-DIFF:
-<the same diff the review brief carries>
+DOCUMENT:
+<the diff the review brief carries, or the plan section this agent is given>
 ```
 
 **Over a plan, this is the same gate with the plan document in place of the diff** - one rule, not
 two: fact-check before every pass above the scan tier, over a diff or over a plan. There is no
-second, plan-only variant of this step, and for a readiness pass the task carries three extra lines,
-appended verbatim:
+second, plan-only variant of this step. Over a plan the document is SPLIT: one agent per ticket
+section plus one agent for the shared sections, each handed the plan's decisions section as
+context, and each ticket's agent handed that ticket's behavior ledger rows (Step 2a) beside its
+section. For a readiness pass the task carries three extra lines, appended verbatim - the classes
+document the third one names is payload, under the installed plugin root, so paste its resolved
+absolute path the way the checklist path above is pasted:
 
 ```
 every acceptance command exists and can fail
 
-verify the chain table - every Outcome sentence has a row, every link resolves at its file:line,
-endpoints are source or render-or-DB-write surfaces, chains start at the entry point
+verify the behavior ledger (Step 2a): every link resolves at its file:line and its DOES cell
+matches the code; a chain that ends before a source or a render-or-DB-write surface is a gap; a NEW
+row names the contract the new file must satisfy
 
-apply the six readiness checks adversarially to every ticket and decision: (1) repo-match - open
-every pointer you doubt; (2) scope - is every boundary between in and out of scope stated, and
-does any worklist item fall outside it; (3) hidden discovery - for each ticket, what the Writer
-would still have to DECIDE or DISCOVER that the plan does not fix (a name, a grant, a layout, a
-flag, an order of operations); (4) dependency order and the gate dry-run - any command that needs
+apply every class of `docs/READINESS_CLASSES.md` to every ticket - a class present in the plan is a
+gap, named by class number. Apply the six readiness checks adversarially to every ticket and
+decision: (1) repo-match - open every pointer you doubt; (2) scope - is every boundary between in
+and out of scope stated, and does any worklist item fall outside it; (3) hidden discovery - for
+each ticket, what the Writer would still have to DECIDE or DISCOVER that the plan does not fix (a
+name, a grant, a layout, a flag, an order of operations); (4) dependency order and the gate dry-run - any command that needs
 a dialog or gate the plan does not name, any step assuming state a prior step leaves different;
 (5) acceptance - for each block, whether it can pass on broken work, fail on correct work, and
 observe every Risk-threshold item; (6) branch, worktree and git prerequisites, and anything the
 Writer contract forbids or requires that a block or worklist violates; and contradictions between
-two places in the plan. Return the gaps as a second list beside the false claims, one line each -
+two places in the plan. Return the gaps as a second list beside the claims ledger, one line each -
 <plan line> | <ticket or decision> | <gap, one sentence> | <what closes it, one sentence> - grouped
 A (the Writer cannot execute, or the check cannot fail or cannot pass), B (false or unverifiable
 claim), C (consistency), ending with GAPS: A=<n> B=<n> C=<n>. No verdict.
 ```
 
-For a readiness pass the agent returns two lists: the false or unverifiable claims exactly as
-above, and the gaps. The "what closes it" cell names the missing decision, fact or command and
-never a redesign - that is what "no suggestions" keeps meaning - and the COO closes every A and B
-item before the pass.
+For a readiness pass the agent returns two lists: the claims ledger exactly as above, and the gaps.
+The "what closes it" cell names the missing decision, fact or command and never a redesign - that
+is what "no suggestions" keeps meaning - and the COO closes every A and B item before the pass.
 
-Then: the COO fixes every returned claim, and **only then** dispatches the pass, over the
-corrected tree. The gate may be skipped only when the reviewer itself runs on a scan-tier model
-(`haiku`/`sonnet`) - there is nothing more expensive than the gate to protect - and even then it is
-cheap enough to be worth running on a prose-heavy diff. That skip is read off a scan-tier ALIAS,
-never off an exact model id.
+**Sampling breaks the contract.** An output that says "spot-checked", "deeply on", "the rest is
+fine" - or that carries no `CLAIMS:` line - is not a result: the same section is re-dispatched, and
+the pass waits for it.
+
+Then: the COO fixes every FALSE row and closes every UNVERIFIABLE one, and **only then** dispatches
+the pass, over the corrected tree. The gate may be skipped only when the reviewer itself runs on a
+scan-tier model (`haiku`/`sonnet`) - there is nothing more expensive than the gate to protect -
+and even then it is cheap enough to be worth running on a prose-heavy diff. That skip is read off a
+scan-tier ALIAS, never off an exact model id.
 
 The fact-check agent is **not** a review: it returns no verdict, it
 is not the COO's own pass and does not stand in for it, it is never counted as a pass, and it never
@@ -269,8 +326,9 @@ implementation, not a code diff - the contract is different:
 - **A precondition on the COO, not a check of this pass:** the plan should already have been
   through, before the first draft, a consumer-inventory scan: for every touched column, permission,
   command or contract, the consumers and adjacent contracts, harvested at scan tier
-  (`docs/WORKFLOW.md` § Plan readiness review). It matters here because a plan that arrives
-  without it spends this paid pass on what a scan-tier agent returns for free.
+  (`docs/WORKFLOW.md` § Plan readiness review) - and, before this pass, the behavior ledger of
+  Step 2a. It matters here because a plan that arrives without them spends this paid pass on what
+  a scan-tier agent returns for free.
 - **Host:** the `review.plan` row - Step 0b resolved it with `-Class plan`. It is a row like any
   other: which engine and model audits plans is what `/pnp:roles` shows and changes. What is NOT
   configurable is that the Planner/COO never approves its own plan, and that the fact-check gate
