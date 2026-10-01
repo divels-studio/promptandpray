@@ -48,8 +48,10 @@ PromptAndPray is **not**:
 - Destructive / system-changing operations require explicit confirmation immediately before
   execution, even when a backlog, runbook, or brief marks them `MUST`. `MUST` means "mandatory
   before completing", not "execute now". In this project that class is:
-  - `git tag` (a release tag is the irreversible half of a release - separate operator word);
-  - `git push` / merge / rebase to either this repo or a consumer project (separate word each);
+  - `git tag` (a release tag is the irreversible half of a release - separate operator word; that
+    word also covers pushing the tag, operator word 2026-10-01);
+  - `git push` / merge / rebase to either this repo or a consumer project (separate word each; the
+    release-tag push rides the tag word above);
   - removing anything under `docs/` (a payload doc leaves only through a migration that names it
     - the delete is legitimate exactly then, and only then);
   - `--confirm-remove-stale` on `/pnp:setup`, and `/plugin uninstall` in a consumer project;
@@ -71,12 +73,13 @@ PromptAndPray is **not**:
 - **Release discipline.** A managed artifact (anything `templates/` renders, the ask-ruleset, the
   managed `CLAUDE.md` region) never changes silently: the change ships as a migration under
   `migrations/NNNN_<slug>/` + a `version` bump in `.claude-plugin/plugin.json` + a `CHANGELOG.md`
-  block. The tag is a separate operator word; so is the push. A consumer project picks the new
-  version up only through `/plugin update` + `/pnp:update` - that path is the product; a version is
+  block. The tag is a separate operator word, and it covers pushing the tag; pushing `main` stays its
+  own word. A consumer project picks the new version up only through `/plugin update` +
+  `/pnp:update` - that path is the product; a version is
   called released when CI is green on the pushed commit, and a consumer proves it on its own next
   update. A prose-only release (docs/, skills/) is the version bump, the CHANGELOG block and a
   note-only migration - nothing else runs locally; the tag follows a green CI on `main` (commit
-  click -> push main -> CI green -> tag word -> push tag).
+  click -> push main -> CI green -> tag word -> push tag on the same word).
 - **Provenance.** `git grep -nP "[\x{0400}-\x{04FF}]" -- docs skills templates scripts schema hooks
   migrations` is empty before every commit - for a prose-only diff that grep IS the gate; the
   self-check's provenance section (origin names as digests, e-mail, Cyrillic by code point,
