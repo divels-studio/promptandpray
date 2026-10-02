@@ -3000,11 +3000,12 @@ Session 03“): „драфтовете трябва да живеят в реп
 текст — показан тук по guard (g), влиза само с думата за тикета; указателният ред в CANDIDATES
 § D2 pointer rows е същото одобрение, guard (h)); (2) `dev/backlogs/readiness/RDY/` и
 `dev/backlogs/readiness/RGATE/` държат readiness историята на двата плана (ledger, consequence scan,
-own pass, fact-check, revisions, r0), тракната; (3) `.aiwf/` съдържа точно трите живи файла; (4)
+own pass, fact-check, revisions, r0), тракната; (3) `.aiwf/` съдържа точно трите живи файла **[дописано 2026-10-02: живите файлове са по PLAN_DRAFTS D4 — `route-state.json`, `review-brief.txt`, `qa-brief.txt`, `arbiter-brief.txt`, `last-*-session.txt`, колкото от тях съществуват, плюс артефактите на текущия тикет/readiness цикъл и `plan/<ABBR>/` на Gate 3 случая до лендинга му]**; (4)
 кандидатът в CANDIDATES е разделен: половината „за това репо“ затворена с указател към този тикет,
 половината „за payload-а“ (`paths.draftsDir`, блокове C/D „естественото място“) остава кандидат.
 
 **Правилото (дословно, за § Workspace paths, заменя реда `.aiwf/ scratch (gitignored): route-state.json, review-brief.txt`):**
+**[дописано 2026-10-02: ЗАМЕНЕНО от PLAN_DRAFTS блок P / D4 (`dev/backlogs/active/PLAN_DRAFTS.md`) — изречението „Written to .aiwf/ only while another session holds the tree“ противоречи на WORKFLOW § Branch policy (readiness пас 1 на PLAN_DRAFTS, блокер 2); scratch стои на мястото на readiness файлове само докато Gate 3 държи главната сесия извън `dev/backlogs`; блок P го пише Колегата с DRAFTS-001.]**
 
 ```text
 .aiwf/              scratch (gitignored): ONLY the live loop mechanics - route-state.json,
@@ -3031,7 +3032,9 @@ own pass, fact-check, revisions, r0), тракната; (3) `.aiwf/` съдър�
    неприземено съдържание = остава в „мести се“ (към `dev/backlogs/readiness/HARD/`), не се трие.
 2. Местене с обикновен copy (файловете са untracked; `git mv` не ги вижда) + `git add`; триене с
    `rm` — ask диалог, един на команда.
-3. `dev/PROJECT_OVERRIDES.md` § Workspace paths — редът по-горе, дословно.
+3. `dev/PROJECT_OVERRIDES.md` § Workspace paths — редът по-горе, дословно. **[дописано 2026-10-02:
+   заменено от PLAN_DRAFTS блок P — ако DRAFTS-001 е минал първи, редът вече е там и т.3 отпада; ако
+   HARD-023 мине първи, пише блок P, не текста по-горе.]**
 4. `dev/backlogs/CANDIDATES.md`: кандидатът на `:9-24` — половина А получава ред „затворена с
    HARD-023, <commit>“, половина Б остава; § D2 pointer rows — указателен ред към правилото; Event
    ledger редът от 2026-09-17 с `.aiwf/arbiter-brief.txt` — дописване в квадратни скоби с новия път.

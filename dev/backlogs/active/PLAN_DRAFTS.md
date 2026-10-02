@@ -1,0 +1,897 @@
+# PromptAndPray — черновите и readiness историята живеят в репото; `scratchDir` носи само живата механика (PLAN_DRAFTS)
+
+> **ОДОБРЕН 2026-10-02** (операторска дума „1“ след readiness пас 3 — таванът; r9 затвори последния
+> блокер на собствена сметка, без пас 4). Readiness: пас 1 NEEDS-FIX 5 (+1 оспорено) → r7 → пас 2
+> NEEDS-FIX 3 → r8 → пас 3 NEEDS-FIX 1 → r9. Историята: `dev/backlogs/readiness/DRAFTS/` (ledger,
+> consequence-scan 105 реда, fact-check r1-r5, own-pass — четвърти печат над r9, revisions с трите
+> вердикта дословно). Изпълнението на DRAFTS-001 чака отделна дума.
+
+> Роден 2026-10-02 от кандидата `dev/backlogs/CANDIDATES.md:9-24` (операторска дума в Silerax, предадена
+> от сесия „Silerax Plan Session 03“) и операторската дума тук същия ден (цитат от канала, не от
+> дървото): „това трябва да го вкараме в пейлоада, в двата консуматора в момента има само правила за
+> тези нова механика на .aiwf“. Планова сесия: inventory ✓ (1× Explore/sonnet) → чернова r0 → Step 2a
+> ledger ✓ → Step 2c consequence scan ✓ → r1 → Step 2b fact-check (2 агента) ✓ → r2 (този текст) →
+> Step 2d own pass (файл, SHA-256) → readiness пас 1 (`Class: plan`, Codex `gpt-6-sol`/xhigh, студен)
+> само на операторска дума. Пас 2 — отделна дума. Изпълнението чака отделна дума след одобрение; при
+> одобрение планът се МЕСТИ в `dev/backlogs/active/` (guard (e), D3) и readiness артефактите му остават в
+> `dev/backlogs/readiness/DRAFTS/`.
+>
+> Издание: **0.2.16**, вози се на единствения тикет. Чистенето на ТОВА репо е HARD-023 в PLAN_HARD
+> (отделен R1 тикет, чака дума); HARD-011 остава 0.3.0.
+>
+> Първа употреба на plan gate-а от 0.2.15 (по записите няма по-ранна): брифът на readiness паса носи
+> петте реда и сочи този файл и `dev/backlogs/readiness/DRAFTS/{consequence-scan,own-pass}.md`;
+> хешът е над ТОЗИ файл.
+
+## Контекст (inventory 2026-10-02; котвите се проверяват при диспач)
+
+**Проблемът.** Payload-ът казва на три места, че readiness артефактите живеят където COO-то реши и
+че `{{config.paths.scratchDir}}` е „the natural place“ (`skills/review/SKILL.md:231-232` Step 2a и
+`:357-358` Step 2c — „is gitignored and the natural place“; `:379-380` Step 2d — само „the natural
+place“), и никъде — къде живее черновата на план (guard (e) `docs/WORKFLOW.md:233-236` говори само
+за „plan-mode file outside the repo“). Резултат: тук `.aiwf/` носи 43 файла (`find .aiwf -type f`,
+2026-10-02, own pass), 3 от тях живи по преценката на HARD-023; двата консуматора си написаха локални правила
+за същото (операторска дума в канала — свидетелство, не дърво; CANDIDATES.md:11-24 носи само
+свидетелството от Silerax); fact-check ledger-ите, revisions и r0 версиите
+нямат нито име, нито дом (`git grep` в skills/docs — нула). Историята на един readiness цикъл е
+доказателството на плана и днес е gitignored (`.gitignore:1`) — изчезва с `.aiwf`.
+
+**Какво има payload-ът (verified в inventory + ledger 1):**
+- Схема `schema/aiwf.config.schema.json:301-330`: `paths` е `additionalProperties: false` (`:303`),
+  `required` `scratchDir|plansDir|overridesDoc` (`:304`); `scratchDir` е `const ".aiwf"` (`:306-310`,
+  фиксиран във v0.1 — Gate 3 резолвира `.aiwf/route-state.json` литерално,
+  `scripts/engine/pretooluse-mutation-guard.js:71`); `plansDir` `:311-316` е „The PARENT of active/
+  and archive/ … setup creates both subdirectories“ (`description` на `:315`, annotation keyword —
+  `scripts/setup/validate-config.mjs:41`, никой не го чете); `transferSurface` `:323-329` без default.
+  Няма `draftsDir`/`readinessDir`.
+- Setup: `scripts/setup/generate.mjs:1471-1474` (в `planInstall`, `:928`) създава `<scratchDir>`,
+  `<plansDir>/active`, `<plansDir>/archive` + три други (mkdir actions само при липса; `applyPlan`
+  `:1558-1580` ги изпълнява с `recursive`); `:1054-1056` containment записи (слизане ВЪТРЕ в owned
+  директория е позволено, `:1066-1068`); `:891-906` `existingPlansWarning` чете само `active/`.
+  `scripts/setup/test-setup.mjs:183-184` проверява `active/` + `archive/` и `.aiwf`; `check()` е на
+  `:60-64`. `scripts/setup/interview.mjs:219` „Plans directory (the PARENT of active/ and archive/)“
+  (`:15` казва само `<plansDir>/active/`).
+- Self-check (`scripts/selfcheck/aiwf-selfcheck.js`): `projectLayerFindings` `:5102+` с `add`
+  `:5103` / `addNote` `:5104`; `plans-active-subdir` `:5416-5421` (само `active/`; коментарът `:5416-5418`
+  и името `:5419` носят буквалното „active/ and archive/“), `scratch-is-aiwf` `:5422-5425`,
+  `path-scratch`/`path-plans` `:5412-5415`; `sectionProjectLayer` `:5466` печата NOTE през глобалния
+  `note()` `:104-107` („[NOTE] <name> - not exercised: <why>“) и има и `observation()` `:113-117`
+  („[NOTE] <name> - <why>“); негативните контроли `:7832-7835`, драйверът `sectionNegativeControls`
+  `:7898-7936` (цел = `ok === false && !note`, `:7922`; note-типизираните находки са извън „no
+  control“ списъка — `!f.note` на `:7927`); plan-gate fixture-ите под `.aiwf/plan/FIX/` `:3746`; spikes
+  `scripts/spike/run-spikes.mjs:303-310` под `.aiwf/plan/SPK/`. Self-check-ът никога не е пускал
+  `git` (нула `spawnSync('git'`).
+- Миграции: речникът е `add-config-key | rerender-managed-region | reconcile-ask-ruleset | note`
+  (`scripts/update/validate-payload.mjs:105-156` OP_SPECS; `dev/PROJECT_OVERRIDES.md:161-162`) — **няма
+  `mkdir` op**; нито една миграция не пипа `paths.*`. Note-only образци: 0005, 0006, 0008, 0013,
+  0014, 0016 (0019 носи и rerender).
+- Gate 2 чете само `<plansDir>/active` (`scripts/engine/pretooluse-dispatch-gate.js:115-120`,
+  `:195-215`, само `^PLAN_.*\.md$`); Gate 3 пуска главната сесия само в `docs/**`, `.aiwf/**`, root
+  `*.md` (`pretooluse-mutation-guard.js:93-100`, `:207-212`; `docs/WORKFLOW.md:539-540`) — при
+  `plansDir` извън `docs/` (тук: `dev/backlogs`) главната сесия НЕ може да пише под `plansDir`,
+  докато R2/R3 маршрут е отворен.
+- `.gitignore`: само на това репо (`:1` `.aiwf/`); setup не пише `.gitignore`, примерният проект
+  няма такъв. Изреченията за gitignored: „is gitignored“ — `skills/review/SKILL.md:232`, `:358`,
+  `:547`, `skills/qa/SKILL.md:311` (4 удара на `git grep -n "is gitignored" -- skills docs`);
+  „gitignored path“ — `skills/qa/SKILL.md:114`; „the gitignored `.aiwf/route-state.json`“ —
+  `docs/WORKFLOW.md:537`. Шест изречения, нула payload механизъм зад тях.
+- Plan gate-ът: `scripts/engine/plan-gate.js:206-209` резолвира `PLAN:`/`CONSEQUENCE SCAN:`/`OWN
+  PASS:` с `path.resolve(root, rel)` без ограничение по директория; хешът е над текста на `PLAN:`
+  файла (`:75-79`, сравнението `:313-318`).
+- Доктрина за layout-а — две групи: казват „parent of active/ and archive/“ (с backticks и
+  преноси): `skills/setup/SKILL.md:87` („setup creates both“), `skills/work/SKILL.md:46-47`,
+  `skills/mission/SKILL.md:39-40`, `skills/brief/SKILL.md:34-35`; описват само `active/`/`archive/`
+  без „parent“: `docs/WORKFLOW.md:691-695` (блокът с пътищата), `:667-671` (архивирането),
+  `templates/CLAUDE.md.tmpl:124-126`, `templates/PROJECT_OVERRIDES.md.tmpl:188-192`,
+  `templates/memory-seeds/approved-plan-lands-in-repo.md:5-7`, `templates/memory-seeds/finished-plan-is-archived.md:7-8`.
+  Буквалното „active/ and archive/“ удря точно 5 пъти (schema:315, selfcheck:5416, :5419,
+  interview:219, test-setup:183).
+- ORCHESTRATOR шаблонът (`templates/ORCHESTRATOR.md.tmpl:171-197`) не назовава директория за
+  ledger/scan/own pass — само „a file“.
+- Seed-овете се ПЕЧАТАТ при setup (`generate.mjs:1581-1587`, `:1671-1676`), никога не се рендерират
+  или копират; `test-setup.mjs:185` пинва само ИМЕТО `finished-plan-is-archived`.
+
+## Решения (COO; всяко с един ред защо)
+
+- **D1. Конвенция под `plansDir`, без нов config ключ.** `<plansDir>/drafts/` и
+  `<plansDir>/readiness/<ABBR>/` — `plansDir` вече е „родителят“ на плановете; нов ключ значи
+  `add-config-key` миграция, промяна на `additionalProperties: false` схемата и на интервюто за нещо,
+  което никой не би конфигурирал отделно от `plansDir`. Граница: правилото приема `plansDir` за
+  това, което той е по доктрина — тракнат път, „the Git canon“ на guard (e) (`docs/WORKFLOW.md:234`)
+  и „Git-tracked history“ на § Durable development history (`:626`); `plansDir` под `scratchDir`
+  (Gate 3 пуска `.aiwf/**`, `scripts/engine/pretooluse-mutation-guard.js:98` — „единственият случай“
+  на D4 не настъпва) или под друг игнориран път (напр. `build/plans` — Gate 3 го държи при отворен
+  маршрут, но лендингът не може да го добави; схемата допуска всеки низ, `schema:311`) е извън
+  правилото по един и същ резултат — там нищо не стига до git (`git add` на игнориран път отказва с
+  exit 1; scan ред 102; fact-check r5) — и блок E го казва с едно изречение; описанието на
+  `plansDir` в схемата (worklist 4) казва „a tracked path“; self-check-ът не го засича, setup и
+  интервюто не предупреждават (scan редове 98-100) — observation по префикс `.aiwf/` и
+  предупреждение в интервюто са КАНДИДАТ, записан в CANDIDATES при лендинга, не ред тук; Gate 2
+  обслужва такъв plansDir за диспач както всеки друг (scan ред 101) — извън правилото е само домът
+  на черновата и историята, не plansDir-ът (пас 2 блокер 3).
+- **D2. Фиксирани имена.** `<plansDir>/drafts/PLAN_<ABBR>.draft.md`; `<plansDir>/readiness/<ABBR>/`
+  с `ledger.md` (Step 2a), `consequence-scan.md` (2c, един файл на план, редовете се добавят),
+  `fact-check-r<N>.md` (2b, един файл на ревизия), `own-pass.md` (2d, ЕДИН файл на план, презаписван
+  при всеки нов печат — „one per pass“ в днешния Step 2d пада; броячът `BLOCKERS FOUND` и хешът на
+  всеки по-ранен пас отиват в `revisions.md`; scan ред 3), `revisions.md` (вердиктите на пасовете
+  дословно + какво затвори всяка ревизия + хешовете). Фиксирани имена правят петте реда на readiness
+  брифа предвидими и grep-ваеми.
+- **D3. Задържане и лендинг.** Черновата живее, докато планът е чернова — НЕТРАКНАТА (планиращият
+  lock забранява git мутации до одобрението; D11). При лендинга се МЕСТИ с обикновен rename
+  (`mv`/`Move-Item`; `git mv` отказва нетракнат файл — измерено `exit 128`) в
+  `<plansDir>/active/PLAN_<ABBR>.md`, бележката за одобрение се добавя в хедъра, и `git add` взема
+  плана и `readiness/<ABBR>/` в ЕДИН docs commit. Честен лимит на печата: хешът в `own-pass.md` е над
+  текста, който одиторът е чел (черновата при последния пас); бележката за одобрение го сменя, затова
+  `revisions.md` записва и двата хеша — преди бележката (= печата) и след лендинга (`plan-gate.js
+  --hash <plansDir>/active/PLAN_<ABBR>.md`) — и единствената разлика между тях е тази бележка (scan
+  ред 5; fact-check A). Одобреният план в `active/` Е текстът; дубликат няма. `readiness/<ABBR>/`
+  остава там завинаги — при архивирането на плана не се мести (scan ред 7). Оттук и ПРАВИЛО, с дом
+  в WORKFLOW (worklist 3(j)): един `<ABBR>` е един план завинаги — по-късен план не преизползва
+  буквите, защото неговата `readiness/<ABBR>/` би презаписала историята на първия (scan ред 61;
+  fact-check r4 B: нов нормативен текст, затова има дом, не само блок). scratchDir не носи копие
+  на одобрен план. Празна `drafts/` не се пази от git (git тракна съдържание, не директории —
+  поведение на git, не на това дърво) — затова self-check-ът я НАБЛЮДАВА (D5).
+- **D4. scratchDir — само живата механика, и едно изключение.** `route-state.json`, `review-brief.txt`,
+  `qa-brief.txt`, `arbiter-brief.txt`, `last-*-session.txt` и артефактите на ТЕКУЩИЯ тикет остават
+  там. Чернова и readiness артефакти се пишат под `<scratchDir>/plan/<ABBR>/` в точно един случай:
+  Gate 3 държи главната сесия извън `plansDir`, защото `plansDir` не е под `docs/` и има отворен R2/R3
+  маршрут (гейтът хваща класа Edit/Write, `pretooluse-mutation-guard.js:97-98`; shell запис покрай
+  него е нарушение на доктрината, не трети случай; scan ред 67). Тогава при лендинга черновата отива
+  в `active/`, артефактите COO-то мести в `readiness/<ABBR>/` (scan ред 68), и лендингът проверява
+  ИМЕНАТА преди `git add` — `test -f` на `ledger.md`, `consequence-scan.md`, `own-pass.md`,
+  `revisions.md` и поне един `fact-check-r*.md`; липсващо име спира лендинга; нищо не проверява повече
+  от присъствие — честен лимит, блок E (scan ред 11; пас 1 блокер 3). Сесия, която НЕ държи дървото,
+  не пише нищо под репото — нито чернова, нито readiness артефакт, нито scratch файл (тя не диспачва
+  нищо, което би написал бриф; `docs/WORKFLOW.md:878-881` § Branch policy: неизпълняваща сесия —
+  нула repo записи, а `.aiwf` е вътре в репото, `schema:306`; scan редове 63, 65); нейната чернова
+  чака извън репото — по аналогия с guard (e) `:235-236`, който вече познава такъв файл („any
+  plan-mode file outside the repo becomes a pointer to it“) — докато дървото се освободи (пас 1
+  блокер 1 — r6 носеше този случай като второ изключение).
+  **Отхвърлено:**
+  Gate 3 да чете `paths.plansDir` и да пуска записи под него — hook промяна с нова allow повърхност за
+  нещо, което клаузата покрива без код; кандидат, не ред в този план.
+- **D5. Setup създава двете директории; self-check ги НАБЛЮДАВА, не ги изисква.**
+  `generate.mjs:1471-1474` добавя `drafts/` и `readiness/` (нови инсталации); заварен консуматор ги
+  създава при първото писане (миграционният речник няма `mkdir`); празна директория не се пази от
+  git (scan ред 6), затова съществуването им не може да е броена проверка. Self-check-ът ги отчита
+  като НАБЛЮДЕНИЕ — нов вид находка `{ ok: true, note: true, observation: true }` в
+  `projectLayerFindings` (помощник `addObservation(id, name, text)` до `addNote` `:5104`), която
+  `sectionProjectLayer` печата през глобалния `observation()` `:113-117` („[NOTE] <name> - <text>“,
+  без „not exercised“), с два текста — `present` / `not created yet - created on first use, or by
+  /pnp:setup on a new install` — никога `add` (ledger B4: NEGATIVE_CONTROLS драйверът `:7898-7936`
+  приема само проверки, които могат да паднат, и обявява проверка, деградирала до NOTE, за fail;
+  `note: true` държи наблюдението извън драйвера — `!f.note`, `:7927`). Наблюдението е извън
+  множеството на падащите проверки по конструкция; това, което МОЖЕ да падне, е неговият принтер:
+  `sectionProjectLayer` избира принтера по вида — `observation()` за наблюдение, `note()` за
+  `addNote`, `check()` за `add` (трите глобални принтера пазят СОБСТВЕНОТО си счетоводство —
+  `observations`/`notes`/`results` — затова изборът, а не редът, се изнася в чиста функция
+  `printerFor(f)` → `'observation' | 'note' | 'check'`; scan ред 36); S1↔S2 / S3↔S4 са fixture-и,
+  които трябва да обърнат текста, S5 проверява избора на `printerFor`, а S6 пуска САМИЯ
+  `sectionProjectLayer` над S1 и над S2 с прихванат `console.log` и чете отпечатаните редове от двете
+  страни (fixture-ите доказват ТЕКСТА, ИЗБОРА и реалния път на печата; acceptance grep-ът над
+  реалния изход — `(observed) - not exercised` → 0 и редът `^  [NOTE] plans drafts/ (observed) - …` →
+  1 — остава като доказателство над инспектирания проект; пас 1 блокер 4). S3/S4 имат един
+  резерв, назован по код: липсващо git binary (`ENOENT` на `git --version`) дава два `[NOTE]` реда с
+  причина „git is not on PATH“ — хост без git е легитимен за setup/update и един зелен запис там не
+  бива да излиза червен заради fixture-ите на self-check-а (пас 2 блокер 2); всичко друго е FAIL,
+  защото git, който тръгва и греши, е счупен fixture, не среда (пас 1 блокер 4). Самият драйвер на контролите получава `&&
+  !f.observation` в списъка „NOTEs on the control fixture“ (`:7932-7935`), иначе би обявил трите
+  наблюдения за непроверени проверки на всеки рън (scan ред 37). Негативна контрола за setup:
+  test-setup payload-copy моделът (`test-setup.mjs:84-119`,
+  образец `:805-830`) — копие на payload-а с махнат `drafts` запис → инсталацията няма `drafts/`
+  (worklist 6(d)).
+- **D6. „gitignored“ става честно.** Шестте изречения (Контекст) казват, че ignore правилата на
+  самия проект (`.gitignore` или неговите excludes) държат scratchDir извън git и че setup не пише
+  ignore запис; ново НАБЛЮДЕНИЕ `scratch-ignored` с четири текста, дословно: `ignored by git` /
+  `NOT ignored by git - add <scratchDir>/ to .gitignore` / `git gave no answer (not a work tree, git
+  not found, or git refused)` / `not present - nothing to check` — от `git check-ignore -q
+  <scratchDir>` в projectRoot (`r.status === 0` → първият; `=== 1` → вторият; всичко друго —
+  `r.error`, `status null`, `>= 2`, вкл. 128 при dubious ownership — третият; директорията липсва →
+  четвъртият без spawn; измерено: `.aiwf` → 0, несъществуващ път → 1, извън repo → 128).
+  `check-ignore` отговаря от ВСЕКИ ignore източник (глобален `core.excludesFile`, `.git/info/exclude`,
+  `.gitignore`) — затова текстът казва „by git“, не „.gitignore“ (scan ред 40). Първото `git`
+  извикване в self-check-а — консуматор без git е легитимен, затова третият текст. Принтерът се
+  проверява с S3↔S4: fixture-и с `git init`, и ЦЯЛОТО извикване на git в тях минава през
+  `scratchIgnored(projectRoot, scratchDir, gitArgs)` с `gitArgs = ['-c', 'core.excludesFile=<празен
+  файл във fixture-а>']`, за да не го обърне глобалният excludes на машината (scan ред 41); в
+  реалното наблюдение `gitArgs` е празно — консуматорът се вижда какъвто е. Payload-ът не пише
+  `.gitignore` (не му е файл).
+- **D7. ORCHESTRATOR шаблонът не се пипа; CLAUDE регионът получава едно изречение и rerender.**
+  Домът на правилото е `skills/review/SKILL.md` (Step 2e) + `docs/WORKFLOW.md`; ORCHESTRATOR не
+  назовава директория и днес. `templates/CLAUDE.md.tmpl:124` „the plan is copied into
+  `<plansDir>/active/`“ обаче се рендерира във ВСЕКИ консуматорски CLAUDE.md и „copied“ оставя
+  източник на място — точно дубликатът, който D3 забранява (scan ред 51); затова изречението става
+  „the plan lands in `{{config.paths.plansDir}}/active/` (moved there from its draft under
+  `drafts/`)“ и миграция 0020 носи `rerender-managed-region` за `CLAUDE.md` регион `aiwf-core`
+  (op-ът за региона — както в `migrations/0012_orchestrator-role/ops.json`, последната миграция,
+  рендерирала CLAUDE региона: `"template": "templates/CLAUDE.md.tmpl#aiwf-core"`; формата
+  rerender + note — както в 0019; редактирал региона консуматор получава диалога, нередактирал —
+  тих take-new). Самоинсталацията:
+  `CLAUDE.md#aiwf-core` е `override: false`, upstream == local (`.claude/aiwf-native/aiwf.config.json:18-22`)
+  → тих rerender при `--apply`.
+- **D8. Plan-gate fixture-ите остават под `.aiwf/plan/`.** Checker-ът е path-agnostic; fixture
+  пътищата са тестови; местенето им е шум в диф, който не доказва нищо.
+- **D9. Един тикет, едно издание.** Конвенцията (имена, задържане) и прозата, която я описва, са
+  един договор — RGATE D12.
+- **D10. Маршрут: R2 code-class без QA** — `generate.mjs`, `test-setup.mjs`, `aiwf-selfcheck.js`
+  се променят; E2E е изключен (`.claude/aiwf-native/aiwf.config.json:229-230`); доказателството са
+  изпълнените проверки на setup suite и self-check.
+- **D11. Планиращият lock и черновата.** Черновата и readiness артефактите са собствените файлове
+  на планирането — нетракнати до лендинга; записването им НЕ е „edit the repository“ в смисъла на
+  lock-а и не е git мутация. WORKFLOW `:342-343` (изречението „Composing the concrete draft plan …
+  explicitly permitted“; абзацът на изключението `:348-350`) го казва изрично след този тикет
+  (worklist 3(e)); до тогава — това е четенето, по което тази чернова е написана (scan ред 8).
+- **COO routing (WORKFLOW § COO routing, заглавие `:818`, проверките `:824-834`):** 1 = ДА (тикетът
+  авторства миграция 0020 — rerender + note, но миграция; fact-check B); 2 = не (всеки КОДОВ
+  worklist запис носи `file:line` котва; записите за издание в т.10 са литерални стойности —
+  manifest ред, версия, блокове — а не места за откриване; нерешен маркер няма — преценка на COO-то
+  върху r5); 3 = не (виж „Ескалация“ по-долу); 4 = не → top tier; тази сесия е top tier (състояние
+  на сесията, не на дървото).
+- **Ескалация (WORKFLOW § Escalation and the arbiter, тригер 1 „reverses a plan-recorded decision“):**
+  PLAN_RGATE блокове C и D записаха „where the file lives is the COO's call, and scratchDir is the
+  natural place“ — препоръка вътре в дословен блок, не D-решение на RGATE (нито едно от D1–D13 там
+  не фиксира място); промяната идва по операторска дума (CANDIDATES.md:9-24 и думата от канала), а
+  в соло инсталация операторът Е ескалационната цел. RGATE D8 („собственият проход е ПОСЛЕДНИЯТ акт
+  над плана … „над текста, който тръгва“ е доказуемо“) НЕ се обръща от D3: гейтът пак отказва пас
+  над текст, различен от печата; D3 описва само какво става СЛЕД последния пас — бележката за
+  одобрение при лендинга — и това е практиката на самия RGATE (печатът `7ea7f6d4…` е над r7, а
+  хедърът „ОДОБРЕН 2026-10-02“ е добавен при лендинга, `archive/007_PLAN_RGATE_2026-10-02.md:3`);
+  D3 я прави изрична и записва двата хеша (scan ред 50). Тригер не е сработил; решението е на
+  COO-то и е записано тук с причината (fact-check r2, C).
+
+**Отхвърлени:** `paths.draftsDir`/`paths.readinessDir` (D1); Gate 3 allow за `plansDir` (D4);
+rerender на ORCHESTRATOR (D7; CLAUDE регионът СЕ рендерира — r4); self-check fail при липсваща
+`drafts/`/`readiness/` (D5, няма mkdir op); преместване на fixture-ите (D8); писане на `.gitignore`
+от setup (D6 — файлът е на оператора); `git mv` при лендинга (D3 — нетракната чернова); бележка за
+одобрение извън плана (D3 — хедърът е конвенцията от всеки план досега; двата хеша са честният
+запис); scratch резерв за сесия, която не държи дървото (D4 — Branch policy: нула repo записи, а
+`.aiwf` е в репото; черновата ѝ чака извън репото; пас 1 блокер 1).
+
+## Тикет
+
+### DRAFTS-001 [R2 code-class] — черновите и readiness историята под `plansDir`; `scratchDir` само за живата механика; release 0.2.16
+
+**Outcome:** (1) `skills/review/SKILL.md` казва на трите места и в readiness брифа къде живеят
+ledger, scan, fact-check, own pass и revisions (D2) и кога scratchDir е легитимен (D4) — нов Step 2e;
+(2) `docs/WORKFLOW.md` guard (e), блокът с пътищата, архивирането, планиращият lock и Gate 3
+абзацът, Branch policy и `:698` носят `drafts/`, `readiness/<ABBR>/`, лендинга и задържането (D3,
+D11); (3) setup създава двете директории; test-setup ги проверява с контрола; self-check НАБЛЮДАВА
+двете директории и дали scratchDir е игнориран (D5, D6), а selfcheck скилът и README-то му казват
+какво е наблюдение; (4) схемата, интервюто, setup/work/mission/brief скиловете, двата self-check
+низа, `templates/PROJECT_OVERRIDES.md.tmpl`, `templates/CLAUDE.md.tmpl:124` и двата memory seed-а
+назовават `drafts/` и `readiness/` до `active/` и `archive/` (всяко със собственото си изречение —
+worklist 8); (5) издание 0.2.16 с миграция `0020_drafts-in-repo` (rerender на CLAUDE региона — op-ът
+както в 0012 — + note; формата rerender + note както в 0019).
+
+**Worklist (котви от inventory/ledger; Колегата ги отваря преди да пише):**
+
+1. **`skills/review/SKILL.md`** — (a) `:231-232` (Step 2a): „- where they live is the COO's call, and
+   `{{config.paths.scratchDir}}` is gitignored and the natural place.“ → „- in
+   `{{config.paths.plansDir}}/readiness/<ABBR>/ledger.md` (Step 2e names the other files and the one
+   case in which `{{config.paths.scratchDir}}/plan/<ABBR>/` stands in).“; (b) `:357-358` (Step 2c):
+   „- where the file lives is the COO's call, and `{{config.paths.scratchDir}}` is gitignored and the
+   natural place -“ → „- `{{config.paths.plansDir}}/readiness/<ABBR>/consequence-scan.md` (Step 2e) -“,
+   дъгите и „and closes EVERY row“ след тях остават (ledger E2); (c) `:379-380` (Step 2d): „The file
+   - one per pass; where it lives is the COO's call, `{{config.paths.scratchDir}}` the natural place
+   - carries:“ → „The file - one per plan, `{{config.paths.plansDir}}/readiness/<ABBR>/own-pass.md`,
+   rewritten at every stamp (Step 2e; the count and the hash of every earlier pass go to
+   `revisions.md`) - carries:“ (scan ред 3); (d) нов раздел `## Step 2e - Where the readiness
+   artifacts live` непосредствено след Step 2d (преди `## Plan-readiness mode` на `:429`), дословно
+   блок E по-долу; (e) readiness брифът — блокът с петте реда на `:467-471` (увод `:462-466`; ledger
+   E4): примерът става `PLAN: <plansDir>/drafts/PLAN_<ABBR>.draft.md`,
+   `CONSEQUENCE SCAN: <plansDir>/readiness/<ABBR>/consequence-scan.md`,
+   `OWN PASS: <plansDir>/readiness/<ABBR>/own-pass.md`, с едно изречение преди блока: „For a plan
+   under readiness `PLAN:` names the DRAFT (Step 2e); the hash is over that file.“; (f) `:547` „is
+   gitignored, so the brief never enters a commit“ → „is kept out of git by the project's own
+   `.gitignore` (setup writes no ignore entry), so the brief never enters a commit“; (g) Step 2b,
+   след „…and **only then** goes on - to the COO's own pass (Step 2d) before a readiness pass, or to
+   the dispatch of a diff pass - over the corrected tree.“ (`:312-314`): ново изречение „Over a plan
+   the ledger itself is kept as `{{config.paths.plansDir}}/readiness/<ABBR>/fact-check-r<N>.md`,
+   one per revision (Step 2e).“ (scan ред 4).
+2. **`skills/qa/SKILL.md`** — `:311` същото като 1(f) за `qa-brief.txt`; `:114` „pins the artifact
+   dir to a known, gitignored path“ → „pins the artifact dir to a known path the project's own
+   `.gitignore` keeps out of git (setup writes no ignore entry)“ (scan ред 17).
+3. **`docs/WORKFLOW.md`** — (a) guard (e) `:233-236`: „the plan is copied to
+   `<plansDir>/active/PLAN_<ABBR>.md` (the Git canon), and any plan-mode file outside the repo
+   becomes a pointer to it.“ → „the plan lands in `<plansDir>/active/PLAN_<ABBR>.md` (the Git
+   canon) - moved there from `<plansDir>/drafts/PLAN_<ABBR>.draft.md`, where it was an untracked
+   draft - its readiness history under `<plansDir>/readiness/<ABBR>/` is added in the same commit, and
+   any plan-mode file outside the repo becomes a pointer to it.“; (b) блокът `:691-695` става
+   ```text
+   <plansDir>/drafts/PLAN_<ABBR>.draft.md       the draft, untracked, while the plan is one
+   <plansDir>/readiness/<ABBR>/                  its readiness history, committed at landing, kept
+   <plansDir>/active/PLAN_<ABBR>.md
+   <plansDir>/archive/
+   ```
+   и след него нов абзац, дословно блок W по-долу; (c) `:536-537` „the gitignored
+   `.aiwf/route-state.json`“ → „`.aiwf/route-state.json` (kept out of git by the project's own
+   `.gitignore`)“; (d) архивирането `:667-671`: след „`git mv` preserves the history; a bare copy of
+   the active filename does not belong there.“ (`:671`) ново изречение „`<plansDir>/readiness/<ABBR>/`
+   is not moved: the archive numbering is for plans, and the history stays where the plan's landing
+   put it.“ (scan ред 7); (e) планиращият lock `:335-348`: в изречението на `:342-343` след
+   „is **explicitly permitted** by the readiness exception below;“ се добавя „ - the draft and its
+   readiness artifacts are the planning's own files, `<plansDir>/drafts/PLAN_<ABBR>.draft.md` and
+   `<plansDir>/readiness/<ABBR>/`, written UNTRACKED under the lock and committed only at the
+   landing, which is not the repository edit this lock forbids;“ (scan ред 8, D11); (f) Gate 3
+   `:544-545` след „…self-healing because `.aiwf/**` stays writable.“: ново изречение „A
+   `paths.plansDir` outside `docs/` puts the plan's own draft and readiness files behind this guard
+   while a route is open; `/pnp:review` Step 2e says what stands in for them.“ (scan ред 9); (g)
+   bullet-ът на lock-а `:345` „edit the repository, agent/tooling configuration, or other project
+   state;“ → „edit the repository, agent/tooling configuration, or other project state - the
+   planning's own untracked files under `<plansDir>/drafts/` and `<plansDir>/readiness/<ABBR>/`
+   excepted;“ (scan ред 52); (h) Branch policy `:861-866`, след „…Never stash, clean, reset, or
+   otherwise hide that state.“: ново изречение „A draft under `<plansDir>/drafts/` and a
+   `readiness/<ABBR>/` in progress are the planning's own untracked files, not foreign work: they
+   stay where they are and move only at their own landing.“ (scan ред 53); (i) `:698` „The approved
+   PLAN is written to Git only after the planning lock is released - and then immediately, by the
+   COO itself (docs class, per the write boundary above and guard (e)), before production-code
+   changes begin.“ → същото + „ - the landing commit, which also takes the readiness history that
+   has sat untracked beside the draft since the cycle began.“ (scan ред 54); (j) граматиката на
+   `<ABBR>` `:703-711`, в bullet-а „one prefix per plan“ след „…the shape the self-check holds a
+   plan to.“: ново изречение „An `<ABBR>` is never reused by a later plan: its
+   `<plansDir>/readiness/<ABBR>/` outlives the plan, and a second plan with the same letters would
+   write over it.“ (D3; scan ред 61; fact-check r4 B). Това са прозови редакции; hook кодът на
+   Gate 3 не се пипа (D4).
+4. **`schema/aiwf.config.schema.json:315`** — `description` на `plansDir`: „The PARENT of active/
+   and archive/.“ → „The PARENT of active/, archive/, drafts/ and readiness/.“ и „setup creates both
+   subdirectories“ → „setup creates all four; a draft lives in drafts/ while the plan is one, and the
+   plan's readiness history lands in readiness/<ABBR>/ with the plan. A tracked path: under the
+   scratch directory or any ignored path nothing here reaches git.“ (scan ред 97). Само `description`; никаква
+   промяна по `type`, `default`, `required`, `additionalProperties` (acceptance: schema diff).
+5. **`scripts/setup/generate.mjs`** — (a) `:1471-1474` масивът на mkdir-а: веднага след елемента
+   `path.join(merged.paths.plansDir, 'archive'), ` се вмъква ДОСЛОВНО, на същия ред, текстът
+   `path.join(merged.paths.plansDir, 'drafts'), path.join(merged.paths.plansDir, 'readiness'), `
+   (запетая-интервал след всеки елемент; днес този низ се среща 0 пъти, след вмъкването — точно 1;
+   6(d) го замества); (b) `:13` header редът; (c) `:1054-1056` — два нови containment записа
+   (`{ rel: path.join(merged.paths.plansDir, 'drafts'), kind: 'dir', label: 'the plan drafts
+   directory' }`, същото с `'readiness'` / `'the readiness history directory'`) по образеца на
+   active/archive. **`scripts/setup/interview.mjs:219`** „Plans directory (the PARENT of active/ and
+   archive/)“ → „Plans directory (the PARENT of active/, archive/, drafts/ and readiness/)“.
+6. **`scripts/setup/test-setup.mjs`** — (a) `:183` проверката `plansDir has BOTH active/ and
+   archive/` става `plansDir has active/, archive/, drafts/ and readiness/` (името дословно —
+   acceptance го търси в изхода; ledger A5) и проверява четирите с `exists(...)`; (b) `:1822-1823`
+   `COLLISIONS` получава два реда `['the plan drafts directory', 'docs/backlogs/drafts']`,
+   `['the readiness history directory', 'docs/backlogs/readiness']` (ledger A6); (c) `HIERARCHY`
+   `:1849-1855` получава ред, дословно, след реда на `:1850`:
+   `['an ANCESTOR of the plan directories (drafts)', 'docs/backlogs', 'docs/backlogs/drafts'],`
+   (трите елемента: етикет, стойност на surface-а, именуваната owned директория — като `:1850`);
+   (d) негативна контрола `setup-drafts-ctl-1` по
+   payload-copy модела (`:84-119` `copyTree` + `install(p, answers, extra, { payload })`, образец
+   `:805-830`; ledger A7): копие на payload-а, в чийто `scripts/setup/generate.mjs` се замества ТОЧНО
+   низът `path.join(merged.paths.plansDir, 'drafts'), path.join(merged.paths.plansDir, 'readiness'),`
+   (двата елемента на масива, с запетаите — срещат се веднъж; containment записите са обекти с
+   `rel:` и не съвпадат) с `path.join(merged.paths.plansDir, 'readiness'),`; замяна, която намира 0
+   или ≥ 2 срещания → throw; `node --check` над копието преди инсталацията; инсталация през копието →
+   `check('[setup-drafts-ctl-1] sabotage detected: the drafts mkdir removed -> the four-directory
+   check turns red', !exists(<p>/docs/backlogs/drafts) && exists(<p>/docs/backlogs/readiness))`.
+   Печата се като `  [PASS] [setup-drafts-ctl-1] …` (test-setup печата `  [PASS|FAIL] <name>` с два
+   водещи интервала и по желание ` - <detail>`, `test-setup.mjs:63`; acceptance grep-овете са
+   неанкерирани); „видяна червена“ = предикатът на 6(a), приложен към контролния проект, е false.
+7. **`scripts/selfcheck/aiwf-selfcheck.js`** — (a) в `projectLayerFindings` (`:5102+`) нов помощник
+   `addObservation(id, name, text)` до `addNote` `:5104`, който push-ва `{ id, name, ok: true,
+   note: true, observation: true, detail: text }`; нова чиста функция `printerFor(f)` на модулно
+   ниво: `f.observation ? 'observation' : f.note ? 'note' : 'check'`; `sectionProjectLayer`
+   (`:5466-5473`) избира по нея: `observation(f.name, f.detail)` (`:113-117`, пази `observations`),
+   `note(f.name, f.detail)` или `check(...)` както днес (вкл. ` [fixture]` суфикса само при
+   `selfAuthored`, `:5471`) — поведението за `add`/`addNote` байт по байт както днес; драйверът на
+   контролите `:7932-7935`: `pristine.filter((f) => f.note)` → `pristine.filter((f) => f.note &&
+   !f.observation)` (scan ред 37); COVERAGE прозата `:8120-8171`, абзацът „PROJECT LAYER:“ — едно
+   изречение: трите `(observed)` реда са наблюдения — отчетени, никога броени, извън контролите, и
+   се появяват и в „OBSERVED ON THE INSPECTED PROJECT“ като всяко `observation()` (scan ред 43);
+   (b) след `plans-active-subdir` `:5416-5421`, с guard `typeof paths.plansDir === 'string'` като
+   съседните проверки (`:5409-5421`; иначе текстът е `config paths unusable - nothing to observe`;
+   scan ред 39): `addObservation('plans-drafts-subdir', 'plans drafts/ (observed)', <text>)` с
+   `present` при `existsSync(path.join(projectRoot, paths.plansDir, 'drafts'))` и `not created yet -
+   created on first use, or by /pnp:setup on a new install` при липса; `addObservation('plans-readiness-subdir',
+   'plans readiness/ (observed)', <text>)` същото за `readiness`; (c) `addObservation('scratch-ignored',
+   'scratchDir ignored by git (observed)', <text>)` — с guard `typeof paths.scratchDir === 'string'`
+   (иначе текстът е `config paths unusable - nothing to observe`, както в (b)); четирите текста по
+   D6 дословно, през модулна функция `scratchIgnored(projectRoot, scratchDir,
+   gitArgs = [])`: директорията липсва → `not present - nothing to check` без spawn; иначе
+   `spawnSync('git', [...gitArgs, 'check-ignore', '-q', scratchDir], { cwd: projectRoot, encoding:
+   'utf8' })`; `r.status === 0` → `ignored by git`; `r.status === 1` → `NOT ignored by git - add
+   <scratchDir>/ to .gitignore` (с реалната стойност); всичко друго (`r.error`, `r.status === null`,
+   `>= 2`) → `git gave no answer (not a work tree, git not found, or git refused)`; (d) нова секция
+   `sectionDraftsObservations(tmpRoot)`, извикана в `main()` непосредствено след реда
+   `sectionProjectLayer(...)`, с четири fixture-а по образеца на `writeFixture` (`:517-534`) и шест
+   `check`-а — четири над ТЕКСТА на наблюдението, един над избора на принтер и един над реалния път на
+   печата (през `projectLayerFindings(fixture, PLUGIN_ROOT, {
+   selfAuthored: true })`, намерено по `id`): `[drafts-S1]` fixture с `docs/backlogs/drafts` и
+   `readiness` → `detail === 'present'` за двете; `[drafts-S2]` без тях → `detail` започва с `not
+   created yet`; `[drafts-S3]` fixture с `spawnSync('git', ['init', '-q'])` + `.gitignore` с ред
+   `.aiwf/` + съществуваща `.aiwf/`, наблюдението извикано като `scratchIgnored(fixture, '.aiwf',
+   ['-c', 'core.excludesFile=' + <празен файл във fixture-а>])` → `detail === 'ignored by git'`;
+   `[drafts-S4]` същото без `.gitignore` → `detail` започва с `NOT ignored` (точно равенство/префикс
+   — `ignored` е подниз на `NOT ignored`, fact-check A; глобалният excludes на машината е
+   неутрализиран от `gitArgs`, scan ред 41); S3/S4 са `check`-ове с ЕДИН точно назован резерв: само
+   когато git binary-то липсва — `spawnSync('git', ['--version'])` преди S3 върне `r.error` с
+   `code === 'ENOENT'` — S3 и S4 са `note('[drafts-S3]', 'git is not on PATH')` / същото за S4
+   (хост без git е легитимен за setup/update — `skills/setup/SKILL.md:15-16` приема изричен project
+   root, а `scripts/selfcheck/run-selfcheck.mjs:2,18` пренася червен self-check като exit 1 на
+   setup/update; пас 2 блокер 2); сондата върви БЕЗ `cwd` (липсваща директория също дава ENOENT —
+   `syscall 'spawnSync git'` — затова fixture-ът се създава преди S3, и липсваща fixture директория
+   е FAIL на S3, не резерв; fact-check r5); ВСЯКО друго отклонение — `git init`, който връща ≠ 0,
+   `check-ignore` ≥ 2 или различен текст — е FAIL с `r.error`/`r.status` в detail-а (счупен fixture
+   аргумент не дава ENOENT — git тръгва и греши; `r.error` с друг код — EACCES/EPERM, git-ът е там, но не може да се изпълни — е
+   също FAIL: такъв хост е счупен, не без git; D5; scan ред 89); сондата е по образеца на `findPwsh`
+   (`aiwf-selfcheck.js:210-217`, `!r.error && r.status === 0`) с добавената проверка на кода (scan
+   ред 91); fixture spawn-овете (S3 `git init` и `scratchIgnored` през `gitArgs`) получават `env` =
+   копие на `process.env` без `GIT_DIR`, `GIT_WORK_TREE` и `GIT_INDEX_FILE`, плюс
+   `GIT_CONFIG_NOSYSTEM=1` и `GIT_CONFIG_GLOBAL=<празен файл във fixture-а>` — системният и
+   глобалният config на хоста (напр. `init.templateDir` към несъществуващ път) не стигат до
+   fixture-а; `-c core.excludesFile=<празен файл>` остава, защото подразбираният excludes файл
+   (`~/.config/git/ignore`) не е config запис (scan редове 76-77, 90); остатъкът — sandbox без право
+   на запис, dubious ownership на tmp родителя — е счупен хост и FAIL е верният отговор; `[drafts-S5]` — `printerFor(<S1 находката>) === 'observation'`,
+   `printerFor(<addNote находка>) === 'note'`, `printerFor(<add находка>) === 'check'` (принтерът
+   различава трите вида; scan ред 36); `[drafts-S6]` — реалният път на печата: `sectionProjectLayer(<S1
+   fixture>, true)` и `sectionProjectLayer(<S2 fixture>, true)` — S1 е `writeFixture` базата +
+   `docs/backlogs/drafts` и `docs/backlogs/readiness`, S2 е базата непроменена (тя носи
+   `docs/backlogs/active` и `.aiwf`, без двете нови; scan ред 75) — всяко извикване с `console.log`
+   заменен за времето му от функция, която събира аргументите в масив, и със снимка на
+   `results.length`, `notes.length`, `observations.length` и на модулната променлива `currentSection`
+   (`:95`, `:98`) преди извикването; във `finally` `console.log` се възстановява, трите масива се
+   режат обратно до снимката (`arr.length = before`) и `currentSection` се връща — fixture фактите не
+   влизат в „NOT EXERCISED“, „OBSERVED ON THE INSPECTED PROJECT“ и общия брой (scan редове 72-73);
+   прихванатият текст се съединява с `\n` и се разделя на редове (`section()` печата многоредов
+   низ, `:94-96`). Твърденията в един `check`: изходът на S1 съдържа точно редовете `  [NOTE] plans
+   drafts/ (observed) - present` и `  [NOTE] plans readiness/ (observed) - present`; изходът на S2
+   съдържа `  [NOTE] plans drafts/ (observed) - not created yet - created on first use, or by
+   /pnp:setup on a new install` и същия ред за `readiness/`; и двата съдържат един ред с префикс
+   `  [NOTE] scratchDir ignored by git (observed) - ` (текстът зависи от хоста — tmpdir под чуждо git
+   дърво дава друг от четирите; scan ред 76); нито един ред `(observed) - not exercised`; нито един
+   `[FAIL]` ред (базата минава собствените си project-layer проверки — pristine проверката `:7904-7909`;
+   `selfAuthored: true` добавя `version-stamp` и двата codex-qa `addNote` реда, които са `[NOTE] ...
+   not exercised`, не FAIL; scan ред 71); `observations.length` преди рязането е нараснал с точно 3 на
+   извикване. S1↔S2 и S3↔S4 са взаимни контроли на текста, S5 — на избора на принтер, S6 — на
+   печата през реалния принтер; `NEGATIVE_CONTROLS` не се пипа (ledger B4); (e) коментарът `:5416-5418` и името `:5419`
+   „(plansDir is the parent of active/ and
+   archive/)“ → „(plansDir is the parent of active/, archive/, drafts/ and readiness/)“ — id-то
+   `plans-active-subdir` остава (контролата `:7832` го цели по id).
+8. **Прозата за layout-а — всяко място със СОБСТВЕНОТО си изречение** (ledger D3/G1/H1-H3):
+   - `skills/setup/SKILL.md:87` „`paths.plansDir` is the **parent** of `active/` and `archive/`;
+     setup creates both;“ → „`paths.plansDir` is the **parent** of `active/`, `archive/`, `drafts/`
+     and `readiness/`; setup creates all four;“;
+   - `skills/work/SKILL.md:46-47` и `skills/brief/SKILL.md:34-35`: „(plansDir is the PARENT of
+     `active/` and `archive/`)“ → „(plansDir is the PARENT of `active/`, `archive/`, `drafts/` and
+     `readiness/`)“; `skills/mission/SKILL.md:39-40` (без скоби, продължава „, and only `active/`
+     holds candidates“): „plansDir is the PARENT of `active/` and `archive/`, and only“ → „plansDir is
+     the PARENT of `active/`, `archive/`, `drafts/` and `readiness/`, and only“; останалото в
+     изреченията непроменено;
+   - `templates/PROJECT_OVERRIDES.md.tmpl:188-192` „Durable knowledge lives in Git under
+     `{{config.paths.plansDir}}/active/` (finished plans move to `{{config.paths.plansDir}}/archive/`);“
+     → „Durable knowledge lives in Git under `{{config.paths.plansDir}}/active/` (a draft under
+     `drafts/` until it lands, its readiness history under `readiness/<ABBR>/`; finished plans move
+     to `{{config.paths.plansDir}}/archive/`);“ — рендерира се веднъж, стига само до нови инсталации
+     (`generate.mjs:1371-1375`), без миграция;
+   - `templates/memory-seeds/approved-plan-lands-in-repo.md:5-7` „…copied into the plans directory
+     (`<plansDir>/active/`) as the Git canon, and any plan-mode file outside the repository becomes a
+     pointer to it.“ → „…lands in the plans directory (`<plansDir>/active/`, moved there from the
+     untracked draft under `<plansDir>/drafts/`) as the Git canon, its readiness history under
+     `<plansDir>/readiness/<ABBR>/` committed with it, and any plan-mode file outside the repository
+     becomes a pointer to it.“;
+   - `templates/memory-seeds/finished-plan-is-archived.md:6-9` — изречението става, цяло: „The
+     moment every ticket in a plan stands closed with its completion record, the file moves from
+     `<plansDir>/active/` to `<plansDir>/archive/` - same session, unprompted, as the last act of
+     closing the last ticket - and its `readiness/<ABBR>/` stays where it is.“ (следващото
+     изречение „The trigger is the checkable fact…“ остава; имената на seed файловете не се сменят
+     — `test-setup.mjs:185` пинва името; ledger G2);
+   - `templates/CLAUDE.md.tmpl:124-125` (двата реда „the moment of approval the plan is copied into
+     `{{config.paths.plansDir}}/active/`; the moment“ и „every ticket in it is closed with its
+     completion record, it is moved to“) се заменят с точно ТРИ реда, дословно блок T по-долу
+     (измерено на scratch копие: хънк `@@ -124,2 +124,3 @@`, редове от 78 / 96 / 35 знака; `:126`
+     с `archive/` остава непроменен и следва „it is moved to“); managed регион, rerender през 0020
+     (D7); `:72` непроменен (Gate 2 lookup); пас 3 блокер 1.
+   **Закриващ grep (първо УДРЯ списъка, после нула извън него):** `git grep -nE "archive/" -- docs
+   skills templates schema scripts README.md` → на котвата удря 15 реда: `docs/WORKFLOW.md:667`,
+   `:695`, `skills/brief/SKILL.md:35`, `skills/mission/SKILL.md:40`, `skills/setup/SKILL.md:87`,
+   `skills/work/SKILL.md:47`, `templates/CLAUDE.md.tmpl:126`, `templates/PROJECT_OVERRIDES.md.tmpl:191`,
+   `templates/memory-seeds/finished-plan-is-archived.md:7`, `schema/aiwf.config.schema.json:315`,
+   `scripts/selfcheck/aiwf-selfcheck.js:5416`, `:5417`, `:5419`, `scripts/setup/interview.mjs:219`,
+   `scripts/setup/test-setup.mjs:183` (измерено на r2). След worklist-а (редовете се местят — съди се
+   по ИЗРЕЧЕНИЕ, пренесените редове се четат цели) всеки удар се отваря: изречение, в което до
+   `archive/` стои `active/` и НЕ стоят `drafts/` и `readiness/`, е пропуск — освен две изречения,
+   познати по съдържание: (i) архивиращото в WORKFLOW („`git mv` … from `<plansDir>/active/` to
+   `<plansDir>/archive/`“ — движението active→archive), (ii) блокът с четирите пътя в WORKFLOW
+   (`<plansDir>/archive/` е сам на реда си). (`templates/CLAUDE.md.tmpl:124-126` ще носи `drafts/`
+   след worklist 8 — днес не; r4.)
+9. **`README.md:22`** `**v0.2.15. Public since 0.2.0.**` → `**v0.2.16. Public since 0.2.0.**`; нищо
+   друго в README описва plansDir layout.
+10. **Издание 0.2.16:** `migrations/0020_drafts-in-repo/ops.json` дословно:
+    ```json
+    {
+      "migration": "0020_drafts-in-repo",
+      "targetPluginVersion": "0.2.16",
+      "operations": [
+        {
+          "op": "rerender-managed-region",
+          "file": "CLAUDE.md",
+          "region": "aiwf-core",
+          "template": "templates/CLAUDE.md.tmpl#aiwf-core"
+        },
+        {
+          "op": "note",
+          "id": "drafts-in-repo",
+          "text": "<блок N по-долу, на един ред>",
+          "docRefs": ["CHANGELOG.md", "skills/review/SKILL.md"]
+        }
+      ]
+    }
+    ```
+    (блокът е дословен; op-ът за региона е байт по байт като в
+    `migrations/0012_orchestrator-role/ops.json` — последната от седемте миграции, рендерирали
+    CLAUDE региона, всичките с `"template": "templates/CLAUDE.md.tmpl#aiwf-core"`; без `#aiwf-core`
+    engine-ът би вмъкнал целия шаблон в региона и никой валидатор не го спира — fact-check r4 A;
+    `NOTES.md` дословно блок M по-долу);
+    `migrations/index.json` нов последен запис `{ "id": "0020_drafts-in-repo",
+    "targetPluginVersion": "0.2.16" }`; `.claude-plugin/plugin.json:3` → `0.2.16`; `CHANGELOG.md`
+    блок дословно блок CL над `## [0.2.15]`; self-update `node scripts/update/aiwf-update.mjs
+    --apply --project-root .` (печата „updated: 0.2.15 -> 0.2.16, 2 operation(s) applied.“; тих
+    rerender на `CLAUDE.md#aiwf-core` в това репо (`override: false`, upstream == local);
+    bookkeeping в config-а — версията И managedRegions хешовете на `CLAUDE.md#aiwf-core`;
+    `CHANGES_0.2.15-to-0.2.16.md`, после интегрираният self-check — ledger C7; conflict диалог →
+    СТОП). **РЕД:** bump + миграция → `--apply` → VERIFY — `version-stamp`
+    (`aiwf-selfcheck.js:5394-5402`) е червен между bump-а и `--apply`; `--apply` само с bump-нат
+    `plugin.json` пада в preflight-а („the LAST manifest entry targets 0.2.15 but the payload
+    version is 0.2.16“).
+11. **`dev/` (пише го Колегата в кодовия commit — Gate 3 държи главната сесия извън `dev/` при
+    отворен маршрут; ledger E9):** (a) `dev/PROJECT_OVERRIDES.md:277` редът за `.aiwf/` в § Workspace
+    paths става блок P по-долу, дословно (ако HARD-023 вече е нанесъл своя текст от
+    `dev/backlogs/active/PLAN_HARD.md:3009-3018` — изречението „Written to .aiwf/ only while another
+    session holds the tree (operator rule 2026-10-02).“ се заменя с последните две изречения на блок P;
+    текстът на HARD-023 казва обратното на D4 и на Branch policy — пас 1 блокер 2; при лендинга на
+    ТОЗИ план COO-то дописва в HARD-023 по един ред на три места — § „Правилото“ (`PLAN_HARD.md:3007`),
+    worklist т.3 (`:3034` „редът по-горе, дословно“) и acceptance (3) (`:3003` „точно трите живи
+    файла“ → живите файлове по D4: `route-state.json`, `review-brief.txt`, `qa-brief.txt`,
+    `arbiter-brief.txt`, `last-*-session.txt`, каквито от тях съществуват): „заменено от PLAN_DRAFTS
+    блок P / D4“ (scan редове 69-70) — docs commit на лендинга; одобрението на плана е одобрението на
+    текста по guard (g));
+    (b) `:275` „backlogs/{active,archive}“ → „backlogs/{active,archive,drafts,readiness}“; (c) `:321`
+    „Durable knowledge lives in Git under `dev/backlogs/active/` (finished plans move to
+    `dev/backlogs/archive/`)“ → както шаблона в worklist 8 с `dev/backlogs/`; (d) `dev/README.md:21`
+    — където изброява `active`/`archive`, добавя `drafts`/`readiness` (`:11` споменава само
+    `active/` — без промяна; fact-check B).
+12. **Какво е наблюдение (docs за self-check-а):** `skills/selfcheck/SKILL.md:43-44` („`[NOTE]` is a
+    branch this run could not exercise … deliberately **not** counted as a pass“) и
+    `scripts/selfcheck/README.md:38-41` („a check this run could not exercise is reported as a
+    `[NOTE]` - never counted as a pass“) — всяко получава едно изречение след това: „The three
+    project-layer rows whose name carries `(observed)` are observations instead: facts about the
+    inspected project the self-check reports and never counts, with no control because nothing in
+    them can fail.“ (scan ред 42; fact-check r4 B — другите `observation()` редове не носят
+    `(observed)` в името, затова изречението назовава трите).
+
+**Блок E (`skills/review/SKILL.md`, Step 2e — дословно):**
+
+```
+## Step 2e - Where the readiness artifacts live
+
+**A plan's readiness history is part of the repository, not of the scratch directory.** While a plan
+is a draft it lives at `{{config.paths.plansDir}}/drafts/PLAN_<ABBR>.draft.md`, untracked - the
+planning lock forbids git mutations until approval, and the draft is the planning's own file - and
+everything the readiness cycle produces lands beside it under
+`{{config.paths.plansDir}}/readiness/<ABBR>/`, with fixed names: `ledger.md` (Step 2a),
+`consequence-scan.md` (Step 2c, one file per plan, rows appended), `fact-check-r<N>.md` (Step 2b, one
+per revision), `own-pass.md` (Step 2d, one per plan, rewritten at every stamp) and `revisions.md`
+(every pass verdict verbatim, what each revision closed, and the hash of every stamp). The readiness
+brief's `PLAN:` line names the draft; the own pass is stamped over the draft.
+
+At approval the draft is moved - a plain rename, not `git mv`, which refuses an untracked file - to
+`active/PLAN_<ABBR>.md` (`docs/WORKFLOW.md` guard (e)), the approval note goes into its header, and
+`git add` takes the plan and `readiness/<ABBR>/` into ONE docs commit. The approval note changes the
+plan's text, so the stamped hash verifies against the audited draft and not against the landed
+plan: `revisions.md` records both hashes - the stamp, and `plan-gate.js --hash` over the landed
+plan - and the only difference between them is that note. A readiness pass over a plan that has
+already landed - an extension with a new ticket - names the active plan on its `PLAN:` line and
+stamps THAT text afresh; the gate sees nothing else. The approved plan IS the text, and an approved
+plan has no copy anywhere else, `{{config.paths.scratchDir}}` included. `readiness/<ABBR>/` is
+never moved again: when the plan is archived, its history stays where it is - which is why a later
+plan never reuses an `<ABBR>`: the second plan's `readiness/<ABBR>/` would write over the first's.
+
+`{{config.paths.scratchDir}}` carries the live loop mechanics only - `route-state.json`, the brief
+files, the engines' session files, and the artifacts of the CURRENT ticket - and it is the
+project's own ignore rules (`.gitignore`, or its excludes) that keep it out of git (setup writes no
+ignore entry). A draft and its
+readiness artifacts are written there, under `{{config.paths.scratchDir}}/plan/<ABBR>/`, in exactly
+one case: Gate 3 holds the main session out of `{{config.paths.plansDir}}` because an R2/R3 route is
+open and `{{config.paths.plansDir}}` is not under `docs/` (the gate covers the Edit/Write tool
+class; a shell write around it is a breach of doctrine, not a third case). Then at the landing the
+draft goes to `active/` and the COO moves the artifacts into `readiness/<ABBR>/`, and the landing
+checks the names before `git add` - `test -f` on `ledger.md`, `consequence-scan.md`, `own-pass.md`,
+`revisions.md`, and at least one `fact-check-r<N>.md` - a missing name stops the landing; nothing
+checks more than presence. A session that does not hold the tree writes nothing under the
+repository at all - not a draft, not a readiness artifact, and no scratch file either, since it
+dispatches nothing that would write one (`docs/WORKFLOW.md` § Branch policy: a non-executing session
+makes no repo writes, and the scratch directory is inside the repository); its draft waits outside
+the repository, as guard (e) already allows, until the tree is free.
+
+This rule assumes what the plans directory already is: a tracked part of the repository - the Git
+canon of `docs/WORKFLOW.md` guard (e), the Git-tracked history of § Durable development history.
+A `{{config.paths.plansDir}}` placed under `{{config.paths.scratchDir}}` (Gate 3 never holds a
+session out of it, so the one case above never arises) or under any other path the project
+ignores (Gate 3 does hold a session out of it, but nothing under it reaches git - `git add` of an
+ignored path refuses with exit 1) is outside this rule either way: such a project has no plan
+canon in git at all - a configuration this rule does not serve and the self-check does not detect.
+
+`/pnp:setup` creates `drafts/` and `readiness/` on a new install; an installation older than this
+rule creates them on first use - no update creates directories, and git keeps no empty one - so
+the self-check only OBSERVES them (a note saying present or not created yet, never a failure), and
+observes in the same way whether git ignores `{{config.paths.scratchDir}}` at all.
+
+**Its suppression dual.** Exactly the behavior ledger's: small R1 and non-durable R2 work owe no
+readiness artifacts, so they owe no place for them.
+```
+
+**Блок W (`docs/WORKFLOW.md`, след блока с пътищата — дословно):**
+
+```
+A draft lives in the repository while the plan is one, its readiness history lands beside it, and the
+scratch directory carries the live loop mechanics only (`/pnp:review` Step 2e names the files and the
+one case in which `<scratchDir>/plan/<ABBR>/` stands in). The reason is where the evidence went: on
+this repository and, as its operator reported, on two consumer installations the readiness
+artifacts - the behavior ledger, the consequence scan, the own pass, the fact-check ledgers, the
+revisions - were written to the scratch directory, which git ignores, so a plan's proof disappeared
+with it, and both consumers wrote a local rule for the same thing. One `<ABBR>` is one plan for
+good: its `readiness/<ABBR>/` stays after archiving, and a later plan with the same letters would
+write over it.
+```
+
+**Блок N (текстът на `note` op-а, на един ред в ops.json — дословно):**
+
+```
+A plan's draft and its readiness history live in the repository (DRAFTS-001): the draft is <plansDir>/drafts/PLAN_<ABBR>.draft.md, untracked until it lands in active/; the behavior ledger, the consequence scan, the fact-check ledgers, the own pass and the revisions land in <plansDir>/readiness/<ABBR>/ with the plan's docs commit and stay there; the scratch directory carries the live loop mechanics only and stands in for the draft and the readiness files only while Gate 3 holds the main session out of plansDir - a plansDir outside docs/ during an open R2/R3 route (/pnp:review Step 2e). YOUR LOCAL RULES: a local rule that puts plan drafts or readiness artifacts in the repository can become a one-line pointer to Step 2e. YOUR DIRECTORIES: create <plansDir>/drafts/ and <plansDir>/readiness/ when you first need them - this update creates no directories, and the self-check only observes them (a note, never a failure); it also observes whether git ignores your scratch directory, which setup never arranges for you.
+```
+
+**Блок M (`migrations/0020_drafts-in-repo/NOTES.md` — дословно):**
+
+```
+# 0020_drafts-in-repo
+
+**A plan's draft and its readiness history lived in the gitignored scratch directory.** The review
+skill called `<scratchDir>` "the natural place" for the behavior ledger, the consequence scan and
+the own pass, and named no place for a plan's draft, the fact-check ledgers or the revisions - so a
+plan's proof disappeared with the scratch directory, and installations wrote local rules for the
+same thing.
+
+## What changes
+
+- **Step 2e of `/pnp:review`**: a draft is `<plansDir>/drafts/PLAN_<ABBR>.draft.md`, untracked until
+  it lands in `active/`; the behavior ledger, the consequence scan, the fact-check ledgers, the own
+  pass and the revisions land in `<plansDir>/readiness/<ABBR>/` with the plan's docs commit and stay
+  there; the scratch directory carries the live loop mechanics only and stands in for the readiness
+  files only while Gate 3 holds the main session out of plansDir.
+- **Doctrine and the plansDir description** say "parent of active/, archive/, drafts/ and
+  readiness/"; `/pnp:setup` creates all four on a new install.
+- **"Gitignored" is the project's own doing**: the sentences that called the scratch directory or
+  the route state gitignored now say the project's `.gitignore` does it and setup writes no entry;
+  the self-check observes, as a note, whether git ignores the scratch directory at all. Two of the
+  self-check's own fixtures run `git init` and `git check-ignore`; on a host with no `git` on PATH
+  they are reported as not exercised, with that reason, and the scratch observation says git gave
+  no answer - never a failure, so a setup or update on such a host stays green.
+
+- **The `CLAUDE.md` region** says the plan lands in `active/`, moved there from its draft - not
+  copied.
+
+## What this migration does
+
+- **Re-renders the `aiwf-core` region of `CLAUDE.md`**: an installation that never edited the
+  region gets the new render silently; an edited region raises the usual conflict question; a
+  region held through an override is not applied - the new render is recorded as upstream.
+- **One `note`** saying the above. No hook entry, matcher or ask rule changes, and no directory is
+  created: `<plansDir>/drafts/` and `<plansDir>/readiness/` appear when you first write into them,
+  and the self-check reports a missing one as a note, never as a failure.
+
+## Superseded local rules
+
+A local rule that puts plan drafts or readiness artifacts in the repository can become a one-line
+pointer to `/pnp:review` Step 2e.
+```
+
+**Блок CL (`CHANGELOG.md`, над `## [0.2.15]` — дословно; датата е денят на тага, проверява се при
+тага като при всяко издание):**
+
+```
+## [0.2.16] - 2026-10-02
+
+A plan's draft and its readiness history live in the repository; the scratch directory carries the
+live loop mechanics only.
+
+### Changed
+
+- **Readiness artifacts live under plansDir (DRAFTS-001)** - `/pnp:review` Step 2e: a draft is
+  `<plansDir>/drafts/PLAN_<ABBR>.draft.md`, untracked, and is moved to `active/` at landing; the
+  behavior ledger, the consequence scan, the fact-check ledgers, the own pass and the revisions land
+  in `<plansDir>/readiness/<ABBR>/` with the plan's docs commit and stay there; the scratch directory
+  stands in only while Gate 3 holds the main session out of plansDir, and the landing checks the
+  fixed names before `git add`. `/pnp:setup` creates `drafts/` and `readiness/`; an older installation creates them on
+  first use, and the self-check observes them as a note. Doctrine and the plansDir description say
+  "parent of active/, archive/, drafts/ and readiness/".
+- **"Gitignored" is the project's own doing (DRAFTS-001)** - the six sentences that called the
+  scratch directory or the route state gitignored now say the project's own ignore rules do it and
+  setup writes no entry; the self-check observes, as a note, whether git ignores the scratch
+  directory at all.
+- **The CLAUDE.md region says "lands in active/" (DRAFTS-001)** - re-rendered by migration
+  `0020_drafts-in-repo`: the plan is moved there from its draft, not copied.
+```
+
+**Блок T (`templates/CLAUDE.md.tmpl`, трите реда на мястото на `:124-125` — дословно, с двата водещи
+интервала; acceptance-ът ги сравнява байт по байт):**
+
+```
+  the moment of approval the plan lands in `{{config.paths.plansDir}}/active/`
+  (moved there from its draft under `drafts/`); the moment every ticket in it is closed with its
+  completion record, it is moved to
+```
+
+**Блок P (`dev/PROJECT_OVERRIDES.md` § Workspace paths, редът за `.aiwf/` — дословно; rule-bearing
+текст по guard (g), одобрява се с плана):**
+
+```text
+.aiwf/              scratch (gitignored): ONLY the live loop mechanics - route-state.json,
+                    review-brief.txt, last-review-session.txt - and the artifacts of the CURRENT
+                    ticket or readiness cycle. A plan draft lives in
+                    dev/backlogs/drafts/PLAN_<ABBR>.draft.md and leaves when the plan lands; the
+                    readiness history (ledger, consequence scan, own pass, fact-check, revisions)
+                    lands in dev/backlogs/readiness/<ABBR>/ with the plan's docs commit; an approved
+                    plan has no copy in .aiwf/. A readiness artifact is written to .aiwf/plan/<ABBR>/
+                    only while Gate 3 holds the main session out of dev/backlogs (an open R2/R3
+                    route) and moves to readiness/<ABBR>/ at the landing (/pnp:review Step 2e). A
+                    session that does not hold the tree writes nothing here (WORKFLOW § Branch policy).
+```
+
+**Извън обхват:** `paths.*` ключове в схемата (D1); `plansDir` под игнориран път — извън правилото
+по конструкция, казано в блок E; self-check observation за него е кандидат (D1; пас 2 блокер 3);
+hook кодът на Gate 3 (D4 — прозата му в
+WORKFLOW получава едно изречение, 3(f)); `templates/ORCHESTRATOR.md.tmpl` и `.claude/agents/*` (D7
+— без rerender; `managedRegions` се сменя само за `CLAUDE.md#aiwf-core`, плюс
+`installedPluginVersion`, `lastMigrationApplied` и журналът); механична проверка на датата в
+CHANGELOG срещу деня на тага (ръчна при тага, както при всяко издание — scan ред 58);
+plan-gate fixture пътищата (D8); `.gitignore` на което и да е дърво; `docs/CODEX_REVIEW_QA_RECIPE.md`
+примерите с `./review-brief.txt` (`:187`, `:192`, `:206`, `:210` — илюстративни); чистенето на това
+репо (HARD-023); HARD-011; консуматорските дървета; описанията на Gate 2 lookup-а
+(`skills/loop/SKILL.md:63,71`, `docs/LOOP.md:135`, `docs/WORKFLOW.md:531` — верни, само `active/`).
+
+**Acceptance (литерални, Bash от repo root; всичко СЛЕД `--apply`; „на котвата“ = HEAD при диспач;
+`git grep -c` над един файл печата `<файл>:<брой>`, затова „→ `1`“ се чете като този ред с брой 1, а
+„→ `0`“ — като без изход и `rc=1`; измерено на котвата: `is copied into` → `templates/CLAUDE.md.tmpl:1`,
+`the plan lands in` → без изход, `rc=1`):**
+- Присъствие на блоковете, по един фиксиран ред от всеки (всеки литерал на един ред):
+  `git grep -n "^## Step 2e" -- skills/review/SKILL.md` → един удар;
+  `git grep -c "A plan's readiness history is part of the repository, not of the scratch directory" -- skills/review/SKILL.md` → `1`;
+  `git grep -c "A draft lives in the repository while the plan is one" -- docs/WORKFLOW.md` → `1`;
+  `git grep -nE "^## \[0.2.16\] - 2026-[0-9]{2}-[0-9]{2}$" -- CHANGELOG.md` → един удар (денят се сверява при тага);
+  `grep -c "A plan's draft and its readiness history live in the repository (DRAFTS-001)" migrations/0020_drafts-in-repo/ops.json` → `1` (блок N);
+  `grep -c "^# 0020_drafts-in-repo$" migrations/0020_drafts-in-repo/NOTES.md` → `1` (блок M);
+  `git grep -c "readiness/<ABBR>/" -- skills/review/SKILL.md` → ≥ 6 и `-- docs/WORKFLOW.md` → ≥ 3 (долни граници — всяко място има и собствен литерал по-горе; на котвата: `rc=1`, нула).
+- Отсъствие: `git grep -n "active/ and archive/" -- docs skills templates schema scripts README.md`
+  → празно (на котвата: точно 5); `git grep -n "natural place" -- skills docs templates` → празно
+  (на котвата: 3, всичките в `skills/review/SKILL.md`); `git grep -n "is gitignored" -- skills docs`
+  → празно (на котвата: 4 — review:232, :358, :547, qa:311); `git grep -n "gitignored" -- skills docs
+  templates` → всеки удар отворен, нито един не твърди, че payload-ът/setup-ът го осигурява.
+  Закриващият grep на worklist 8 — всеки удар отворен, нула пропуска извън двете изключения.
+- Risk threshold, наблюдаем: `git diff <котва> -- schema/aiwf.config.schema.json | grep -E "^[-+]" |
+  grep -vE "^(---|\+\+\+)" | grep -v description` → празно (само `description` редът се сменя);
+  `grep -c '"op":' migrations/0020_drafts-in-repo/ops.json` → `2`, `grep -c '"op": "note"'` → `1`,
+  `grep -c '"op": "rerender-managed-region"'` → `1`, `grep -c '"file": "CLAUDE.md"'` → `1`;
+  `git diff <котва> --stat -- hooks scripts/engine templates/ORCHESTRATOR.md.tmpl` → празно;
+  `git grep -c "the plan lands in" -- templates/CLAUDE.md.tmpl` → `1` и `git grep -c "is copied into" -- templates/CLAUDE.md.tmpl` → `0` (на котвата: 0 / 1);
+  границата на шаблона (пас 1 блокер 5): `git diff <котва> -U0 -- templates/CLAUDE.md.tmpl | grep -c "^@@"` → `1` и
+  `git diff <котва> -U0 -- templates/CLAUDE.md.tmpl | grep -c "^@@ -124,2 +124,3 @@"` → `1` (точно един хънк: двата стари реда `:124-125` стават трите на блок T; хънк от `:123`, със стар брой 1 или 3, или с нов брой ≠ 3 брои 0; редакция другаде в шаблона, напр. `:72`, е втори хънк и първият брояч дава 2; измерено на scratch копие: `@@ -124,2 +124,3 @@`, с добавена редакция на `:72` → два хънка, с вмъкнат излишен ред → `+124,4`; на котвата: `0` / `0`; пас 3 блокер 1);
+  и по СЪДЪРЖАНИЕ (пас 2 блокер 1): `git diff <котва> -U0 -- templates/CLAUDE.md.tmpl | grep -E "^-[^-]" | grep -vcE "the plan is copied into|every ticket in it is closed with its completion record"` → `0` (всеки премахнат ред е един от двата позволени — `:124` или продължението му `:125`; премахнат ред с `archive/` или друг текст брои 1; на котвата: `0` без премахнати редове — затова и `grep -cE "^-[^-]"` → `1` или `2`, не `0`);
+  добавената страна ДОСЛОВНО (пас 3 блокер 1; scan редове 85-86): с блок T записан в `.aiwf/drafts-block-T.txt` (трите реда, LF, без друг знак — артефакт на текущия тикет, D4):
+  `git diff <котва> -U0 -- templates/CLAUDE.md.tmpl | grep -E "^\+[^+]" | sed 's/^+//' | diff - .aiwf/drafts-block-T.txt` → без изход, exit 0 (добавените редове са байт по байт блок T — нито един ред повече, по-малко или различен; измерено: вмъкнат излишен ред → `3d2` + exit 1; на котвата: `1,3d0`, exit 1);
+  `git grep -c "moved there from its draft" -- templates/CLAUDE.md.tmpl` → `1` (на котвата: без изход, `rc=1`) и `git grep -c "completion record, it is moved to" -- templates/CLAUDE.md.tmpl` → `1` (продължението към `:126` е запазено; на котвата: `1`); след `--apply`: `git grep -c "is copied into" -- CLAUDE.md templates/memory-seeds/approved-plan-lands-in-repo.md` → без изход, `rc=1` (старата фраза не оцелява нито в самоинсталацията, нито в seed-а; на котвата: `CLAUDE.md:1` и `...approved-plan-lands-in-repo.md:1`; scan ред 88);
+  `grep -c '"template": "templates/CLAUDE.md.tmpl#aiwf-core"' migrations/0020_drafts-in-repo/ops.json` → `1`;
+  след `--apply`: `git grep -c "the plan lands in" -- CLAUDE.md` → `1` (самоинсталацията е пре-рендерирана).
+  Прозата (изречение, което твърди, че update-ът създава директории или пише `.gitignore`) няма
+  механичен наблюдател — само Codex code пасът; записано тук като такова.
+- `node scripts/setup/test-setup.mjs > .aiwf/drafts-test-setup-out.txt` → exit 0 (артефакт на
+  текущия тикет, D4; ново име — `.aiwf/selfcheck-out.txt` е заварен файл от HARD-023's инвентар, scan
+  ред 48);
+  `grep -c "\[PASS\] plansDir has active/, archive/, drafts/ and readiness/" .aiwf/drafts-test-setup-out.txt` → `1`;
+  `grep -c "\[PASS\] \[setup-drafts-ctl-1\] sabotage detected" .aiwf/drafts-test-setup-out.txt` → `1`.
+- `node scripts/selfcheck/aiwf-selfcheck.js --plugin-root . --project-fixture . > .aiwf/drafts-selfcheck-out.txt` → exit 0;
+  `grep -cE "\[PASS\] \[drafts-S[1-6]\]" .aiwf/drafts-selfcheck-out.txt` → `6` и `grep -cE "\[(FAIL|NOTE)\] \[drafts-S[1-6]\]" .aiwf/drafts-selfcheck-out.txt` → `0` (на тази машина git е на PATH, затова `6`/`0` без алтернатива; `[NOTE] [drafts-S3]` тук = дефект; пас 1 блокер 4, пас 2 блокер 2);
+  `grep -cE "^  \[NOTE\] plans drafts/ \(observed\) - (present|not created yet)" .aiwf/drafts-selfcheck-out.txt` → `1` (черновата е преместена при лендинга; празната директория може да е останала или не — и двата текста са верни; `^  ` държи реда на секцията, не обобщението);
+  `grep -c "^  \[NOTE\] plans readiness/ (observed) - present" .aiwf/drafts-selfcheck-out.txt` → `1` (`dev/backlogs/readiness/DRAFTS/` е комитната при лендинга);
+  `grep -c "^  \[NOTE\] scratchDir ignored by git (observed) - ignored by git" .aiwf/drafts-selfcheck-out.txt` → `1` (`.gitignore:1`);
+  `grep -cE "\(observed\) - not exercised" .aiwf/drafts-selfcheck-out.txt` → `0`;
+  `grep -c "no control applies: plans-drafts-subdir" .aiwf/drafts-selfcheck-out.txt` → `0` (scan ред 37).
+- `node scripts/update/validate-payload.mjs --plugin-root .` → exit 0, изходът съдържа `valid: 20
+  migration(s) in` и `payload version 0.2.16`; `node scripts/update/aiwf-update.mjs --check
+  --project-root .` → изходът е `up to date: this project is at 0.2.16 and the payload is 0.2.16; no
+  migrations are pending.`
+- Провенанс, с нетракнатите файлове: `git grep --untracked -nP "[\x{0400}-\x{04FF}]" -- docs skills
+  templates scripts schema hooks migrations examples README.md` → празно; `git grep --untracked -nE
+  "[A-Za-z]:[\\\\/]|promptandpray|D:/" -- migrations/0020_drafts-in-repo` → празно (абсолютен път или
+  име на този проект); self-check-ът (VERIFY) носи провенанс раздела с digest-ите.
+- Дифф гард: `git status --short -- . ":(exclude)dev"` → точно worklist файловете +
+  `migrations/0020_drafts-in-repo/`, `CHANGES_0.2.15-to-0.2.16.md`, `.claude/aiwf-native/aiwf.config.json`
+  (bookkeeping) и `CLAUDE.md` (тихият rerender на региона в самоинсталацията); `git status --short
+  -- dev` → точно ` M dev/PROJECT_OVERRIDES.md` и ` M dev/README.md`
+  (черновата и `readiness/DRAFTS/` са комитнати при лендинга, преди диспача — няма `??`).
+- Лендингът на този план (пас 1 блокер 3; изпълнява се ПРЕДИ `git add` в стъпка 1 на трейса):
+  `for f in ledger.md consequence-scan.md own-pass.md revisions.md; do test -f dev/backlogs/readiness/DRAFTS/$f || echo "MISSING $f"; done` → без изход;
+  `ls dev/backlogs/readiness/DRAFTS/fact-check-r*.md | wc -l` → ≥ `1`; след docs commit-а:
+  `git status --short -- dev/backlogs/readiness dev/backlogs/drafts` → празно (нищо нетракнато не е останало) и
+  `git ls-files dev/backlogs/readiness/DRAFTS | wc -l` → равно на `ls dev/backlogs/readiness/DRAFTS | wc -l`.
+
+**VERIFY (`dev/VERIFY_RUNBOOK.md`; Test policy `dev/PROJECT_OVERRIDES.md:190-198`): редовете „schema /
+config“ (`selfcheck`, `validate-payload`, `setup-suite`) + „update engine / migrations / examples“
+(`update-suite`, `validate-payload`, `example-cycle-windows`, `selfcheck`) + `plugin-validate` по
+решение на COO-то (skills/ се променят; прецедент RGATE-001) — `validate-payload`, `setup-suite`,
+`update-suite`, `example-cycle-windows`, `selfcheck`, `plugin-validate`: ЕДНА паралелна партида,
+СЛЕД `--apply`, точни exit кодове; без `spikes` (hooks непроменени). POSIX — CI след push.**
+
+**Risk threshold:** блокира: промяна по `type`/`default`/`required`/`additionalProperties` в
+схемата; self-check FAIL (не наблюдение) при липсваща `drafts/`/`readiness/` или неигнориран
+scratchDir; наблюдение, чийто принтер не се обърна с fixture-а (S1-S6) или което драйверът на
+контролите обяви за непроверена проверка; промяна в hook кода на Gate 1-4 или в ORCHESTRATOR
+шаблона, или в `templates/CLAUDE.md.tmpl` извън реда `:124`; миграция с op извън двата (rerender на
+CLAUDE региона + note); изречение, което
+твърди, че update-ът създава директории или пише `.gitignore`, или че payload-ът осигурява
+ignore-а; Cyrillic/абсолютен път/име на проект в payload-а; броена проверка без контрола или без
+`[NOTE]` с причина (наблюденията по D5/D6 са извън броените по конструкция).
+
+**Stop condition:** acceptance и VERIFY зелени → стоп.
+
+**Review:** `Class: code`, ЕДИН пас (`gpt-6-sol`/xhigh, Codex) над целия диф срещу котвата при
+диспач; fact-check преди него; cap 2. **Interlock:** след `--apply` репото е 0.2.16, а `D:\pnp-live`
+0.2.15 → Step 0 на `/pnp:review` отказа („downgrade refused“); опресняване преди паса е невъзможно
+(дифът е некомитнат). Пътят е един, както при RDY-001 и RGATE-001: отказът се показва на
+оператора и кодовият пас тръгва през непроменения 0.2.15 wrapper на `D:\pnp-live` на негова дума за
+случая (`Class: code`; plan gate-ът не участва).
+
+**Assignee:** Колега. Branch `main`. Route-state `{"ticket":"DRAFTS-001","route":"R2"}` при диспач.
+Commit: ЕДИН кодов, subject `DRAFTS-001: plan drafts and readiness history live under plansDir -
+released as 0.2.16`, един ред, без trailers; PLAN и CANDIDATES — отделен docs commit.
+
+## Ред и гейтове (dry trace)
+
+0. Lock: от „пускай“ до одобрението важи планиращият lock — нула git мутации; черновата и
+   `dev/backlogs/readiness/DRAFTS/*` са нетракнати файлове на планирането (D11). Дърво при r2:
+   `main` = `2e1521d` (локален docs commit над `origin/main` = `542c664`); таг `v0.2.15` на
+   `542c664` пушнат (`git ls-remote --tags` в PLAN_RGATE release record); CI зелен и на двата рънa.
+1. Readiness (сега): inventory ✓ → r0 → Step 2a ledger (1 sonnet, 49 реда) → `ledger.md` → Step 2c
+   scan (1 sonnet, 35 реда) → `consequence-scan.md`, редовете затворени → r1 → Step 2b fact-check (2
+   sonnet: тикетът 83 твърдения / 10 FALSE / A12 B6 C5; общите 155 / 24 FALSE / A8 B18 C4) →
+   `fact-check-r1.md` → r2 → делта fact-check над r2 (1 sonnet: 208 / 20 FALSE / A8 B12 C4) →
+   `fact-check-r2.md` → r3 → делта scan над решенията, сменени в r2/r3 (D3, D5, D6, D7, D11,
+   worklist 6(d), 7; редовете се ДОБАВЯТ към `consequence-scan.md`, закриванията на редове 5, 6, 8,
+   13, 14, 16 — пренаписани към r3) → делта fact-check над r3 → `fact-check-r3.md` → Step 2d own
+   pass в ОТДЕЛЕН ход → `own-pass.md` с `node D:/pnp-live/scripts/engine/plan-gate.js --hash
+   dev/backlogs/drafts/PLAN_DRAFTS.draft.md` ПОСЛЕДЕН → пас 1 на операторска дума. Брифът:
+   `COVERED BY:` първи ред; `Class: plan`; `PLAN: dev/backlogs/drafts/PLAN_DRAFTS.draft.md`;
+   `TICKETS: DRAFTS-001`; `CONSEQUENCE SCAN: dev/backlogs/readiness/DRAFTS/consequence-scan.md`;
+   `OWN PASS: dev/backlogs/readiness/DRAFTS/own-pass.md`; `PREVIOUS PASS BLOCKERS` (`none - this is
+   pass 1`); `BUDGET TARGET` ред (`skills/review/SKILL.md:447-453`, `:167`); гейтът на 0.2.15 (в
+   `D:\pnp-live`, `codex-review.ps1` plan gate блокът) проверява и отказва при проблем → ревизия →
+   делта скан + делта fact-check + нов печат → пас 2 само на отделна дума → одобрение (дума) →
+   лендинг: `mv dev/backlogs/drafts/PLAN_DRAFTS.draft.md dev/backlogs/active/PLAN_DRAFTS.md` +
+   бележка за одобрение в хедъра + `revisions.md` с двата хеша + (ако има scratch артефакти) местене
+   в `readiness/DRAFTS/` + проверката на имената (`test -f` на четирите фиксирани + `ls fact-check-r*`,
+   acceptance „Лендингът на този план“; липсващо име = СТОП) + `dev/backlogs/CANDIDATES.md:9-24`
+   получава указателен ред (payload половината → PLAN_DRAFTS, половината за това репо → HARD-023) +
+   нов кандидат в CANDIDATES („plansDir под игнориран път: self-check observation по префикс
+   `.aiwf/` + предупреждение в интервюто“, D1) +
+   три реда в HARD-023 (`PLAN_HARD.md:3003`, `:3007`, `:3034`: „заменено от PLAN_DRAFTS блок P / D4“) + `git add
+   dev/backlogs/active/PLAN_DRAFTS.md dev/backlogs/readiness/DRAFTS/ dev/backlogs/CANDIDATES.md
+   dev/backlogs/active/PLAN_HARD.md` → docs commit (клик; първият, в който
+   readiness история влиза в git) → опресняване на
+   `D:\pnp-live` (`git -C D:/pnp-live status --porcelain` празно → `checkout --detach main`; Gate 4
+   вдига диалог за всяко `git -C`).
+2. Изпълнение (отделна дума): `git rev-parse HEAD` → route-state → Колега (worklist → bump +
+   миграция → `--apply` → VERIFY → acceptance → handback) → COO чете целия диф → fact-check → Codex
+   code пас (interlock: отказът показан, дума за случая, непроменен 0.2.15 wrapper) → корекции в
+   cap 2 (кодов рунд = верификационен пас на отделна дума) → commit клик → `D:\pnp-live` опресняване
+   (диалог) → route-state `{}` → docs commit с completion record + архивиране
+   (`008_PLAN_DRAFTS_<дата>.md`; грепът за rule-class точки с контрола над `005_PLAN_CONS`;
+   `readiness/DRAFTS/` остава) → опресняване (диалог) → издание по писаното правило
+   (`dev/PROJECT_OVERRIDES.md:73-82` § Release discipline, HARD-021): push `main` (дума + диалог) → CI
+   зелен на `windows` и `ubuntu` → датата в CHANGELOG се сверява в тагнатото дърво (практика, записана
+   в RGATE record-а `archive/007_PLAN_RGATE_2026-10-02.md:946-948` и в блок CL, не ред от текста на
+   правилото; scan ред 81) → таг `v0.2.16` на record commit-а (дума; покрива и push-а на тага —
+   правилото от 2026-10-01, по-ново от HARD-021 record-а, който записва отделен диалог) → release
+   record. Авторитетът за реда е писаното правило; практиката „таг локално + main и тагът в един
+   push“ от 0.2.15 е записана в RGATE record-а (`:903-911`) като ПРЕДЛОЖЕНА замяна на правилото с
+   текст за § Release discipline, който чака guard (g) отделно от този план — докато не е одобрен,
+   правилото стои и отклонение от него е операторска дума за случая, дадена в момента на тага, не ред
+   в този план (пас 1 оспорено решение).
