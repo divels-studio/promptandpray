@@ -66,6 +66,7 @@
 | HARD-020 | — (шестте readiness проверки стават трета стояща инструкция на fact-check гейта, роден 2026-09-27) | 0.2.12 (преди 0.3.0, операторска дума) |
 | HARD-021 | — („доктринният текст не е код“: пиновете върху проза падат, docs промяна = validate-payload + provenance, изданието без локален пълен VERIFY; роден 2026-09-28, операторска дума) | 0.2.12 (заедно с HARD-020: един commit, един code пас) |
 | HARD-022 | — (вердиктът получава свое съобщение, не свой ход; роден 2026-09-30) | 0.2.14 (дума 2026-09-30 „пускай тикета“; без одит пас; commit `1bc1bfa`; tag `v0.2.14` на `3244460`) |
+| HARD-023 | — (чист `.aiwf`: черновите и readiness историята живеят в репото; роден 2026-10-02 от кандидата, операторска дума) | без издание (само `dev/` и `.aiwf`); ЧАКА ДУМА |
 
 ## Context (discovery 2026-09-12: 4× Explore/sonnet + claude-code-guide; котви проверявани при диспач)
 
@@ -2977,6 +2978,83 @@ tag `v0.2.14` на `3244460` (лек, `cat-file -t` = commit; целта е comm
 `main...origin/main` → синхрон. Операторът след тага: „качвай стига пита, за какво ми е само
 локално“. Консуматорите вземат 0.2.14 при следващия си ъпдейт.
 **Останал дълг: няма.** Route-state `{}`.
+
+## Housekeeping — чист `.aiwf` (роден 2026-10-02 от кандидата „Черновите живеят в репото“, операторска дума „искам да вкараме един от последните кандидати за чист .aiwf“; записан и СПРЯН — изпълнение след дума за ТОЗИ тикет)
+
+### HARD-023 [R1 docs/housekeeping — само `dev/` и `.aiwf`, нула payload] — черновите и readiness историята живеят в репото; `.aiwf` носи само живата механика на loop-а
+
+**Контекст:** `dev/backlogs/CANDIDATES.md:9-24` — операторската дума от Silerax (сесия „Silerax Plan
+Session 03“): „драфтовете трябва да живеят в репото; в .aiwf се пишат само когато репото е блокирано
+от друга сесия; одобрени планове нямат дубликати в .aiwf; ако трябват за история, да намерят мястото
+си в репото“. Silerax го изпълни в три commit-а (по доклад). Тук `.aiwf/` (gitignored) днес носи 43
+файла (Glob 2026-10-02): трите живи (`review-brief.txt`, `last-review-session.txt`,
+`route-state.json`), readiness историята на RDY (10 файла в `plan/RDY/`) и RGATE (5 в `plan/RGATE/`),
+стара чернова `PLAN_PNP_HARDENING.draft.md`, пет `pending-*.md`, три стари review брифа
+(`review-verify-brief.txt`, `review-brief-pass2.txt`, `review-brief-warm.txt`), `arbiter-brief.txt`
+(указател към него в CANDIDATES § Event ledger, ред от 2026-09-17), два json
+(`hard-009-resolution.json`, `resolve-region.json`), два изхода (`pass3-out.txt`, `selfcheck-out.txt`)
+и десет `probe-*.txt`. Съдържанието на `pending-*.md` и на `PLAN_PNP_HARDENING.draft.md` не е
+проверено — дали е приземено, се чете в стъпка 1.
+
+**Outcome:** (1) `dev/PROJECT_OVERRIDES.md` § Workspace paths носи правилото по-долу (rule-bearing
+текст — показан тук по guard (g), влиза само с думата за тикета; указателният ред в CANDIDATES
+§ D2 pointer rows е същото одобрение, guard (h)); (2) `dev/backlogs/readiness/RDY/` и
+`dev/backlogs/readiness/RGATE/` държат readiness историята на двата плана (ledger, consequence scan,
+own pass, fact-check, revisions, r0), тракната; (3) `.aiwf/` съдържа точно трите живи файла; (4)
+кандидатът в CANDIDATES е разделен: половината „за това репо“ затворена с указател към този тикет,
+половината „за payload-а“ (`paths.draftsDir`, блокове C/D „естественото място“) остава кандидат.
+
+**Правилото (дословно, за § Workspace paths, заменя реда `.aiwf/ scratch (gitignored): route-state.json, review-brief.txt`):**
+
+```text
+.aiwf/              scratch (gitignored): ONLY the live loop mechanics - route-state.json,
+                    review-brief.txt, last-review-session.txt - and the artifacts of the CURRENT
+                    ticket or readiness cycle. A plan draft lives in
+                    dev/backlogs/drafts/PLAN_<ABBR>.draft.md and leaves when the plan lands; the
+                    readiness history (ledger, consequence scan, own pass, fact-check, revisions)
+                    lands in dev/backlogs/readiness/<ABBR>/ with the plan's docs commit; an approved
+                    plan has no copy in .aiwf/. Written to .aiwf/ only while another session holds
+                    the tree (operator rule 2026-10-02).
+```
+
+**Worklist (COO, R1):**
+1. **Инвентар в три списъка, показан на оператора ПРЕДИ действие** (думата за тикета покрива
+   инвентара; местенето и триенето тръгват след „да“ на списъците): *остава* — трите живи файла;
+   *мести се* — `plan/RDY/*` → `dev/backlogs/readiness/RDY/`, `plan/RGATE/{ledger,consequence-scan,
+   own-pass,revisions}.md` → `dev/backlogs/readiness/RGATE/`, `arbiter-brief.txt` →
+   `dev/backlogs/readiness/CONS/arbiter-brief.txt` (указателят в Event ledger се ДОПИСВА, не се
+   пренаписва — редът е датиран лог); *трие се* — `plan/RGATE/PLAN_RGATE.md` и
+   `plan/RDY/PLAN_RDY.draft.md` (дубликати на одобрени планове; `diff` срещу архива преди триене —
+   разлика извън completion record-а = остава в „мести се“), `PLAN_PNP_HARDENING.draft.md`,
+   `pending-*.md`, трите стари review брифа, двата json, двата изхода, десетте probe файла — всеки
+   `pending-*.md` и черновата се ОТВАРЯТ и се казва с един ред къде е приземено съдържанието им;
+   неприземено съдържание = остава в „мести се“ (към `dev/backlogs/readiness/HARD/`), не се трие.
+2. Местене с обикновен copy (файловете са untracked; `git mv` не ги вижда) + `git add`; триене с
+   `rm` — ask диалог, един на команда.
+3. `dev/PROJECT_OVERRIDES.md` § Workspace paths — редът по-горе, дословно.
+4. `dev/backlogs/CANDIDATES.md`: кандидатът на `:9-24` — половина А получава ред „затворена с
+   HARD-023, <commit>“, половина Б остава; § D2 pointer rows — указателен ред към правилото; Event
+   ledger редът от 2026-09-17 с `.aiwf/arbiter-brief.txt` — дописване в квадратни скоби с новия път.
+5. `dev/README.md` — ако картата споменава `.aiwf` или черновите, едно изречение.
+
+**Извън обхват:** payload-ът (схема `paths.draftsDir`, `skills/review/SKILL.md` блокове C/D,
+`templates/`), миграция и bump; `.gitignore`; консуматорските дървета; HARD-011.
+
+**Acceptance (литерални):** `ls .aiwf` → точно `last-review-session.txt review-brief.txt
+route-state.json`; `ls dev/backlogs/readiness/RDY dev/backlogs/readiness/RGATE` → 9 и 4 файла (или
+повече, ако стъпка 1 премести неприземено съдържание — броят се записва в completion record-а по
+`ls | wc -l`); `git grep -n "\.aiwf/plan/" -- dev` → само датирани ledger редове с дописан нов път
+(контрол на котвата: ≥1 удар, `CANDIDATES.md:620`); `git grep -c "dev/backlogs/readiness/" --
+dev/PROJECT_OVERRIDES.md` → `1`; `git status --short` след commit-а → празно.
+**VERIFY:** няма (нула payload, нула код); provenance grep не се отнася за `dev/`.
+**Risk threshold:** блокира: изтрит файл с неприземено съдържание; пипнат payload или `.gitignore`;
+пренаписан (вместо дописан) ledger ред; правило, различно от показания текст.
+**Stop condition:** acceptance зелен → стоп.
+**Review:** R1 → без Одитор (маршрутът няма loop); въпросът при раждането — одит пас има ли —
+отговорът се записва тук.
+**Assignee:** COO (главната сесия, R1). Branch `main`. Route-state не се пише (R1). Commit: ЕДИН
+docs commit, subject `HARD-023: .aiwf carries only the live loop mechanics - readiness history and
+drafts live in dev/backlogs`; PLAN записът — отделен docs commit след затварянето.
 
 ## 0.2.7 — Environment correctness · tag `v0.2.7` (операторска дума 2026-09-16: HARD-013; ЗАМРАЗЕНО до края на консолидацията. HARD-014 ОТПАДНА — беше „Одитор с resume на сесията"; темата отива където консолидационното решение я прати)
 
