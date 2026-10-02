@@ -2554,12 +2554,29 @@ const PS_RESUME_FROZEN = ["'exec'", "'resume'", '$ResumeId',
   "'-c'", '"model=$($role.model)"', "'-c'", '"model_reasoning_effort=$($role.effort)"', "'-'"];
 const psRel = (file) => ['scripts', 'native', 'ps', file];
 
-/** A control copies ONLY the PowerShell wrappers - the findings below read nothing else. */
+/**
+ * A control copies ONLY the PowerShell wrappers - the findings below read nothing else - plus the
+ * two engine files the review wrapper's plan gate runs (scripts/engine/plan-gate.js and its
+ * aiwf-lib.js), at the same relative path: without them every executed probe on a copy would be
+ * refused by the gate for the wrong reason.
+ */
 function copyPsChannel(from, to) {
   const src = path.join(from, 'scripts', 'native', 'ps');
   const dst = path.join(to, 'scripts', 'native', 'ps');
   fs.mkdirSync(dst, { recursive: true });
   for (const name of fs.readdirSync(src)) fs.copyFileSync(path.join(src, name), path.join(dst, name));
+  copyPlanGateEngine(from, to);
+}
+
+/** The plan gate's engine files, copied beside a wrapper channel copy (same relative path). */
+const PLAN_GATE_ENGINE_FILES = ['plan-gate.js', 'aiwf-lib.js'];
+function copyPlanGateEngine(from, to) {
+  const src = path.join(from, 'scripts', 'engine');
+  const dst = path.join(to, 'scripts', 'engine');
+  fs.mkdirSync(dst, { recursive: true });
+  for (const name of PLAN_GATE_ENGINE_FILES) {
+    if (fs.existsSync(path.join(src, name))) fs.copyFileSync(path.join(src, name), path.join(dst, name));
+  }
 }
 
 function psResumeFindings(root, { execProbes = false, tmpDir = null } = {}) {
@@ -2709,8 +2726,13 @@ function psResumeFindings(root, { execProbes = false, tmpDir = null } = {}) {
  * /pnp:review's own block does it - a `-File` invocation would not bind the pipeline parameter at
  * all, and the run would die on "No prompt provided" while looking like a wrapper defect.
  */
+// `klass` - undefined keeps the historical ` -Class code` on the review wrapper, null passes NO
+// -Class at all, a string passes that class. `prepare(projectRoot)` runs before the wrapper (the
+// plan-gate probes write their readiness artifacts with it). `pathFor(bin)` replaces the PATH the
+// wrapper sees (the node-less probe); by default the stub's bin is prepended to the inherited PATH.
 function runPsWrapperWithStub(root, wrapper, tmpDir,
-  { brief = STUB_BRIEF, writeRollout = true, foreignRollout = false, seedState = null, readOnlyState = null, extraArgs = '' } = {}) {
+  { brief = STUB_BRIEF, writeRollout = true, foreignRollout = false, seedState = null, readOnlyState = null, extraArgs = '',
+    klass = undefined, prepare = null, pathFor = null } = {}) {
   const home = fs.mkdtempSync(path.join(tmpDir, 'ps-exec-run-'));
   const bin = path.join(home, 'bin');
   const projectRoot = path.join(home, 'project');
@@ -2737,6 +2759,7 @@ function runPsWrapperWithStub(root, wrapper, tmpDir,
     }
   }
   if (readOnlyState) fs.chmodSync(path.join(projectRoot, '.aiwf', readOnlyState), 0o444);
+  if (prepare) prepare(projectRoot);
 
   // The stub is node, not a shell script: it must write EXACT bytes (a CR, no trailing newline) on
   // both streams, and node is the one interpreter this payload already requires everywhere.
@@ -2775,10 +2798,15 @@ function runPsWrapperWithStub(root, wrapper, tmpDir,
   fs.writeFileSync(briefFile, brief);
   const sep = process.platform === 'win32' ? ';' : ':';
   const env = Object.assign({}, process.env, {
-    PATH: bin + sep + process.env.PATH,
+    PATH: pathFor ? pathFor(bin) : bin + sep + process.env.PATH,
     CODEX_HOME: codexHome,
   });
-  const classArg = wrapper === 'codex-review.ps1' ? ' -Class code' : '';
+  // Windows spells the variable `Path`; the copy is deduplicated so the value the wrapper sees does
+  // not depend on how the spawn layer merges the two spellings.
+  if (pathFor) for (const k of Object.keys(env)) if (k !== 'PATH' && k.toUpperCase() === 'PATH') delete env[k];
+  let classArg = wrapper === 'codex-review.ps1' ? ' -Class code' : '';
+  if (klass === null) classArg = '';
+  else if (typeof klass === 'string') classArg = ` -Class ${klass}`;
   const cmd = `Get-Content -LiteralPath '${briefFile}' -Raw | `
     + `& '${path.join(root, 'scripts', 'native', 'ps', wrapper)}' -ProjectRoot '${projectRoot}'${classArg} ${extraArgs}; `
     + 'exit $LASTEXITCODE';
@@ -2789,6 +2817,10 @@ function runPsWrapperWithStub(root, wrapper, tmpDir,
     stderrHex: (r.stderr || Buffer.alloc(0)).toString('hex'),
     stderrText: (r.stderr || Buffer.alloc(0)).toString('utf8'),
     state: (file) => { const t = readText(path.join(projectRoot, '.aiwf', file)); return t === null ? null : t.trim(); },
+    // The stub leaves two traces when it runs: its rollout in its own $CODEX_HOME and its stdout
+    // bytes. This stub records no argv, so "codex was invoked" is read off those two.
+    stubInvoked: fs.existsSync(path.join(codexHome, 'sessions', '2026', '09', '17', `rollout-2026-09-17T18-00-00-${STUB_SESSION_ID}.jsonl`))
+      || (r.stdout || Buffer.alloc(0)).toString('hex').includes(STUB_STDOUT_HEX),
   };
 }
 
@@ -3342,8 +3374,10 @@ const NUL_BYTE = String.fromCharCode(0);
  * newline), the stdin bytes, and the wrapper's own exit code. The stub exits with a distinctive
  * code so exit-propagation is proven by the same run.
  */
+// `prepare(projectRoot)` runs before the wrapper (the plan-gate probes write their readiness
+// artifacts into the probe's project with it).
 function runWrapperWithStub(root, wrapper, tmpDir, extraArgs = [],
-  { seedState = null, writeRollout = true, secondRollout = null, brief = STUB_BRIEF, readOnlyState = null } = {}) {
+  { seedState = null, writeRollout = true, secondRollout = null, brief = STUB_BRIEF, readOnlyState = null, prepare = null } = {}) {
   const home = fs.mkdtempSync(path.join(tmpDir, 'sh-exec-'));
   const bin = path.join(home, 'bin');
   const projectRoot = path.join(home, 'project');
@@ -3366,6 +3400,7 @@ function runWrapperWithStub(root, wrapper, tmpDir, extraArgs = [],
   // A state file the wrapper cannot write is the "a previous run failed to clear it" case: its
   // content is exactly the stale id a bare resume must refuse to replay.
   if (readOnlyState) fs.chmodSync(path.join(projectRoot, '.aiwf', readOnlyState), 0o444);
+  if (prepare) prepare(projectRoot);
   const record = { engine: 'codex', model: HOSTILE_MODEL, effort: HOSTILE_EFFORT };
   // The ROW deliberately carries a DIFFERENT model and effort from the role. That asymmetry is the
   // whole proof: with --class the argv must show the row's values, so a wrapper that accepted the
@@ -3445,12 +3480,14 @@ function runWrapperWithStub(root, wrapper, tmpDir, extraArgs = [],
 }
 
 // A control copies ONLY the four wrapper files (the findings above read nothing else), so a
-// sabotage costs four file copies rather than a payload tree.
+// sabotage costs four file copies rather than a payload tree - plus the plan gate's two engine
+// files, at the same relative path, which the review wrapper runs on every brief.
 function copyShChannel(from, to) {
   const src = path.join(from, 'scripts', 'native', 'sh');
   const dst = path.join(to, 'scripts', 'native', 'sh');
   fs.mkdirSync(dst, { recursive: true });
   for (const name of fs.readdirSync(src)) fs.copyFileSync(path.join(src, name), path.join(dst, name));
+  copyPlanGateEngine(from, to);
 }
 const shRel = (file) => ['scripts', 'native', 'sh', file];
 /** Drops one line out of a wrapper's CODEX_ARGS block (the array lines are indented by two). */
@@ -3686,6 +3723,459 @@ function sectionShWrappers(tmpRoot) {
   }
   for (const id of findings.filter((f) => !covered.has(f.id)).map((f) => f.id)) {
     note(`no negative control for bash-channel check "${id}"`, 'no control defined - add one or state why it cannot fail');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// SECTION 5c - the plan gate: a plan-class pass does not start without its readiness artifacts
+// ---------------------------------------------------------------------------
+// One checker (scripts/engine/plan-gate.js), three ways in: its own CLI (the M cases), the two Codex
+// review wrappers that run it on every brief (the W cases, on both channels, against the recording
+// stubs above), and Gate 2 on a Claude `reviewer` dispatch (the G cases).
+//
+// THE CONTROL MODEL. Every check has a passing and a refusing side over ONE fixture family: the
+// refusing M cases are the valid fixture of M1 with exactly the named damage (M7 and M17 name two),
+// so M1 is their passing
+// side, and each passing case has a named refusing twin - M18/M28 (an escaped `|` against a bare one),
+// M21/M22+M31, M23/M3 (an indented line against a second one at column 0), M24/M34, M37/M36+M42, and
+// M19/M20 for the --hash mode. The sabotage controls ctl-1..ctl-15 come ON TOP of that: they show a
+// token comes from the named branch rather than from a neighbouring check that happens to refuse, and
+// they cover the wiring in the wrappers and in Gate 2, which no pair of inputs can see. The ids are
+// written into the check names, because `check` has no id parameter.
+const PLAN_GATE = path.join(PLUGIN_ROOT, 'scripts', 'engine', 'plan-gate.js');
+const PG_REL = { plan: '.aiwf/plan/FIX/PLAN_FIX.md', scan: '.aiwf/plan/FIX/consequence-scan.md', own: '.aiwf/plan/FIX/own-pass.md' };
+const PG_FENCES = {
+  backtick: ['```text', '### FENCE-1 - a heading inside a fenced block', '```'],
+  tilde: ['~~~text', '### FENCE-1 - a heading inside a fenced block', '~~~'],
+  // A SHORTER fence inside a longer one does not close it.
+  nested: ['````text', '```', '### FENCE-1 - a heading inside a fenced block', '```', '````'],
+};
+const pgPlanText = (fence = PG_FENCES.backtick) => [
+  '# PLAN FIX - the plan-gate fixture', '',
+  '## Decisions', '',
+  '- D1. One fixture decision; NOTE-9 is mentioned here, in prose only.', '',
+  '### FIX-001 - the ticket under review', '', 'Body.', '',
+  '### LEGACY-7 - a ticket with an older-style name', '', 'Body.', '',
+  ...fence, '',
+  '### AFTER-1 - a heading after a closed fence', '', 'Body.', '',
+  '### NOROW-1 - a ticket with no scan row and no own-pass row', '', 'Body.', '',
+].join('\n');
+const pgScanRow = (n, ref, { closure = 'no defect: fixture', surface = 'none found - the fixture tree' } = {}) =>
+  `| ${n} | ${ref} | D1 (plan line 5) | ${surface} | none | ${closure} |`;
+const PG_SCAN_HEADER = ['| # | ticket | decision | surface | violation | closure |', '|---|---|---|---|---|---|'];
+const PG_SCAN_ROWS = [pgScanRow(1, 'FIX-001'), pgScanRow(2, 'LEGACY-7'), pgScanRow(3, 'AFTER-1')];
+// Lines of the default scan: 1 title, 2 blank, 3 header, 4 separator, 5-7 FIX-001 / LEGACY-7 / AFTER-1.
+const pgScanText = ({ header = PG_SCAN_HEADER, rows = PG_SCAN_ROWS, tail = [] } = {}) =>
+  ['# Consequence scan - FIX', '', ...header, ...rows, ...tail, ''].join('\n');
+const pgOwnRow = (ref) => `| ${ref} | 0 - lines 1-25 read | in scope | none | gates walked | can fail | main, clean |`;
+const PG_INSTRUMENT = '| `node plan-gate.js --hash PLAN_FIX.md` | one PLAN SHA256 line, exit 0 | exit 2 on a missing file |';
+const pgOwnText = (hash, { checks = [pgOwnRow('FIX-001'), pgOwnRow('LEGACY-7'), pgOwnRow('AFTER-1')],
+  instruments = [PG_INSTRUMENT], hashLine = true, blockersLine = true, checksTable = true, instrumentsTable = true,
+  checksSeparator = '|---|---|---|---|---|---|---|', extraInstrumentTables = [] } = {}) => [
+  ...(hashLine ? [`PLAN SHA256: ${hash}`] : []),
+  ...(blockersLine ? ['BLOCKERS FOUND: 0'] : []),
+  '',
+  ...(checksTable ? ['| ticket | repo-match | scope | discovery | order | acceptance | git |', checksSeparator, ...checks, ''] : []),
+  ...(instrumentsTable ? ['| instrument | valid input | broken input |', '|---|---|---|', ...instruments, ''] : []),
+  ...extraInstrumentTables.flatMap((rows) => ['| instrument | valid input | broken input |', '|---|---|---|', ...rows, '']),
+].join('\n');
+const PG_BRIEF = [
+  'Review the plan PLAN_FIX for execution readiness.', '',
+  'Class: plan',
+  `PLAN: ${PG_REL.plan}`,
+  'TICKETS: FIX-001',
+  `CONSEQUENCE SCAN: ${PG_REL.scan}`,
+  `OWN PASS: ${PG_REL.own}`, '',
+  'RISK THRESHOLD: block on a gap the Writer cannot execute.',
+  'STOP CONDITION: stop once the whole plan is read.', '',
+].join('\n');
+const pgSetLine = (brief, name, line) => brief.replace(new RegExp(`^${name}:.*$`, 'm'), line);
+const pgDropLine = (brief, name) => brief.replace(new RegExp(`^${name}:.*\\n`, 'm'), '');
+const pgLineOf = (text, needle) => text.split('\n').findIndex((l) => l.includes(needle)) + 1;
+
+/**
+ * Writes the plan-gate fixture into projectDir and returns the text of the VALID brief (the five
+ * lines at column 0, `TICKETS: FIX-001`), or the brief the variant makes of it. The plan carries the
+ * headings FIX-001, LEGACY-7, AFTER-1 (after a closed fence) and NOROW-1 (no rows anywhere), the ref
+ * NOTE-9 in prose only, and FENCE-1 only inside a fenced block. The own pass is stamped with the
+ * PAYLOAD checker's planHash. A variant names exactly one damage (M7 and M17 name two):
+ *   plan: the plan text; scan: the scan text; own: options of pgOwnText; brief: (brief) => brief;
+ *   planAfterStamp: (plan) => plan, rewritten AFTER the own pass was stamped.
+ */
+function writePlanFixture(projectDir, variant = {}) {
+  const at = (rel) => path.join(projectDir, ...rel.split('/'));
+  fs.mkdirSync(path.dirname(at(PG_REL.plan)), { recursive: true });
+  const plan = variant.plan !== undefined ? variant.plan : pgPlanText();
+  fs.writeFileSync(at(PG_REL.plan), plan);
+  const hash = require(PLAN_GATE).planHash(at(PG_REL.plan));
+  fs.writeFileSync(at(PG_REL.scan), variant.scan !== undefined ? variant.scan : pgScanText());
+  fs.writeFileSync(at(PG_REL.own), pgOwnText(hash, variant.own || {}));
+  if (variant.planAfterStamp) fs.writeFileSync(at(PG_REL.plan), variant.planAfterStamp(plan));
+  return variant.brief ? variant.brief(PG_BRIEF) : PG_BRIEF;
+}
+
+/** The checker's CLI, as the wrappers run it. Tokens are read off `plan-gate: <token> - <message>`. */
+function pgCli(gatePath, args, input) {
+  const r = spawnSync(process.execPath, [gatePath, ...args], { input: input === undefined ? '' : input, encoding: 'utf8' });
+  const stderr = (r.stderr || '').replace(/\r/g, '');
+  const tokens = stderr.split('\n').filter((l) => l.startsWith('plan-gate: ') && l.indexOf(' - ') !== -1)
+    .map((l) => l.slice('plan-gate: '.length, l.indexOf(' - '))).filter((t) => t !== 'refused');
+  return { status: r.status, stdout: (r.stdout || '').replace(/\r/g, ''), stderr, tokens };
+}
+
+/** The M matrix. A case either names a fixture variant + extra args + an expectation, or runs itself. */
+function planGateCases() {
+  const valid = (r) => r.status === 0 && r.stderr === '';
+  const has = (...tokens) => (r) => r.status === 2 && tokens.every((t) => r.tokens.includes(t));
+  const exactly = (...tokens) => (r) => r.status === 2 && r.tokens.length === tokens.length && tokens.every((t) => r.tokens.includes(t));
+  const ownLines = pgOwnText('0'.repeat(64));
+  const fixRow = pgOwnRow('FIX-001');
+  const twoTables = (second) => pgScanText({ tail: ['', '## Delta scan - r2', '', ...second] });
+  const noClass = (b) => pgDropLine(b, 'Class');
+  return [
+    { id: 'M1', label: 'the valid fixture -> exit 0, empty stderr', expect: valid },
+    { id: 'M2', label: 'no OWN PASS line -> line-missing:OWN PASS', variant: { brief: (b) => pgDropLine(b, 'OWN PASS') }, expect: has('line-missing:OWN PASS') },
+    { id: 'M3', label: 'two PLAN lines at column 0 -> line-duplicate:PLAN', variant: { brief: (b) => b.replace(/^PLAN:.*$/m, (l) => `${l}\n${l}`) }, expect: has('line-duplicate:PLAN') },
+    { id: 'M4', label: 'TICKETS names XX-999, which the plan does not carry -> tickets-not-in-plan:XX-999', variant: { brief: (b) => pgSetLine(b, 'TICKETS', 'TICKETS: FIX-001, XX-999') }, expect: has('tickets-not-in-plan:XX-999') },
+    { id: 'M5', label: 'TICKETS: -bad -> tickets-bad-ref:-bad', variant: { brief: (b) => pgSetLine(b, 'TICKETS', 'TICKETS: -bad') }, expect: has('tickets-bad-ref:-bad') },
+    { id: 'M6', label: 'OWN PASS names a missing file -> file-missing:OWN PASS', variant: { brief: (b) => pgSetLine(b, 'OWN PASS', 'OWN PASS: .aiwf/plan/FIX/no-such-own-pass.md') }, expect: has('file-missing:OWN PASS') },
+    { id: 'M7', label: 'one scan row closed "later", another with an empty closure -> two scan-open-row with their file lines',
+      variant: { scan: pgScanText({ rows: [pgScanRow(1, 'FIX-001', { closure: 'later' }), pgScanRow(2, 'LEGACY-7', { closure: '' }), pgScanRow(3, 'AFTER-1')] }) },
+      expect: has('scan-open-row:5', 'scan-open-row:6') },
+    { id: 'M8', label: 'the scan has no row for FIX-001 -> scan-ticket-missing:FIX-001', variant: { scan: pgScanText({ rows: PG_SCAN_ROWS.slice(1) }) }, expect: has('scan-ticket-missing:FIX-001') },
+    { id: 'M9', label: 'the scan rows with no header -> scan-no-table', variant: { scan: pgScanText({ header: [] }) }, expect: has('scan-no-table') },
+    { id: 'M10', label: 'the plan edited after the own pass was stamped -> own-hash-mismatch', variant: { planAfterStamp: (p) => `${p}One more line, written after the stamp.\n` }, expect: has('own-hash-mismatch') },
+    { id: 'M11', label: 'the own pass without its PLAN SHA256 line -> own-hash-missing', variant: { own: { hashLine: false } }, expect: has('own-hash-missing') },
+    { id: 'M12', label: 'the own pass without BLOCKERS FOUND -> own-blockers-missing', variant: { own: { blockersLine: false } }, expect: has('own-blockers-missing') },
+    { id: 'M13', label: 'an empty own-pass cell -> own-checks-empty-cell:FIX-001', variant: { own: { checks: [fixRow.replace('| in scope |', '|  |'), pgOwnRow('LEGACY-7'), pgOwnRow('AFTER-1')] } }, expect: has('own-checks-empty-cell:FIX-001') },
+    { id: 'M14', label: 'no own-pass row for FIX-001 -> own-ticket-missing:FIX-001', variant: { own: { checks: [pgOwnRow('LEGACY-7'), pgOwnRow('AFTER-1')] } }, expect: has('own-ticket-missing:FIX-001') },
+    { id: 'M15', label: 'an instrument whose broken run reads like its valid one -> own-instrument-cannot-fail:1', variant: { own: { instruments: ['| `node check.js` | exit 0 | exit 0 |'] } }, expect: has('own-instrument-cannot-fail:1') },
+    { id: 'M16', label: 'the own pass without the instrument table -> own-instruments-missing', variant: { own: { instrumentsTable: false } }, expect: has('own-instruments-missing') },
+    { id: 'M17', label: 'two independent problems (no hash line, no scan row for FIX-001) -> both tokens in ONE run',
+      variant: { own: { hashLine: false }, scan: pgScanText({ rows: PG_SCAN_ROWS.slice(1) }) }, expect: has('own-hash-missing', 'scan-ticket-missing:FIX-001') },
+    { id: 'M18', label: 'an escaped \\| inside an instrument cell -> valid (the refusing twin is M28)', variant: { own: { instruments: ['| `grep -c "a\\|b" x` | 1 match | 0 matches |'] } }, expect: valid },
+    { id: 'M19', label: '--hash prints the SHA-256 of the LF-normalised text, and a CRLF copy of the same file prints the same hash (the refusing twin is M20)',
+      run: (gate, dir) => {
+        const text = pgPlanText();
+        fs.writeFileSync(path.join(dir, 'lf.md'), text);
+        fs.writeFileSync(path.join(dir, 'crlf.md'), text.replace(/\n/g, '\r\n'));
+        const a = pgCli(gate, ['--hash', path.join(dir, 'lf.md')]);
+        const b = pgCli(gate, ['--hash', path.join(dir, 'crlf.md')]);
+        return { ok: a.status === 0 && a.stdout === `PLAN SHA256: ${sha256(text)}\n` && b.status === 0 && b.stdout === a.stdout,
+          detail: `lf exit ${a.status} ${a.stdout.trim()}; crlf exit ${b.status} ${b.stdout.trim() === a.stdout.trim() ? 'same' : 'DIFFERENT'}` };
+      } },
+    { id: 'M20', label: '--hash on a missing file -> exit 2',
+      run: (gate, dir) => { const r = pgCli(gate, ['--hash', path.join(dir, 'no-such-plan.md')]); return { ok: r.status === 2 && r.stdout === '', detail: `exit ${r.status}` }; } },
+    { id: 'M21', label: 'a brief with no Class line and no --plan-class -> exit 0, empty stderr (a non-plan brief is not checked)', variant: { brief: noClass }, expect: valid },
+    { id: 'M22', label: 'the same brief WITH --plan-class -> exit 2 with line-missing', variant: { brief: noClass }, extraArgs: ['--plan-class'],
+      expect: (r) => r.status === 2 && r.tokens.some((t) => t.startsWith('line-missing:')) },
+    { id: 'M23', label: 'an indented "  PLAN: x" beside the valid lines -> valid (it is not a duplicate; the refusing twin is M3)', variant: { brief: (b) => `  PLAN: x\n${b}` }, expect: valid },
+    { id: 'M24', label: 'TICKETS: FIX-001, LEGACY-7 (an older-style ref with its heading and rows) -> valid (the refusing twin is M34)', variant: { brief: (b) => pgSetLine(b, 'TICKETS', 'TICKETS: FIX-001, LEGACY-7') }, expect: valid },
+    { id: 'M25', label: 'TICKETS: , -> tickets-empty', variant: { brief: (b) => pgSetLine(b, 'TICKETS', 'TICKETS: ,') }, expect: has('tickets-empty') },
+    { id: 'M26', label: 'a scan row with one cell too many -> scan-row-shape:5',
+      variant: { scan: pgScanText({ rows: [PG_SCAN_ROWS[0].replace(/ \|$/, ' | extra |'), ...PG_SCAN_ROWS.slice(1)] }) }, expect: has('scan-row-shape:5') },
+    { id: 'M27', label: 'an own-pass row with one cell too few -> own-checks-row-shape:<line>',
+      variant: { own: { checks: [fixRow.replace('| main, clean |', '|'), pgOwnRow('LEGACY-7'), pgOwnRow('AFTER-1')] } }, expect: has(`own-checks-row-shape:${pgLineOf(ownLines, '| FIX-001 |')}`) },
+    { id: 'M28', label: 'an instrument row with a bare | inside a cell -> own-instrument-shape:<line>',
+      variant: { own: { instruments: ['| `grep -c "a|b" x` | 1 match | 0 matches |'] } }, expect: has(`own-instrument-shape:${pgLineOf(ownLines, '| `node plan-gate.js')}`) },
+    { id: 'M29', label: 'the own pass without the six-check table -> own-checks-table-missing', variant: { own: { checksTable: false } }, expect: has('own-checks-table-missing') },
+    { id: 'M30', label: 'a scan row with an empty surface cell -> scan-empty-cell:5',
+      variant: { scan: pgScanText({ rows: [pgScanRow(1, 'FIX-001', { surface: '' }), ...PG_SCAN_ROWS.slice(1)] }) }, expect: has('scan-empty-cell:5') },
+    { id: 'M31', label: '--plan-class and a brief with no Class line -> exactly line-missing:Class', variant: { brief: noClass }, extraArgs: ['--plan-class'], expect: exactly('line-missing:Class') },
+    { id: 'M32', label: '--plan-class and Class: code -> class-not-plan', variant: { brief: (b) => pgSetLine(b, 'Class', 'Class: code') }, extraArgs: ['--plan-class'], expect: has('class-not-plan') },
+    { id: 'M33', label: 'two TICKETS lines (FIX-001, NOROW-1) -> line-duplicate:TICKETS and NO derived scan-ticket-missing / own-ticket-missing',
+      variant: { brief: (b) => b.replace(/^TICKETS:.*$/m, 'TICKETS: FIX-001\nTICKETS: NOROW-1') },
+      expect: (r) => has('line-duplicate:TICKETS')(r) && !r.tokens.some((t) => t.startsWith('scan-ticket-missing') || t.startsWith('own-ticket-missing')) },
+    { id: 'M34', label: 'TICKETS: NOTE-9 (a ref in prose, not a heading) -> tickets-not-in-plan:NOTE-9', variant: { brief: (b) => pgSetLine(b, 'TICKETS', 'TICKETS: NOTE-9') }, expect: has('tickets-not-in-plan:NOTE-9') },
+    { id: 'M35', label: 'a four-column scan table as the only one -> exactly scan-bad-header:3',
+      variant: { scan: pgScanText({ header: ['| # | ticket | decision | closure |', '|---|---|---|---|'], rows: ['| 1 | FIX-001 | D1 | later |'] }) }, expect: exactly('scan-bad-header:3') },
+    { id: 'M36', label: 'TICKETS: FENCE-1 (its heading only inside a ```text block) -> tickets-not-in-plan:FENCE-1', variant: { brief: (b) => pgSetLine(b, 'TICKETS', 'TICKETS: FENCE-1') }, expect: has('tickets-not-in-plan:FENCE-1') },
+    { id: 'M36', label: 'the same with a ~~~ fence -> tickets-not-in-plan:FENCE-1', variant: { plan: pgPlanText(PG_FENCES.tilde), brief: (b) => pgSetLine(b, 'TICKETS', 'TICKETS: FENCE-1') }, expect: has('tickets-not-in-plan:FENCE-1') },
+    { id: 'M36', label: 'the same inside a ```` fence holding a shorter ``` (which does not close it) -> tickets-not-in-plan:FENCE-1', variant: { plan: pgPlanText(PG_FENCES.nested), brief: (b) => pgSetLine(b, 'TICKETS', 'TICKETS: FENCE-1') }, expect: has('tickets-not-in-plan:FENCE-1') },
+    { id: 'M37', label: 'TICKETS: AFTER-1 (a heading AFTER a closed fence) -> valid (the passing side of M36)', variant: { brief: (b) => pgSetLine(b, 'TICKETS', 'TICKETS: AFTER-1') }, expect: valid },
+    { id: 'M38', label: 'two scan tables with the same header, an open row in the second -> scan-open-row:13',
+      variant: { scan: twoTables([...PG_SCAN_HEADER, '| 4 | FIX-001 | D2 (plan line 9) | none found - the fixture tree | none | later |']) }, expect: has('scan-open-row:13') },
+    { id: 'M39', label: 'a row "7 | FIX-001 | ..." without its leading | inside the scan table -> scan-row-shape:6',
+      variant: { scan: pgScanText({ rows: [PG_SCAN_ROWS[0]], tail: ['7 | FIX-001 | D1 | none found | none | no defect: x |', ...PG_SCAN_ROWS.slice(1)] }) }, expect: has('scan-row-shape:6') },
+    { id: 'M40', label: 'an unknown CLI argument -> exit 2 with the usage',
+      run: (gate, dir) => { const r = pgCli(gate, ['--project-root', dir, '--bogus'], PG_BRIEF); return { ok: r.status === 2 && /usage:/.test(r.stderr), detail: `exit ${r.status}: ${firstLine(r.stderr)}` }; } },
+    { id: 'M41', label: 'the valid six-column table plus a second "# | ticket | decision | closure" table with an open row -> exactly scan-bad-header:11 (its rows are not checked)',
+      variant: { scan: twoTables(['| # | ticket | decision | closure |', '|---|---|---|---|', '| 4 | FIX-001 | D2 | later |']) }, expect: exactly('scan-bad-header:11') },
+    { id: 'M42', label: 'the fence closed by "```" plus ONE TAB stays open to the end of the plan, so TICKETS: AFTER-1 -> tickets-not-in-plan:AFTER-1 (the refusing twin of M37)',
+      variant: { plan: pgPlanText(['```text', '### FENCE-1 - a heading inside a fenced block', '```\t']), brief: (b) => pgSetLine(b, 'TICKETS', 'TICKETS: AFTER-1') },
+      expect: has('tickets-not-in-plan:AFTER-1') },
+    { id: 'M43', label: 'the six-column scan header over a one-cell "|---|" separator, as the only table -> exactly scan-bad-header:3 (the passing side is M1)',
+      variant: { scan: pgScanText({ header: [PG_SCAN_HEADER[0], '|---|'] }) }, expect: exactly('scan-bad-header:3') },
+    { id: 'M44', label: 'the six-check table over a one-cell "|---|" separator is not a table -> own-checks-table-missing (the passing side is M1)',
+      variant: { own: { checksSeparator: '|---|' } }, expect: has('own-checks-table-missing') },
+    { id: 'M45', label: 'a SECOND instrument table whose first row cannot fail -> own-instrument-cannot-fail:1 and not :2 (rows numbered within their own table; the passing side is M18)',
+      variant: { own: { extraInstrumentTables: [['| `node again.js` | exit 0 | exit 0 |']] } },
+      expect: (r) => has('own-instrument-cannot-fail:1')(r) && !r.tokens.includes('own-instrument-cannot-fail:2') },
+  ];
+}
+
+/** Runs one M case against a checker file; a fresh project dir per case. */
+function pgRunCase(c, gatePath, tmpRoot) {
+  const dir = fs.mkdtempSync(path.join(tmpRoot, `pg-${c.id}-`));
+  if (c.run) return c.run(gatePath, dir);
+  const brief = writePlanFixture(dir, c.variant || {});
+  const r = pgCli(gatePath, ['--project-root', dir, ...(c.extraArgs || [])], brief);
+  return { ok: c.expect(r), detail: `exit ${r.status}; tokens ${r.tokens.join(', ') || '(none)'}`, tokens: r.tokens };
+}
+
+// The W probes. `brief` and `prepare` describe the probe's project; `ps`/`sh` are the extra wrapper
+// arguments per channel, `klass` the PowerShell -Class (null = none). Each expects either a refusal
+// (exit 2, a line-missing token, the stub never invoked) or a run that reached the stub.
+const PG_NO_LINES = STUB_BRIEF;
+const PG_W = [
+  { id: 'W1', label: 'plan class + a brief without the readiness lines -> exit 2, line-missing, codex never invoked',
+    brief: PG_NO_LINES, klass: 'plan', ps: '', sh: ['--class', 'plan'], refused: true },
+  { id: 'W2', label: 'plan class + the valid brief with its artifacts in the project -> codex invoked, its exit code propagated',
+    brief: PG_BRIEF, prepare: (p) => writePlanFixture(p), klass: 'plan', ps: '', sh: ['--class', 'plan'], refused: false, planArgv: true },
+  { id: 'W3', label: 'plan class + a resume with an EXPLICIT id + a brief without the lines -> exit 2, line-missing, codex never invoked',
+    brief: PG_NO_LINES, klass: 'plan', ps: '-ResumeId pnp-plan-gate-w3', sh: ['--class', 'plan', '--resume', 'pnp-plan-gate-w3'], refused: true },
+  { id: 'W4', label: 'code class + a brief without the lines -> codex invoked (a non-plan pass is untouched)',
+    brief: PG_NO_LINES, klass: 'code', ps: '', sh: ['--class', 'code'], refused: false },
+  { id: 'W5', label: 'plan class + a resume with an explicit id + the valid brief -> codex invoked',
+    brief: PG_BRIEF, prepare: (p) => writePlanFixture(p), klass: 'plan', ps: '-ResumeId pnp-plan-gate-w5', sh: ['--class', 'plan', '--resume', 'pnp-plan-gate-w5'], refused: false },
+  { id: 'W6', label: 'NO class + a brief carrying "Class: plan" at column 0 and no artifacts -> exit 2, codex never invoked',
+    brief: `Class: plan\n${PG_NO_LINES}`, klass: null, ps: '', sh: [], refused: true },
+  { id: 'W7', label: 'code class + a brief with an INDENTED "  Class: plan" and no artifacts -> codex invoked',
+    brief: `  Class: plan\n${PG_NO_LINES}`, klass: 'code', ps: '', sh: ['--class', 'code'], refused: false },
+  { id: 'W8', label: 'code class + a brief carrying "Class: plan" at column 0 and no artifacts -> exit 2, codex never invoked',
+    brief: `Class: plan\n${PG_NO_LINES}`, klass: 'code', ps: '', sh: ['--class', 'code'], refused: true },
+];
+
+function pgPsProbe(root, w, tmpRoot, pathFor = null) {
+  const probe = runPsWrapperWithStub(root, 'codex-review.ps1', tmpRoot,
+    { brief: w.brief, klass: w.klass, extraArgs: w.ps, prepare: w.prepare || null, pathFor });
+  const err = probe.stderrText.replace(/\x1b\[[0-9;]*m/g, '');
+  const ok = w.refused
+    ? probe.status === 2 && /line-missing/.test(err) && !probe.stubInvoked
+    : probe.stubInvoked && probe.status === STUB_EXIT;
+  return { ok, detail: `exit ${probe.status}; codex ${probe.stubInvoked ? 'invoked' : 'never invoked'}${w.refused ? `; line-missing ${/line-missing/.test(err)}` : ''}`, probe, err };
+}
+
+function pgShProbe(root, w, tmpRoot) {
+  const probe = runWrapperWithStub(root, 'codex-review.sh', tmpRoot, w.sh, { brief: w.brief, prepare: w.prepare || null });
+  let ok = w.refused
+    ? probe.status === 2 && /line-missing/.test(probe.stderr) && probe.atoms === null
+    : probe.atoms !== null && probe.status === STUB_EXIT;
+  if (ok && w.planArgv) {
+    // The locked argv on the plan row: the gate adds nothing to what codex is handed.
+    const expected = ['exec', '-C', probe.projectRoot, '-m', ROW_MODEL,
+      '--sandbox', 'read-only', '-c', 'approval_policy=never', '-c', `model_reasoning_effort=${ROW_EFFORT}`];
+    ok = JSON.stringify(probe.atoms) === JSON.stringify(expected);
+  }
+  return { ok, detail: `exit ${probe.status}; codex ${probe.atoms === null ? 'never invoked' : `invoked with ${probe.atoms.length} atoms`}` };
+}
+
+/**
+ * W9-ps: a PowerShell host that can start but finds no node. Built from the directory of `pwsh`
+ * (looked up NOW - the self-check otherwise knows only the name) and the stub's bin, without the
+ * directory of node. Returns { pathFor } or { why } when the case cannot be built on this machine.
+ */
+function pgNodelessPath() {
+  if (process.platform !== 'win32') return { why: 'not win32 - on POSIX dropping the directory of node can drop /usr/bin with it' };
+  if (PWSH !== 'pwsh') return { why: `the PowerShell host here is ${JSON.stringify(PWSH)}, not pwsh` };
+  const r = spawnSync('where', ['pwsh'], { encoding: 'utf8' });
+  const exe = r.status === 0 ? String(r.stdout || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean)[0] : null;
+  if (!exe) return { why: 'the directory of pwsh could not be looked up (`where pwsh` found nothing)' };
+  const dir = path.dirname(exe);
+  if (fs.existsSync(path.join(dir, 'node.exe')) || path.dirname(process.execPath).toLowerCase() === dir.toLowerCase()) {
+    return { why: 'pwsh and node share one directory, so node cannot be removed from the PATH alone' };
+  }
+  return { pathFor: (bin) => `${dir};${bin}` };
+}
+
+/** One Gate 2 run of a `reviewer` dispatch carrying `prompt`. */
+function pgGate2(gatePath, prompt, projectDir) {
+  return runHook(gatePath, {
+    session_id: '9a1c1a44-0000-4000-8000-000000000000', permission_mode: 'default',
+    hook_event_name: 'PreToolUse', tool_name: 'Agent',
+    tool_input: { description: 'plan readiness pass', prompt, subagent_type: 'reviewer' },
+    tool_use_id: 'toolu_02selfcheckPlanPass',
+  }, projectDir);
+}
+const PG_PLAN_PROMPT = 'Class: plan\n\nReview the plan for execution readiness.\n';
+
+/** Copies files of scripts/engine into a scratch engine dir and returns that dir. */
+function pgEngineCopy(tmpRoot, name, files) {
+  const dir = path.join(fs.mkdtempSync(path.join(tmpRoot, `pg-${name}-`)), 'scripts', 'engine');
+  fs.mkdirSync(dir, { recursive: true });
+  for (const f of files) fs.copyFileSync(path.join(PLUGIN_ROOT, 'scripts', 'engine', f), path.join(dir, f));
+  return dir;
+}
+/** A sabotage that cannot find its target throws - a control that changed nothing proves nothing. */
+function pgPatch(file, from, to) {
+  const src = fs.readFileSync(file, 'utf8');
+  const out = src.replace(from, to);
+  if (out === src) throw new Error(`the sabotage found nothing to replace in ${path.basename(file)}`);
+  fs.writeFileSync(file, out);
+}
+
+// The contract's tokens. Every one of them is produced by at least one M case - except
+// internal-error, which no input can provoke from a working checker (stated as a NOTE below).
+const PG_CONTRACT_TOKENS = ['line-missing', 'line-duplicate', 'class-not-plan', 'tickets-empty', 'tickets-bad-ref',
+  'tickets-not-in-plan', 'file-missing', 'scan-no-table', 'scan-bad-header', 'scan-row-shape', 'scan-empty-cell',
+  'scan-open-row', 'scan-ticket-missing', 'own-hash-missing', 'own-hash-mismatch', 'own-blockers-missing',
+  'own-checks-table-missing', 'own-checks-row-shape', 'own-checks-empty-cell', 'own-ticket-missing',
+  'own-instruments-missing', 'own-instrument-shape', 'own-instrument-cannot-fail'];
+
+function sectionPlanGate(tmpRoot) {
+  section('PLAN GATE - the checker (scripts/engine/plan-gate.js) executed through its CLI');
+  if (!check('scripts/engine/plan-gate.js exists', fs.existsSync(PLAN_GATE))) return;
+  const cases = planGateCases();
+  const seen = new Set();
+  for (const c of cases) {
+    const r = pgRunCase(c, PLAN_GATE, tmpRoot);
+    for (const t of (r.tokens || [])) seen.add(t.split(':')[0]);
+    check(`[plan-gate-${c.id}] ${c.label}`, r.ok, r.detail);
+  }
+  const unseen = PG_CONTRACT_TOKENS.filter((t) => !seen.has(t));
+  check('[plan-gate-tokens] every token of the checker contract is produced by at least one M case', unseen.length === 0,
+    unseen.length ? `never produced: ${unseen.join(', ')}` : `${PG_CONTRACT_TOKENS.length} tokens`);
+  note('plan-gate-internal-error (exit 2 with "plan-gate: internal-error - <message>" on the plan path)',
+    'no input provokes it from a working checker - it exists for a defect in the checker itself');
+  note('plan-gate-stdin-unreadable (a brief that cannot be read, without --plan-class -> exit 0 and one stderr line)',
+    'no input the self-check can build reliably makes stdin itself fail to read');
+
+  section('PLAN GATE - the Codex review wrappers run it on every brief (both channels, recording stubs)');
+  const nodeless = pgNodelessPath();
+  if (!PWSH) {
+    check('plan-gate-W1-ps..W9-ps: a PowerShell host is available to run the wrapper', false,
+      'neither `pwsh` nor `powershell` could be executed - the PowerShell plan gate is UNPROVEN in this run');
+  } else {
+    for (const w of PG_W) {
+      const r = pgPsProbe(PLUGIN_ROOT, w, tmpRoot);
+      check(`[plan-gate-${w.id}-ps] ${w.label}`, r.ok, r.detail);
+    }
+    if (nodeless.why) {
+      note('plan-gate-W9-ps (plan class + no readiness lines, with NO node on the PATH -> exit 2 and "plan-class pass refused")', nodeless.why);
+    } else {
+      const r = pgPsProbe(PLUGIN_ROOT, { brief: PG_NO_LINES, klass: 'plan', ps: '' }, tmpRoot, nodeless.pathFor);
+      const ok = r.probe.status === 2 && /plan-class pass refused/.test(r.err);
+      check('[plan-gate-W9-ps] plan class + a brief without the lines, with NO node on the PATH -> exit exactly 2 and "plan-class pass refused" (a node that cannot start refuses, never passes)',
+        ok, `exit ${r.probe.status}; refusal line ${/plan-class pass refused/.test(r.err)}`);
+    }
+  }
+  if (!BASH) {
+    check('plan-gate-W1-sh..W8-sh: a bash host is available to run the wrapper', false,
+      'neither `bash` on PATH nor a Git-for-Windows bash could be executed - the bash plan gate is UNPROVEN in this run');
+  } else {
+    for (const w of PG_W) {
+      const r = pgShProbe(PLUGIN_ROOT, w, tmpRoot);
+      check(`[plan-gate-${w.id}-sh] ${w.label}`, r.ok, r.detail);
+    }
+  }
+
+  section('PLAN GATE - Gate 2 on a Claude reviewer dispatch (deny on a readable brief, ask on an error)');
+  {
+    const bare = fs.mkdtempSync(path.join(tmpRoot, 'pg-g2-bare-'));
+    const fixture = fs.mkdtempSync(path.join(tmpRoot, 'pg-g2-fix-'));
+    const brief = writePlanFixture(fixture);
+    const silent = (r) => r.decision === 'allow(passthrough)' && r.exit === 0;
+    const g1 = pgGate2(GATE2, PG_PLAN_PROMPT, bare);
+    check('[gate2-plan-G1] reviewer + "Class: plan" + no artifacts -> DENY naming the problems, tagged [AIWF gate 2: plan pass]',
+      g1.decision === 'deny' && g1.exit === 0 && g1.reason.includes('[AIWF gate 2: plan pass]') && g1.reason.includes('line-missing'),
+      `${g1.decision}: ${g1.reason.slice(0, 90)}`);
+    const g2 = pgGate2(GATE2, brief, fixture);
+    check('[gate2-plan-G2] the same with valid artifacts (CLAUDE_PROJECT_DIR = the fixture) -> silent passthrough', silent(g2), `${g2.decision}: ${g2.reason.slice(0, 90)}`);
+    const g3 = pgGate2(GATE2, 'Class: code\n\nReview the diff.\n', bare);
+    check('[gate2-plan-G3] reviewer + "Class: code" -> silent passthrough (a non-plan reviewer dispatch is untouched)', silent(g3), g3.decision);
+    const g4 = pgGate2(GATE2, 'Class: Plan\n\nReview the plan.\n', bare);
+    check('[gate2-plan-G4] reviewer + "Class: Plan" (value in another case) + no artifacts -> DENY', g4.decision === 'deny' && g4.exit === 0, g4.decision);
+    const g5 = pgGate2(GATE2, PG_PLAN_PROMPT, null);
+    check('[gate2-plan-G5] reviewer + "Class: plan" with NO CLAUDE_PROJECT_DIR -> ASK (the paths cannot be resolved), never deny',
+      g5.decision === 'ask' && g5.exit === 0 && g5.reason.includes('CLAUDE_PROJECT_DIR'), `${g5.decision}: ${g5.reason.slice(0, 90)}`);
+    const g6 = pgGate2(GATE2, '  Class: plan\n\nReview the plan.\n', bare);
+    check('[gate2-plan-G6] reviewer + an INDENTED "  Class: plan" -> silent passthrough (not recognised as a plan brief)', silent(g6), g6.decision);
+    const noChecker = pgEngineCopy(tmpRoot, 'g7', ['pretooluse-dispatch-gate.js', 'aiwf-lib.js']);
+    const g7 = pgGate2(path.join(noChecker, 'pretooluse-dispatch-gate.js'), PG_PLAN_PROMPT, bare);
+    check('[gate2-plan-G7] Gate 2 run from an engine copy WITHOUT plan-gate.js + a plan brief -> ASK through the fail-to-ask wrapper (no crash, no deny)',
+      g7.decision === 'ask' && g7.exit === 0 && g7.reason.includes('fail-to-ask'), `${g7.decision}: ${g7.reason.slice(0, 90)}`);
+  }
+
+  section('PLAN GATE CONTROLS - each sabotage turns its named check red');
+  const byId = (id) => cases.find((c) => c.id === id);
+  const controls = [
+    { id: 'ctl-4', target: 'M10', label: 'the hash comparison disabled', from: 'if (ownHash !== currentHash) {', to: 'if (false) {' },
+    { id: 'ctl-5', target: 'M15', label: 'the "valid == broken" instrument check disabled', from: " || valid === '' || broken === '' || valid === broken)", to: " || valid === '' || broken === '')" },
+    { id: 'ctl-7', target: 'M34', label: 'the ticket-heading rule replaced by "mentioned anywhere in the plan"', from: 'const inPlan = planHeads.has(p);', to: 'const inPlan = lib.refRegex(p).test(planText);' },
+    { id: 'ctl-8', target: 'M30', label: 'scan-empty-cell disabled', from: "if (cells.slice(0, 5).some((c) => c === '')) {", to: 'if (false) {' },
+    { id: 'ctl-9', target: 'M7', label: 'the closure white list replaced by "not empty"', from: 'if (!CLOSED_PREFIXES.some((p) => closure.startsWith(p))) {', to: "if (closure === '') {" },
+    { id: 'ctl-10', target: 'M32', label: 'class-not-plan disabled', from: "} else if (name === 'Class' && vals[name][0].toLowerCase() !== 'plan') {", to: '} else if (false) {' },
+    { id: 'ctl-11', target: 'M33', label: 'the skip on a duplicated TICKETS line replaced by "use every TICKETS line"', from: "const ticketsText = single('TICKETS');", to: "const ticketsText = vals.TICKETS.length ? vals.TICKETS.join(',') : null;" },
+    { id: 'ctl-12', target: 'M41', label: 'the scan-bad-header check disabled (only an exact header opens a scan table again)', from: "return c.length >= 2 && c[0].toLowerCase() === '#' && c[1].toLowerCase() === 'ticket';", to: 'return sameHeader(c, SCAN_HEADER);' },
+    { id: 'ctl-13', target: 'M42', label: 'the closing-fence rule widened back to spaces OR tabs', from: '/^ {0,3}(`{3,}|~{3,}) *$/', to: '/^ {0,3}(`{3,}|~{3,})[ \\t]*$/' },
+    { id: 'ctl-14', target: 'M43', label: 'the separator cell-count check disabled', from: 'return cells.length === expectedCount && ', to: 'return cells.length > 0 && ' },
+    { id: 'ctl-15', target: 'M45', label: 'the per-table instrument numbering replaced by one flattened count', from: 'for (const t of instrumentTables) {', to: 'for (const t of [{ rows: instrumentTables.flatMap((x) => x.rows), headerLine: 0 }]) {' },
+  ];
+  // The checker controls: plan-gate.js copied beside aiwf-lib.js, sabotaged, and the target case run
+  // against the copy. The fixture is still stamped by the PAYLOAD checker, so only the branch moved.
+  for (const k of controls) {
+    let gate;
+    try {
+      gate = path.join(pgEngineCopy(tmpRoot, k.id, ['plan-gate.js', 'aiwf-lib.js']), 'plan-gate.js');
+      pgPatch(gate, k.from, k.to);
+    } catch (e) { check(`[plan-gate-${k.id}] control could be applied: ${k.label}`, false, String(e.message)); continue; }
+    const r = pgRunCase(byId(k.target), gate, tmpRoot);
+    check(`[plan-gate-${k.id}] sabotage detected: ${k.label} -> plan-gate-${k.target} turns red`, r.ok === false,
+      r.ok ? 'still PASS - the check is vacuous' : `FAIL as required (${r.detail})`);
+  }
+  // ctl-1 / ctl-6: the PowerShell wiring. The whole gate block removed, and then only `-not $?`.
+  const psGateBlock = /\r?\n\$Prompt \| & node [^\r\n]*\r?\nif \(-not \$\? -or \$LASTEXITCODE -ne 0\) \{\r?\n[^\r\n]*\r?\n[^\r\n]*\r?\n\}/;
+  if (PWSH) {
+    const broken = fs.mkdtempSync(path.join(tmpRoot, 'pg-ctl-1-'));
+    let applied = true;
+    try { copyPsChannel(PLUGIN_ROOT, broken); pgPatch(path.join(broken, ...psRel('codex-review.ps1')), psGateBlock, ''); } catch (e) { applied = false; check('[plan-gate-ctl-1] control could be applied: the gate block removed from codex-review.ps1', false, String(e.message)); }
+    if (applied) {
+      const r = pgPsProbe(broken, PG_W[0], tmpRoot);
+      check('[plan-gate-ctl-1] sabotage detected: the gate block removed from codex-review.ps1 -> plan-gate-W1-ps turns red', r.ok === false,
+        r.ok ? 'still PASS - the check is vacuous' : `FAIL as required (${r.detail})`);
+    }
+  } else {
+    check('[plan-gate-ctl-1] a PowerShell host is available to run the control', false, 'no PowerShell host - the control is UNPROVEN in this run');
+  }
+  if (nodeless.why || !PWSH) {
+    note('plan-gate-ctl-6 (`-not $?` removed from the PowerShell refusal -> plan-gate-W9-ps turns red)', nodeless.why || 'no PowerShell host');
+  } else {
+    const broken = fs.mkdtempSync(path.join(tmpRoot, 'pg-ctl-6-'));
+    let applied = true;
+    try { copyPsChannel(PLUGIN_ROOT, broken); pgPatch(path.join(broken, ...psRel('codex-review.ps1')), 'if (-not $? -or $LASTEXITCODE -ne 0) {', 'if ($LASTEXITCODE -ne 0) {'); } catch (e) { applied = false; check('[plan-gate-ctl-6] control could be applied: `-not $?` removed', false, String(e.message)); }
+    if (applied) {
+      const r = pgPsProbe(broken, { brief: PG_NO_LINES, klass: 'plan', ps: '' }, tmpRoot, nodeless.pathFor);
+      const stillOk = r.probe.status === 2 && /plan-class pass refused/.test(r.err);
+      check('[plan-gate-ctl-6] sabotage detected: `-not $?` removed from the PowerShell refusal -> plan-gate-W9-ps turns red (a node that cannot start now PASSES the gate)', stillOk === false,
+        stillOk ? 'still PASS - the check is vacuous' : `FAIL as required (exit ${r.probe.status})`);
+    }
+  }
+  // ctl-2: the bash wiring.
+  if (BASH) {
+    const broken = fs.mkdtempSync(path.join(tmpRoot, 'pg-ctl-2-'));
+    let applied = true;
+    try { copyShChannel(PLUGIN_ROOT, broken); pgPatch(path.join(broken, ...shRel('codex-review.sh')), /\nprintf '%s\\n' "\$PROMPT" \| node [^\n]*\n/, '\n'); } catch (e) { applied = false; check('[plan-gate-ctl-2] control could be applied: the gate line removed from codex-review.sh', false, String(e.message)); }
+    if (applied) {
+      const r = pgShProbe(broken, PG_W[0], tmpRoot);
+      check('[plan-gate-ctl-2] sabotage detected: the gate line removed from codex-review.sh -> plan-gate-W1-sh turns red', r.ok === false,
+        r.ok ? 'still PASS - the check is vacuous' : `FAIL as required (${r.detail})`);
+    }
+  } else {
+    check('[plan-gate-ctl-2] a bash host is available to run the control', false, 'no bash host - the control is UNPROVEN in this run');
+  }
+  // ctl-3: Gate 2's plan branch removed -> G1 is a silent passthrough again.
+  {
+    let gate;
+    try {
+      gate = path.join(pgEngineCopy(tmpRoot, 'ctl-3', ['pretooluse-dispatch-gate.js', 'aiwf-lib.js', 'plan-gate.js']), 'pretooluse-dispatch-gate.js');
+      pgPatch(gate, "if (ti.subagent_type === REVIEWER_AGENT_TYPE && typeof ti.prompt === 'string') {", 'if (false) {');
+    } catch (e) { gate = null; check('[plan-gate-ctl-3] control could be applied: the plan branch removed from Gate 2', false, String(e.message)); }
+    if (gate) {
+      const r = pgGate2(gate, PG_PLAN_PROMPT, fs.mkdtempSync(path.join(tmpRoot, 'pg-ctl-3-bare-')));
+      const g1ok = r.decision === 'deny' && r.reason.includes('[AIWF gate 2: plan pass]');
+      check('[plan-gate-ctl-3] sabotage detected: the plan branch removed from Gate 2 -> gate2-plan-G1 turns red', g1ok === false,
+        g1ok ? 'still PASS - the check is vacuous' : `FAIL as required (${r.decision})`);
+    }
   }
 }
 
@@ -7496,6 +7986,7 @@ function main() {
     sectionMarketplace(tmpRoot);
     sectionWrappers(tmpRoot);
     sectionShWrappers(tmpRoot);
+    sectionPlanGate(tmpRoot);
     sectionResolver(tmpRoot);
     sectionRolesCommand(tmpRoot, pluginVersion);
     sectionPayloadIntegrity();

@@ -20,7 +20,19 @@
  *
  * In BOTH modes:
  *   - `tool_input.subagent_type !== "writer"` -> passthrough. Reviewer, QA, Explore, general-purpose
- *     and every ad-hoc scan subagent are untouched by this gate, whatever their prompt says.
+ *     and every ad-hoc scan subagent are untouched by this gate, whatever their prompt says - with
+ *     ONE exception, the plan-pass branch below.
+ *
+ * THE PLAN-PASS BRANCH (independent of the mode). A `reviewer` dispatch whose prompt carries the
+ * line `Class: plan` at column 0 is a Claude-hosted plan-readiness pass, and it does not start
+ * without its readiness artifacts: the prompt is handed to plan-gate.js, which reads the files its
+ * fixed lines name (the plan, the consequence scan, the own pass). Problems -> DENY, naming every
+ * one; none -> passthrough; any other reviewer prompt -> passthrough, as before. The deny is a
+ * decision on a READABLE brief, not an error path: an unset CLAUDE_PROJECT_DIR (the brief's paths
+ * cannot be resolved) asks, and a throw inside the check - plan-gate.js missing included - is
+ * caught by runFailAsk and asks. What it does not prove is plan-gate.js's own honest limit; and the
+ * deny on an `Agent` call rests on the documented PreToolUse decision contract, not on a live
+ * observation (only `ask` on `Agent` was observed - see the empirical basis below).
  *
  * THE MODE IS READ FAIL-SAFE, in the same direction as Gate 3's `enforcement.routeWriteGuard`: a
  * missing config, an unreadable or corrupt one, a missing key, or ANY value other than the exact
@@ -32,6 +44,7 @@
  * FAIL DIRECTION IS ASK, NOT DENY (the opposite of Gate 1 - see the asymmetry note in aiwf-lib.js).
  * An unparseable payload, an unreadable plans directory or any unexpected throw raises the dialog: a
  * deny here would block legitimate work, while the stake is only "the operator should look at this".
+ * The plan-pass deny above does not flip this: it is reached only on a brief the gate could read.
  *
  * Empirical basis (live PreToolUse payload, CLI 2.1.x): the subagent dispatch tool is
  * `tool_name: "Agent"` (NOT "Task"); its `tool_input` carries `subagent_type` next to
@@ -56,7 +69,8 @@ const TAG = '[AIWF gate 2: Writer dispatch]';
 // being worked.
 const TICKET_LINE = /^[ \t]*Ticket:[ \t]*([A-Za-z0-9][A-Za-z0-9_-]*)[ \t]*$/m;
 const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
-const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const REVIEWER_AGENT_TYPE = 'reviewer'; // the rendered Claude review host (templates/agents/reviewer.md.tmpl)
+const PLAN_TAG = '[AIWF gate 2: plan pass]';
 
 // One-line label of what is being dispatched, for the dialog text. Never throws on a hostile payload.
 function describe(ti) {
@@ -106,16 +120,6 @@ function plansDirOf(projectDir, config) {
   return path.join(projectDir, rel, 'active');
 }
 
-// WHOLE-IDENTIFIER match, case-sensitive. A plain substring test would be wrong ("ABC-2" would
-// match "ABC-21" and clear a ref that is in no PLAN), and so is `\b`: the ref alphabet admitted by
-// TICKET_LINE is [A-Za-z0-9_-], while `-` is NOT a regex word character, so `\bDEMO-1\b` finds a
-// boundary in the middle of "DEMO-1-EXTRA" and in "X-DEMO-1" and clears both. The boundaries below
-// are therefore stated over the COMPLETE identifier alphabet: the ref matches only where it is not
-// glued to another ref character on either side.
-function refRegex(ref) {
-  return new RegExp('(?<![A-Za-z0-9_-])' + escapeRe(ref) + '(?![A-Za-z0-9_-])');
-}
-
 // Is `<REF>` in an active PLAN? One prefix per plan (payload docs/WORKFLOW.md, "Durable development
 // history"): a plan file is `PLAN_<ABBR>.md` and every ticket in it is `<ABBR>-<NNN>`, so the ref
 // ADDRESSES its plan instead of merely describing the work - `ABC-007` is read out of `PLAN_ABC.md`
@@ -144,7 +148,7 @@ function refRegex(ref) {
 //     version did: a lookup that could not look is not a "no", and it is not a "yes" either.
 function lookupTicketRef(activeDir, ref) {
   const filesRead = [];
-  const refRe = refRegex(ref);
+  const refRe = lib.refRegex(ref); // whole-identifier match; the rationale lives beside it in aiwf-lib.js
 
   // `<ABBR>` is the ref's text before its FIRST `-`. No dash (or a leading one) -> no targeted
   // candidate at all, and the scan below is the only path.
@@ -264,6 +268,33 @@ if (require.main === module) {
         'Cannot verify this dispatch: tool_input is not an object, so the target subagent is unreadable. ' +
         '[AIWF gate 2: Writer dispatch]'
       );
+    }
+
+    // The plan-pass branch: a Claude-hosted plan-readiness pass does not start without its readiness
+    // artifacts. Only a `reviewer` dispatch whose prompt carries `Class: plan` at column 0 enters it;
+    // every other reviewer dispatch falls through to the passthrough below, exactly as before.
+    if (ti.subagent_type === REVIEWER_AGENT_TYPE && typeof ti.prompt === 'string') {
+      // Required HERE, not at the top of the file: a load failure is then a throw inside
+      // runFailAsk -> ask, never a crash before any decision and never a deny.
+      const planGate = require('./plan-gate');
+      if (planGate.isPlanBrief(ti.prompt)) {
+        const envDir = process.env.CLAUDE_PROJECT_DIR;
+        // No projectDirOf() fallback here: the payload root is not the project whose files the
+        // brief names, so resolving them against it would decide on the wrong tree.
+        if (!envDir || envDir.trim() === '') {
+          return lib.askPreTool(
+            'Cannot verify this plan-readiness pass: CLAUDE_PROJECT_DIR is not set, so the paths its brief ' +
+            `names cannot be resolved. ${PLAN_TAG}`
+          );
+        }
+        const res = planGate.checkPlanBrief(ti.prompt, envDir);
+        if (res.ok) return lib.allowPassthrough();
+        const list = res.problems.map((p) => `${p.token}: ${p.message}`).join('; ');
+        return lib.denyPreTool(
+          `Plan-readiness pass refused: ${res.problems.length} problem(s) - ${list}. Fix them ` +
+          `(see /pnp:review Steps 2c and 2d) and dispatch again. ${PLAN_TAG}`
+        );
+      }
     }
 
     // Only the Writer is gated - it is the only role that writes to the repo.

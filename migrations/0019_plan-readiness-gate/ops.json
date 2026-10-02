@@ -1,0 +1,18 @@
+{
+  "migration": "0019_plan-readiness-gate",
+  "targetPluginVersion": "0.2.15",
+  "operations": [
+    {
+      "op": "rerender-managed-region",
+      "file": ".claude/aiwf-native/ORCHESTRATOR.md",
+      "region": null,
+      "template": "templates/ORCHESTRATOR.md.tmpl"
+    },
+    {
+      "op": "note",
+      "id": "plan-readiness-gate",
+      "text": "A paid readiness pass no longer starts on an own pass nobody wrote down (RGATE-001). /pnp:review gains Step 2c, the consequence scan - one scan-tier agent per ticket searches the tree for surfaces that can violate each decision of the plan, and the COO closes every row in a file before the pass - and Step 2d, the COO's own pass as a file: the last act over the plan, one row per audited ticket against the six readiness checks, every instrument run on valid and on broken input, stamped with the plan's SHA-256 (scripts/engine/plan-gate.js --hash). The readiness brief names the plan, the audited tickets and both files on five fixed lines, and a plan-class pass does not start without them: the Codex review wrapper refuses the run (exit 2) by its class flag or by the brief's `Class: plan` line, and Gate 2 denies a Claude reviewer dispatch whose brief carries that line. It proves presence and shape, not quality. YOUR ORCHESTRATOR RULES: the first operation re-renders `.claude/aiwf-native/ORCHESTRATOR.md`, where the section Behavior ledger duty now carries the consequence scan and the own pass as the same duty, with the gate's honest limit; if you edited that file, the update asks you, and an artifact you hold through an override is not applied - the new render is recorded as upstream. SUPERSEDED LOCAL RULES: a local rule or hook that refuses a plan pass without these artifacts can become a one-line pointer to Step 2d.",
+      "docRefs": ["CHANGELOG.md", "skills/review/SKILL.md"]
+    }
+  ]
+}

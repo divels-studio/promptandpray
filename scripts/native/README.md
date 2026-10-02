@@ -24,6 +24,9 @@ explicit project root because the payload has no project of its own:
 - `codex-review.*`, `codex-qa.*` - read-only Codex hosts; `-C` is the caller's project root, the
   sandbox and approval flags are literals, the brief arrives on stdin. `codex-review.*` also takes
   the optional `-Class` / `--class`, hands it to the resolver and uses that row's model and effort.
+  The review wrapper passes every brief through `scripts/engine/plan-gate.js`: a `plan`-class run,
+  or a brief carrying a `Class: plan` line at its first column, is refused (exit 2) while its
+  readiness artifacts are missing or incomplete (`/pnp:review` Step 2d).
 - `codex-qal.*` - the unsandboxed, operator-gated live-browser host; `-C` is always a unique
   throwaway scratch dir, never the repo. The project root is used only to find `roles.json`.
 

@@ -130,7 +130,8 @@ Boundaries a reviewer checks:
   WRITE the project layer - only the managed artifacts, only under the two-hash bookkeeping (no
   silent overwrite, no delete without `--confirm-remove-stale`) - and never the operator-owned
   content. The payload's hooks READ the project's `aiwf.config.json`, `roles.json`, the active
-  PLANs under `plansDir` (Gate 2 off-plan) and `.aiwf/route-state.json` (Gate 3) - nothing else of
+  PLANs under `plansDir` (Gate 2 off-plan), the files a plan-class reviewer brief names (Gate 2,
+  through `scripts/engine/plan-gate.js`) and `.aiwf/route-state.json` (Gate 3) - nothing else of
   the project, and Gate 4 reads nothing at all beyond the payload the harness hands it. Nothing in
   the project layer ever writes the payload.
 - **`schema/aiwf.config.schema.json` is the single authority for the config shape**; the interview,
@@ -139,8 +140,9 @@ Boundaries a reviewer checks:
   direction differs per gate: Gate 1 (non-writer subagent write) DENIES, Gate 3 (main-session
   write to a code-class path while an R2/R3 route is open, or an unusable route-state) DENIES,
   Gate 4 (an ask-class git verb from a non-writer subagent) DENIES - and fails closed, with the
-  risk of sitting on every Bash command stated in its own header - Gate 2 (Writer dispatch) ASKS -
-  any unexpected error inside Gate 2 also resolves to ASK, never to
+  risk of sitting on every Bash command stated in its own header - Gate 2 (Writer dispatch) ASKS,
+  and DENIES a Claude-hosted plan-readiness pass whose readiness artifacts are missing - a decision
+  on a readable brief; any unexpected error inside Gate 2 still resolves to ASK, never to
   a silent pass. A change that flips a fail direction is R3.
 - **Zero runtime dependencies.** No `node_modules`, no build step; the wrappers are PowerShell 5.1
   ASCII-only / bash LF-only and mirror each other flag for flag.

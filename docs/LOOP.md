@@ -143,6 +143,19 @@ costs clicks, never silence. The matcher for a subagent dispatch is the `Agent` 
 reports the same call as `Task` in its permission records - the two names sit on different layers,
 and `Agent` is the empirically correct matcher).
 
+**A Claude-hosted plan-readiness pass goes through the same hook.** On an `Agent` dispatch of
+`reviewer` whose prompt carries the line `Class: plan`, Gate 2 runs `scripts/engine/plan-gate.js`
+over the prompt and DENIES the dispatch while the readiness artifacts the brief names are missing or
+incomplete (`docs/WORKFLOW.md` § Plan readiness review); with the artifacts in order it stays silent,
+and every other reviewer dispatch is untouched. The deny is a decision on a readable brief, not an
+error path: an unreadable payload, a throw inside the check, or a session with no
+`CLAUDE_PROJECT_DIR` to resolve the brief's paths against still resolves to ask. The Codex host gets
+the same check inside `codex-review.ps1` / `codex-review.sh`, which refuse a plan-class run - by the
+class flag or by the brief's `Class: plan` line - with exit 2 before the engine starts. **And the
+deny borrows a promise, as Gate 4's passthrough does:** `ask` on an `Agent` call was observed live,
+while `deny` on it rests on the documented PreToolUse decision contract, which names no exception
+for this tool - nothing in this repository observes the host.
+
 **Gate 3** (the route-state write guard, which lives INSIDE the Gate 1 hook file, so three wired
 hook files carry four gates) keeps the main session out of code-class files while an R2/R3 ticket is
 dispatched: with `<projectDir>/.aiwf/route-state.json` naming an R2/R3 route, a main-session

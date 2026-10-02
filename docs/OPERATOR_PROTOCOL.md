@@ -43,6 +43,14 @@ The rules do not rely on the session "remembering" them - they are enforced mech
   silence. Either way it gates the Writer path, not every write: routine R1 work and the session's
   own docs edits are main-session work and do not raise this dialog - Gate 3 below is what bounds
   them while a ticket is open.
+- **Plan readiness (wrapper + Gate 2)** - a paid readiness pass over a plan does not start until the
+  COO's own pass and the consequence scan exist as files the brief names: the Codex review wrapper
+  refuses the run, and Gate 2 denies a Claude reviewer dispatch, while one is missing, a scan row is
+  still open, or the plan changed after the own pass was stamped. It checks that both files exist,
+  that every scan row is closed and every audited ticket has its rows, and that the own pass was
+  stamped over the plan file the brief names - not how good either is,
+  and not that the scan covered the latest revision - so the step happens without you reading those
+  files.
 - **Gate 3 (hook)** - while a ticket is dispatched, the main session cannot edit code: with an open
   R2/R3 route recorded in `.aiwf/route-state.json` it may write only docs, `.aiwf/` and root
   `*.md`. Code goes to the Writer, where the review gates are.

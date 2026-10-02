@@ -23,6 +23,9 @@
 # --class <plan|code|docs> is OPTIONAL: with it, the model and effort come from that row of the
 # audit table (review.<class> in roles.json) instead of the Reviewer role's own triple, which is
 # what /pnp:review passes on every invocation. Without it the wrapper behaves exactly as it did.
+# Every brief also passes through the plan gate (scripts/engine/plan-gate.js): with class `plan`, or
+# a brief carrying a `Class: plan` line, missing or incomplete readiness artifacts are exit 2 before
+# codex starts.
 #
 # --resume [<id>] is OPTIONAL and takes an OPTIONAL argument: without one it replays the session id
 # THIS wrapper recorded last (<scratchDir>/last-review-session.txt, the Reviewer's own file - a QA
@@ -220,6 +223,22 @@ PROMPT="$(cat)"
 if [ -z "$(printf '%s' "$PROMPT" | tr -d '[:space:]')" ]; then
   fail 'No prompt provided. Pipe the brief in: cat brief.txt | bash scripts/native/sh/codex-review.sh --project-root <path>'
 fi
+
+# THE PLAN GATE - a plan-class pass does not start without its readiness artifacts (/pnp:review
+# Steps 2c and 2d). It sits HERE because this is where the brief is in hand and the paid engine has
+# not started yet. Every brief goes through scripts/engine/plan-gate.js: whether the BRIEF is
+# plan-class is the checker's decision (it reads the `Class: plan` line); this shell only forwards
+# its own --class flag as --plan-class, and carries no copy of the line grammar or the file formats.
+# A non-plan brief passes untouched. node is a
+# prerequisite of this plugin - every hook runs on it - and a node that cannot start fails this
+# pipeline, which is a refusal, never a pass. The project root is the absolute one computed above,
+# before any cd. What the gate does not prove: that the own pass was good, that it ran in a turn of
+# its own, or that a later scan covered the revision.
+GATE_ARGS=(--project-root "$PROJECT_ROOT_ABS")
+if [ "$HAS_CLASS" -eq 1 ] && [ "$CLASS" = 'plan' ]; then
+  GATE_ARGS+=(--plan-class)
+fi
+printf '%s\n' "$PROMPT" | node "$HERE/../../engine/plan-gate.js" "${GATE_ARGS[@]}" || fail 'plan-class pass refused: the readiness artifacts are missing or incomplete (see plan-gate output above).'
 
 # THE SESSION ID IS READ FROM CODEX'S OWN SESSION STORE, NOT FROM THIS RUN'S OUTPUT.
 # BOTH output streams belong to the caller and this wrapper touches NEITHER. The reason is not

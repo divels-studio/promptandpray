@@ -197,7 +197,10 @@ bash channel) and passes it to the resolver, so the `-m` model and the `model_re
 atom come from that row of the audit table (`review.<class>` in `roles.json`) instead of the
 Reviewer role's own triple. Without the flag the wrapper behaves exactly as it always did. A row
 that resolves to the `claude` engine makes the wrapper exit 2, the same way a claude-hosted
-Reviewer does - that pass belongs to the Claude Agent branch.
+Reviewer does - that pass belongs to the Claude Agent branch. The review wrapper passes every brief
+through `scripts/engine/plan-gate.js`: a `plan`-class run, or a brief carrying a `Class: plan` line
+at its first column, is refused (exit 2) while its readiness artifacts are missing or incomplete
+(`/pnp:review` Step 2d).
 
 ```powershell
 Get-Content .\review-brief.txt -Raw | scripts\native\ps\codex-review.ps1 -ProjectRoot <root> -Class docs

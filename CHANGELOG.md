@@ -4,6 +4,34 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.2.15] - 2026-10-02
+
+A paid readiness pass no longer starts on an own pass nobody wrote down: the consequence scan and
+the COO's own pass are files the brief names, and a plan-class pass refuses to start without them.
+
+### Added
+
+- **Consequence scan (RGATE-001)** - `/pnp:review` Step 2c: before every paid readiness pass, one
+  scan-tier agent per ticket searches the tree for surfaces that can violate each decision of the
+  plan; the COO closes every row in a file before the pass, and the scan runs again over what each
+  revision changed.
+- **The own pass as a file (RGATE-001)** - Step 2d: the COO's own pass is the last act over the
+  plan - one row per audited ticket against the six readiness checks, every instrument run on valid
+  and on broken input - stamped with the plan's SHA-256 (`scripts/engine/plan-gate.js --hash`).
+- **Plan-pass gate (RGATE-001)** - `scripts/engine/plan-gate.js` checks the brief's `Class:`,
+  `PLAN:`, `TICKETS:`, `CONSEQUENCE SCAN:` and `OWN PASS:` lines; `codex-review.ps1` / `codex-review.sh`
+  refuse a plan-class run (by the class flag or the brief's `Class: plan` line) with exit 2 and
+  Gate 2 denies a Claude reviewer dispatch whose brief carries that line when an artifact is
+  missing, a row is open, a ticket is uncovered, an
+  instrument cannot fail or the plan changed after the stamp. It proves presence and shape, not
+  quality.
+
+### Changed
+
+- **Readiness order (RGATE-001)** - `docs/WORKFLOW.md` and the rendered
+  `.claude/aiwf-native/ORCHESTRATOR.md` (re-rendered by migration `0019_plan-readiness-gate`): the
+  behavior ledger, the consequence scan, the fact-check gate, then the COO's own pass - last.
+
 ## [0.2.14] - 2026-09-30
 
 A reported verdict is no longer a stop: the COO reports it on its own and goes on in the same turn.

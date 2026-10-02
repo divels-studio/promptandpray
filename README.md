@@ -8,8 +8,9 @@ Routine work stays direct - the loop is a route you choose, not a ceremony every
 The part that is not advice: **every operator gate that CAN be a native dialog IS a native dialog.**
 Writer dispatch, commit, push and the destructive commands surface Claude Code's own Yes/No
 permission prompt, and three PreToolUse hooks stand behind them - one deciding who may write at all,
-one deciding which Writer dispatch becomes a click, one deciding who may run a gated git verb and in
-which form - so the protection does not depend on a model remembering the rules. What the hooks
+one deciding which Writer dispatch becomes a click and which plan-readiness pass may start, one
+deciding who may run a gated git verb and in which form - so the protection does not depend on a
+model remembering the rules. What the hooks
 cannot reach - a file mutation performed through a shell command, the roles' own judgment - stays
 doctrine, and this repository says so at each such place instead of
 claiming a guarantee it does not have.
@@ -18,7 +19,7 @@ Born in a real production project, then extracted and genericized.
 
 ## Status
 
-**v0.2.14. Public since 0.2.0.**
+**v0.2.15. Public since 0.2.0.**
 
 What is here:
 
@@ -39,7 +40,8 @@ What is here:
   session out of code while an R2/R3 ticket is open - the dispatch gate, Gate 2, which puts the
   operator in the way of a Writer dispatch: a click on every one of them, or (per
   `enforcement.dispatchGate`) only on a dispatch whose `Ticket: <REF>` line names no ticket in an
-  active PLAN - and the git-verb guard, Gate 4, on both shell tools (matcher `Bash|PowerShell`): an
+  active PLAN, and which denies a Claude-hosted plan-readiness pass whose readiness artifacts are
+  missing - and the git-verb guard, Gate 4, on both shell tools (matcher `Bash|PowerShell`): an
   ask-class git verb is denied
   to any subagent but the Writer, because a background agent's dialog reaches nobody, and for the
   session it raises a dialog on the git forms the `ask` rules never spell out - `git.exe` outside
@@ -216,7 +218,9 @@ pass count and optionally its own engine and model. The review brief's `Class:` 
 `review.plan.passes` is the CEILING of readiness passes a plan may get - the first runs on the word
 you gave for the ticket, every further one, configured or the one beyond the ceiling, takes a word
 of its own. `/pnp:roles` prints the whole table and changes any of it. What is deliberately NOT in the
-table: the fact-check gate, which runs before every pass above the scan tier, over a diff or a plan.
+table: the fact-check gate, which runs before every pass above the scan tier, over a diff or a plan -
+nor the readiness artifacts a plan-class pass does not start without: the consequence scan and the
+COO's own pass, files the brief names (`docs/WORKFLOW.md` § Plan readiness review).
 
 ## FAQ
 

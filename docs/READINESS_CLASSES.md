@@ -5,7 +5,8 @@ classes were each a paid pass-1 blocker at least once, most of them in more than
 fourteenth was measured between passes, on the blockers a revision itself created.
 
 `/pnp:review` Step 2b hands this file to the fact-check agent; a class present in a plan is a gap,
-named by number; the list grows with a release, never with a session.
+named by number. Step 2c's consequence scan asks classes 1, 10 and 14 from the other side - from
+each decision of the plan out to the tree. The list grows with a release, never with a session.
 
 | # | class | the question to ask of every ticket |
 |---|---|---|

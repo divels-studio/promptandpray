@@ -29,7 +29,9 @@ overrides") - not every ticket is a ceremony.
   session *can* write - R1 requires it - so the COO's not writing implementation code in the
   R2/R3 cycle is doctrine, not a hook. Gate 2, the dispatch gate, puts the operator in the way
   of a Writer dispatch - a native Yes/No dialog on every one of them, or only on one whose
-  `Ticket: <REF>` line names no ticket in an active PLAN, per `enforcement.dispatchGate`. Gate 4,
+  `Ticket: <REF>` line names no ticket in an active PLAN, per `enforcement.dispatchGate`. The same
+  hook denies a Claude-hosted plan-readiness pass whose readiness artifacts are missing (§ Plan
+  readiness review). Gate 4,
   the git-verb guard on both shell tools (matcher `Bash|PowerShell`), denies an ask-class git verb
   to any subagent that is not
   the Writer - a background agent's dialog reaches no operator - and asks for it in the git forms
@@ -294,11 +296,15 @@ Configurable in `aiwf.config.json` and shown on one screen by `/pnp:roles`: the 
 alone and INHERITS the Reviewer role whole (engine, model and effort together), or it names its own
 host. The factory table is `plan 2`, `code 1`, `docs 1`, all three inheriting the Reviewer. Who
 audits what, on which engine, with how many passes is therefore a value the operator reads and
-changes - not a sentence in this document. What the table does NOT contain is the fact-check gate:
-it runs before every pass above the scan tier, over a diff or a plan, and it is not configurable.
+changes - not a sentence in this document. What the table does NOT contain is the fact-check gate -
+it runs before every pass above the scan tier, over a diff or a plan - nor the plan gate, which
+keeps a plan-class pass from starting without its readiness artifacts (§ Plan readiness review);
+neither is configurable.
 
 Not configurable, and enforced here regardless of the project:
 
+- **A plan-class pass does not start without its readiness artifacts** - the consequence scan and
+  the COO's own pass, files the brief names (§ Plan readiness review).
 - **Only the operator lifts the correction-round cap.** After the cap without a passable result,
   stop and summarize to the operator. A round beyond the cap requires an explicit word in chat
   *before* the re-dispatch, granted one extension at a time and recorded in the ticket's PLAN
@@ -383,10 +389,26 @@ consumer the draft had never opened, an adjacent contract that had to move with 
 each of them was a grep away. A paid pass that discovers them buys at the most expensive tier what
 the cheapest one proves.
 
-**The COO's own pass comes first, and it is not one of the counted ones.** The own pass reads the
+**A decision is also read from the tree's side.** The behavior ledger and the fact-check gate read
+what the plan SAYS; neither can find a rule the plan never wrote down. Before every paid readiness
+pass, one scan-tier agent per ticket (`/pnp:review` Step 2c) takes every decision, invariant and
+risk-threshold line of the ticket and searches the tree for a surface that can VIOLATE it - a
+screen, an action, a query, an import, a bulk path, another command - and for every other path that
+writes what the plan locks. Each finding is one numbered row in a file, and the COO closes every row
+before the pass: a plan change, or a reason the surface is no defect. Before every further readiness
+pass the scan runs again over the decisions the revision changed or added, because the revision is
+where new surface is born (`docs/READINESS_CLASSES.md` class 14). Measured on a consumer: five
+consecutive plans returned 10 to 13 author-side blockers on pass 1 with the behavior ledger and the
+per-claim fact-check already applied, and those blockers were mostly missing rules rather than false
+claims; one scan over one revised plan returned 102 rows, 4 of them critical defects the revision
+itself had introduced. Its suppression dual is the behavior ledger's: owed exactly when the ledger
+is owed, and small R1 and non-durable R2 work owe nothing.
+
+**The COO's own pass comes before every counted pass, and it is not one of them.** The own pass reads the
 behavior ledger (`/pnp:review` Step 2a) - what each link does with the plan's input, read by a
-second context - not the pointers alone. Once the draft is "finished", the COO re-reads it in a
-SEPARATE turn against the six readiness checks below, before any auditor is dispatched: every
+second context - not the pointers alone. It is the LAST act over the plan before an auditor is
+dispatched - after the consequence scan and the fact-check gate are closed - and the COO does it in
+a SEPARATE turn against the six readiness checks below: every
 `file:line` opened, every command executable on the OS channel the plan records and run on the real
 tree, never on a stub (an instrument proven on a stub has not been made to fail where it will run -
 tripwire 4 of § COO owns broad scans), not one "if the Writer finds ...", every promise of a
@@ -402,6 +424,24 @@ that introduced the audit table, the first readiness pass returned 10 blockers o
 author's own (shortcuts, a decision left open, code not read), and the pass after it returned 14, of
 which 11 had been visible in the first. A paid pass verifies decisions; precision is paid for on the
 COO's own account.
+
+**The own pass leaves a file, and a plan-class pass does not start without it.** A rule the
+operator would have to read artifacts to enforce is not enforced: on the same consumer the own pass
+was skipped or folded into the writing flow in five readiness cycles out of five, and the one time
+it was forced into a turn of its own it found 14 author blockers on a plan already revised twice. So
+the own pass is written down (`/pnp:review` Step 2d): one row per audited ticket against the six
+checks, every instrument with what it returns on valid and on broken input, a `BLOCKERS FOUND:`
+count, and the SHA-256 of the plan file it read. The readiness brief names the plan, the audited
+tickets, the consequence scan and the own pass on fixed lines, and `scripts/engine/plan-gate.js`
+checks them before the pass is spent - the Codex review wrapper refuses a plan-class run (exit 2),
+by its class flag or by the brief's `Class: plan` line, and Gate 2 denies a Claude reviewer dispatch
+whose brief carries that line - when a file is
+missing, a scan row is open, an audited ticket has no row, an instrument returns the same on broken
+input as on valid, or the plan changed after the own pass was stamped. Its honest limit, in the same
+breath: the gate proves presence, shape and that the own pass was stamped over the plan file the
+brief names; it cannot prove the pass was good, that it ran in a turn of its own, or that a pass N+1
+scan covered the revision - and at `review.plan.passes: 0` nothing is dispatched, so there the duty
+stays doctrine.
 
 **The PROCESS gets its own dry run, and it is the half the fact-check gate
 can read but cannot walk.** The pass above reads what the plan SAYS; this one walks what executing
@@ -439,8 +479,8 @@ remember it.
 That numbered pair is the factory-2 illustration, not the contract - and the second of the two is
 already a pass the operator is asked for. At `review.plan.passes: 3` one further configured pass
 is available on a word of its own; at `1` only the first runs; at `0` the plan gets no auditor at
-all and the COO's own pass over the behavior ledger plus the fact-check gate is the whole
-contract - a configuration `/pnp:roles` prints as `no auditor`, never a shortcut taken silently.
+all and the consequence scan, the fact-check gate and the COO's own pass over the behavior ledger
+are the whole contract - a configuration `/pnp:roles` prints as `no auditor`, never a shortcut taken silently.
 
 Only once the CONFIGURED passes are exhausted and blockers remain may the COO revise once more and -
 with the **operator's explicit permission**, requested before dispatch - run one final extra pass. A
