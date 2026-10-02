@@ -39,6 +39,35 @@ PLAN_HARD (чака дума), а правилото за `.aiwf/` в § Workspa
 PLAN_DRAFTS). Под `.aiwf` е решимо по префикс без git; „друг игнориран път“ иска `git check-ignore`.
 Нов observation (наблюдение, не проверка) + един warn в интервюто — отделен тикет, когато дойде.
 
+## От readiness цикъла на Silerax PLAN_PUR v3 (роден 2026-10-02, доклад на сесия „Silerax PLAN_PUR Rediness 2b“ по операторска дума „прати на ПНП за мнение“; операторът още не е решил)
+
+Кандидати без ref, за 0.2.17 (0.2.16 = DRAFTS-001 е одобрен и затворен по обхват). Докладът: PUR v3
+(5 тикета, 1276 реда) — пас 1 NEEDS-FIX 11 (4 дизайн/гонки, 2 отхвърлени „приети остатъци“, 4
+прецизности, 1 продуктов), пас 2 NEEDS-FIX 7 (3 незатворени + 4 родени от ревизията), ревизия 3 без
+пас по операторско решение; own pass-ът в отделен ход хвана 12 + 2 авторски дефекта преди пасовете;
+цена 400k Codex + ~1,3M sonnet + 2 COO сесии. Авторските блокери на пас 1 при Silerax: RST 11 → TAL 10
+→ LIV 11 → PUR v1 12 → TRF 13 → PUR v3 11 — броят не пада с 0.2.15, класът се мести (указатели/
+acceptance → дизайн/concurrency). При PnP: RGATE 9 → DRAFTS 5.
+- **Behavior ledger (Step 2a) + consequence scan (Step 2c) = един агент на тикет** с два вида редове
+  (какво ПРАВИ веригата / какво НАРУШАВА решение) — спестява един диспач на тикет; гейтът чете scan
+  файла, затова артефактите остават два файла или един с две заглавия — дизайнът е на кандидата.
+  Домове: `skills/review/SKILL.md` Step 2a/2c, `templates/ORCHESTRATOR.md.tmpl` § Behavior ledger duty.
+- **Старт→стоп двойката става незадължителна в payload-а** — `templates/PNP_CANDIDATES.md.tmpl` §
+  Pass statistics и `docs/WORKFLOW.md` § The transfer surface още искат „the start/stop pair the
+  operator read off the host“; тук е операторско правило от 2026-10-02, че не се иска. Docs-class.
+- **Нов readiness клас: lock/concurrency решение, оставено като „приет остатък“** — одиторът не го
+  приема (PUR пас 2: 2 от 4 нови блокера); `docs/READINESS_CLASSES.md` + един ред в шестте проверки
+  на own pass-а („за всеки запис — кой lock, какво върви паралелно“).
+- **Гейтът назовава граматиката на затварянето в отказа си** — `plan:` / `no defect:` само;
+  `accepted:`, `none`, `plan (r4):` са отворени редове (ухапа и двата консуматора, и PnP — 40 от 62
+  реда нормализирани преди пас 1); `scripts/engine/plan-gate.js` съобщението + Step 2c с удебелен ред.
+- **Step 2d „every file:line opened“ — от кого:** указателите са работа на fact-check гейта; own
+  pass-ът отваря онова, по което Колегата ДЕЙСТВА, и чете ledger редовете (Silerax: 629 отворени от
+  агенти в own pass-а, 4 FALSE след fact-check — нулев добив). Едно изречение в Step 2d.
+Отхвърлено от PnP (мнение, не решение): сливане на делта скана и делта fact-check-а в един агент —
+двата договора са различни (повърхност срещу твърдения; fact-check-ът забранява sampling) и при
+PLAN_DRAFTS всеки рунд намираха различни неща; спестяването е да вървят ПАРАЛЕЛНО, както тук.
+
 ## ГЛАВЕН ПРИОРИТЕТ — топъл пас с компенсациите по-скъп ли е от студен? (роден 2026-09-24, операторска дума)
 
 Кандидат без ref. Readiness цикълът на HARD-019+018 (`gpt-6-sol`/xhigh) даде 138,441 токена за
@@ -684,4 +713,5 @@ xhigh) излиза по-скъп от студен. Решава се само 
 
 | 2026-09-16 | PLAN_CONS одобрен — пълните решения/фрази живеят в dev/backlogs/active/PLAN_CONS.md; дизайн авторитетът в dev/backlogs/CONSOLIDATION_2026-09-16.md | **[дописано 2026-09-21: планът е архивиран, сега е `dev/backlogs/archive/005_PLAN_CONS_2026-09-21.md`. Редът е датиран лог и пътят в него е бил верен, когато е писан — затова се дописва, а не се пренаписва.]** |
 | 2026-09-17 | VERIFY кадансът паралелен (операторска дума) + pre-dispatch checklist — домовете: PLAN_CONS хедърът; памет machine-constraints-verify-runs |
+| 2026-10-02 | Release order: tag locally + main and the tag in ONE push, CI after, standing until revoked (operator rule, „да за правилото“) — home: `dev/PROJECT_OVERRIDES.md` § Hard rules Release discipline + § Test policy; PLAN_DRAFTS trace step 2 carries a one-line note; the RGATE record's „proposed text awaits guard (g)“ is closed by this row |
 | 2026-10-02 | PLAN_DRAFTS одобрен — черновите и readiness историята под `plansDir` (`drafts/`, `readiness/<ABBR>/`), scratchDir само за живата механика и за единствения Gate 3 случай; домът на правилото в payload-а: `skills/review/SKILL.md` Step 2e + `docs/WORKFLOW.md` (след DRAFTS-001); за това репо: блок P в `dev/backlogs/active/PLAN_DRAFTS.md` → `dev/PROJECT_OVERRIDES.md` § Workspace paths (пише го Колегата с DRAFTS-001; замества текста на HARD-023 § „Правилото“) |

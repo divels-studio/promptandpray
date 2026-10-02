@@ -73,13 +73,16 @@ PromptAndPray is **not**:
 - **Release discipline.** A managed artifact (anything `templates/` renders, the ask-ruleset, the
   managed `CLAUDE.md` region) never changes silently: the change ships as a migration under
   `migrations/NNNN_<slug>/` + a `version` bump in `.claude-plugin/plugin.json` + a `CHANGELOG.md`
-  block. The tag is a separate operator word, and it covers pushing the tag; pushing `main` stays its
-  own word. A consumer project picks the new version up only through `/plugin update` +
-  `/pnp:update` - that path is the product; a version is
-  called released when CI is green on the pushed commit, and a consumer proves it on its own next
-  update. A prose-only release (docs/, skills/) is the version bump, the CHANGELOG block and a
-  note-only migration - nothing else runs locally; the tag follows a green CI on `main` (commit
-  click -> push main -> CI green -> tag word -> push tag on the same word).
+  block. The tag is created LOCALLY on the record commit and pushed WITH `main` in ONE push - two
+  words (the tag word, the push word), one dialog; CI is not waited for (operator rule 2026-10-02,
+  standing until the operator revokes it: every consumer is Windows today and the local self-check
+  is the proof). A consumer project picks the new version up only through `/plugin update` +
+  `/pnp:update` - that path is the product; a version is called released when that push lands; CI
+  runs on the pushed commit afterwards, and a red POSIX leg is a defect ticket, not a release
+  block; a consumer proves the version on its own next update. A prose-only release (docs/,
+  skills/) is the version bump, the CHANGELOG block and a note-only migration - nothing else runs
+  locally (commit click -> tag word -> tag locally -> push word -> main + tag in one push -> CI
+  after).
 - **Provenance.** `git grep -nP "[\x{0400}-\x{04FF}]" -- docs skills templates scripts schema hooks
   migrations` is empty before every commit - for a prose-only diff that grep IS the gate; the
   self-check's provenance section (origin names as digests, e-mail, Cyrillic by code point,
@@ -197,9 +200,9 @@ break, and the brief names them:
   `example-cycle-windows`, `selfcheck`;
 - hooks / gates -> `selfcheck`, `spikes`;
 - docs / skills prose -> `validate-payload` + the provenance grep (`git grep -nP "[\x{0400}-\x{04FF}]" -- docs skills templates scripts schema hooks migrations examples README.md`); `selfcheck` only when the diff also touches `scripts/`, `hooks/`, `templates/` or `schema/`.
-A diff that spans several rows runs their union. CI runs the full set on the pushed commit; the tag lands only on a commit CI has proven green on `windows` and `ubuntu` - nothing beyond the ticket's own row runs locally (HARD-021, 2026-09-28).
+A diff that spans several rows runs their union. CI runs the full set on the pushed commit; the tag goes out with `main` in one push, and CI proves the pushed commit AFTER the fact on `windows` and `ubuntu` (operator rule 2026-10-02, § Hard rules Release discipline - it supersedes HARD-021's tag-after-green-CI) - nothing beyond the ticket's own row runs locally (HARD-021, 2026-09-28).
 
-**NOT A GATE since 2026-09-28 (HARD-021; operator word the same day): CI is the POSIX proof before a tag, and the Portion 2 (WSL) paragraphs below never run as a release condition. They stay as the LOCAL REPRODUCTION path: when a POSIX CI leg goes red, WSL is how the failure is reproduced and diagnosed on this machine instead of blind from CI logs.**
+**NOT A GATE since 2026-09-28 (HARD-021; operator word the same day): CI is the POSIX proof after the push (since 2026-10-02 the tag no longer waits for it), and the Portion 2 (WSL) paragraphs below never run as a release condition. They stay as the LOCAL REPRODUCTION path: when a POSIX CI leg goes red, WSL is how the failure is reproduced and diagnosed on this machine instead of blind from CI logs.**
 **VERIFY runs in PORTIONS, each portion ONE PARALLEL batch** (operator words 2026-09-17 and
 2026-09-19). Portion 1: the eight Windows commands above as one parallel batch (~10.4 min wall
 measured). Portion 2: the POSIX suites under WSL (non-root user `pnp`) as their own batch, AFTER the

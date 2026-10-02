@@ -322,4 +322,11 @@ Hashes (D3 - the only difference between them is the approval note):
 
 Docs commit: the plan, `readiness/DRAFTS/` (9 files - the first readiness history in git),
 CANDIDATES rows (pointer, candidate, three pass rows, two event rows, one D2 pointer row) and the
-three HARD-023 pointer lines in PLAN_HARD.
+three HARD-023 pointer lines in PLAN_HARD - commit `c0dc0cc`.
+
+Post-landing edit (2026-10-02, same session): the operator changed the release rule by guard (g)
+("да за правилото" - tag locally + main and the tag in one push, CI after; home
+`dev/PROJECT_OVERRIDES.md` § Release discipline + § Test policy, D2 pointer row in CANDIDATES); the
+plan's trace step 2 gained a one-line bracketed note saying execution follows the new text. The
+active plan's hash after that note: `5a63c52bb44782b951df5a399d64494ab336a3dbd14588f0b6bb6f9b8b1e8c84`
+(the difference from the landed hash above is that note alone; the audited text is unchanged).
