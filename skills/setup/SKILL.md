@@ -84,7 +84,8 @@ Three constraints worth stating before the operator answers:
   an exact id is pinned in the rendered agent's frontmatter and the dispatch omits `model`. A
   claude-hosted review row shares the ONE reviewer agent file, so it takes a tier alias or exactly
   the Reviewer's own model;
-- `paths.plansDir` is the **parent** of `active/` and `archive/`; setup creates both;
+- `paths.plansDir` is the **parent** of `active/`, `archive/`, `drafts/` and `readiness/`; setup
+  creates all four;
 - `enforcement.dispatchGate` has exactly two values. `always` (the factory one) raises the Yes/No
   dialog on **every** Writer dispatch. `off-plan` raises it only when the brief's `Ticket: <REF>`
   line names no ticket in `<plansDir>/active/PLAN_*.md` - quieter, and it only means anything in a

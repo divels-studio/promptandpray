@@ -275,9 +275,18 @@ templates/          what /pnp:setup renders into a project (managed artifacts; a
 scripts/            engine (hooks lib), setup, update, selfcheck, spike, ci, native/{ps,sh} wrappers
 schema/ migrations/ config authority; ordered payload migrations
 examples/           the committed example project + cycle data (payload; asserted by the self-check)
-dev/                the plugin's OWN development: this doc, answers.json, backlogs/{active,archive}
+dev/                the plugin's OWN development: this doc, answers.json, backlogs/{active,archive,drafts,readiness}
 .claude/ CLAUDE.md  the self-install (project layer rendered by /pnp:setup from dev/answers.json)
-.aiwf/              scratch (gitignored): route-state.json, review-brief.txt
+.aiwf/              scratch (gitignored): ONLY the live loop mechanics - route-state.json,
+                    review-brief.txt, last-review-session.txt - and the artifacts of the CURRENT
+                    ticket or readiness cycle. A plan draft lives in
+                    dev/backlogs/drafts/PLAN_<ABBR>.draft.md and leaves when the plan lands; the
+                    readiness history (ledger, consequence scan, own pass, fact-check, revisions)
+                    lands in dev/backlogs/readiness/<ABBR>/ with the plan's docs commit; an approved
+                    plan has no copy in .aiwf/. A readiness artifact is written to .aiwf/plan/<ABBR>/
+                    only while Gate 3 holds the main session out of dev/backlogs (an open R2/R3
+                    route) and moves to readiness/<ABBR>/ at the landing (/pnp:review Step 2e). A
+                    session that does not hold the tree writes nothing here (WORKFLOW § Branch policy).
 ```
 
 Default integration/base branch: `main`. It is not the only allowed
@@ -321,5 +330,6 @@ Routing (R1/R2/R3), the four roles, the ticket-brief contract, and commit/push m
 in the plugin payload - `docs/WORKFLOW.md`, with the one-page native mapping in `docs/LOOP.md`
 and the verdict rules in `docs/REVIEW_CHECKLIST.md`, all of them under the installed plugin root,
 not in this repository. Durable knowledge lives in Git under
-`dev/backlogs/active/` (finished plans move to `dev/backlogs/archive/`);
+`dev/backlogs/active/` (a draft under `drafts/` until it lands, its readiness history
+under `readiness/<ABBR>/`; finished plans move to `dev/backlogs/archive/`);
 live process state lives in the in-session orchestration.

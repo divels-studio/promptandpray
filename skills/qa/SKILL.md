@@ -111,7 +111,8 @@ Why the two flags (do not drop them):
 - **`--trace on`** - a typical repo config traces only on retry, and with zero local retries a
   *passing* run would leave **zero** traces, so QA would self-`BLOCKED`. `on` forces a `trace.zip`
   for every test.
-- **`--output {{config.verify.e2e.outputDir}}`** - pins the artifact dir to a known, gitignored path.
+- **`--output {{config.verify.e2e.outputDir}}`** - pins the artifact dir to a known path the
+  project's own `.gitignore` keeps out of git (setup writes no ignore entry).
 
 **Guaranteed artifacts** (before extraction):
 - the JSON report, **always** (config reporter);
@@ -308,10 +309,10 @@ A `-Resume` against a state file the wrapper cannot write is refused (exit 2) fo
 
 The block of this project's OS channel is the **only canonical wrapper path** - PowerShell on os
 `windows`, bash on os `linux`/`macos` (same foreign-shell caveat as `/pnp:review`, and the same
-rule: the channels are mirrors, never alternatives). `{{config.paths.scratchDir}}` is gitignored, so
-the brief never enters a commit. Never delete it afterwards - `rm` is an `ask` rule and cleanup
-would pop the very dialog this
-arrangement removes; the next dispatch overwrites the file.
+rule: the channels are mirrors, never alternatives). `{{config.paths.scratchDir}}` is kept out of
+git by the project's own `.gitignore` (setup writes no ignore entry), so the brief never enters a
+commit. Never delete it afterwards - `rm` is an `ask` rule and cleanup would pop the very dialog
+this arrangement removes; the next dispatch overwrites the file.
 
 ### claude branch (`$role.engine -eq 'claude'`) - dispatch the qa subagent
 

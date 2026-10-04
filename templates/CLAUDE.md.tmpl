@@ -121,8 +121,9 @@ for the full model.
   mandatory, and a silent inline substitution is a route violation equal to a failed review. Full
   text: payload `docs/WORKFLOW.md` § "COO owns broad scans".
 - **An approved plan lands in the repo immediately; a finished plan is archived immediately.** At
-  the moment of approval the plan is copied into `{{config.paths.plansDir}}/active/`; the moment
-  every ticket in it is closed with its completion record, it is moved to
+  the moment of approval the plan lands in `{{config.paths.plansDir}}/active/`
+  (moved there from its draft under `drafts/`); the moment every ticket in it is closed with its
+  completion record, it is moved to
   `{{config.paths.plansDir}}/archive/` - same session, unprompted, in both directions. The
   irreversible half of a closeout (changelog block, version bump, tag) stays gated and does NOT
   travel with the archiving. Full text: payload `docs/WORKFLOW.md` § "Operator-interaction guards" and

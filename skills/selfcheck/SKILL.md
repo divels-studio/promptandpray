@@ -41,7 +41,10 @@ Exit 0 = every assertion held. Exit 1 = at least one failed. Exit 2 = the run co
 
 - `[PASS] / [FAIL]` are assertions that really ran.
 - `[NOTE]` is a branch this run could not exercise (an empty owned-rule list, a codex-hosted role
-  with no agent frontmatter to compare). A NOTE is deliberately **not** counted as a pass.
+  with no agent frontmatter to compare). A NOTE is deliberately **not** counted as a pass. The three
+  project-layer rows whose name carries `(observed)` are observations instead: facts about the
+  inspected project the self-check reports and never counts, with no control because nothing in
+  them can fail.
 - The **NEGATIVE CONTROLS** section breaks a throwaway copy of a synthetic fixture and requires each
   project-layer check to actually fail. A check that cannot fail is not a check.
 

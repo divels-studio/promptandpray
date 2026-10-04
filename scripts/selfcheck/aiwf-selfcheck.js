@@ -5096,12 +5096,41 @@ function sectionRolesCommand(tmpRoot, pluginVersion) {
 // Each entry is { id, name, ok, detail, note }. `id` is a STABLE key that never embeds a configured
 // value, so the negative controls can target a check without hardcoding fixture data. `note: true`
 // means "this run could not exercise the branch" - it is neither a pass nor a failure, and a
-// negative control may not target it. The caller decides whether a failure is a failure (normal run)
-// or the expected outcome (negative control).
+// negative control may not target it. `observation: true` (always with `note: true`) is a fact
+// OBSERVED about the project that asserts nothing - printed through observation(), never counted,
+// and outside the negative controls by construction, because nothing in it can fail. The caller
+// decides whether a failure is a failure (normal run) or the expected outcome (negative control).
+//
+// Whether git ignores the scratch directory, as one of four fixed texts. `git check-ignore -q`
+// answers from EVERY ignore source (the global core.excludesFile, .git/info/exclude, .gitignore),
+// which is why the positive text says "ignored by git" rather than naming .gitignore (the negative
+// text names .gitignore as the place to add the entry). `gitArgs` precede the subcommand (the
+// fixtures neutralise the machine's global excludes with them; the real observation passes none);
+// `env`, when given, replaces the inherited environment of the spawn (the fixtures use it to keep
+// the host's system and global git config out). A host with no git, a directory that is not a work
+// tree, or a git that refuses (dubious ownership) is the "git gave no answer" text - never a
+// failure. A git that hangs is cut off after the timeout and reads as "git gave no answer".
+//
+// Every synchronous git spawn of the drafts observations runs under this budget - the same value
+// the bash probe uses (BASH_PROBE_TIMEOUT_MS). On a timeout spawnSync reports error.code ETIMEDOUT.
+const GIT_SPAWN_TIMEOUT_MS = 15000;
+// The GIT_* variables that redirect the repository or inject configuration, matched without regard
+// to case - Windows environment names have none. The drafts fixtures strip every one of them from
+// their spawn environment, so no host git input reaches the fixture.
+const GIT_HOST_ENV_RE = /^GIT_(DIR|WORK_TREE|INDEX_FILE|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|COMMON_DIR|CEILING_DIRECTORIES|NAMESPACE|DISCOVERY_ACROSS_FILESYSTEM|TEMPLATE_DIR|CONFIG_COUNT|CONFIG_PARAMETERS|CONFIG_KEY_\d+|CONFIG_VALUE_\d+|CONFIG_GLOBAL|CONFIG_SYSTEM|CONFIG_NOSYSTEM)$/i;
+function scratchIgnored(projectRoot, scratchDir, gitArgs = [], env = undefined) {
+  if (!fs.existsSync(path.join(projectRoot, scratchDir))) return 'not present - nothing to check';
+  const r = spawnSync('git', [...gitArgs, 'check-ignore', '-q', scratchDir], { cwd: projectRoot, encoding: 'utf8', env, timeout: GIT_SPAWN_TIMEOUT_MS });
+  if (!r.error && r.status === 0) return 'ignored by git';
+  if (!r.error && r.status === 1) return `NOT ignored by git - add ${scratchDir}/ to .gitignore`;
+  return 'git gave no answer (not a work tree, git not found, or git refused)';
+}
+
 function projectLayerFindings(projectRoot, pluginRoot, opts) {
   const out = [];
   const add = (id, name, ok, detail) => out.push({ id, name, ok: !!ok, detail: detail || '', note: false });
   const addNote = (id, name, why) => out.push({ id, name, ok: true, detail: why || '', note: true });
+  const addObservation = (id, name, text) => out.push({ id, name, ok: true, note: true, observation: true, detail: text });
   const selfAuthored = !!(opts && opts.selfAuthored);
 
   const cfgPath = path.join(projectRoot, '.claude', 'aiwf-native', 'aiwf.config.json');
@@ -5413,16 +5442,29 @@ function projectLayerFindings(projectRoot, pluginRoot, opts) {
     typeof paths.scratchDir === 'string' && fs.existsSync(path.join(projectRoot, paths.scratchDir)), String(paths.scratchDir));
   add('path-plans', 'paths.plansDir exists in the project',
     typeof paths.plansDir === 'string' && fs.existsSync(path.join(projectRoot, paths.plansDir)), String(paths.plansDir));
-  // plansDir is the PARENT of active/ and archive/: a plan ENTERS the repo into active/ and LEAVES
-  // into archive/ when every ticket is closed. A plansDir with no active/ means every consumer that
-  // globs `<plansDir>/active/PLAN_*.md` silently finds nothing.
-  add('plans-active-subdir', 'paths.plansDir contains the active/ subdirectory (plansDir is the parent of active/ and archive/)',
+  // plansDir is the PARENT of active/, archive/, drafts/ and readiness/: a plan ENTERS the repo
+  // into active/ and LEAVES into archive/ when every ticket is closed. A plansDir with no active/
+  // means every consumer that globs `<plansDir>/active/PLAN_*.md` silently finds nothing.
+  add('plans-active-subdir', 'paths.plansDir contains the active/ subdirectory (plansDir is the parent of active/, archive/, drafts/ and readiness/)',
     typeof paths.plansDir === 'string' && fs.existsSync(path.join(projectRoot, paths.plansDir, 'active')),
     `${paths.plansDir}/active`);
+  // drafts/ and readiness/ are OBSERVED, never required: setup creates them on a new install, an
+  // older installation creates them on first use (no update creates directories), and git keeps no
+  // empty directory - so their absence is a legitimate state, not a failure.
+  for (const [id, sub] of [['plans-drafts-subdir', 'drafts'], ['plans-readiness-subdir', 'readiness']]) {
+    addObservation(id, `plans ${sub}/ (observed)`,
+      typeof paths.plansDir !== 'string' ? 'config paths unusable - nothing to observe'
+        : fs.existsSync(path.join(projectRoot, paths.plansDir, sub)) ? 'present'
+          : 'not created yet - created on first use, or by /pnp:setup on a new install');
+  }
   // The route-state guard resolves `.aiwf/route-state.json` literally, so a project that moves its
   // scratch directory elsewhere would arm a guard nobody writes to.
   add('scratch-is-aiwf', 'paths.scratchDir is ".aiwf" (the route-state guard resolves that path literally in v0.1)',
     paths.scratchDir === '.aiwf', String(paths.scratchDir));
+  // The project's own ignore rules keep the scratch directory out of git; setup writes no ignore
+  // entry. Observed, never failed: the project is within its rights either way.
+  addObservation('scratch-ignored', 'scratchDir ignored by git (observed)',
+    typeof paths.scratchDir !== 'string' ? 'config paths unusable - nothing to observe' : scratchIgnored(projectRoot, paths.scratchDir));
 
   // --- the transfer surface is OUTSIDE the managed set ------------------------------------------
   // Setup seeds it ONCE and then it is the operator's: no bookkeeping record, no `--resolve` address,
@@ -5463,14 +5505,155 @@ function projectLayerFindings(projectRoot, pluginRoot, opts) {
   return out;
 }
 
+// Which of the three global printers a project-layer finding goes through. Each printer keeps its
+// OWN account - `observations`, `notes`, `results` - so the choice is what matters, and it lives in
+// one pure function the drafts fixtures can hold to each kind.
+function printerFor(f) {
+  return f.observation ? 'observation' : f.note ? 'note' : 'check';
+}
+
 function sectionProjectLayer(projectRoot, selfAuthored) {
   section(`PROJECT LAYER - ownership, rendered artifacts, bookkeeping${selfAuthored ? '  [fixture: authored by this run]' : ''}`);
   const findings = projectLayerFindings(projectRoot, PLUGIN_ROOT, { selfAuthored });
   for (const f of findings) {
-    if (f.note) { note(f.name, f.detail); continue; }
+    const printer = printerFor(f);
+    if (printer === 'observation') { observation(f.name, f.detail); continue; }
+    if (printer === 'note') { note(f.name, f.detail); continue; }
     check(`${f.name}${selfAuthored ? ' [fixture]' : ''}`, f.ok, f.detail);
   }
   return findings;
+}
+
+// The three (observed) project-layer rows assert nothing, so no negative control can target them -
+// what CAN fail is their text and their printer. Four fixtures flip the text (S1<->S2 for the two
+// directories, S3<->S4 for the ignore observation), S5 holds printerFor to each kind, and S6 runs
+// the REAL sectionProjectLayer over S1 and S2 with console.log captured and reads the printed
+// lines. The fixture facts are trimmed back out of results/notes/observations afterwards, so they
+// never reach the tally, NOT EXERCISED or OBSERVED ON THE INSPECTED PROJECT.
+function sectionDraftsObservations(tmpRoot) {
+  section('PROJECT LAYER OBSERVATIONS - drafts/, readiness/ and the ignored scratch directory (own fixtures)');
+  const pj = readJson(path.join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json'));
+  const pluginVersion = (pj && pj.version) || '0.0.0';
+  const byId = (root, id) => projectLayerFindings(root, PLUGIN_ROOT, { selfAuthored: true }).find((f) => f.id === id) || {};
+
+  // S1: the writeFixture base plus docs/backlogs/drafts and docs/backlogs/readiness. S2: the base
+  // unchanged (it carries docs/backlogs/active and .aiwf, and neither of the two).
+  const s1 = path.join(tmpRoot, 'drafts-s1');
+  const s2 = path.join(tmpRoot, 'drafts-s2');
+  for (const root of [s1, s2]) { fs.mkdirSync(root, { recursive: true }); writeFixture(root, pluginVersion); }
+  fs.mkdirSync(path.join(s1, 'docs', 'backlogs', 'drafts'), { recursive: true });
+  fs.mkdirSync(path.join(s1, 'docs', 'backlogs', 'readiness'), { recursive: true });
+
+  const s1d = byId(s1, 'plans-drafts-subdir');
+  const s1r = byId(s1, 'plans-readiness-subdir');
+  check('[drafts-S1] drafts/ and readiness/ present -> both observations say "present"',
+    s1d.detail === 'present' && s1r.detail === 'present', `drafts="${s1d.detail}" readiness="${s1r.detail}"`);
+  const s2d = byId(s2, 'plans-drafts-subdir');
+  const s2r = byId(s2, 'plans-readiness-subdir');
+  check('[drafts-S2] drafts/ and readiness/ absent -> both observations say "not created yet"',
+    String(s2d.detail).startsWith('not created yet') && String(s2r.detail).startsWith('not created yet'),
+    `drafts="${s2d.detail}" readiness="${s2r.detail}"`);
+
+  // S3/S4: real git repositories. The fixtures are created BEFORE the probe is read, so a missing
+  // fixture directory is a FAIL of S3, never the no-git reserve. In every fixture spawn, every
+  // GIT_* variable that redirects the repository or injects configuration is removed, templates are
+  // disabled (`git init --template=`), and system/global config is switched off; the check-ignore
+  // call also gets an empty core.excludesFile - the default excludes file is not a config entry, so
+  // the env alone would not keep it out.
+  const s3 = path.join(tmpRoot, 'drafts-s3');
+  const s4 = path.join(tmpRoot, 'drafts-s4');
+  for (const root of [s3, s4]) {
+    fs.mkdirSync(path.join(root, '.aiwf'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'empty-git-file'), '');
+  }
+  // The ONE named reserve: a host with no git binary at all. The probe runs WITHOUT cwd, because a
+  // missing cwd also yields ENOENT. Any other error (EACCES, EPERM) is a broken host and stays a
+  // FAIL.
+  const probe = spawnSync('git', ['--version'], { encoding: 'utf8', timeout: GIT_SPAWN_TIMEOUT_MS });
+  if (probe.error && probe.error.code === 'ENOENT') {
+    note('[drafts-S3]', 'git is not on PATH');
+    note('[drafts-S4]', 'git is not on PATH');
+  } else {
+    const ignoreCase = (root, withGitignore) => {
+      const empty = path.join(root, 'empty-git-file');
+      const env = { ...process.env };
+      for (const k of Object.keys(env)) if (GIT_HOST_ENV_RE.test(k)) delete env[k];
+      env.GIT_CONFIG_NOSYSTEM = '1';
+      env.GIT_CONFIG_GLOBAL = empty;
+      const gitArgs = ['-c', `core.excludesFile=${empty}`];
+      const init = spawnSync('git', ['init', '-q', '--template='], { cwd: root, encoding: 'utf8', env, timeout: GIT_SPAWN_TIMEOUT_MS });
+      if (withGitignore) fs.writeFileSync(path.join(root, '.gitignore'), '.aiwf/\n');
+      const text = scratchIgnored(root, '.aiwf', gitArgs, env);
+      const diag = `git init: status=${init.status}${init.error ? ` error=${init.error.code || init.error.message}` : ''}; text="${text}"`;
+      return { init, text, diag, gitArgs, env };
+    };
+    const c3 = ignoreCase(s3, true);
+    const ok3 = !c3.init.error && c3.init.status === 0 && c3.text === 'ignored by git';
+    if (!ok3) {
+      const r = spawnSync('git', [...c3.gitArgs, 'check-ignore', '-q', '.aiwf'], { cwd: s3, encoding: 'utf8', env: c3.env, timeout: GIT_SPAWN_TIMEOUT_MS });
+      c3.diag += `; check-ignore: status=${r.status}${r.error ? ` error=${r.error.code || r.error.message}` : ''}`;
+    }
+    check('[drafts-S3] a git repository whose .gitignore carries .aiwf/ -> "ignored by git"', ok3, c3.diag);
+    const c4 = ignoreCase(s4, false);
+    const ok4 = !c4.init.error && c4.init.status === 0 && c4.text.startsWith('NOT ignored by git');
+    if (!ok4) {
+      const r = spawnSync('git', [...c4.gitArgs, 'check-ignore', '-q', '.aiwf'], { cwd: s4, encoding: 'utf8', env: c4.env, timeout: GIT_SPAWN_TIMEOUT_MS });
+      c4.diag += `; check-ignore: status=${r.status}${r.error ? ` error=${r.error.code || r.error.message}` : ''}`;
+    }
+    check('[drafts-S4] the same repository with no .gitignore -> "NOT ignored by git"', ok4, c4.diag);
+  }
+
+  // S5: the printer choice, on one finding of each kind (version-stamp is an addNote on a
+  // self-authored fixture, config-parses an add).
+  const p1 = printerFor(s1d);
+  const p2 = printerFor(byId(s1, 'version-stamp'));
+  const p3 = printerFor(byId(s1, 'config-parses'));
+  check('[drafts-S5] printerFor tells the three kinds apart: observation / note / check',
+    p1 === 'observation' && p2 === 'note' && p3 === 'check', `${p1} / ${p2} / ${p3}`);
+
+  // S6: the real printing path. console.log is swapped for a collector for the duration of each
+  // call; the three accounts and currentSection are snapshotted before and restored in `finally`.
+  const captured = (root) => {
+    const lines = [];
+    const before = { r: results.length, n: notes.length, o: observations.length, s: currentSection };
+    const original = console.log;
+    let grew = null;
+    let error = null;
+    console.log = (...args) => { lines.push(util.format(...args)); };
+    try {
+      sectionProjectLayer(root, true);
+      grew = observations.length - before.o;
+    } catch (e) {
+      error = e;
+    } finally {
+      console.log = original;
+      results.length = before.r;
+      notes.length = before.n;
+      observations.length = before.o;
+      currentSection = before.s;
+    }
+    return { lines: lines.join('\n').split('\n'), grew, error };
+  };
+  const o1 = captured(s1);
+  const o2 = captured(s2);
+  const problems = [];
+  const has = (o, line, tag) => { if (!o.lines.includes(line)) problems.push(`${tag} lacks "${line.trim()}"`); };
+  has(o1, '  [NOTE] plans drafts/ (observed) - present', 'S1');
+  has(o1, '  [NOTE] plans readiness/ (observed) - present', 'S1');
+  has(o2, '  [NOTE] plans drafts/ (observed) - not created yet - created on first use, or by /pnp:setup on a new install', 'S2');
+  has(o2, '  [NOTE] plans readiness/ (observed) - not created yet - created on first use, or by /pnp:setup on a new install', 'S2');
+  for (const [tag, o] of [['S1', o1], ['S2', o2]]) {
+    if (o.error) problems.push(`${tag} threw: ${describeThrowable(o.error).headline}`);
+    const scratchRows = o.lines.filter((l) => l.startsWith('  [NOTE] scratchDir ignored by git (observed) - ')).length;
+    if (scratchRows !== 1) problems.push(`${tag} has ${scratchRows} scratch observation row(s), not 1`);
+    const notExercised = o.lines.filter((l) => l.includes('(observed) - not exercised')).length;
+    if (notExercised) problems.push(`${tag} printed ${notExercised} (observed) row(s) through note()`);
+    const fails = o.lines.filter((l) => l.includes('[FAIL]'));
+    if (fails.length) problems.push(`${tag} printed [FAIL]: ${fails[0].trim().slice(0, 120)}`);
+    if (o.grew !== 3) problems.push(`${tag} grew observations by ${o.grew}, not 3`);
+  }
+  check('[drafts-S6] the real sectionProjectLayer prints the three (observed) rows through observation() on both fixtures',
+    problems.length === 0, problems.length ? problems.join('; ').slice(0, 400) : 'S1 present / S2 not created yet, one scratch row each, no FAIL');
 }
 
 // ---------------------------------------------------------------------------
@@ -7929,7 +8112,7 @@ function sectionNegativeControls(tmpRoot, pluginVersion) {
     note(`no negative control for project-layer check "${id}"`,
       NO_CONTROL_REASON[id] || 'no control defined - add one or state why it cannot fail');
   }
-  const unexercised = pristine.filter((f) => f.note).map((f) => f.id);
+  const unexercised = pristine.filter((f) => f.note && !f.observation).map((f) => f.id);
   if (unexercised.length) {
     console.log(`  (checks that were NOTEs on the control fixture, so no control applies: ${unexercised.join(', ')})`);
   }
@@ -7994,6 +8177,7 @@ function main() {
     sectionProvenance(tmpRoot);
     sectionExampleFixture(tmpRoot);
     sectionProjectLayer(PROJECT, selfAuthored);
+    sectionDraftsObservations(tmpRoot);
     sectionCommitAutomation(PROJECT, tmpRoot);
     sectionNegativeControls(tmpRoot, pluginVersion);
   } catch (e) {
@@ -8131,7 +8315,10 @@ function main() {
   console.log('config, the conditional-render contract (a Claude agent file exists iff its role is');
   console.log('claude-hosted), and version bookkeeping - proven able to fail by the negative controls,');
   console.log('which run against a fixture this script synthesises for that purpose alone. Checks with no');
-  console.log('control are named individually above, each with its reason.');
+  console.log('control are named individually above, each with its reason. The three (observed) rows - plans');
+  console.log('drafts/, plans readiness/ and whether git ignores the scratch directory - are observations:');
+  console.log('reported, never counted, outside the negative controls, and listed again under OBSERVED ON THE');
+  console.log('INSPECTED PROJECT like every observation() row.');
   console.log('COMMIT AUTOMATION: the inspected project is read for an active pre-commit/post-commit hook and');
   console.log('for a core.hooksPath that moves them, and one is reported as a [NOTE] - never a failure, because');
   console.log('such a hook is a legitimate choice - carrying the limit it creates: the click covers one commit');

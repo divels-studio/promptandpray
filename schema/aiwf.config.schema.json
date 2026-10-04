@@ -312,7 +312,7 @@
           "type": "string",
           "minLength": 1,
           "default": "docs/backlogs",
-          "description": "The PARENT of active/ and archive/. A plan ENTERS the repo into <plansDir>/active/ at approval and LEAVES into <plansDir>/archive/ when every ticket is closed; setup creates both subdirectories."
+          "description": "The PARENT of active/, archive/, drafts/ and readiness/. A plan ENTERS the repo into <plansDir>/active/ at approval and LEAVES into <plansDir>/archive/ when every ticket is closed; setup creates all four; a draft lives in drafts/ while the plan is one, and the plan's readiness history lands in readiness/<ABBR>/ with the plan. A tracked path: under the scratch directory or any ignored path nothing here reaches git."
         },
         "overridesDoc": {
           "type": "string",

@@ -4,6 +4,30 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.2.16] - 2026-10-04
+
+A plan's draft and its readiness history live in the repository; the scratch directory carries the
+live loop mechanics only.
+
+### Changed
+
+- **Readiness artifacts live under plansDir (DRAFTS-001)** - `/pnp:review` Step 2e: a draft is
+  `<plansDir>/drafts/PLAN_<ABBR>.draft.md`, untracked, and is moved to `active/` at landing; the
+  behavior ledger, the consequence scan, the fact-check ledgers, the own pass and the revisions land
+  in `<plansDir>/readiness/<ABBR>/` with the plan's docs commit and stay there; the scratch directory
+  stands in only while Gate 3 holds the main session out of plansDir, and the landing checks the
+  fixed names before `git add`. `/pnp:setup` creates `drafts/` and `readiness/`; an older installation creates them on
+  first use, and the self-check observes them as a note. Doctrine and the plansDir description say
+  "parent of active/, archive/, drafts/ and readiness/".
+- **"Gitignored" is the project's own doing (DRAFTS-001)** - none of the six sentences that called
+  the scratch directory, the route state or the E2E artifact directory gitignored survives: four
+  now say the project's own `.gitignore` keeps the path out of git (three of them that setup writes
+  no ignore entry), and the two that placed the behavior ledger and the consequence scan name their
+  readiness files instead; the self-check observes, as a note, whether git ignores the scratch
+  directory at all.
+- **The CLAUDE.md region says "lands in active/" (DRAFTS-001)** - re-rendered by migration
+  `0020_drafts-in-repo`: the plan is moved there from its draft, not copied.
+
 ## [0.2.15] - 2026-10-02
 
 A paid readiness pass no longer starts on an own pass nobody wrote down: the consequence scan and

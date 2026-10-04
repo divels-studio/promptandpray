@@ -216,7 +216,7 @@ export async function runInterview({ schema, ask, installed = null, projectRoot 
   // setup will not write because it never rewrites that file. Each is checked on the offered
   // default AND on the answer, and each is a warning - the operator may mean exactly this.
   out.write('\n-- paths --\n');
-  await text('paths.plansDir', 'Plans directory (the PARENT of active/ and archive/)', {
+  await text('paths.plansDir', 'Plans directory (the PARENT of active/, archive/, drafts/ and readiness/)', {
     allowEmpty: false,
     warn: (value) => existingPlansWarning({ projectRoot, plansDir: value }),
   });

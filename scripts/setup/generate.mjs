@@ -10,7 +10,7 @@
  *   CLAUDE.md                              the `aiwf-core` managed region (create / append / re-render)
  *   <overridesDoc>                         rendered ONCE, then owned by the operator forever
  *   .claude/settings.json                  ask-ruleset SET-MERGE, ownership without takeover
- *   <plansDir>/active, <plansDir>/archive, <scratchDir>   directories
+ *   <plansDir>/active, <plansDir>/archive, <plansDir>/drafts, <plansDir>/readiness, <scratchDir>   directories
  *
  * TWO PHASES, AND THE ORDER IS THE SAFETY PROPERTY
  *   plan() decides everything and writes nothing; apply() writes what plan() decided. Any blocker -
@@ -1054,6 +1054,8 @@ export function planInstall({
         { rel: merged.paths.scratchDir, kind: 'dir', label: 'the scratch directory' },
         { rel: path.join(merged.paths.plansDir, 'active'), kind: 'dir', label: 'the active plans directory' },
         { rel: path.join(merged.paths.plansDir, 'archive'), kind: 'dir', label: 'the plan archive' },
+        { rel: path.join(merged.paths.plansDir, 'drafts'), kind: 'dir', label: 'the plan drafts directory' },
+        { rel: path.join(merged.paths.plansDir, 'readiness'), kind: 'dir', label: 'the readiness history directory' },
         { rel: path.dirname(CONFIG_REL), kind: 'dir', label: 'the directory the pnp config lives in' },
         { rel: AGENTS_DIR, kind: 'dir', label: 'the agents directory' },
         { rel: path.dirname(merged.paths.overridesDoc), kind: 'dir', label: 'the directory the overrides document lives in' },
@@ -1468,7 +1470,7 @@ export function planInstall({
     const warning = existingPlansWarning({ projectRoot, plansDir: merged.paths.plansDir });
     if (warning) notes.push(warning);
   }
-  for (const rel of [merged.paths.scratchDir, path.join(merged.paths.plansDir, 'active'), path.join(merged.paths.plansDir, 'archive'), path.dirname(CONFIG_REL), AGENTS_DIR, path.dirname(overridesRel)]) {
+  for (const rel of [merged.paths.scratchDir, path.join(merged.paths.plansDir, 'active'), path.join(merged.paths.plansDir, 'archive'), path.join(merged.paths.plansDir, 'drafts'), path.join(merged.paths.plansDir, 'readiness'), path.dirname(CONFIG_REL), AGENTS_DIR, path.dirname(overridesRel)]) {
     const dir = abs(rel);
     if (!fs.existsSync(dir)) actions.push({ kind: 'mkdir', file: dir, rel: toPosix(rel), why: 'created' });
   }

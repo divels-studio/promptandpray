@@ -180,7 +180,29 @@ check('NO qa agent rendered (codex-hosted role has no Claude agent file)', !exis
 check('CLAUDE.md written with the managed markers',
   (read(at(p1, 'CLAUDE.md')) || '').includes('<!-- BEGIN aiwf-core -->') && (read(at(p1, 'CLAUDE.md')) || '').includes('<!-- END aiwf-core -->'));
 check('overrides document seeded', exists(at(p1, 'docs/ai/PROJECT_OVERRIDES.md')));
-check('plansDir has BOTH active/ and archive/', exists(at(p1, 'docs/backlogs/active')) && exists(at(p1, 'docs/backlogs/archive')));
+check('plansDir has active/, archive/, drafts/ and readiness/', exists(at(p1, 'docs/backlogs/active')) && exists(at(p1, 'docs/backlogs/archive'))
+  && exists(at(p1, 'docs/backlogs/drafts')) && exists(at(p1, 'docs/backlogs/readiness')));
+{
+  // The negative control of the four-directory check above: a payload copy whose generator no
+  // longer creates drafts/ must install a project WITHOUT drafts/ (and still WITH readiness/), so
+  // the predicate of that check is seen to be false on a sabotaged install. The replacement is
+  // exact - zero or several occurrences of the mkdir elements is a broken control, not a pass - and
+  // the sabotaged generator is parsed before anything runs through it.
+  const payload = path.join(tmpRoot, 'payload-no-drafts');
+  copyTree(PLUGIN_ROOT, payload);
+  const genFile = path.join(payload, 'scripts', 'setup', 'generate.mjs');
+  const needle = "path.join(merged.paths.plansDir, 'drafts'), path.join(merged.paths.plansDir, 'readiness'),";
+  const src = fs.readFileSync(genFile, 'utf8');
+  const hits = src.split(needle).length - 1;
+  if (hits !== 1) throw new Error(`setup-drafts-ctl-1: expected exactly 1 occurrence of the drafts/readiness mkdir elements in the payload copy, found ${hits}`);
+  fs.writeFileSync(genFile, src.replace(needle, "path.join(merged.paths.plansDir, 'readiness'),"));
+  const parsed = spawnSync(process.execPath, ['--check', genFile], { encoding: 'utf8' });
+  if (parsed.status !== 0) throw new Error(`setup-drafts-ctl-1: the sabotaged generate.mjs does not parse: ${((parsed.stderr || '') + (parsed.error ? parsed.error.message : '')).trim()}`);
+  const pc = project('drafts-ctl');
+  const rc = install(pc, baseAnswers(), ['--no-seeds'], { payload });
+  check('[setup-drafts-ctl-1] sabotage detected: the drafts mkdir removed -> the four-directory check turns red',
+    !exists(at(pc, 'docs/backlogs/drafts')) && exists(at(pc, 'docs/backlogs/readiness')), why(rc));
+}
 check('scratch dir created', exists(at(p1, '.aiwf')));
 check('memory seeds are PRINTED for the operator', r1.out.includes('MEMORY SEEDS') && r1.out.includes('finished-plan-is-archived'));
 {
@@ -1821,6 +1843,8 @@ section('24 - the transfer surface: seeded once at the resolved path, never mana
       ['the overrides document', 'docs/ai/PROJECT_OVERRIDES.md'],
       ['the scratch directory', '.aiwf'],
       ['the active plans directory', 'docs/backlogs/active'],
+      ['the plan drafts directory', 'docs/backlogs/drafts'],
+      ['the readiness history directory', 'docs/backlogs/readiness'],
       ['the agents directory', '.claude/agents'],
     ];
     // Every row through the DIRECT GENERATOR - the engine itself, and the entrypoint a script can
@@ -1848,6 +1872,7 @@ section('24 - the transfer surface: seeded once at the resolved path, never mana
     // as a partial installation and then died on EISDIR - worse than a refusal, which is the point.
     const HIERARCHY = [
       ['an ANCESTOR of the plan directories', 'docs/backlogs', 'docs/backlogs/active'],
+      ['an ANCESTOR of the plan directories (drafts)', 'docs/backlogs', 'docs/backlogs/drafts'],
       ['an ANCESTOR of everything under .claude', '.claude', '.claude'],
       ['an ANCESTOR of the overrides and plan directories', 'docs', 'docs'],
       ['INSIDE a file setup writes (the inverse conflict)', 'CLAUDE.md/surface.md', 'CLAUDE.md'],

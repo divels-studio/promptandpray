@@ -228,8 +228,9 @@ TICKET:
 ```
 
 The COO records the rows under the header
-`| # | behavior | link (file:line) | DOES | CLOSES OVER | STATES | LIB | NOTE |` - where they live is
-the COO's call, and `{{config.paths.scratchDir}}` is gitignored and the natural place. An empty
+`| # | behavior | link (file:line) | DOES | CLOSES OVER | STATES | LIB | NOTE |` - in
+`{{config.paths.plansDir}}/readiness/<ABBR>/ledger.md` (Step 2e names the other files and the one
+case in which `{{config.paths.scratchDir}}/plan/<ABBR>/` stands in). An empty
 DOES cell or an `UNREAD` row is closed before the pass: the COO reads that link itself, or
 re-dispatches. The NOTE cells are the input of the COO's own pass (`docs/WORKFLOW.md` § Plan
 readiness review). The ledger is not an auditor: it returns no verdict and it is never counted as a
@@ -311,7 +312,9 @@ the pass waits for it.
 
 Then: the COO fixes every FALSE row and closes every UNVERIFIABLE one, and **only then** goes on -
 to the COO's own pass (Step 2d) before a readiness pass, or to the dispatch of a diff pass - over
-the corrected tree. The gate may be skipped only when the reviewer itself runs on a
+the corrected tree. Over a plan the ledger itself is kept as
+`{{config.paths.plansDir}}/readiness/<ABBR>/fact-check-r<N>.md`, one per revision (Step 2e). The
+gate may be skipped only when the reviewer itself runs on a
 scan-tier model (`haiku`/`sonnet`) - there is nothing more expensive than the gate to protect -
 and even then it is cheap enough to be worth running on a prose-heavy diff. That skip is read off a
 scan-tier ALIAS, never off an exact model id.
@@ -354,8 +357,8 @@ with exactly this task, verbatim:
     <the ticket section, pasted>
 
 The COO records the rows - each with a leading and a trailing `|` - in ONE file per plan under the
-header `| # | ticket | decision | surface | violation | closure |`, numbered from 1 - where the file lives
-is the COO's call, and `{{config.paths.scratchDir}}` is gitignored and the natural place - and closes
+header `| # | ticket | decision | surface | violation | closure |`, numbered from 1 -
+`{{config.paths.plansDir}}/readiness/<ABBR>/consequence-scan.md` (Step 2e) - and closes
 EVERY row before the pass, in the `closure` cell: `plan: <what changed, with its plan line>` or
 `no defect: <why, with file:line>`. Every table in the file that starts with the `#` and `ticket`
 columns carries exactly this header - a delta scan repeats it - or the plan gate refuses the file.
@@ -376,8 +379,9 @@ is never counted as a pass.
 **The COO's own pass is the LAST act over the plan before a paid readiness pass is dispatched -
 after Steps 2a, 2c and 2b are closed - done in a turn of its own and written down.** It is the pass
 `docs/WORKFLOW.md` § Plan readiness review describes: every `file:line` opened, every command run on
-the real tree, not one "if the Writer finds ...". The file - one per pass; where it lives is the
-COO's call, `{{config.paths.scratchDir}}` the natural place - carries:
+the real tree, not one "if the Writer finds ...". The file - one per plan,
+`{{config.paths.plansDir}}/readiness/<ABBR>/own-pass.md`, rewritten at every stamp (Step 2e; the
+count and the hash of every earlier pass go to `revisions.md`) - carries:
 
     PLAN SHA256: <64 hex digits>
     BLOCKERS FOUND: <n - the blockers this pass found and applied to the plan>
@@ -426,6 +430,70 @@ documented PreToolUse decision contract, not on an observation this repository m
 **Its suppression dual.** Exactly the behavior ledger's: small R1 and non-durable R2 work owe no
 own-pass file - they receive no readiness review at all.
 
+## Step 2e - Where the readiness artifacts live
+
+**A plan's readiness history is part of the repository, not of the scratch directory.** While a plan
+is a draft it lives at `{{config.paths.plansDir}}/drafts/PLAN_<ABBR>.draft.md`, untracked - the
+planning lock forbids git mutations until approval, and the draft is the planning's own file - and
+everything the readiness cycle produces lands beside it under
+`{{config.paths.plansDir}}/readiness/<ABBR>/`, with fixed names: `ledger.md` (Step 2a),
+`consequence-scan.md` (Step 2c, one file per plan, rows appended), `fact-check-r<N>.md` (Step 2b, one
+per revision), `own-pass.md` (Step 2d, one per plan, rewritten at every stamp) and `revisions.md`
+(every pass verdict verbatim, what each revision closed, and the hash of every stamp). The readiness
+brief's `PLAN:` line names the draft; the own pass is stamped over the draft.
+
+At approval the draft is moved - a plain rename, not `git mv`, which refuses an untracked file - to
+`active/PLAN_<ABBR>.md` (`docs/WORKFLOW.md` guard (e)), the approval note goes into its header, and
+`git add` takes the plan and `readiness/<ABBR>/` into ONE docs commit. The approval note changes the
+plan's text, so the stamped hash verifies against the audited draft and not against the landed
+plan: `revisions.md` records both hashes - the stamp, and `plan-gate.js --hash` over the landed
+plan - and the only difference between them is that note. A readiness pass over a plan that has
+already landed - an extension with a new ticket - names the active plan on its `PLAN:` line: the
+extension is an UNCOMMITTED edit of that file until its approval (the planning lock forbids
+committing the tracked plan, not drafting into it - `docs/WORKFLOW.md` § Planning lock), its
+readiness files are appended to or rewritten under `readiness/<ABBR>/` in the working tree the same
+way, the own pass is stamped over the active plan as it stands, and the extension's docs commit
+takes the plan and the history together; the gate sees nothing else. The approved plan IS the text,
+and an approved plan has no copy anywhere else, `{{config.paths.scratchDir}}` included.
+`readiness/<ABBR>/` is never moved again: when the plan is archived, its history stays where
+it is - which is why a later plan never reuses an `<ABBR>`: the second plan's `readiness/<ABBR>/`
+would write over the first's.
+
+`{{config.paths.scratchDir}}` carries the live loop mechanics only - `route-state.json`, the brief
+files, the engines' session files, and the artifacts of the CURRENT ticket - and it is the
+project's own ignore rules (`.gitignore`, or its excludes) that keep it out of git (setup writes no
+ignore entry). A draft and its
+readiness artifacts are written there, under `{{config.paths.scratchDir}}/plan/<ABBR>/`, in exactly
+one case: Gate 3 holds the main session out of `{{config.paths.plansDir}}` because an R2/R3 route is
+open and `{{config.paths.plansDir}}` is under neither `docs/` nor `{{config.paths.scratchDir}}`
+(the gate covers the Edit/Write tool class; a shell write around it is a breach of doctrine, not a
+third case). Then at the landing the
+draft goes to `active/` and the COO moves the artifacts into `readiness/<ABBR>/`, and the landing
+checks the names before `git add` - `test -f` on `ledger.md`, `consequence-scan.md`, `own-pass.md`,
+`revisions.md`, and at least one `fact-check-r<N>.md` - a missing name stops the landing; nothing
+checks more than presence. A session that does not hold the tree writes nothing under the
+repository at all - not a draft, not a readiness artifact, and no scratch file either, since it
+dispatches nothing that would write one (`docs/WORKFLOW.md` § Branch policy: a non-executing session
+makes no repo writes, and the scratch directory is inside the repository); its draft waits outside
+the repository, as guard (e) already allows, until the tree is free.
+
+This rule assumes what the plans directory already is: a tracked part of the repository - the Git
+canon of `docs/WORKFLOW.md` guard (e), the Git-tracked history of § Durable development history.
+A `{{config.paths.plansDir}}` placed under `{{config.paths.scratchDir}}` (Gate 3 never holds a
+session out of it, so the one case above never arises) or under any other path the project
+ignores (whether or not Gate 3 holds a session out of it - under `docs/` it does not - nothing
+under it reaches git: `git add` of an ignored path refuses with exit 1) is outside this rule either
+way: such a project has no plan canon in git at all - a configuration this rule does not serve and
+the self-check does not detect.
+
+`/pnp:setup` creates `drafts/` and `readiness/` on a new install; an installation older than this
+rule creates them on first use - no update creates them, and git keeps no empty one - so
+the self-check only OBSERVES them (a note saying present or not created yet, never a failure), and
+observes in the same way whether git ignores `{{config.paths.scratchDir}}` at all.
+
+**Its suppression dual.** Exactly the behavior ledger's: small R1 and non-durable R2 work owe no
+readiness artifacts, so they owe no place for them.
+
 ## Plan-readiness mode (durable R2/R3 plans, before execution)
 
 If the brief is a **plan-readiness** check - reviewing a durable R2/R3 **plan** *before*
@@ -462,13 +530,15 @@ implementation, not a code diff - the contract is different:
   Beside it, every readiness brief carries five fixed lines, each on a line of its own,
   starting at the first column, exactly once - the class line reads exactly `Class: plan` -
   which `scripts/engine/plan-gate.js` reads before the pass is spent (Step 2d); the paths are
-  plain ASCII, relative to `<root>`:
+  plain ASCII, relative to `<root>`. For a plan under readiness `PLAN:` names the DRAFT; for an
+  extension of a plan that has already landed it names the ACTIVE plan (Step 2e); the hash is over
+  the file it names.
 
       Class: plan
-      PLAN: <the plan file>
+      PLAN: <plansDir>/drafts/PLAN_<ABBR>.draft.md
       TICKETS: <the refs this pass audits, comma-separated>
-      CONSEQUENCE SCAN: <the Step 2c file>
-      OWN PASS: <the Step 2d file>
+      CONSEQUENCE SCAN: <plansDir>/readiness/<ABBR>/consequence-scan.md
+      OWN PASS: <plansDir>/readiness/<ABBR>/own-pass.md
 - **One invocation = ONE pass.** The next pass is a **separate** `/pnp:review` invocation *after the
   COO revises the plan*.
 
@@ -544,7 +614,8 @@ The wrapper passes every brief through the plan gate of Step 2d before the engin
 naming every problem, while the readiness artifacts are missing or incomplete; a refusal spends
 nothing - fix what it names and invoke again.
 
-`{{config.paths.scratchDir}}` is gitignored, so the brief never enters a commit. Never delete the
+`{{config.paths.scratchDir}}` is kept out of git by the project's own `.gitignore` (setup writes no
+ignore entry), so the brief never enters a commit. Never delete the
 file afterwards - `rm` is an `ask` rule and cleanup would pop the very dialog this arrangement
 removes. The next dispatch overwrites it, and keeping it lets a correction round re-dispatch
 without retransmitting the brief.

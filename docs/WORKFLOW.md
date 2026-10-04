@@ -231,8 +231,10 @@ change of COO model, and each of these was learned from an observed violation.
   Read/check that the state already present does not cover it. A demand that one Read would have
   cancelled is a workflow defect.
 - **(e) An approved plan lands in the repo immediately.** At the moment of approval, in the same
-  session, unprompted: the plan is copied to `<plansDir>/active/PLAN_<ABBR>.md` (the Git canon),
-  and any plan-mode file outside the repo becomes a pointer to it. The principle "durable
+  session, unprompted: the plan lands in `<plansDir>/active/PLAN_<ABBR>.md` (the Git canon) -
+  moved there from `<plansDir>/drafts/PLAN_<ABBR>.draft.md`, where it was an untracked draft - its
+  readiness history under `<plansDir>/readiness/<ABBR>/` is added in the same commit, and any
+  plan-mode file outside the repo becomes a pointer to it. The principle "durable
   knowledge lives in Git" already existed; what had never been written down was the mechanical
   moment of approval.
 - **(f) Host-directive precedence.** A host - the CLI, an editor integration, a wrapper around the
@@ -337,12 +339,19 @@ are not project workflow authority.
 Until the concrete plan is presented and the operator explicitly approves its execution, the COO
 must not:
 
-- dispatch or advance an **implementation** brief for execution, or mutate the Git-tracked PLAN -
-  these wait for execution approval. Composing the concrete draft plan and a read-only
-  plan-readiness brief (each carrying its risk threshold + stop condition) is **explicitly
-  permitted** by the readiness exception below;
+- dispatch or advance an **implementation** brief for execution, or commit a change to the
+  Git-tracked PLAN - these wait for execution approval. Composing the concrete draft plan and a
+  read-only plan-readiness brief (each carrying its risk threshold + stop condition) is **explicitly
+  permitted** by the readiness exception below - the draft and its readiness artifacts are the
+  planning's own files, `<plansDir>/drafts/PLAN_<ABBR>.draft.md` and `<plansDir>/readiness/<ABBR>/`,
+  written UNTRACKED under the lock and committed only at the landing, which is not the repository
+  edit this lock forbids; an extension of a plan that has already landed is drafted the same way,
+  as an UNCOMMITTED edit of the active plan and of its `<plansDir>/readiness/<ABBR>/`, and lands
+  with the extension's own docs commit (`/pnp:review` Step 2e);
 - delegate to the Writer subagent, QA, or another implementation run;
-- edit the repository, agent/tooling configuration, or other project state;
+- edit the repository, agent/tooling configuration, or other project state - the planning's own
+  files excepted: the untracked draft under `<plansDir>/drafts/`, `<plansDir>/readiness/<ABBR>/`,
+  and the uncommitted edit of an active plan that an extension is;
 - stage, commit, switch/create branches, merge, push, or perform another Git mutation.
 
 The sole orchestration exception is a read-only plan-readiness review by the Reviewer - run
@@ -533,8 +542,9 @@ raising the dialog only for a brief with no ticket line, a ref that is in no act
 directory it cannot read - because a dispatch that cannot name a ticket in an active PLAN is work
 nobody planned, which is exactly the accident worth one operator click.
 
-At the same moment - dispatch of an R2/R3 ticket - the COO writes the **route state**, the
-gitignored `.aiwf/route-state.json`, as `{ "ticket": "<REF>", "route": "R2"|"R3" }`, and on
+At the same moment - dispatch of an R2/R3 ticket - the COO writes the **route state**,
+`.aiwf/route-state.json` (kept out of git by the project's own `.gitignore`), as
+`{ "ticket": "<REF>", "route": "R2"|"R3" }`, and on
 closing the ticket clears it by writing `{}`. While that file names an R2/R3 route, **Gate 3**
 (the route-state guard inside the Gate 1 hook) lets the **main session** write only `docs/**`,
 `.aiwf/**` and root-level `*.md`; anything else is denied with a message naming the open ticket,
@@ -542,7 +552,9 @@ because code-class work belongs to the Writer while a ticket is open. With no st
 with the cleared `{}` - behaviour is exactly what it was before, so R1 work is untouched, and the
 Writer is never affected in either case. A present-but-unusable state (a route that is not
 R2/R3, a non-string route, malformed JSON) denies by design, and is self-healing because
-`.aiwf/**` stays writable. Two honest limits, stated in the same breath: the guard covers the
+`.aiwf/**` stays writable. A `paths.plansDir` under neither `docs/` nor `.aiwf/` puts the plan's
+own draft and readiness files behind this guard while a route is open; `/pnp:review` Step 2e says
+what stands in for them. Two honest limits, stated in the same breath: the guard covers the
 **Edit/Write tool class only**, so a main-session mutation performed through a shell command is
 not caught and remains doctrine; and it only bites if the COO actually writes the file at
 dispatch - a convention, not an enforcement. The paths and the state-file location are fixed in
@@ -668,7 +680,9 @@ carries a closed status and its completion record, the COO moves the file from
 of closing the final ticket, not as a step someone has to remember later. The archive has a
 naming convention the active directory does not: `<NNN>_PLAN_<ABBR>_<YYYY-MM-DD>.md`, where
 `NNN` is the next free sequence number and the date is the day of ARCHIVING, not of creation.
-`git mv` preserves the history; a bare copy of the active filename does not belong there. And
+`git mv` preserves the history; a bare copy of the active filename does not belong there.
+`<plansDir>/readiness/<ABBR>/` is not moved: the archive numbering is for plans, and the history
+stays where the plan's landing put it. And
 archiving CHECKS as well as moves - the step is not only a `git mv` but a last look at the plan:
 archiving greps the plan's process sections for rule-class points without a pointer row -
 fail-capable, with a positive control, which here means running the grep once over a plan known to
@@ -691,13 +705,27 @@ PLAN. Preserve accepted engineering context, not runtime noise.
 Use the configured paths (`paths.plansDir`):
 
 ```text
+<plansDir>/drafts/PLAN_<ABBR>.draft.md       the draft, untracked, while the plan is one
+<plansDir>/readiness/<ABBR>/                  its readiness history, committed at landing, kept
 <plansDir>/active/PLAN_<ABBR>.md
 <plansDir>/archive/
 ```
 
+A draft lives in the repository while the plan is one, its readiness history lands beside it, and the
+scratch directory carries the live loop mechanics only (`/pnp:review` Step 2e names the files and the
+one case in which `<scratchDir>/plan/<ABBR>/` stands in). The reason is where the evidence went: on
+this repository and, as its operator reported, on two consumer installations the readiness
+artifacts - the behavior ledger, the consequence scan, the own pass, the fact-check ledgers, the
+revisions - were written to the scratch directory, which git ignores, so a plan's proof disappeared
+with it, and both consumers wrote a local rule for the same thing. One `<ABBR>` is one plan for
+good: its `readiness/<ABBR>/` stays after archiving, and a later plan with the same letters would
+write over it.
+
 The approved PLAN is written to Git only after the planning lock is released - and then
 immediately, by the COO itself (docs class, per the write boundary above and guard (e)), before
-production-code changes begin. Rough personal notes are inputs, never implementation authority.
+production-code changes begin - the landing commit, which also takes the readiness history that
+has sat untracked beside the draft since the cycle began. Rough personal notes are inputs, never
+implementation authority.
 When a durable record is warranted:
 
 - **one prefix per plan.** A plan file is `PLAN_<ABBR>.md`, where `<ABBR>` is an abbreviation of the
@@ -706,6 +734,8 @@ When a durable record is warranted:
   digit** sequential number that is never reused - not even for a ticket that was dropped.
   `PLAN_ABC.md` holds `ABC-001`, `ABC-002`, and so on. That grammar is what the tooling reads: it
   is the shape the dispatch gate turns into a filename and the shape the self-check holds a plan to.
+  An `<ABBR>` is never reused by a later plan: its `<plansDir>/readiness/<ABBR>/` outlives the plan,
+  and a second plan with the same letters would write over it.
   The ref is a lookup key, not a description: from the ref alone the plan file is known without
   searching for it;
 - **a ticket born in flight takes the same abbreviation and the next free number.** Whatever its
@@ -864,7 +894,9 @@ untracked files are outside the planned task, do not propose branch creation/swi
 immediate execution step and do not carry those files into the task branch. State the
 prerequisite instead: finish or checkpoint the current scope first, or use a separate clean
 worktree explicitly provided by the operator. Never stash, clean, reset, or otherwise hide that
-state. Merge and push run only on the operator's explicit word, through the `ask` dialog.
+state. A draft under `<plansDir>/drafts/` and a `readiness/<ABBR>/` in progress are the planning's
+own untracked files, not foreign work: they stay where they are and move only at their own landing.
+Merge and push run only on the operator's explicit word, through the `ask` dialog.
 
 **A session does not mutate a repository outside its own project root.** No git or filesystem
 operation that writes, moves or discards state in another repository runs without the operator's

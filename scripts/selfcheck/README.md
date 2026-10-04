@@ -37,8 +37,10 @@ whatever `--project-fixture` pointed at, which may be a real project - sabotages
 project-layer check, and requires each check to actually FAIL. Controls target checks by a stable
 id, so none of them silently stops targeting anything when a fixture value changes. Checks with no
 control are named individually with the reason, and a check this run could not exercise is
-reported as a `[NOTE]` - never counted as a pass. Exit 0 = all assertions held; 1 = at least one
-failed; 2 = the run could not start.
+reported as a `[NOTE]` - never counted as a pass. The three project-layer rows whose name carries
+`(observed)` are observations instead: facts about the inspected project the self-check reports and
+never counts, with no control because nothing in them can fail. Exit 0 = all assertions held; 1 =
+at least one failed; 2 = the run could not start.
 
 The EXAMPLE FIXTURE section carries its own controls in the same shape: they sabotage a COPY of the
 payload one way per assertion and require each to fail. Every one of those checks is phrased so it

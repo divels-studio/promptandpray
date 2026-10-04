@@ -19,7 +19,8 @@ carry things the payload never may (the operator's language, machine-local paths
 ## Plans
 
 - `dev/backlogs/active/` - open plans; `dev/backlogs/archive/` - finished ones (and a pointer to
-  where the extraction history lives).
+  where the extraction history lives); `dev/backlogs/drafts/` - a plan's untracked draft until it
+  lands; `dev/backlogs/readiness/<ABBR>/` - its readiness history, committed at landing and kept.
 
 ## The payload is code
 
