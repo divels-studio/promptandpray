@@ -76,6 +76,24 @@ acceptance → дизайн/concurrency). При PnP: RGATE 9 → DRAFTS 5.
 двата договора са различни (повърхност срещу твърдения; fact-check-ът забранява sampling) и при
 PLAN_DRAFTS всеки рунд намираха различни неща; спестяването е да вървят ПАРАЛЕЛНО, както тук.
 
+**[2026-10-04, операторска дума „всичките шест“] Обхватът на 0.2.17 е РЕШЕН:** (1) ledger + consequence
+scan = един агент на тикет, две таблици, два файла; (2) старт→стоп двойката незадължителна в payload-а
+(`templates/PNP_CANDIDATES.md.tmpl` § Pass statistics, `docs/WORKFLOW.md` § The transfer surface);
+(3) readiness клас concurrency/lock („приет остатък“ не минава) + ред в шестте проверки на own pass-а;
+(4) Step 2d „every file:line opened“ → „every pointer the Writer acts on; the ledger rows read as
+behavior; every instrument run with valid AND broken input“; (5) plansDir под игнориран път —
+self-check observation по префикс `.aiwf/` + warn в интервюто (кандидатът по-горе); (6) от
+консуматорския блок „вътрешните стъпки отпадат“ (Silerax `dev/PROJECT_OVERRIDES.md:437-449`, Furnissimo
+`docs/ai/PROJECT_OVERRIDES.md:334-351`, inventory 2026-10-04): планът носи `file:line` само където
+Колегата действа или acceptance-ът чете; контекстът цитира по секция и символ — изречение в WORKFLOW
+§ Ticket brief contract („A factual claim about existing code carries a file:line pointer“ се стеснява)
+и § Plan readiness review. Точка (1) на същия блок („няма отделен агент за опресняване на указателите“)
+е вече покрита от Step 2b (FALSE редът носи вярната стойност) — без промяна. Форма (COO решение): ЕДИН
+план, ЕДИН code-class тикет (self-check observation + ORCHESTRATOR rerender → миграция 0021 + bump),
+`docs/READINESS_CLASSES.md` получава класа. Двата консуматора носят (1)-(4) и (6) като локални правила с
+клауза „изтича с 0.2.17“ — note op-ът на миграцията им казва кои редове да махнат. Планирането — в НОВА
+сесия (тази е на половина контекст при избора; handover в `.aiwf/session-brief.md` по `/pnp:brief`).
+
 ## ГЛАВЕН ПРИОРИТЕТ — топъл пас с компенсациите по-скъп ли е от студен? (роден 2026-09-24, операторска дума)
 
 Кандидат без ref. Readiness цикълът на HARD-019+018 (`gpt-6-sol`/xhigh) даде 138,441 токена за
