@@ -2979,7 +2979,7 @@ tag `v0.2.14` на `3244460` (лек, `cat-file -t` = commit; целта е comm
 локално“. Консуматорите вземат 0.2.14 при следващия си ъпдейт.
 **Останал дълг: няма.** Route-state `{}`.
 
-## Housekeeping — чист `.aiwf` (роден 2026-10-02 от кандидата „Черновите живеят в репото“, операторска дума „искам да вкараме един от последните кандидати за чист .aiwf“; записан и СПРЯН — изпълнение след дума за ТОЗИ тикет)
+## Housekeeping — чист `.aiwf` (роден 2026-10-02 от кандидата „Черновите живеят в репото“, операторска дума „искам да вкараме един от последните кандидати за чист .aiwf“; записан и СПРЯН — изпълнение след дума за ТОЗИ тикет) **[ЗАТВОРЕН 2026-10-04, дума „пускай HARD-023“, docs commit `e2e13fe`]**
 
 ### HARD-023 [R1 docs/housekeeping — само `dev/` и `.aiwf`, нула payload] — черновите и readiness историята живеят в репото; `.aiwf` носи само живата механика на loop-а
 
@@ -3060,6 +3060,34 @@ dev/PROJECT_OVERRIDES.md` → `1`; `git status --short` след commit-а → �
 **Assignee:** COO (главната сесия, R1). Branch `main`. Route-state не се пише (R1). Commit: ЕДИН
 docs commit, subject `HARD-023: .aiwf carries only the live loop mechanics - readiness history and
 drafts live in dev/backlogs`; PLAN записът — отделен docs commit след затварянето.
+
+**Completion record — HARD-023 (ЗАТВОРЕН 2026-10-04, docs commit `e2e13fe`, 18 файла, +1401/−5).**
+Инвентар: 46 файла в `.aiwf` (един sonnet Explore агент, read-only, всеки файл отворен; трите
+списъка показани на оператора — „Да“ на списъците). *Остава* 3: `route-state.json` (`{}`),
+`review-brief.txt`, `last-review-session.txt`. *Мести се* 14 (copy + `git add`; `cmp` байт по байт
+преди триенето, нула разлики): `plan/RDY/{chains,factcheck-r0,factcheck-r1,inventory,ownpass,replay,
+revisions,simulation}.md` + `PLAN_RDY.r0.md` (r0 = 0.3.0 скопът с `/pnp:plan` skill, 1014 реда
+разлика срещу архив 006 — НЕприземен текст, затова се мести) → `dev/backlogs/readiness/RDY/` (9);
+`plan/RGATE/{consequence-scan,ledger,own-pass,revisions}.md` → `readiness/RGATE/` (4);
+`arbiter-brief.txt` (CONS-006 арбитражът) → `readiness/CONS/` (1). Имената на историята НЕ са
+преименувани по D2 на PLAN_DRAFTS — историята е история и плановете ѝ ги назовават с тези имена.
+*Трие се* 29 (един `rm`, един диалог): дубликатите `plan/RGATE/PLAN_RGATE.md` и
+`plan/RDY/PLAN_RDY.draft.md` (`diff` срещу 007/006: само хедърът за одобрение + completion/release
+записите); 5× `pending-*.md` (всички казват „APPLIED“ — съдържанието в архив 004 `:652/:716/:796-806/
+:870-890`, CANDIDATES `:252-264`, commit `b9495a0`); `PLAN_PNP_HARDENING.draft.md` (stub към този
+план); `session-brief.md` (handover на PLAN_DRAFTS, приземен като 008); три стари review брифа
+(PLAN_CONS p2/p4, HARD-009 verify); `hard-009-resolution.json` и `resolve-region.json` (едно и
+също `take-new`); `pass3-out.txt` (codex stdout 2026-09-01); `selfcheck-out.txt` (0.2.8); 10×
+`probe-*.txt` (думата „probe“); 3× `drafts-*` (VERIFY артефакти на затворения DRAFTS-001).
+Указатели към стария път — ДОПИСАНИ в квадратни скоби, не пренаписани: CANDIDATES § Ruling ledger
+(CONS-006) и § Event ledger 2026-09-17 „граница за генеричност“, `CONSOLIDATION_2026-09-16.md` D22,
+архив 005 `:521`, архив 006 `:15`. Acceptance: `ls .aiwf` → точно трите; `ls readiness/RDY` 9,
+`RGATE` 4, `CONS` 1; `git grep -c "dev/backlogs/readiness/" -- dev/PROJECT_OVERRIDES.md` → 1;
+`git grep -n "\.aiwf/plan/" -- dev` → 19 удара, всичките правилото (блок P), acceptance текстът на
+този тикет, fixture пътищата на plan-gate/spikes (`.aiwf/plan/FIX|SPK`) или датирана история (006:15
+с дописания път). Т.3 (правилото) ОТПАДНА — блок P легна с DRAFTS-001 (`dd2b81f`); т.5 —
+`dev/README.md` не споменава `.aiwf`, без промяна. VERIFY: няма (нула payload, нула код). Одит: няма
+(R1; записано при раждането). Route-state не е писан (R1). **Останал дълг: няма.**
 
 ## 0.2.7 — Environment correctness · tag `v0.2.7` (операторска дума 2026-09-16: HARD-013; ЗАМРАЗЕНО до края на консолидацията. HARD-014 ОТПАДНА — беше „Одитор с resume на сесията"; темата отива където консолидационното решение я прати)
 

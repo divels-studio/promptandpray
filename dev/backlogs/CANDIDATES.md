@@ -31,7 +31,9 @@ PLAN_HARD (чака дума), а правилото за `.aiwf/` в § Workspa
 
 **[дописано 2026-10-04]** Половината за payload-а е ЗАТВОРЕНА: DRAFTS-001, кодов commit `dd2b81f`
 (0.2.16); планът е архивиран като `dev/backlogs/archive/008_PLAN_DRAFTS_2026-10-04.md`; блок P е в
-`dev/PROJECT_OVERRIDES.md` § Workspace paths. Половината за това репо остава при HARD-023 (чака дума).
+`dev/PROJECT_OVERRIDES.md` § Workspace paths. Половината за това репо е ЗАТВОРЕНА с HARD-023,
+`e2e13fe` (2026-10-04): `.aiwf` = трите живи файла; историята на RDY/RGATE и CONS арбитраж брифът са
+тракнати под `dev/backlogs/readiness/`. Кандидатът е изчерпан.
 
 ## plansDir под игнориран път — self-check observation по префикс `.aiwf/` + предупреждение в интервюто (роден 2026-10-02, от readiness пас 2 на PLAN_DRAFTS)
 
