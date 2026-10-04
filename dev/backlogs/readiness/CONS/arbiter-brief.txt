@@ -1,0 +1,117 @@
+ARBITER BRIEF - parked by the executing COO session, 2026-09-17
+
+TRIGGER FIRED (D18, countable list): (1) the decision reverses a plan-recorded decision. Secondary:
+(3) the blast radius crosses the current ticket's boundary - the conflict is about D19/D22
+themselves, not only about CONS-006.
+
+DECLARED INTEREST: I am a party to this dispute, not a neutral reporter. The drift described below
+is mine. Read my position as a party's.
+
+## The casus in one sentence
+
+Ticket CONS-006 is written in the approved plan as "create `docs/METRICS.md` in the payload",
+sourced from D22 ("Stats methodology: normative text in ONE payload home (a short METRICS
+section)") and D19 ("Budget gates are planned and measured ONLY in operator-counter start/stop
+pairs ... tokens demoted to diagnostic"). The operator states that measurement was NEVER a payload
+topic: the counter exists to measure the D1-D26 work, the plugin is public, and an independent user
+may never run Codex at all or may hold a quota many times larger. If that is right, the ticket's
+premise - not merely its execution - is void.
+
+## Evidence, file:line
+
+PLAN / DESIGN AUTHORITY
+- `dev/backlogs/CONSOLIDATION_2026-09-16.md:158-162` - D19, the budget-gate rule, written in
+  doctrine register.
+- `dev/backlogs/CONSOLIDATION_2026-09-16.md:172-175` - D22, "normative text in ONE payload home (a
+  short METRICS section); the TABLE lives on the project's never-archiving transfer-surface file".
+- `dev/backlogs/CONSOLIDATION_2026-09-16.md:163-168` - D20, the resume policy, including the
+  canonical "resume answers 'is the DELTA sound'; cold answers 'is the WHOLE still sound'".
+- `dev/backlogs/active/PLAN_CONS.md`, ticket section CONS-006 - the Outcome lists seven items;
+  the counter is item 1, "same-window" is a FLAG on a table row.
+
+PRODUCT IDENTITY (the constraint the operator is invoking)
+- `dev/PROJECT_OVERRIDES.md` § Identity - the payload is generic or it is wrong; origin-project
+  specifics may live only in `dev/` and the self-install layer.
+- `dev/PROJECT_OVERRIDES.md` § Product direction - install -> loop -> update on a real consumer is
+  the value loop; a change that does not make one of those three more correct or more honest about
+  its guarantees is not this project's next step.
+
+WHAT IS ACTUALLY IN THE TREE RIGHT NOW (uncommitted, 5 files, +175/-2, HEAD `f34aa9a`)
+- `docs/METRICS.md` - new, 151 lines, 7 sections. Two of them (`:21-34` "Why the counter and not
+  the token", `:36-61` "How a pair is taken, and when it is attributable") are counter mechanics.
+- `docs/METRICS.md:57-61` - a rule I invented ("the start reading is taken at the moment of
+  dispatch") from an incident that did not happen; it appears in no D-entry.
+- `docs/METRICS.md:63-88` - the resume policy. This part is sourced directly from D20.
+- `docs/METRICS.md:90-110` - where the numbers live.
+- `docs/METRICS.md:112-128` - the method (counter-centric).
+- `docs/METRICS.md:130-151` - honest limits (auditor cannot run the suites; a paid pass can be
+  killed without a verdict; the evidence pack's claim is qualitative).
+- `docs/README.md:16`, `docs/WORKFLOW.md:305`, `docs/LOOP.md:37` - one pointer line each.
+- `CHANGELOG.md:62-76` - the release entry.
+- The diff passed its acceptance and the trio (selfcheck 1235/1235, exit 0). It has NOT been
+  reviewed by an auditor and has NOT been committed. No auditor pass has been spent on it.
+
+HOW THE DRIFT HAPPENED (relevant, because it bears on how much of the page is D-sourced)
+- I mis-read a counter reading as a spoiled measurement and wrote an invented failure mode into the
+  Writer's brief. The operator corrected the fact: the window had turned over BEFORE dispatch, the
+  pass ran wholly inside the new window, the pair was clean. I retracted the text, but the
+  retraction itself left behind the invented `:57-61` rule and enlarged the counter sections.
+- Recorded in `dev/backlogs/CANDIDATES.md:763` as an operator-correction row that STILL carries my
+  wrong version; it is queued for correction as soon as CONS-006's route-state clears (Gate 3 keeps
+  the main session out of `dev/**` while an R2 route is open).
+
+## The question to rule on
+
+Does the payload get a measurement/metrics home at all?
+
+POSITION A - the plan is right as recorded. D19 and D22 were adopted by the operator on 2026-09-16
+as payload doctrine; "a short METRICS section" is explicit about the home. The counter is an
+instance; the RULE is generic - every host meters something, and the rule "do not convert a token
+count into a budget figure" holds on any of them. Under A, CONS-006 stands and the remedy is
+surgical: delete `:57-61`, shrink the counter sections to the unit rule, keep the rest.
+
+POSITION B - the operator's reading. Measurement was never a payload topic. The counter, the
+5-hour window and the pairs are instruments of the D1-D26 consolidation; a public user may never
+run Codex, or runs it with a quota that makes scarcity discipline meaningless. Under B the page's
+FRAME is wrong, not its length: what survives is the resume policy - whose real justification is
+audit INDEPENDENCE, not economy (a readiness pass 1 is cold because the independent full reading is
+the guarantee it buys, and that argument holds at infinite quota) - plus the honest limits. The
+counter methodology moves to `dev/`, where the table already lives. Whether the survivor needs a
+new file or belongs in `docs/WORKFLOW.md` / `docs/REVIEW_CHECKLIST.md` is a second, smaller
+question.
+
+MY POSITION AS A PARTY: B on the substance. The counter sections describe an apparatus that exists
+in this operator's sessions and nowhere else, and I built them out during a correction rather than
+from the D-entries. I hold one reservation against my own position: D19's demotion of tokens to
+diagnostic is generic and worth keeping somewhere in the payload, and a pure B reading risks losing
+it with the rest.
+
+## What a ruling changes
+
+- Under A: CONS-006 proceeds after the surgical cuts; the plan is untouched.
+- Under B: CONS-006 is rewritten in `dev/backlogs/active/PLAN_CONS.md` (scope, outcome, acceptance),
+  D19/D22 gain a recorded qualification, and the current uncommitted diff is reworked. Discarding
+  work in the tree is destructive and needs the operator's own word regardless of the ruling.
+- Either way: `docs/METRICS.md:57-61` goes - it is sourced from nothing.
+
+## A note on who is receiving this
+
+By the operator's decision this brief goes to the session that holds the full consolidation context
+and AUTHORED the plan - not to a cold-start arbiter. That session is therefore a party too: it wrote
+D19, D22 and the CONS-006 ticket now under dispute. D18 makes the arbiter cold-start precisely
+against this (a warm author defends its own decision rather than re-deriving it), and the operator
+has weighed that against the value of the full context and chosen the context. Nothing in that
+choice is being second-guessed here; it is recorded so the ruling can account for it.
+
+Concretely, what is asked of the receiving session: declare your own interest as this brief's author
+does, and rule on the substance rather than on the authorship of D19/D22. If the honest answer is
+that the plan's premise was wrong, saying so costs the plan two paragraphs and saves the payload a
+page that does not belong to it.
+
+## Contract for the ruling
+
+Return: the position ruled for, in one line; the reasoning in a short paragraph; and, if B, an
+explicit answer to the second question (new file vs. an existing doc) and to my reservation about
+D19's token clause. You are READ-ONLY on the tree - no ruling without an opened file, which means
+you READ. The executing session writes the one-line entry into the Ruling ledger section of the
+transfer surface (`dev/backlogs/CANDIDATES.md`, format `| question | ruling | evidence pointer |`).

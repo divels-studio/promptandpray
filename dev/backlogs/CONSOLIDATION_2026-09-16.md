@@ -172,7 +172,7 @@ or doctrine. The payload carries mechanisms; the machine carries the topology.
 - **D21.** Evidence pack as payload practice: pack on every first code-class pass + explicit
   spot-check right and duty; the claim is qualitative (moves the pass from rediscovery to
   judgment), never cost.
-- **D22.** [AMENDED 2026-09-17 by arbitration ruling on `.aiwf/arbiter-brief.txt`, operator word
+- **D22.** [AMENDED 2026-09-17 by arbitration ruling on `.aiwf/arbiter-brief.txt` (moved 2026-10-04 to `dev/backlogs/readiness/CONS/arbiter-brief.txt`, HARD-023), operator word
   the same day; the amendment is the AUTHOR's own correction, ruled against its own rendering.]
   The original text put the normative half in "ONE payload home (a short METRICS section)". That
   violated this document's own genericity boundary: what ships must hold for a stranger with ONE
