@@ -1,0 +1,34 @@
+# PLAN_STAB - behavior ledger (Step 2a, one Explore/sonnet agent, over r0 at HEAD bc8c9a4)
+
+Rows as returned (cells condensed, substance kept). NOTE cells were acted on in r1 - see revisions.md.
+
+| # | behavior | link (file:line) | DOES | CLOSES OVER | STATES | LIB | NOTE |
+|---|---|---|---|---|---|---|---|
+| 1 | Blocks A, B land in tripwires (3)/(4) | docs/WORKFLOW.md:87-104 | prose; appended mid-paragraph; nothing reads it | none | n/a | none | Gate 1 denies Edit/Write to every non-writer subagent (scripts/engine/pretooluse-mutation-guard.js:236-258): a procedure agent can only write via shell, which r0's A called invisible - r1 rewords A |
+| 2 | C1, C2, D in How the COO speaks / operator gates | docs/WORKFLOW.md:165-173, 179-182, 192-196 | prose; pinned "one word per pass)," at :170 untouched | none | n/a | none | D's "such" had a weak antecedent (style) - r1 rewords; mechanism descriptions "clicks **Yes**" kept (D8) |
+| 3 | G1, H in Loop shape | docs/WORKFLOW.md:310-313, 317-324 | prose; :320 pin intact | none | n/a | none | count of "one word per pass" stays 4; `git grep -c` prints `<file>:N`; H's no-pass case vs the per-pass word rule (:165-170) |
+| 4 | X brief-contract line | docs/WORKFLOW.md:540 | replaces one skeleton line | none | n/a | none | "VERIFY runbook" has no other payload home (conditional "when it has one"); first 50 chars of X already at HEAD |
+| 5 | E, K in durable-plan list | docs/WORKFLOW.md:667-668, 671-672 | prose; E replaces point 3 | none | n/a | none | K partly repeats "scratch carries live mechanics only" (:236, :731-735); E's 50-char prefix matches HEAD |
+| 6 | J1 new paragraph | docs/WORKFLOW.md:271-279 | prose | none | n/a | none | anchor correct |
+| 7 | W, F in COO routing | docs/WORKFLOW.md:872-880 | prose | none | n/a | none | "unplanned R2" occurs once in docs/skills/templates (:875) |
+| 8 | V cross-repo paragraph | docs/WORKFLOW.md:917-924 | prose | none | n/a | none | anchor correct |
+| 9 | I commit authority | docs/WORKFLOW.md:1007-1010 | replaces bullet start | none | n/a | none | other texts describe the Writer committing CODE (LOOP:264, skills/loop:86, writer.md.tmpl:91-92) - consistent with I |
+| 10 | L, M1 in LOOP.md | docs/LOOP.md:44-48, 106-109 | prose | none | n/a | none | M1's Gate 4 claim true: recogniser matches a verb anywhere incl. quoted text (scripts/engine/pretooluse-git-verb-guard.js ~70-90) |
+| 11 | O1 checklist | docs/REVIEW_CHECKLIST.md:68-69 | prose | none | n/a | none | two homes of the sentence: here and reviewer.md.tmpl:68 |
+| 12 | CLAUDE.md.tmpl edits -> managed region | templates/CLAUDE.md.tmpl:84-98; generate.mjs renderTemplate :393; migrate.mjs extractRegion :207 | rendered; blocks carry no `{{` | config at call time | self-install region hash == upstream == recorded -> silent take-new (migrate.mjs:707-716) | none | "Four countable tripwires" (:106) must stay (test-update.mjs:1701-1728) |
+| 13 | writer.md.tmpl M2, N | templates/agents/writer.md.tmpl:66-68, 129-130 | whole-file render; contract block stripped | managedRegions hash == file | clean -> take-new | none | .claude/agents/writer.md is the live Writer file, rewritten in the Writer's own run |
+| 14 | reviewer.md.tmpl O2 | templates/agents/reviewer.md.tmpl:68 | rendered only where recorded | none | no reviewer.md here -> ifRecorded skip (migrate.mjs:634-640) | none | O2 exercised here only by the suites |
+| 15 | ORCHESTRATOR.md.tmpl P1, P2 | templates/ORCHESTRATOR.md.tmpl:159-160, 221 | render == template pinned (test-setup.mjs:250-254); model-agnostic check (selfcheck :6372-6389) | none | clean -> take-new | none | blocks carry none of the forbidden tokens; P2 is rule-bearing (guard (g)) |
+| 16 | skills/review R1, Q | skills/review/SKILL.md:629-630, 711 | prose; pin at :700-701 stays | none | pin count 1 | none | no wrapper records a killed pass's cost (r1 rewords Q); R1's prefix matches HEAD |
+| 17 | skills/qa U, R2, Q | skills/qa/SKILL.md:94-96, 207-208, 292 | prose | none | none | none | skills/qal builds its brief in the same block - no write-then-invoke gap, correctly untouched |
+| 18 | G2, T, S1, S2 | skills/loop:76-77; skills/mission:48-49; skills/roles:94; skills/update:81-82 | prose | none | none | none | update:82 ends with "." not ";"; /pnp:roles never writes settings.json (scripts/setup/aiwf-roles.mjs:13) - r1 fixes both |
+| 19 | self-check doctrine pins | scripts/selfcheck/aiwf-selfcheck.js:6267-6334, 6354-6364, 6464-6528 | five whitespace-collapsed phrase pins | none | none touched | none | plan r0 said three - r1 says five |
+| 20 | test-update region ageing | scripts/update/test-update.mjs:1701-1728 | throws without "Four countable tripwires" | fixed string | kept | none | fine |
+| 21 | test-setup ORCHESTRATOR pin | scripts/setup/test-setup.mjs:249-275 | render == template; no `{{`; contract block present | fresh fixture | none | none | template contract block must stay |
+| 22 | validate-payload manifest | scripts/update/validate-payload.mjs:182-332 | ids +1, versions increasing, last == plugin.json, dir set == id set, NOTES.md exists, ops.json keys | none | none | none | NOTES.md has no required sections; docRefs shape only |
+| 23 | validate-payload ops | scripts/update/validate-payload.mjs:105-156, 335-416, 428-453 | rerender fields + ifRecorded; template exists; region markers; note fields | none | Y satisfies | none | r0's note text was a Cyrillic placeholder -> selfcheck provenance fail; consumer names are denylisted (selfcheck :6762-6769) - r1 writes the note in English, no names |
+| 24 | engine rerender path | scripts/update/migrate.mjs:619-727 | record + unedited -> auto take-new; no record + ifRecorded -> skip | overlay | rerun: already current | none | no dialog expected here |
+| 25 | `--apply` | scripts/update/aiwf-update.mjs; migrate.mjs:468-543, 1473+, 1559 | preflight, apply, integrated self-check; writes CHANGES_<x>-to-<y>.md at root | pluginRoot = repo | needs plugin.json bumped first | none | CHANGES file was outside r0's scope; 20 predecessors are tracked - r1 adds it |
+| 26 | release files | .claude-plugin/plugin.json:3; migrations/index.json:22; CHANGELOG.md:7; README.md:22 | bump, index entry (needs a comma after 0021), NEW ops/NOTES | none | none | none | selfcheck version-stamp needs `--apply` first (D10 order) |
+| 27 | self-install targets | CLAUDE.md:1-145; .claude/agents/writer.md; .claude/aiwf-native/ORCHESTRATOR.md | rewritten by `--apply`, tracked | hashes == files | clean | none | r1's check-blocks covers CLAUDE.md, writer.md, ORCHESTRATOR.md |
+| 28 | acceptance greps vs tree | plan r0 acceptance | counts right for pins | none | none | none | negative probes for E, X, R1 already matched at HEAD; prefixes straddle wraps; backticks in double quotes; `git grep -c` prints `<file>:N` - r1 replaces them with check-blocks.mjs |
