@@ -1,8 +1,9 @@
 // UserPromptSubmit / PostToolUse / SessionStart(compact) hook (HARD-024; ported from Silerax UIR-040/041): the context ceiling.
 // Rule: dev/PROJECT_OVERRIDES.md § Loop shape "Чекпойнт по гейтове и таван на контекста".
 // Reads the per-session context % and window size that ~/.claude/statusline.sh writes to ~/.claude/ctx/<session_id>.pct
-// and .size (UIR-041), turns them into tokens (missing / bad size -> 1 000 000), reminds once on entering 400k tokens,
-// says "checkpoint now" on entering 450k (and on every prompt while at or above 450k; auto-compact comes at ~500k).
+// and .size (UIR-041), turns them into tokens (missing / bad size -> 1 000 000), reminds once on entering 950k tokens,
+// says "checkpoint now" on entering 1000k (and on every prompt while at or above 1000k). Thresholds 950k / 1000k
+// (operator 2026-10-14; before: 400k / 450k) - auto-compact is the operator's (`/autocompact`), the hook assumes no value.
 // Subagent hooks carry the parent's session_id, so activity events with an agent_id stay silent.
 // After a compaction it returns .aiwf/checkpoint.md as context and resets the announced band.
 // Writes only under ~/.claude/ctx/. Never blocks: bad input or any error -> exit 0, no output.
@@ -11,8 +12,8 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-export const REMIND_TOKENS = 400000;
-export const NOW_TOKENS = 450000;
+export const REMIND_TOKENS = 950000;
+export const NOW_TOKENS = 1000000;
 export const DEFAULT_WINDOW_SIZE = 1000000;
 
 // Stored band levels. Any other stored value (e.g. the UIR-040 70 / 80) reads as 0.
@@ -28,7 +29,7 @@ const BANDS = new Set([BAND_NONE, BAND_REMIND, BAND_NOW]);
 export const remindText = (k) =>
   `Контекстът е ${k}k токена — пиши чекпойнта (.aiwf/checkpoint.md) на следващия гейт (правило „Чекпойнт по гейтове", overrides § Loop shape).`;
 export const nowText = (k) =>
-  `Контекстът е ${k}k токена — пиши чекпойнта (.aiwf/checkpoint.md) СЕГА, след текущата стъпка: автоматичното компресиране идва на ~500k.`;
+  `Контекстът е ${k}k токена — пиши чекпойнта (.aiwf/checkpoint.md) СЕГА, след текущата стъпка.`;
 export const CHECKPOINT_PREFIX =
   'Чекпойнт след компресиране — прочети го и продължи по раздела „After /compact"/„След компресиране":';
 

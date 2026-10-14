@@ -27,7 +27,7 @@ import {
   tokensOf,
 } from '../context-gate.mjs';
 
-// No .size file -> 1 000 000 tokens, so 1 % = 10k tokens: 39 % = 390k, 41 % = 410k, 51 % = 510k.
+// No .size file -> 1 000 000 tokens, so 1 % = 10k tokens: 94 % = 940k, 96 % = 960k, 100 % = 1000k.
 
 const hookPath = fileURLToPath(new URL('../context-gate.mjs', import.meta.url));
 
@@ -78,12 +78,12 @@ function listFiles(dir) {
 }
 
 test('pure: bands at the boundaries, number parsing, decision table', () => {
-  assert.equal(bandOf(399999), 0);
-  assert.equal(bandOf(400000), 1);
-  assert.equal(bandOf(449999), 1);
-  assert.equal(bandOf(450000), 2);
-  assert.equal(bandOf(499999), 2);
-  assert.equal(bandOf(500000), 2);
+  assert.equal(bandOf(949999), 0);
+  assert.equal(bandOf(950000), 1);
+  assert.equal(bandOf(999999), 1);
+  assert.equal(bandOf(1000000), 2);
+  assert.equal(bandOf(1049999), 2);
+  assert.equal(bandOf(1050000), 2);
   assert.equal(tokensOf(41, 1000000), 410000);
   assert.equal(tokensOf(72, 200000), 144000);
   assert.equal(parsePct('72'), 72);
@@ -91,27 +91,27 @@ test('pure: bands at the boundaries, number parsing, decision table', () => {
   for (const bad of ['', '   ', 'abc', '-5', '7e1', 'NaN', '72%', null, undefined, 72]) {
     assert.equal(parsePct(bad), null, `parsePct(${JSON.stringify(bad)})`);
   }
-  assert.deepEqual(decide('PostToolUse', 390000, 0), { text: null, band: 0 });
-  assert.deepEqual(decide('PostToolUse', 410400, 0), { text: remindText(410), band: 1 });
-  assert.deepEqual(decide('PostToolUse', 449999, 1), { text: null, band: 1 });
-  assert.deepEqual(decide('PostToolUse', 450000, 1), { text: nowText(450), band: 2 });
-  assert.deepEqual(decide('PostToolUse', 510000, 1), { text: nowText(510), band: 2 });
-  assert.deepEqual(decide('UserPromptSubmit', 510000, 2), { text: nowText(510), band: 2 });
-  assert.deepEqual(decide('PostToolUse', 510000, 2), { text: null, band: 2 });
+  assert.deepEqual(decide('PostToolUse', 940000, 0), { text: null, band: 0 });
+  assert.deepEqual(decide('PostToolUse', 960400, 0), { text: remindText(960), band: 1 });
+  assert.deepEqual(decide('PostToolUse', 999999, 1), { text: null, band: 1 });
+  assert.deepEqual(decide('PostToolUse', 1000000, 1), { text: nowText(1000), band: 2 });
+  assert.deepEqual(decide('PostToolUse', 1010000, 1), { text: nowText(1010), band: 2 });
+  assert.deepEqual(decide('UserPromptSubmit', 1010000, 2), { text: nowText(1010), band: 2 });
+  assert.deepEqual(decide('PostToolUse', 1010000, 2), { text: null, band: 2 });
   assert.deepEqual(decide('UserPromptSubmit', 300000, 2), { text: null, band: 0 });
-  assert.deepEqual(decide('PostToolUse', 550000, 0), { text: nowText(550), band: 2 });
+  assert.deepEqual(decide('PostToolUse', 1050000, 0), { text: nowText(1050), band: 2 });
 });
 
 test('pure: the two texts, exact; no stop / no /compact request', () => {
   assert.equal(
-    remindText(410),
-    'Контекстът е 410k токена — пиши чекпойнта (.aiwf/checkpoint.md) на следващия гейт (правило „Чекпойнт по гейтове", overrides § Loop shape).',
+    remindText(960),
+    'Контекстът е 960k токена — пиши чекпойнта (.aiwf/checkpoint.md) на следващия гейт (правило „Чекпойнт по гейтове", overrides § Loop shape).',
   );
   assert.equal(
-    nowText(460),
-    'Контекстът е 460k токена — пиши чекпойнта (.aiwf/checkpoint.md) СЕГА, след текущата стъпка: автоматичното компресиране идва на ~500k.',
+    nowText(1010),
+    'Контекстът е 1010k токена — пиши чекпойнта (.aiwf/checkpoint.md) СЕГА, след текущата стъпка.',
   );
-  for (const text of [remindText(410), nowText(460)]) {
+  for (const text of [remindText(960), nowText(1010)]) {
     assert.equal(text.includes('СПРИ'), false);
     assert.equal(text.includes('поискай /compact'), false);
   }
@@ -126,49 +126,49 @@ test('pure: window size parsing -> missing / garbage / non-positive = 1 000 000'
   }
 });
 
-test('390k -> no output', () => {
+test('940k -> no output', () => {
   const s = sandbox();
-  s.setPct('sess-1', 39);
+  s.setPct('sess-1', 94);
   assert.equal(s.run(activity('UserPromptSubmit')), '');
   assert.equal(s.run(activity('PostToolUse')), '');
   assert.equal(existsSync(s.ctx('sess-1.band')), false);
 });
 
-test('band flow: 410k once, 510k now, 510k again on prompt only, drop to 300k silently, 410k again', () => {
+test('band flow: 960k once, 1000k now, 1000k again on prompt only, drop to 300k silently, 960k again', () => {
   const s = sandbox();
 
-  s.setPct('sess-1', 41);
-  assert.equal(contextOf(s.run(activity('PostToolUse')), 'PostToolUse'), remindText(410));
+  s.setPct('sess-1', 96);
+  assert.equal(contextOf(s.run(activity('PostToolUse')), 'PostToolUse'), remindText(960));
   assert.equal(readFileSync(s.ctx('sess-1.band'), 'utf8'), '1');
-  assert.equal(s.run(activity('PostToolUse')), '', 'second call at 410k -> none');
-  assert.equal(s.run(activity('UserPromptSubmit')), '', 'prompt at 410k -> none');
+  assert.equal(s.run(activity('PostToolUse')), '', 'second call at 960k -> none');
+  assert.equal(s.run(activity('UserPromptSubmit')), '', 'prompt at 960k -> none');
 
-  s.setPct('sess-1', 51);
-  assert.equal(contextOf(s.run(activity('PostToolUse')), 'PostToolUse'), nowText(510));
+  s.setPct('sess-1', 100);
+  assert.equal(contextOf(s.run(activity('PostToolUse')), 'PostToolUse'), nowText(1000));
   assert.equal(readFileSync(s.ctx('sess-1.band'), 'utf8'), '2');
-  assert.equal(contextOf(s.run(activity('UserPromptSubmit')), 'UserPromptSubmit'), nowText(510));
-  assert.equal(contextOf(s.run(activity('UserPromptSubmit')), 'UserPromptSubmit'), nowText(510));
-  assert.equal(s.run(activity('PostToolUse')), '', 'tool call at 510k after the now-text -> none');
+  assert.equal(contextOf(s.run(activity('UserPromptSubmit')), 'UserPromptSubmit'), nowText(1000));
+  assert.equal(contextOf(s.run(activity('UserPromptSubmit')), 'UserPromptSubmit'), nowText(1000));
+  assert.equal(s.run(activity('PostToolUse')), '', 'tool call at 1000k after the now-text -> none');
 
   s.setPct('sess-1', 30);
   assert.equal(s.run(activity('UserPromptSubmit')), '');
   assert.equal(readFileSync(s.ctx('sess-1.band'), 'utf8'), '0', 'band lowered silently');
 
-  s.setPct('sess-1', 41);
-  assert.equal(contextOf(s.run(activity('UserPromptSubmit')), 'UserPromptSubmit'), remindText(410));
+  s.setPct('sess-1', 96);
+  assert.equal(contextOf(s.run(activity('UserPromptSubmit')), 'UserPromptSubmit'), remindText(960));
 
   assert.deepEqual(listFiles(s.home), ['.claude/ctx/sess-1.band', '.claude/ctx/sess-1.pct']);
   assert.deepEqual(listFiles(s.project), []);
 });
 
-test('rounding: 449.6k is still the remind band and shows 450k rounded', () => {
+test('rounding: 999.6k is still the remind band and shows 1000k rounded', () => {
   const s = sandbox();
-  s.setPct('sess-1', 44.96);
-  assert.equal(contextOf(s.run(activity('PostToolUse')), 'PostToolUse'), remindText(450));
+  s.setPct('sess-1', 99.96);
+  assert.equal(contextOf(s.run(activity('PostToolUse')), 'PostToolUse'), remindText(1000));
   assert.equal(readFileSync(s.ctx('sess-1.band'), 'utf8'), '1');
 });
 
-test('.size: tokens = pct x size; 72 % of 200k = 144k -> none; 51 % of 1M file -> now; 25.5 % of 2M -> now', () => {
+test('.size: tokens = pct x size; 72 % of 200k = 144k -> none; 100 % of 1M file -> now; 50 % of 2M -> now', () => {
   const s = sandbox();
   s.setSize('sess-1', 200000);
   s.setPct('sess-1', 72);
@@ -176,19 +176,19 @@ test('.size: tokens = pct x size; 72 % of 200k = 144k -> none; 51 % of 1M file -
   assert.equal(existsSync(s.ctx('sess-1.band')), false);
 
   s.setSize('sess-2', 1000000);
-  s.setPct('sess-2', 51);
-  assert.equal(contextOf(s.run(activity('PostToolUse', 'sess-2')), 'PostToolUse'), nowText(510));
+  s.setPct('sess-2', 100);
+  assert.equal(contextOf(s.run(activity('PostToolUse', 'sess-2')), 'PostToolUse'), nowText(1000));
 
   s.setSize('sess-3', 2000000);
-  s.setPct('sess-3', 25.5);
-  assert.equal(contextOf(s.run(activity('PostToolUse', 'sess-3')), 'PostToolUse'), nowText(510));
+  s.setPct('sess-3', 50);
+  assert.equal(contextOf(s.run(activity('PostToolUse', 'sess-3')), 'PostToolUse'), nowText(1000));
 });
 
-test('no .size -> computed on 1M (41 % -> 410k remind, 39 % -> none)', () => {
+test('no .size -> computed on 1M (96 % -> 960k remind, 94 % -> none)', () => {
   const s = sandbox();
-  s.setPct('sess-1', 41);
-  assert.equal(contextOf(s.run(activity('PostToolUse')), 'PostToolUse'), remindText(410));
-  s.setPct('sess-2', 39);
+  s.setPct('sess-1', 96);
+  assert.equal(contextOf(s.run(activity('PostToolUse')), 'PostToolUse'), remindText(960));
+  s.setPct('sess-2', 94);
   assert.equal(s.run(activity('PostToolUse', 'sess-2')), '');
   assert.equal(existsSync(s.ctx('sess-1.size')), false);
 });
@@ -198,33 +198,33 @@ test('garbage .size -> computed on 1M', () => {
   for (const [i, garbage] of ['', 'abc', '0', '-200000', '2e5', '200000.5'].entries()) {
     const sid = `sess-g${i}`;
     s.setSize(sid, garbage);
-    s.setPct(sid, 41);
-    assert.equal(contextOf(s.run(activity('PostToolUse', sid)), 'PostToolUse'), remindText(410), `.size ${JSON.stringify(garbage)}`);
+    s.setPct(sid, 96);
+    assert.equal(contextOf(s.run(activity('PostToolUse', sid)), 'PostToolUse'), remindText(960), `.size ${JSON.stringify(garbage)}`);
   }
 });
 
 test('old UIR-040 band values (70 / 80) read as 0', () => {
   const s = sandbox();
   writeFileSync(s.ctx('sess-1.band'), '80');
-  s.setPct('sess-1', 51);
-  assert.equal(contextOf(s.run(activity('PostToolUse')), 'PostToolUse'), nowText(510));
+  s.setPct('sess-1', 100);
+  assert.equal(contextOf(s.run(activity('PostToolUse')), 'PostToolUse'), nowText(1000));
   assert.equal(readFileSync(s.ctx('sess-1.band'), 'utf8'), '2');
   writeFileSync(s.ctx('sess-2.band'), '70');
-  s.setPct('sess-2', 41);
-  assert.equal(contextOf(s.run(activity('PostToolUse', 'sess-2')), 'PostToolUse'), remindText(410));
+  s.setPct('sess-2', 96);
+  assert.equal(contextOf(s.run(activity('PostToolUse', 'sess-2')), 'PostToolUse'), remindText(960));
 });
 
 test('sessions are separate', () => {
   const s = sandbox();
-  s.setPct('sess-a', 55);
-  s.setPct('sess-b', 39);
+  s.setPct('sess-a', 101);
+  s.setPct('sess-b', 94);
   assert.equal(s.run(activity('PostToolUse', 'sess-b')), '');
-  assert.equal(contextOf(s.run(activity('PostToolUse', 'sess-a')), 'PostToolUse'), nowText(550));
+  assert.equal(contextOf(s.run(activity('PostToolUse', 'sess-a')), 'PostToolUse'), nowText(1010));
 });
 
-test('subagent (agent_id present) at 550k -> no output, .band unchanged; without agent_id -> now text', () => {
+test('subagent (agent_id present) at 1010k -> no output, .band unchanged; without agent_id -> now text', () => {
   const s = sandbox();
-  s.setPct('sess-1', 55);
+  s.setPct('sess-1', 101);
   writeFileSync(s.ctx('sess-1.band'), '1');
   const sub = (event) => ({ ...activity(event), agent_id: 'agent-7f3a', agent_type: 'writer' });
   assert.equal(s.run(sub('PostToolUse')), '', 'subagent PostToolUse -> none');
@@ -232,11 +232,11 @@ test('subagent (agent_id present) at 550k -> no output, .band unchanged; without
   assert.equal(readFileSync(s.ctx('sess-1.band'), 'utf8'), '1', '.band untouched by the subagent');
 
   // control: the same payload without agent_id (and with an empty one) is the main session
-  assert.equal(contextOf(s.run(activity('PostToolUse')), 'PostToolUse'), nowText(550));
+  assert.equal(contextOf(s.run(activity('PostToolUse')), 'PostToolUse'), nowText(1010));
   assert.equal(readFileSync(s.ctx('sess-1.band'), 'utf8'), '2');
   assert.equal(
     contextOf(s.run({ ...activity('UserPromptSubmit'), agent_id: '' }), 'UserPromptSubmit'),
-    nowText(550),
+    nowText(1010),
   );
 });
 
@@ -258,7 +258,7 @@ test('garbage pct file -> no output, exit 0', () => {
 
 test('garbage stdin / bad session id / other events -> no output, exit 0, nothing written', () => {
   const s = sandbox();
-  s.setPct('sess-1', 55);
+  s.setPct('sess-1', 101);
   assert.equal(s.run('not json'), '');
   assert.equal(s.run('null'), '');
   assert.equal(s.run({ hook_event_name: 'PostToolUse' }), '');
@@ -271,8 +271,8 @@ test('garbage stdin / bad session id / other events -> no output, exit 0, nothin
 
 test('SessionStart compact with a checkpoint -> the content as additionalContext, band reset to 0', () => {
   const s = sandbox();
-  s.setPct('sess-1', 55);
-  assert.equal(contextOf(s.run(activity('PostToolUse')), 'PostToolUse'), nowText(550));
+  s.setPct('sess-1', 101);
+  assert.equal(contextOf(s.run(activity('PostToolUse')), 'PostToolUse'), nowText(1010));
   mkdirSync(join(s.project, '.aiwf'));
   const checkpoint = '# Checkpoint\n\n## След компресиране\n- прочети PLAN § UIR-040\n';
   writeFileSync(join(s.project, '.aiwf', 'checkpoint.md'), checkpoint);
@@ -312,14 +312,14 @@ test('SessionStart with another source -> no output, state untouched', () => {
 
 test('after a compaction a stale pct (not rewritten since) is ignored; a fresh one counts', () => {
   const s = sandbox();
-  s.setPct('sess-1', 55);
-  assert.equal(contextOf(s.run(activity('PostToolUse')), 'PostToolUse'), nowText(550));
+  s.setPct('sess-1', 101);
+  assert.equal(contextOf(s.run(activity('PostToolUse')), 'PostToolUse'), nowText(1010));
   const past = Date.now() / 1000 - 120;
   utimesSync(s.ctx('sess-1.pct'), past, past);
 
   assert.equal(s.run({ hook_event_name: 'SessionStart', source: 'compact', session_id: 'sess-1' }), '');
-  assert.equal(s.run(activity('PostToolUse')), '', 'stale 550k after compaction -> silent');
-  assert.equal(s.run(activity('UserPromptSubmit')), '', 'stale 550k after compaction -> silent on prompt too');
+  assert.equal(s.run(activity('PostToolUse')), '', 'stale 1010k after compaction -> silent');
+  assert.equal(s.run(activity('UserPromptSubmit')), '', 'stale 1010k after compaction -> silent on prompt too');
   assert.equal(readFileSync(s.ctx('sess-1.band'), 'utf8'), '0');
 
   const future = Date.now() / 1000 + 120;
@@ -327,7 +327,7 @@ test('after a compaction a stale pct (not rewritten since) is ignored; a fresh o
   utimesSync(s.ctx('sess-1.pct'), future, future);
   assert.equal(s.run(activity('PostToolUse')), '');
 
-  s.setPct('sess-1', 42);
+  s.setPct('sess-1', 97);
   utimesSync(s.ctx('sess-1.pct'), future + 1, future + 1);
-  assert.equal(contextOf(s.run(activity('PostToolUse')), 'PostToolUse'), remindText(420));
+  assert.equal(contextOf(s.run(activity('PostToolUse')), 'PostToolUse'), remindText(970));
 });
