@@ -126,6 +126,7 @@ PLAN_HARD (чака дума), а правилото за `.aiwf/` в § Workspa
 само за заварени PLAN_* файлове, self-check-ът проверява само съществуване (scan редове 97-101 на
 PLAN_DRAFTS). Под `.aiwf` е решимо по префикс без git; „друг игнориран път“ иска `git check-ignore`.
 Нов observation (наблюдение, не проверка) + един warn в интервюто — отделен тикет, когато дойде.
+**[дописано 2026-10-14: в PLAN_LEAN, тикет LEAN-001 — `dev/backlogs/active/PLAN_LEAN.md` D6/D7.]**
 
 ## От readiness цикъла на Silerax PLAN_PUR v3 (роден 2026-10-02, доклад на сесия „Silerax PLAN_PUR Rediness 2b“ по операторска дума „прати на ПНП за мнение“; операторът още не е решил)
 
@@ -158,6 +159,8 @@ acceptance → дизайн/concurrency). При PnP: RGATE 9 → DRAFTS 5.
 двата договора са различни (повърхност срещу твърдения; fact-check-ът забранява sampling) и при
 PLAN_DRAFTS всеки рунд намираха различни неща; спестяването е да вървят ПАРАЛЕЛНО, както тук.
 
+**[дописано 2026-10-14: планът е одобрен — `dev/backlogs/active/PLAN_LEAN.md`, тикет LEAN-001; точка
+(2) е сменена с операторска дума 2026-10-14: двойката се МАХА изцяло, не става незадължителна — D3.]**
 **[2026-10-04, операторска дума „всичките шест“] Обхватът на 0.2.17 е РЕШЕН:** (1) ledger + consequence
 scan = един агент на тикет, две таблици, два файла; (2) старт→стоп двойката незадължителна в payload-а
 (`templates/PNP_CANDIDATES.md.tmpl` § Pass statistics, `docs/WORKFLOW.md` § The transfer surface);
@@ -794,6 +797,9 @@ xhigh) излиза по-скъп от студен. Решава се само 
 | PLAN_DRAFTS readiness p3 (2026-10-02, над r8, дума „добре нека да има трети пас, само че това е тавана“; hard max) | plan | студен | 92,438 | — | — | NEEDS-FIX (2 от 3 затворени; границата на шаблона: трети добавен ред минава) → цикълът спира; операторът „1“: r9 (дословен блок T) и одобрение без пас 4 |
 | DRAFTS-001 code p1 (2026-10-04, `gpt-6-sol`/xhigh, session `01a10644-30ae-7ad2-9769-5aa49dd4b488`, дума „действай“; interlock през 0.2.15 wrapper по същата дума) | code | студен | 106,608 | — | — | fail (5 блокера: WORKFLOW Gate 3 изречението пропуска `.aiwf/**`; брифът `PLAN:` чернова срещу активен план при разширение; ОСПОРЕНО D3/D11 → операторът: А; S3/S4 env пази `GIT_CONFIG_COUNT`/`GIT_TEMPLATE_DIR`; git spawn-ове без timeout) → кодов рунд 1 |
 | DRAFTS-001 code verification (2026-10-04, resume на p1, дума „да“) | code | resume | 218,317 (Codex отчита натрупаното за сесията, не само паса) | — | — | pass (5/5 затворени, 0 нови) |
+| PLAN_LEAN readiness p1 (2026-10-04, `gpt-6-sol`/xhigh, над r2, стоящата дума за планирането, session `01a1074e-17db-7eb0-8c90-bde27757039b`) | plan | студен | 148,092 | — | — | NEEDS-FIX (2: указателният bullet полу-стеснен; регистърът свеждан по хоста) |
+| PLAN_LEAN readiness p2 (2026-10-04, над r5, дума „пускай топъл“; прекъснат от квотата на engine-а, довършен с bare resume по дума „има квота пускай“) | plan | resume | 453,600 натрупано за сесията (прекъснатият ~298k, продължението ~7,350) | — | — | NEEDS-FIX (1, роден от r5: `typeof cfg.os` guard пуска `solaris` до „outside“) |
+| PLAN_LEAN readiness p3 (2026-10-14, над r6, дума „studen ok“; hard max) | plan | студен | 131,408 | — | — | PASS (пренесеният блокер CLOSED, 0 нови) |
 
 ## Event ledger (D16 формат: | дата | правило | violation|catch|operator-correction | указател |)
 
@@ -857,6 +863,9 @@ xhigh) излиза по-скъп от студен. Решава се само 
 | 2026-10-04 | VERIFY, паднал по средова причина, спира и пита | catch (на Колегата) | DRAFTS-001: `example-cycle-windows` exit 1 в паралелната партида (46/47 — byte-identity проверката видя `.aiwf/drafts-selfcheck-out.txt` и `.aiwf/drafts-test-setup-out.txt`, писани от съседните команди по редиректите на брифа на COO-то; runbook капанът „ZERO edits in the working tree while the example cycles run“), 47/47 самостоятелно; Колегата докладва двата рънa, COO спря и пита, операторът прие („действай“). Дефектът е в брифа — и в acceptance-а на плана, който праща изходите в `.aiwf/` при VERIFY в една партида — не в кода; следващ бриф праща VERIFY изходите извън репото или пуска цикъла отделно от всичко, което пише под репото |
 | 2026-10-04 | fact-check гейтът пази скъпия пас | catch | DRAFTS-001: 124 твърдения над прозата на дифа, 7 FALSE / 4 UNVERIFIABLE; две от неверните са ДОСЛОВЕН текст на плана (блок CL/M „шестте изречения сега казват setup writes no entry“ — вярно за 3 от 6; блок E „Gate 3 държи сесия извън всеки игнориран път“ — не под `docs/`), минал три readiness паса и четири собствени прохода; поправени с микро-рунд преди паса. Одиторът после намери 5 блокера, нито един прозово-фактически — двата инструмента пак се допълват |
 | 2026-10-04 | оспорен дизайнерски блокер → операторът, не рунд (ORCHESTRATOR § Escalation; D18 тригер 4) | catch (на COO-то) | DRAFTS-001 code p1: Одиторът оспори D3/D11 (разширение на приземен план срещу планиращия lock); COO-то НЕ го имплементира, записа двете страни и цената на всяка на оператора с две bullet-а, а рунда за другите блокери пусна паралелно; операторът отсъди с една буква („А“); текстовете легнаха в същия рунд, верификацията ги прие. Обратното на 2026-09-21 (CONS-008: ~430k tok за дизайн, който операторът отхвърли с едно изречение) |
+| 2026-10-04 | пас 1 язди стоящата дума (WORKFLOW § Plan readiness review) | operator-correction | PLAN_LEAN: COO-то вкара „пас 1 на операторска дума“ и „отделен ход = клик“ в цикъла; операторът: „имаме лупа цикъл ... да не стоя и да ви вардя“. Поправено: пас 1 тръгва на думата за планирането; отделният ход е граница на хода, не клик (`dev/backlogs/readiness/LEAN/revisions.md`, края) |
+| 2026-10-04 | топъл пас с компенсации срещу студен (§ ГЛАВЕН ПРИОРИТЕТ) | catch (данни) | PLAN_LEAN p2 топъл с трите компенсации над 1119-редов план: ~298k до прекъсването срещу 148k за студения p1; p3 студен — 131k. Още една точка към въпроса (Pass statistics по-горе) |
+| 2026-10-14 | инструментът пада нарочно / нула записи под репото | catch (на агента, самодокладван) | PLAN_LEAN own pass 3: агентът с инструментите написа scratch файлове в `dev/backlogs/readiness/LEAN/` (cwd на сесията), веднага ги изнесе и го докладва; COO провери директорията — само осемте readiness файла. Брифът казваше scratch пътя, но не „създай го преди `cd`“ |
 
 ## D2 pointer rows
 
@@ -864,5 +873,6 @@ xhigh) излиза по-скъп от студен. Решава се само 
 | 2026-09-17 | VERIFY кадансът паралелен (операторска дума) + pre-dispatch checklist — домовете: PLAN_CONS хедърът; памет machine-constraints-verify-runs |
 | 2026-10-02 | Release order: tag locally + main and the tag in ONE push, CI after, standing until revoked (operator rule, „да за правилото“) — home: `dev/PROJECT_OVERRIDES.md` § Hard rules Release discipline + § Test policy; PLAN_DRAFTS trace step 2 carries a one-line note; the RGATE record's „proposed text awaits guard (g)“ is closed by this row |
 | 2026-10-02 | PLAN_DRAFTS одобрен — черновите и readiness историята под `plansDir` (`drafts/`, `readiness/<ABBR>/`), scratchDir само за живата механика и за единствения Gate 3 случай; домът на правилото в payload-а: `skills/review/SKILL.md` Step 2e + `docs/WORKFLOW.md` (след DRAFTS-001); за това репо: блок P в `dev/backlogs/active/PLAN_DRAFTS.md` → `dev/PROJECT_OVERRIDES.md` § Workspace paths (пише го Колегата с DRAFTS-001; замества текста на HARD-023 § „Правилото“) **[дописано 2026-10-04: DRAFTS-001 затворен с `dd2b81f` — Step 2e, WORKFLOW и блок P са приземени; планът е `dev/backlogs/archive/008_PLAN_DRAFTS_2026-10-04.md`; редът е датиран лог и пътят в него е бил верен, когато е писан]** |
+| 2026-10-14 | PLAN_LEAN одобрен (дума „odobrqwam“, след readiness пас 3 PASS) — пълните решения D1-D14 и тикетът LEAN-001 живеят в `dev/backlogs/active/PLAN_LEAN.md`; readiness историята в `dev/backlogs/readiness/LEAN/`; издание 0.2.17 |
 | 2026-10-14 | Заглавие не е текст — след компресиране COO препрочита текста на правилото преди гейт / readiness / диспач; readiness започва със зареждане на `/pnp:review` (операторска дума „да, впиши го в overrides“) — home: `dev/PROJECT_OVERRIDES.md` § Loop shape, в bullet-а „Чекпойнт по гейтове“; произход: § „Таван на контекста“ по-горе, инцидентът на Silerax Plan F3 |
 | 2026-10-14 | Чекпойнт по гейтове и таван на контекста (операторско правило, „пускай тикета“; пренесено от Silerax UIR-040/041) — home: `dev/PROJECT_OVERRIDES.md` § Loop shape + § Workspace paths (`checkpoint.md`); механизмът: `.claude/hooks/context-gate.mjs` (HARD-024, `dev/backlogs/active/PLAN_HARD.md`); payload кандидатът: § „Таван на контекста“ по-горе |
