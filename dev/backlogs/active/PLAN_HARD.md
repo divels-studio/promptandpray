@@ -3089,6 +3089,138 @@ revisions,simulation}.md` + `PLAN_RDY.r0.md` (r0 = 0.3.0 скопът с `/pnp:p
 `dev/README.md` не споменава `.aiwf`, без промяна. VERIFY: няма (нула payload, нула код). Одит: няма
 (R1; записано при раждането). Route-state не е писан (R1). **Останал дълг: няма.**
 
+## Таван на контекста — проектно (роден 2026-10-14, операторска дума „сега въвеждаш този механизъм веднага тук в този проект“; пуснат 2026-10-14 с дума „пускай тикета“, без одит) **[ЗАТВОРЕН 2026-10-14, commit `b7e498a`]**
+
+### HARD-024 [R2 code-class — само self-install слоя `.claude/` + `dev/`, нула payload, без миграция и bump] — куката за тавана на контекста и чекпойнтът по гейтове, пренесени от Silerax
+
+**Контекст:** Silerax носи механизма от 2026-10-10 (UIR-040 / UIR-041 + `c37de33a`): кука
+`D:\Stratex\.claude\hooks\context-gate.mjs` (176 реда, без външни зависимости, ESM, пише само под
+`~/.claude/ctx/`, винаги exit 0), тестове `D:\Stratex\.claude\hooks\__tests__\context-gate.test.mjs`
+(20 `test(...)`, собствен temp HOME, нищо извън hooks директорията), окабеляване в
+`D:\Stratex\.claude\settings.json:20-51` (три събития, без `timeout`). Куката чете
+`~/.claude/ctx/<session_id>.pct|.size` — пише ги потребителският `~/.claude/statusline.sh:41-52`
+(регистриран в `~/.claude/settings.json:15-18`, върви за всеки проект). `autoCompactWindow: 500000` е в
+`~/.claude/settings.json:52` — важи и тук. В това репо: `.claude/settings.json` няма `hooks` ключ
+(носи само `permissions`); `.claude/hooks/` не съществува. Текстовете на куката сочат
+`.aiwf/checkpoint.md` и „правило „Чекпойнт по гейтове", overrides § Loop shape“ — правилото по-долу
+ляга под същото име в същата секция, затова текстовете остават дословно. Защо R2, а не R1: куката е
+изпълним артефакт (WORKFLOW § Routes R1 — „an executable artifact ends R1“).
+
+**Outcome:** (1) `.claude/hooks/context-gate.mjs` и `.claude/hooks/__tests__/context-gate.test.mjs` —
+копия на Silerax файловете; (2) `.claude/settings.json` носи `hooks` с трите събития; `permissions`
+непроменени байт по байт; (3) `dev/PROJECT_OVERRIDES.md` § Loop shape носи правилото по-долу и §
+Workspace paths брои `checkpoint.md` в живата механика на `.aiwf/` (rule-bearing — показано тук по
+guard (g), влиза само с одобрението; указателният ред в CANDIDATES § D2 pointer rows е същото
+одобрение, guard (h)); (4) `.aiwf/checkpoint.md` — първият чекпойнт, пише го COO-то.
+
+**Правилото (дословно, нов bullet в края на `dev/PROJECT_OVERRIDES.md` § Loop shape):**
+
+```text
+- **Чекпойнт по гейтове и таван на контекста (операторско правило 2026-10-14, пренесено от Silerax
+  UIR-040 / UIR-041; HARD-024).** COO пренаписва `.aiwf/checkpoint.md` ЦЕЛИЯ (Write, не допълване;
+  ≤ 60 реда: състояние, решения на оператора, живи агенти, следващи стъпки, „След компресиране
+  направи“) на всеки гейт — диспач, предаване, вердикт, преди commit — и когато куката
+  `.claude/hooks/context-gate.mjs` съобщи ≥ 400k токена контекст; при ≥ 450k — ВЕДНАГА, след текущата
+  стъпка, защото автоматичното компресиране идва на ~500k (`autoCompactWindow: 500000` в
+  потребителските настройки). След компресиране куката (`SessionStart`, `compact`) връща файла в
+  контекста; COO чете само него и файловете, които той назовава. Дълъг контекст не е повод за нова
+  сесия — сесията продължава през компресирането. Куката чете `~/.claude/ctx/<session_id>.pct` и
+  `.size`, които пише потребителският `~/.claude/statusline.sh`; без тях мълчи.
+  *Изтича:* когато payload-ът носи механизма (кандидат в `dev/backlogs/CANDIDATES.md` § „Таван на
+  контекста“).
+```
+
+**§ Workspace paths:** в описанието на `.aiwf/` списъкът на живите файлове
+(`route-state.json, review-brief.txt, last-review-session.txt`) получава `checkpoint.md` (HARD-024).
+
+**Решение на COO (един ред защо):** пренасят се куката, тестовете, окабеляването и основното правило;
+НЕ се пренасят правилата (а) „планът се чете по секции“, (б) „прочитът на diff-а е гейт + `/compact`“
+и „нова сесия на границата на тикета“ — операторът каза, че следващи сесии няма да има, а (а)/(б) са
+отделни решения на Silerax, не част от куката.
+
+**Worklist (Колега):**
+1. `.claude/hooks/context-gate.mjs` — копие байт по байт на `D:\Stratex\.claude\hooks\context-gate.mjs`
+   (четене извън репото, нула запис там), с ЕДНА промяна: ред 1, `(UIR-040)` → `(HARD-024; ported from
+   Silerax UIR-040/041)`.
+2. `.claude/hooks/__tests__/context-gate.test.mjs` — копие байт по байт на
+   `D:\Stratex\.claude\hooks\__tests__\context-gate.test.mjs`, без промяна.
+3. `.claude/settings.json` — нов ключ `"hooks"` след затварящата скоба на `"permissions"` (`:117`),
+   съдържанието дословно `D:\Stratex\.claude\settings.json:20-51` (`UserPromptSubmit` без matcher;
+   `PostToolUse` matcher `*`; `SessionStart` matcher `compact`; командата навсякъде `node
+   "${CLAUDE_PROJECT_DIR}/.claude/hooks/context-gate.mjs"`); `PreToolUse` / `long-command-guard` НЕ се
+   пренася; отстъп 2 интервала, както файлът.
+
+**Worklist (COO, преди диспача, docs):** правилото и Workspace paths реда в `dev/PROJECT_OVERRIDES.md`;
+D2 pointer ред в CANDIDATES; ред „HARD-024“ в § Ред и гейтове. След commit-а: `.aiwf/checkpoint.md`.
+
+**Извън обхват:** payload-ът (`hooks/`, `docs/`, `skills/`, `templates/`, схемата) — това е кандидатът;
+`~/.claude/settings.json`, `~/.claude/statusline.sh` (потребителски, вече работят); permissions и
+ask-правилата в `.claude/settings.json`; `long-command-guard`; правилата (а), (б) и „нова сесия“.
+
+**Acceptance (литерални, Bash от repo root):**
+- `node --test .claude/hooks/__tests__/` → exit 0, изходът съдържа `# pass 20` и `# fail 0` (счупено
+  лице: куката с `NOW_TOKENS = 400000` в scratch копие → `# fail` ≥ 1 — Колегата го пуска в scratchpad,
+  не в репото);
+- `diff D:/Stratex/.claude/hooks/context-gate.mjs .claude/hooks/context-gate.mjs` → точно един хънк
+  `1c1`, exit 1; `diff D:/Stratex/.claude/hooks/__tests__/context-gate.test.mjs
+  .claude/hooks/__tests__/context-gate.test.mjs` → без изход, exit 0;
+- `node -e "const s=require('./.claude/settings.json');const h=s.hooks;process.exit(h&&h.UserPromptSubmit&&h.PostToolUse&&h.SessionStart&&h.SessionStart[0].matcher==='compact'&&h.PostToolUse[0].matcher==='*'&&!h.PreToolUse?0:1)"`
+  → exit 0;
+- `git diff -U0 HEAD -- .claude/settings.json | grep -c '^-'` → `2` (`---` хедърът и `  }` на `:117`,
+  който става `  },`; трети изтрит ред = махнат permissions ред) и `git diff HEAD -- .claude/settings.json | grep -cE
+  '^\+.*"(Bash|PowerShell)\('` → `0`;
+- жив тест на куката: `echo '{"hook_event_name":"SessionStart","source":"compact","session_id":"hard024probe"}' |
+  CLAUDE_PROJECT_DIR=<scratch с .aiwf/checkpoint.md> node .claude/hooks/context-gate.mjs` → stdout
+  съдържа `Чекпойнт след компресиране`, exit 0; без файла → без изход, exit 0;
+- `git status --short -- . ":(exclude)dev"` → точно `?? .claude/hooks/` и ` M .claude/settings.json`.
+
+**VERIFY:** `node --test .claude/hooks/__tests__/` и `node scripts/selfcheck/aiwf-selfcheck.js
+--plugin-root . --project-fixture .` (self-check-ът чете `.claude/settings.json` на проекта — доказва, че
+`hooks` ключът не чупи owned ask-rules проверките); ЕДНА паралелна партида, точни exit кодове;
+`dev/VERIFY_RUNBOOK.md`.
+
+**Risk threshold:** блокира: пипнат payload файл; променен или махнат permissions/ask ред; кука, която
+блокира или излиза ≠ 0; запис извън `~/.claude/ctx/` от куката; различие от Silerax файловете извън ред
+1 на куката; правило, различно от показания текст.
+
+**Stop condition:** acceptance и VERIFY зелени → стоп.
+
+**Review:** `Class: code` → ред `code` на таблицата (Codex `gpt-6-sol`/xhigh, 1 пас) — ИЛИ без одит;
+въпросът при раждането — одит пас има ли — отговорът се записва тук: **БЕЗ ОДИТ (операторска дума
+2026-10-14: „без одит, когато влезе в пейлоада, тогава одитор, пускай тикета“; правилото одобрено със
+същата дума)**. Честен лимит: живото
+задействане (400k / 450k / компресиране) се вижда при първото реално компресиране на тази сесия, не в
+acceptance-а.
+
+**Assignee:** Колега (pin в `.claude/agents/writer.md`; НИКОГА `model`). Branch `main`. Route-state
+`{"ticket":"HARD-024","route":"R2"}` при диспач, `{}` при close. Commit: ЕДИН, subject `HARD-024:
+context ceiling hook and checkpoint rule, ported from Silerax`, без trailers; носи
+`.claude/hooks/**`, `.claude/settings.json`, `dev/PROJECT_OVERRIDES.md`, `dev/backlogs/CANDIDATES.md`
+(D2 реда и кандидата); PLAN записът — отделен docs commit.
+
+**Completion record — HARD-024 (ЗАТВОРЕН 2026-10-14, commit `b7e498a`, 5 файла, +588/−1).** Колегата:
+куката и тестовете — копия на Silerax (`cp`, LF като източника); единствената разлика в куката е ред 1
+(`diff` → един хънк `1c1`), тестовете — без разлика; `.claude/settings.json` — `hooks` с трите събития,
+нула permissions редове пипнати (`"(Bash|PowerShell)\(` в добавените редове → `0`). COO: правилото в §
+Loop shape и `checkpoint.md` в § Workspace paths на `dev/PROJECT_OVERRIDES.md`, кандидатът и D2 редът в
+CANDIDATES — в същия commit (обявено тук като пряка COO редакция). **Два дефекта на брифа, поправени в
+микро-рунд (не на Колегата):** (1) `node --test .claude/hooks/__tests__/` пада на Node v24.12.0
+(`MODULE_NOT_FOUND` — папка не се приема; Silerax е минал през същото, `PLAN_UIR.md:3693`), а
+подразбиращият се reporter печата `ℹ pass`, не `# pass` — командата е
+`node --test --test-reporter=tap ".claude/hooks/__tests__/*.test.mjs"`; (2) `git diff -U0 HEAD --
+.claude/settings.json | grep -c '^-'` → `1`, не `2` (git подравнява стария `  }` с новия затварящ;
+хънкът е само добавяне `@@ -116,0 +117,34 @@` по първия рън, `@@ -114,5 +114,39 @@` с контекст).
+VERIFY (една паралелна партида): тестовете → exit 0, `# tests 20`, `# pass 20`, `# fail 0`; self-check →
+exit 0, `==== 1256/1256 assertions passed ====`. Счупено лице: `NOW_TOKENS = 400000` в scratch копие →
+exit 1, `# pass 13`, `# fail 7`. Жива сонда: `SessionStart`/`compact` с `.aiwf/checkpoint.md` в scratch
+проект → stdout `{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"Чекпойнт
+след компресиране — …"}}`, exit 0; без файла → без изход, exit 0; сондата остави
+`~/.claude/ctx/hard024probe.{band,compacted}` (собствената зона за запис на куката). Statusline-ът вече
+пише `.pct`/`.size` за тази сесия (`~/.claude/ctx/00f71ea0-….pct`). Одит: няма (операторска дума).
+Route-state `{}`. `D:\pnp-live` не се опреснява за това — commit-ът не пипа payload. Честен лимит:
+живото задействане на 400k/450k и при компресиране се вижда при първото реално компресиране.
+**Останал дълг: няма.**
+
 ## 0.2.7 — Environment correctness · tag `v0.2.7` (операторска дума 2026-09-16: HARD-013; ЗАМРАЗЕНО до края на консолидацията. HARD-014 ОТПАДНА — беше „Одитор с resume на сесията"; темата отива където консолидационното решение я прати)
 
 ### HARD-013 [R2 code-class] — self-check-ът хваща кой да е `bash` от PATH; на WSL bash пада 52 пъти и `--apply` връща 1 въпреки приложените миграции (роден 2026-09-15 от консуматорски рън, ЧАКА ОПЕРАТОРСКА ДУМА)
@@ -3143,7 +3275,7 @@ HARD-016 (+release 0.2.9, изцяло) → [пауза; планът остав
 операторска дума 2026-09-24: 019 преди 018)** → **HARD-020 (+release 0.2.12; роден 2026-09-27,
 операторска дума „това ми трябва преди 0.3.0“)** → **HARD-021 (същото издание 0.2.12, един commit и
 един code пас за двата; роден 2026-09-28, операторски думи „довърши 020 и след това се заеми с 021“,
-„ще минем одит“)** → **HARD-022 (+release 0.2.14; роден 2026-09-30, дума същия ден „пускай тикета“, без одит пас)** → HARD-011 в цикъла
+„ще минем одит“)** → **HARD-022 (+release 0.2.14; роден 2026-09-30, дума същия ден „пускай тикета“, без одит пас)** → **HARD-024 (роден 2026-10-14, операторска дума „въвеждаш този механизъм веднага“; проектно, без издание)** → HARD-011 в цикъла
 на 0.3.0 → архивиране на плана с последния затворен тикет.
 
 Гейтове: всеки тикет — собствена дума за диспач; commit — клик (стейдж по изрични пътища,
