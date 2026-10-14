@@ -67,6 +67,22 @@ review не се съкращава заради токени ((4-стр.) p2); 
 на праговете (нито един текст не препоръчва 450K или 500K като окончателни); цената на нов старт при
 ~150-180K има една точка ($1.07 при 140.9K).
 
+**Инцидент след компресиране (2026-10-14, доклад на сесия „Silerax Plan F3“ по операторско искане):**
+обобщението на автокомпакта носи доктрината само като ЗАГЛАВИЯ („Doctrine preflight: done this session
+— I read these in full“; readiness цикълът — един ред), а текстът на `/pnp:review` Step 2a–2d изчезва;
+чекпойнтът казваше само „Следва: … → readiness“. COO-то пусна два свободни sonnet агента („fact-check“,
+„consequence scan“) ПРЕДИ да зареди скила, после скилът поиска своите седем — 2 дублирани агента, ~550k
+subagent токена (fact-check ~187k, скан ~369k), нула платени engine пасове. Причина (по доклада):
+действие по заглавието на правилото, не по текста му — правилото е в `docs/WORKFLOW.md` § Plan
+readiness review; компресирането е усилващ фактор („прочетено изцяло“ оцелява, текстът — не). Мерки
+там: memory `feedback_readiness_via_review_skill.md` и ред в „След компресиране направи“ на чекпойнта —
+преди гейт, readiness стъпка или диспач се препрочита текстът на правилото. **Предложения към payload-а
+(от доклада, за решаване):** (a) `SessionStart:compact` да инжектира общо напомняне „обобщението носи
+заглавия; преди гейт препрочети текста на правилото“, независимо от чекпойнта на проекта; (b) едно
+изречение в WORKFLOW § Plan readiness review: readiness започва със зареждане на `/pnp:review`, scan /
+fact-check агенти извън Step 2a–2c не се пускат; (c) предупреждение, когато в сесията вече има scan
+агенти с „fact-check“/„consequence“ преди скилът да поиска своите.
+
 **Наблюдения** от Silerax (памет на сесия „Silerax Plan F3“, 2026-10-14): на 460k куката каза „сега“,
 компресирането мина и `SessionStart:compact` върна чекпойнта правилно; допълван (не пренаписван)
 resume файл беше стигнал 174 KB и ~25% от контекста при старт — затова „пренаписвай целия“;
@@ -848,4 +864,5 @@ xhigh) излиза по-скъп от студен. Решава се само 
 | 2026-09-17 | VERIFY кадансът паралелен (операторска дума) + pre-dispatch checklist — домовете: PLAN_CONS хедърът; памет machine-constraints-verify-runs |
 | 2026-10-02 | Release order: tag locally + main and the tag in ONE push, CI after, standing until revoked (operator rule, „да за правилото“) — home: `dev/PROJECT_OVERRIDES.md` § Hard rules Release discipline + § Test policy; PLAN_DRAFTS trace step 2 carries a one-line note; the RGATE record's „proposed text awaits guard (g)“ is closed by this row |
 | 2026-10-02 | PLAN_DRAFTS одобрен — черновите и readiness историята под `plansDir` (`drafts/`, `readiness/<ABBR>/`), scratchDir само за живата механика и за единствения Gate 3 случай; домът на правилото в payload-а: `skills/review/SKILL.md` Step 2e + `docs/WORKFLOW.md` (след DRAFTS-001); за това репо: блок P в `dev/backlogs/active/PLAN_DRAFTS.md` → `dev/PROJECT_OVERRIDES.md` § Workspace paths (пише го Колегата с DRAFTS-001; замества текста на HARD-023 § „Правилото“) **[дописано 2026-10-04: DRAFTS-001 затворен с `dd2b81f` — Step 2e, WORKFLOW и блок P са приземени; планът е `dev/backlogs/archive/008_PLAN_DRAFTS_2026-10-04.md`; редът е датиран лог и пътят в него е бил верен, когато е писан]** |
+| 2026-10-14 | Заглавие не е текст — след компресиране COO препрочита текста на правилото преди гейт / readiness / диспач; readiness започва със зареждане на `/pnp:review` (операторска дума „да, впиши го в overrides“) — home: `dev/PROJECT_OVERRIDES.md` § Loop shape, в bullet-а „Чекпойнт по гейтове“; произход: § „Таван на контекста“ по-горе, инцидентът на Silerax Plan F3 |
 | 2026-10-14 | Чекпойнт по гейтове и таван на контекста (операторско правило, „пускай тикета“; пренесено от Silerax UIR-040/041) — home: `dev/PROJECT_OVERRIDES.md` § Loop shape + § Workspace paths (`checkpoint.md`); механизмът: `.claude/hooks/context-gate.mjs` (HARD-024, `dev/backlogs/active/PLAN_HARD.md`); payload кандидатът: § „Таван на контекста“ по-горе |
