@@ -6,6 +6,37 @@
 тикетите, които ги затвориха. Нов кандидат, роден от работа в полет, става тикет в активния план;
 тук стоят само неща, нарочно паркирани извън активната мисия.
 
+## Таван на контекста + чекпойнт по гейтове в payload-а (роден 2026-10-14, операторска дума „кандидат запис за версия и анализ“; ГЛАВЕН кандидат и на Silerax)
+
+**Произход:** Silerax (`D:\Stratex`) UIR-040 / UIR-041 + поправка `c37de33a`; правилото —
+`D:\Stratex\dev\PROJECT_OVERRIDES.md` § Loop shape „Чекпойнт по гейтове и таван на контекста“
+(2026-10-10), изтича там „когато PromptAndPray носи механизма“; записът на експеримента —
+`D:\Stratex\dev\backlogs\readiness\UIR\context-ceiling-2026-10-10.md`. В това репо проектно (не
+payload) от HARD-024 (`dev/backlogs/active/PLAN_HARD.md`).
+
+**Механизмът (три части):** (1) `autoCompactWindow` (днес `500000` в потребителските настройки —
+важи за всички проекти на машината); (2) statusline пише `~/.claude/ctx/<session_id>.pct|.size`
+(днес потребителският `~/.claude/statusline.sh` — извън всеки проект); (3) кука `context-gate.mjs`
+на `UserPromptSubmit` / `PostToolUse` / `SessionStart:compact` — напомняне на 400k, „сега“ на 450k,
+след компресиране връща `.aiwf/checkpoint.md` като `additionalContext` (`PreCompact` не може да добавя
+контекст); правило: COO пренаписва ЦЕЛИЯ чекпойнт (≤ 60 реда) на всеки гейт и по сигнал на куката.
+
+**Какво би носил payload-ът (за решаване, не решено):** куката като четвърти hook файл (или
+`SessionStart` + `UserPromptSubmit` в съществуващия `hooks/hooks.json`) — фабрично изключена или
+включена; праговете като ключове в схемата (`context.remindTokens`, `context.nowTokens` — имена
+нерешени), а не константи; statusline зависимостта — payload-ът не може да пише потребителския
+statusline, затова или собствен източник на процента, или честен лимит „без statusline куката мълчи“;
+правилото за чекпойнта — `docs/WORKFLOW.md` или ORCHESTRATOR шаблонът (rule-bearing, guard (g));
+`checkpoint.md` в живата механика на scratchDir (Step 2e списъкът). Managed-artifact промяна →
+миграция + bump. Текстовете на куката днес са български — payload-ът ги иска английски.
+
+**Анализ (чака):** операторът ще качи GPT анализа на експеримента (измерването); праговете
+400k/450k и цената на самото компресиране при голям контекст се решават след него. Записани
+наблюдения от Silerax (памет на сесия „Silerax Plan F3“, 2026-10-14): на 460k куката каза „сега“,
+компресирането мина и `SessionStart:compact` върна чекпойнта правилно; допълван (не пренаписван)
+resume файл беше стигнал 174 KB и ~25% от контекста при старт — затова „пренаписвай целия“;
+планиране/readiness не е граница на тикет и дълъг контекст не е повод за нова сесия.
+
 ## Черновите живеят в репото; `.aiwf` носи само живата механика на loop-а (роден 2026-10-02, операторска дума)
 
 Кандидат без ref. Операторът го даде в Silerax (предадено от сесия „Silerax Plan Session 03“) и
@@ -782,3 +813,4 @@ xhigh) излиза по-скъп от студен. Решава се само 
 | 2026-09-17 | VERIFY кадансът паралелен (операторска дума) + pre-dispatch checklist — домовете: PLAN_CONS хедърът; памет machine-constraints-verify-runs |
 | 2026-10-02 | Release order: tag locally + main and the tag in ONE push, CI after, standing until revoked (operator rule, „да за правилото“) — home: `dev/PROJECT_OVERRIDES.md` § Hard rules Release discipline + § Test policy; PLAN_DRAFTS trace step 2 carries a one-line note; the RGATE record's „proposed text awaits guard (g)“ is closed by this row |
 | 2026-10-02 | PLAN_DRAFTS одобрен — черновите и readiness историята под `plansDir` (`drafts/`, `readiness/<ABBR>/`), scratchDir само за живата механика и за единствения Gate 3 случай; домът на правилото в payload-а: `skills/review/SKILL.md` Step 2e + `docs/WORKFLOW.md` (след DRAFTS-001); за това репо: блок P в `dev/backlogs/active/PLAN_DRAFTS.md` → `dev/PROJECT_OVERRIDES.md` § Workspace paths (пише го Колегата с DRAFTS-001; замества текста на HARD-023 § „Правилото“) **[дописано 2026-10-04: DRAFTS-001 затворен с `dd2b81f` — Step 2e, WORKFLOW и блок P са приземени; планът е `dev/backlogs/archive/008_PLAN_DRAFTS_2026-10-04.md`; редът е датиран лог и пътят в него е бил верен, когато е писан]** |
+| 2026-10-14 | Чекпойнт по гейтове и таван на контекста (операторско правило, „пускай тикета“; пренесено от Silerax UIR-040/041) — home: `dev/PROJECT_OVERRIDES.md` § Loop shape + § Workspace paths (`checkpoint.md`); механизмът: `.claude/hooks/context-gate.mjs` (HARD-024, `dev/backlogs/active/PLAN_HARD.md`); payload кандидатът: § „Таван на контекста“ по-горе |

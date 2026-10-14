@@ -278,7 +278,7 @@ examples/           the committed example project + cycle data (payload; asserte
 dev/                the plugin's OWN development: this doc, answers.json, backlogs/{active,archive,drafts,readiness}
 .claude/ CLAUDE.md  the self-install (project layer rendered by /pnp:setup from dev/answers.json)
 .aiwf/              scratch (gitignored): ONLY the live loop mechanics - route-state.json,
-                    review-brief.txt, last-review-session.txt - and the artifacts of the CURRENT
+                    review-brief.txt, last-review-session.txt, checkpoint.md (HARD-024) - and the artifacts of the CURRENT
                     ticket or readiness cycle. A plan draft lives in
                     dev/backlogs/drafts/PLAN_<ABBR>.draft.md and leaves when the plan lands; the
                     readiness history (ledger, consequence scan, own pass, fact-check, revisions)
@@ -314,6 +314,18 @@ mechanics and are **not** editable here (see the payload doc `docs/WORKFLOW.md` 
   ceiling: the first on the ticket's standing word, each further one on the operator's own explicit
   word - one word per pass - and one more beyond the configured number is always available with
   that word. Independent of the cap above.
+- **Чекпойнт по гейтове и таван на контекста (операторско правило 2026-10-14, пренесено от Silerax
+  UIR-040 / UIR-041; HARD-024).** COO пренаписва `.aiwf/checkpoint.md` ЦЕЛИЯ (Write, не допълване;
+  ≤ 60 реда: състояние, решения на оператора, живи агенти, следващи стъпки, „След компресиране
+  направи“) на всеки гейт — диспач, предаване, вердикт, преди commit — и когато куката
+  `.claude/hooks/context-gate.mjs` съобщи ≥ 400k токена контекст; при ≥ 450k — ВЕДНАГА, след текущата
+  стъпка, защото автоматичното компресиране идва на ~500k (`autoCompactWindow: 500000` в
+  потребителските настройки). След компресиране куката (`SessionStart`, `compact`) връща файла в
+  контекста; COO чете само него и файловете, които той назовава. Дълъг контекст не е повод за нова
+  сесия — сесията продължава през компресирането. Куката чете `~/.claude/ctx/<session_id>.pct` и
+  `.size`, които пише потребителският `~/.claude/statusline.sh`; без тях мълчи.
+  *Изтича:* когато payload-ът носи механизма (кандидат в `dev/backlogs/CANDIDATES.md` § „Таван на
+  контекста“).
 
 ## Product boundary checks (rendered into the Reviewer)
 
