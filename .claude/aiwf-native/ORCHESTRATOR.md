@@ -153,8 +153,11 @@ Before the first paid readiness pass - and, when no auditor pass is configured, 
 presented for execution approval - every link of every chain the plan's Outcome passes through has
 a row produced by a SEPARATE scan-tier context: what the link does with the plan's input, what it
 closes over, what it does at N rows and under concurrent callers, and what the library underneath
-it does. `/pnp:review` Step 2a carries the agent's task; it is not restated here. The COO reads the
-rows, not the pointers, and acts on what they say BEFORE the dispatch.
+it does - and the same context, in the same dispatch, reads every decision of the plan from the
+tree's side and returns the surfaces that can violate it, as a second table. `/pnp:review` Step 2a
+carries the agent's task and its dispatch - one agent per ticket, two tables; the task is not
+restated here. The COO reads the rows, not the pointers, and acts on what they say BEFORE the
+dispatch.
 
 a ledger proves that a second context read the link, not that the COO acted on it - the plan lines
 that changed are where acting is visible; the catch-share was measured on one plan by its author
@@ -165,9 +168,12 @@ fact-check gate and the COO's own pass over the ledger are the whole contract. I
 dual: small R1 and non-durable R2 work owe nothing here, because they receive no readiness review.
 
 **The consequence scan and the own pass ride the same duty.** Before the same pass, every decision
-of the plan has been read from the tree's side by a separate scan-tier context and every row it
-returned is closed (`/pnp:review` Step 2c), and the COO's own pass - the last act over the plan, in
-a turn of its own - is a file stamped with the plan's SHA-256 (Step 2d). The brief names both, and a
+of the plan has been read from the tree's side by that same separate context - the second table of
+the Step 2a dispatch, and before a further pass a scan over the revision's decisions (`/pnp:review`
+Step 2c) - and every row it returned is closed, and the COO's own pass - the last act over the plan,
+in a turn of its own - is a file stamped with the plan's SHA-256 (Step 2d, which says what that pass
+opens, reads and runs; it is not restated here).
+The brief names both, and a
 plan-class pass does not start without them: the Codex wrapper refuses it and Gate 2 denies a Claude
 reviewer dispatch. The gate proves that both files exist, that every scan row is closed and every
 audited ticket has its rows, and that the own pass was stamped over the plan file the brief names;

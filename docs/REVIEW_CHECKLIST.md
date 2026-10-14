@@ -29,7 +29,8 @@ fact-check gate runs before every one of these passes above the scan tier - it i
 the reviewer itself runs on a scan-tier model.
 
 Check only that the plan matches the repository, has clear scope, contains no hidden discovery or
-unresolved architecture, sequences executable work correctly, uses real acceptance/verification, and
+unresolved architecture (for every write, the lock and what runs beside it - class 15), sequences
+executable work correctly, uses real acceptance/verification, and
 has valid branch/worktree/Git prerequisites. Return only `PASS` or `NEEDS-FIX` with concise
 actionable blockers. Do not require a universal DoR/DoD, create an audit document, or review
 formatting for its own sake.

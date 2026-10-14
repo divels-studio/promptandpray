@@ -2,7 +2,9 @@
 
 The classes below were measured on the readiness cycles of consumer projects: the first thirteen
 classes were each a paid pass-1 blocker at least once, most of them in more than one project; the
-fourteenth was measured between passes, on the blockers a revision itself created.
+fourteenth was measured between passes, on the blockers a revision itself created; the fifteenth on
+a second pass, where two of the four blockers born of the revision were a race or a lock decision the
+plan had left as an accepted residual.
 
 `/pnp:review` Step 2b hands this file to the fact-check agent; a class present in a plan is a gap,
 named by number. Step 2c's consequence scan asks classes 1, 10 and 14 from the other side - from
@@ -24,5 +26,6 @@ each decision of the plan out to the tree. The list grows with a release, never 
 | 12 | open decision left to the Writer | What would the Writer still have to decide - a name, a layout, a flag, an order - that the plan does not fix? |
 | 13 | acceptance misses a risk-threshold item | Does every item of the risk threshold have an acceptance check that observes it? |
 | 14 | fix after a pass adds new surface | Does the revision after a pass only close the blockers it was handed, or does it open surface the previous pass never saw? |
+| 15 | concurrency decision left as an accepted residual | For every write the ticket adds or changes: which lock holds it and what runs beside it - does the plan NAME them? A race or a lock-order question on a path the ticket writes that the plan closes with "accepted residual", "rare" or "the Writer will see" is an open decision, and no pass accepts it. |
 
 This is a corpus, not a theory - a class not listed is not proven absent.

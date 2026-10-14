@@ -4,6 +4,46 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.2.17] - 2026-10-14
+
+The readiness cycle is leaner and sharper: one scan agent per ticket, no counter pair, a
+class for the race left as an "accepted residual", an own pass that opens what the Writer acts on,
+a plan that carries `file:line` where someone acts, and a self-check that sees a plansDir under the
+scratch directory.
+
+### Added
+
+- **Readiness class 15 (LEAN-001)** - `docs/READINESS_CLASSES.md`: a concurrency decision left as an
+  accepted residual is an open decision, and no pass accepts it; readiness check 3 names, for every
+  write the plan adds or changes, the lock that holds it and what runs beside it - in
+  `docs/WORKFLOW.md`, in the fact-check instruction and in the own pass's `discovery` cell.
+- **plansDir under the scratch directory is observed (LEAN-001)** - the self-check's fourth
+  `(observed)` row says `under the scratch directory` or `outside the scratch directory` (a note,
+  never a failure), and `/pnp:setup` warns at the plans question - a lexical prefix test over the
+  configured paths, folding case and backslashes on a project whose `os` is windows; any other
+  ignored path is detected by neither.
+
+### Changed
+
+- **One scan agent per ticket (LEAN-001)** - `/pnp:review` Step 2a dispatches one scan-tier agent
+  that returns the behavior ledger and the consequence scan as two tables from one context; the
+  files stay two and the plan gate is untouched; Step 2c describes the second table and the delta
+  scan before a further pass. `.claude/aiwf-native/ORCHESTRATOR.md` is re-rendered by migration
+  `0021_lean-readiness`.
+- **The own pass opens what the Writer acts on (LEAN-001)** - Step 2d and `docs/WORKFLOW.md` § Plan
+  readiness review: every pointer the Writer acts on opened, the ledger rows read as behavior, every
+  instrument run with valid AND broken input - in place of "every `file:line` opened".
+- **Pointer discipline (LEAN-001)** - `docs/WORKFLOW.md` § Ticket brief contract and § Plan readiness
+  review: a plan carries `file:line` where the Writer acts or an acceptance check reads; context
+  cites the section and the symbol.
+
+### Removed
+
+- **The counter start/stop pair (LEAN-001)** - `templates/PNP_CANDIDATES.md.tmpl` and the skeleton
+  in `docs/WORKFLOW.md` § The transfer surface: a Pass statistics row records which pass it was and
+  what it cost as the engine reported it, and nothing asks the operator for a counter; § Branch
+  policy loses the "one live auditor" clause that held only while a pair was being recorded.
+
 ## [0.2.16] - 2026-10-04
 
 A plan's draft and its readiness history live in the repository; the scratch directory carries the

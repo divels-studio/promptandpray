@@ -879,11 +879,15 @@ export function resolveTransferSurface(paths) {
 }
 
 /**
- * THE TWO WARNINGS SETUP OWES A PROJECT THAT WAS NOT EMPTY, in one place because two spellings of
- * the same sentence would eventually disagree - and the interview and the generator each say them
- * on their own path (the interview at the question, the generator in its plan/report).
+ * THE THREE WARNINGS SETUP OWES, in one place because two spellings of the same sentence would
+ * eventually disagree. The interview says all three at their questions; the generator repeats the
+ * existing-plans warning and the under-scratch warning, through these same helpers, as notes in its
+ * plan/report. The overrides-document warning is the interview's alone: the generator never calls
+ * existingOverridesWarning and states that fact in a note of its own words (planInstall, step 5).
+ * Two are owed a project that was not empty (existing plans, an existing overrides document); the
+ * third is owed any project whose paths.plansDir lies under the scratch directory.
  *
- * Neither is a blocker. Both describe a situation an operator may want on purpose; what must not
+ * None is a blocker. Each describes a situation an operator may want on purpose; what must not
  * happen is that setup adopts it in SILENCE.
  */
 
@@ -904,6 +908,29 @@ export function existingPlansWarning({ projectRoot, plansDir }) {
   const count = entries.filter((e) => e.isFile() && /^PLAN_.*\.md$/.test(e.name)).length;
   if (count === 0) return null;
   return `${count} existing PLAN_*.md in ${rel} - Gate 2 off-plan will read them as active pnp plans; pick another paths.plansDir if they are not.`;
+}
+
+/**
+ * One warning line, or null: paths.plansDir lies under the scratch directory. A plan canon there
+ * is outside git wherever the scratch directory is ignored (/pnp:review Step 2e). A warning, never a
+ * refusal - the schema admits any string and the operator may mean exactly this. Pure and lexical:
+ * "." and ".." segments are folded; on a project whose `os` is windows (windowsPaths) backslashes
+ * are separators and case is folded, as that file system and git's ignore matching fold them
+ * there; on linux and macos the paths are compared as written (a volume's case rule is not in the
+ * config, and a lexical test does not guess it); nothing is resolved against the file system. The
+ * same test lives in scripts/selfcheck/aiwf-selfcheck.js (plansDirUnderScratch) - the self-check
+ * imports nothing from setup.
+ */
+export function plansDirUnderScratchWarning({ plansDir, scratchDir = '.aiwf', windowsPaths = false }) {
+  const norm = (p) => {
+    const s = windowsPaths ? String(p).replace(/\\/g, '/').toLowerCase() : String(p);
+    return path.posix.normalize(s).replace(/\/+$/, '');
+  };
+  const a = norm(plansDir);
+  const b = norm(scratchDir);
+  if (!a || !b || a === '.' || b === '.') return null;
+  if (a !== b && !a.startsWith(b + '/')) return null;
+  return `paths.plansDir ${plansDir} is under the scratch directory ${scratchDir} - a plan canon there is outside git wherever the scratch directory is ignored; pick a tracked path (/pnp:review Step 2e)`;
 }
 
 /**
@@ -1469,6 +1496,8 @@ export function planInstall({
   {
     const warning = existingPlansWarning({ projectRoot, plansDir: merged.paths.plansDir });
     if (warning) notes.push(warning);
+    const underScratch = plansDirUnderScratchWarning({ plansDir: merged.paths.plansDir, scratchDir: merged.paths.scratchDir, windowsPaths: merged.os === 'windows' });
+    if (underScratch) notes.push(underScratch);
   }
   for (const rel of [merged.paths.scratchDir, path.join(merged.paths.plansDir, 'active'), path.join(merged.paths.plansDir, 'archive'), path.join(merged.paths.plansDir, 'drafts'), path.join(merged.paths.plansDir, 'readiness'), path.dirname(CONFIG_REL), AGENTS_DIR, path.dirname(overridesRel)]) {
     const dir = abs(rel);

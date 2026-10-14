@@ -15,8 +15,10 @@
  *   again on the typed answer. A `<plansDir>/active/` that already holds PLAN_*.md files is named
  *   with its count, because `enforcement.dispatchGate: off-plan` will read those files as active pnp
  *   plans; an overrides document that already exists is named too, because setup seeds that file
- *   once and never rewrites it. Both are WARNINGS - the operator may mean exactly that - and the
- *   generator repeats the first one in its plan/report, so --dry-run shows it as well.
+ *   once and never rewrites it; a plans directory under the scratch directory is named at the plans
+ *   question, because a plan canon there is outside git wherever the scratch directory is ignored.
+ *   All three are WARNINGS - the operator may mean exactly that - and the generator repeats the
+ *   first and the third in its plan/report, so --dry-run shows them as well.
  *
  * WHAT IT REFUSES
  *   An os outside the schema's three channels (windows | linux | macos), fail-closed: windows
@@ -59,8 +61,8 @@ import { fileURLToPath } from 'node:url';
 import { loadSchema, collectDefaults } from './validate-config.mjs';
 import {
   DEFAULT_PLUGIN_ROOT, SetupError, adoptRefusal, assertSupportedOs, existingOverridesWarning,
-  existingPlansWarning, formatReport, generateProject, makeAdoptResolver, readMemorySeeds,
-  resolveProjectRoot,
+  existingPlansWarning, formatReport, generateProject, makeAdoptResolver, plansDirUnderScratchWarning,
+  readMemorySeeds, resolveProjectRoot,
 } from './generate.mjs';
 import { TIER_ALIASES } from './role-rules.mjs';
 import { finishWithSelfCheck } from '../selfcheck/run-selfcheck.mjs';
@@ -218,7 +220,8 @@ export async function runInterview({ schema, ask, installed = null, projectRoot 
   out.write('\n-- paths --\n');
   await text('paths.plansDir', 'Plans directory (the PARENT of active/, archive/, drafts/ and readiness/)', {
     allowEmpty: false,
-    warn: (value) => existingPlansWarning({ projectRoot, plansDir: value }),
+    warn: (value) => plansDirUnderScratchWarning({ plansDir: value, windowsPaths: os === 'windows' }) ??
+      existingPlansWarning({ projectRoot, plansDir: value }),
   });
   await text('paths.overridesDoc', 'Project overrides document', {
     allowEmpty: false,

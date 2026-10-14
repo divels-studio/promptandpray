@@ -194,25 +194,34 @@ SIDE, so the Reviewer keeps the right and the duty to read the tree beyond it, t
 probes, and to raise what the pack does not mention - a pack that turns out to be incomplete is
 itself a finding.
 
-## Step 2a - Behavior ledger before a readiness pass
+## Step 2a - Behavior ledger and consequence scan before a readiness pass: one agent, two tables
 
-**Before the first paid readiness pass of a durable plan, the COO dispatches ONE scan-tier agent
-per ticket that reads the CODE every chain of the ticket's Outcome passes through** - what each link
-does with the plan's input, read by a second context rather than remembered by the plan's author. At
-`review.plan.passes: 0`, where no auditor pass runs, the ledger is owed all the same, before the
-plan is presented for execution approval: the consequence scan (Step 2c), the fact-check gate and
-the COO's own pass over all of it (Step 2d) are then the whole contract (`docs/WORKFLOW.md` § Plan
-readiness review).
+**Before the first paid readiness pass of a durable plan, the COO dispatches ONE scan-tier agent per
+ticket that reads the CODE every chain of the ticket's Outcome passes through AND reads the TREE
+against the plan's decisions, and returns two tables from one context.** The first is the behavior
+ledger - what each link does with the plan's input, read by a second context rather than remembered
+by the plan's author. The second is the consequence scan of Step 2c - for every decision, the
+surface that can violate it by a path the plan never opened. One dispatch carries both because both
+are read off the same tree in the light of the same ticket, and under the earlier contract the
+second agent opened the files the first had just read; the tables stay two files because they have
+two readers - the plan gate checks the scan, the COO's own pass reads the ledger. At
+`review.plan.passes: 0`, where no auditor pass runs, both tables are owed all the same, before the
+plan is presented for execution approval: they, the fact-check gate and the COO's own pass over all
+of it (Step 2d) are then the whole contract (`docs/WORKFLOW.md` § Plan readiness review).
 
 Dispatch it with the **Agent tool**, `subagent_type: "Explore"` (or whichever read-only scan agent
 this harness ships), `model: sonnet` - named explicitly, never inherited - one agent per ticket,
 with exactly this task, verbatim:
 
 ```
-You read CODE, not the plan's claims. Input: one ticket's Outcome sentences and its worklist
-pointers, below. For EVERY link a chain from the entry point to the endpoint passes through -
-every function, action, hook, query, component, template, test the pointers name or that the code
-at a pointer calls - open it and return ONE row:
+You read CODE and the TREE, not the plan's claims. Input: the plan's decisions section and one
+ticket's section - its Outcome sentences, its worklist pointers and the decisions that apply to it -
+below. Return TWO tables, one after the other, each under a line that reads exactly `LEDGER` or
+`SCAN`. No verdict, no suggestions, no summary in either.
+
+LEDGER. For EVERY link a chain from the entry point to the endpoint passes through - every function,
+action, hook, query, component, template, test the pointers name or that the code at a pointer
+calls - open it and return ONE row:
 <#> | <behavior sentence> | <link file:line> | DOES: what it validates / rejects / overwrites /
 reads / writes / renders with the plan's input | CLOSES OVER: what state it captures and when it
 is recreated (memo deps, refs, module scope) | STATES: what happens at empty / one / N rows,
@@ -221,20 +230,36 @@ plan relies on | NOTE: anything the plan assumes that the code does not do
 A link the plan CREATES (a file that does not exist yet) is one row with `NEW <path>` in DOES and
 the contract it must satisfy in NOTE. A link you cannot open is one row with `UNREAD <reason>` in
 DOES. A chain that ends before a source or a render-or-DB-write surface is reported as
-`CHAIN ENDS EARLY at <file:line>`. No verdict, no suggestions, no summary; every link is a row.
+`CHAIN ENDS EARLY at <file:line>`. Every link is a row.
+
+SCAN. For EVERY decision, rule, invariant and risk-threshold line that applies to this ticket,
+search the tree for a surface that can VIOLATE it: a screen, an action, an endpoint, a query, an
+import, a bulk or batch path, a migration, a script, a fixture, another command or hook - anything
+that reaches the same data, permission, command or contract by a path the plan does not mention.
+For every field, file, flag or contract the plan locks or changes, find every OTHER path that
+writes or reads it. Return ONE row per surface:
+<#> | <ticket> | <decision, quoted short, with its plan line> | <surface file:line> | <how it
+violates or bypasses the decision, one sentence> |
+(the last cell stays empty - it is the COO's). A decision for which you found no violating
+surface is one row with `none found - <what you searched>` in the surface cell and `none` in
+the violation cell. Every surface is a row.
+
+PLAN DECISIONS:
+<the plan's decisions section, pasted>
 
 TICKET:
-<the ticket's Outcome and worklist, pasted>
+<the ticket's section - Outcome, worklist, acceptance - pasted>
 ```
 
-The COO records the rows under the header
-`| # | behavior | link (file:line) | DOES | CLOSES OVER | STATES | LIB | NOTE |` - in
-`{{config.paths.plansDir}}/readiness/<ABBR>/ledger.md` (Step 2e names the other files and the one
-case in which `{{config.paths.scratchDir}}/plan/<ABBR>/` stands in). An empty
-DOES cell or an `UNREAD` row is closed before the pass: the COO reads that link itself, or
-re-dispatches. The NOTE cells are the input of the COO's own pass (`docs/WORKFLOW.md` § Plan
-readiness review). The ledger is not an auditor: it returns no verdict and it is never counted as a
-pass.
+The COO records the LEDGER rows under the header
+`| # | behavior | link (file:line) | DOES | CLOSES OVER | STATES | LIB | NOTE |` in
+`{{config.paths.plansDir}}/readiness/<ABBR>/ledger.md`, and the SCAN rows in
+`{{config.paths.plansDir}}/readiness/<ABBR>/consequence-scan.md` under the header and the closure
+rule of Step 2c (Step 2e names the other files and the one case in which
+`{{config.paths.scratchDir}}/plan/<ABBR>/` stands in). An empty DOES cell or an `UNREAD` row is
+closed before the pass: the COO reads that link itself, or re-dispatches. The NOTE cells are the
+input of the COO's own pass (`docs/WORKFLOW.md` § Plan readiness review). The ledger is not an
+auditor: it returns no verdict and it is never counted as a pass.
 
 **Its suppression dual.** Small R1 and non-durable R2 work owe no ledger - they receive no
 readiness review at all (`docs/WORKFLOW.md` § Plan readiness review).
@@ -291,7 +316,9 @@ gap, named by class number. Apply the six readiness checks adversarially to ever
 decision: (1) repo-match - open every pointer you doubt; (2) scope - is every boundary between in
 and out of scope stated, and does any worklist item fall outside it; (3) hidden discovery - for
 each ticket, what the Writer would still have to DECIDE or DISCOVER that the plan does not fix (a
-name, a grant, a layout, a flag, an order of operations); (4) dependency order and the gate dry-run - any command that needs
+name, a grant, a layout, a flag, an order of operations); for every write the ticket adds or changes,
+the lock that holds it and what runs beside it - a race left as an accepted residual is an open
+decision, class 15; (4) dependency order and the gate dry-run - any command that needs
 a dialog or gate the plan does not name, any step assuming state a prior step leaves different;
 (5) acceptance - for each block, whether it can pass on broken work, fail on correct work, and
 observe every Risk-threshold item; (6) branch, worktree and git prerequisites, and anything the
@@ -326,35 +353,20 @@ replaces the Reviewer's pass.
 ## Step 2c - Consequence scan before a readiness pass
 
 **Before every paid readiness pass of a durable plan - and, at `review.plan.passes: 0`, before the
-plan is presented for execution approval - the COO dispatches ONE scan-tier agent per ticket that
-reads the TREE against the plan's decisions.** The behavior ledger (Step 2a) and the fact-check
-gate (Step 2b) read what the plan SAYS; this agent looks for what it does not say - a surface that
-can violate a decision by a path the plan never opened (`docs/WORKFLOW.md` § Plan readiness review;
-it asks classes 1, 10 and 14 of `docs/READINESS_CLASSES.md` from the tree's side).
-
-Dispatch it with the **Agent tool**, `subagent_type: "Explore"` (or whichever read-only scan agent
-this harness ships), `model: sonnet` - named explicitly, never inherited - one agent per ticket,
-with exactly this task, verbatim:
-
-    You read the TREE against the PLAN's decisions, not the plan's claims. Input: the plan's
-    decisions section and one ticket's section, below. For EVERY decision, rule, invariant and
-    risk-threshold line that applies to this ticket, search the tree for a surface that can VIOLATE
-    it: a screen, an action, an endpoint, a query, an import, a bulk or batch path, a migration, a
-    script, a fixture, another command or hook - anything that reaches the same data, permission,
-    command or contract by a path the plan does not mention. For every field, file, flag or contract
-    the plan locks or changes, find every OTHER path that writes or reads it. Return ONE row per
-    surface:
-    <#> | <ticket> | <decision, quoted short, with its plan line> | <surface file:line> | <how it
-    violates or bypasses the decision, one sentence> |
-    (the last cell stays empty - it is the COO's). A decision for which you found no violating
-    surface is one row with `none found - <what you searched>` in the surface cell and `none` in
-    the violation cell. No verdict, no fixes, no summary; every surface is a row.
-
-    PLAN DECISIONS:
-    <the plan's decisions section, pasted>
-
-    TICKET:
-    <the ticket section, pasted>
+plan is presented for execution approval - every decision of the plan has been read from the TREE's
+side: the second table of the Step 2a agent.** The behavior ledger and the fact-check gate (Step 2b)
+read what the plan SAYS; the SCAN half of the Step 2a task looks for what it does not say - a surface
+that can violate a decision by a path the plan never opened (`docs/WORKFLOW.md` § Plan readiness
+review; it asks classes 1, 10 and 14 of `docs/READINESS_CLASSES.md` from the tree's side). Before the
+FIRST pass the scan rides the Step 2a dispatch - one agent per ticket, two tables, no second
+dispatch. Before every FURTHER readiness pass the scan runs again over the decisions the revision
+changed or added - the revision is where new surface is born (class 14) - as a dispatch of its own:
+the same agent kind and model, carrying the SCAN half of the Step 2a task alone over those
+decisions - the Step 2a task with its LEDGER paragraph removed and its first paragraph reading
+"Return ONE table under a line that reads exactly `SCAN`", the two inputs unchanged; its rows are
+APPENDED to the same file - numbering continues, the earlier rows stay. A
+link a revision adds to the worklist is a ledger row the COO reads itself or re-dispatches, exactly
+as Step 2a says of an empty DOES cell.
 
 The COO records the rows - each with a leading and a trailing `|` - in ONE file per plan under the
 header `| # | ticket | decision | surface | violation | closure |`, numbered from 1 -
@@ -362,14 +374,11 @@ header `| # | ticket | decision | surface | violation | closure |`, numbered fro
 EVERY row before the pass, in the `closure` cell: `plan: <what changed, with its plan line>` or
 `no defect: <why, with file:line>`. Every table in the file that starts with the `#` and `ticket`
 columns carries exactly this header - a delta scan repeats it - or the plan gate refuses the file.
-A closure that starts with neither is an open row, and no other
-cell may be empty - a `none found` row writes `none` in its violation cell; a `|` inside a cell is
-written `\|`. Every ticket the pass audits has at least one row: a ticket on which the agent found
-no violating surface keeps its `none found` row, closed. Before
-every further readiness pass the scan runs again over the decisions the revision changed or added -
-the revision is where new surface is born (class 14) - and its rows are APPENDED to the same file:
-numbering continues, the earlier rows stay. The scan is not an auditor: it returns no verdict and it
-is never counted as a pass.
+**A closure that starts with neither prefix is an open row**, and no other cell may be empty - a
+`none found` row writes `none` in its violation cell; a `|` inside a cell is written `\|`. Every
+ticket the pass audits has at least one row: a ticket on which the agent found no violating surface
+keeps its `none found` row, closed. The scan is not an auditor: it returns no verdict and it is never
+counted as a pass.
 
 **Its suppression dual.** Exactly the behavior ledger's: small R1 and non-durable R2 work owe no scan
 - they receive no readiness review at all.
@@ -377,9 +386,11 @@ is never counted as a pass.
 ## Step 2d - The COO's own pass, as a file
 
 **The COO's own pass is the LAST act over the plan before a paid readiness pass is dispatched -
-after Steps 2a, 2c and 2b are closed - done in a turn of its own and written down.** It is the pass
-`docs/WORKFLOW.md` § Plan readiness review describes: every `file:line` opened, every command run on
-the real tree, not one "if the Writer finds ...". The file - one per plan,
+after Steps 2a, 2c and 2b are closed - done in a turn of its own and written down.**
+It is the pass `docs/WORKFLOW.md` § Plan readiness review describes: every pointer the Writer acts on
+opened - the worklist, the guards, the commands - while the pointers that only explain are the
+fact-check gate's; the ledger rows read as behavior, not as pointers; every instrument run on the
+real tree with valid AND broken input; not one "if the Writer finds ...". The file - one per plan,
 `{{config.paths.plansDir}}/readiness/<ABBR>/own-pass.md`, rewritten at every stamp (Step 2e; the
 count and the hash of every earlier pass go to `revisions.md`) - carries:
 
@@ -400,7 +411,9 @@ checkout that converts line endings does not read as an edit. The paths on the b
 plain ASCII, relative to `<root>`.
 
 One row per ticket the pass audits in the first table, every cell filled; the six columns are the
-six readiness checks, and `order` carries the dry process trace of the gates. One row per acceptance
+six readiness checks; `order` carries the dry process trace of the gates, and `discovery` names, for
+every write the ticket adds or changes, the lock that holds it and what runs beside it (class 15) -
+its clean form is `0 - no write with a concurrent caller`, never a bare `none`. One row per acceptance
 command or other instrument in the second, run both ways: an instrument whose broken run reads the
 same as its valid run cannot fail, so it is a blocker of this pass, not a row. A `|` inside a cell is
 written `\|`. Stamp the hash LAST: any edit to the plan after it changes the hash, and the pass does
@@ -483,13 +496,18 @@ A `{{config.paths.plansDir}}` placed under `{{config.paths.scratchDir}}` (Gate 3
 session out of it, so the one case above never arises) or under any other path the project
 ignores (whether or not Gate 3 holds a session out of it - under `docs/` it does not - nothing
 under it reaches git: `git add` of an ignored path refuses with exit 1) is outside this rule either
-way: such a project has no plan canon in git at all - a configuration this rule does not serve and
-the self-check does not detect.
+way: such a project has no plan canon in git at all -
+a configuration this rule does not serve. The self-check observes a `{{config.paths.plansDir}}`
+under `{{config.paths.scratchDir}}` (a note, never a failure - the project is within its rights) and
+`/pnp:setup` warns at the plans question - a lexical prefix test over the configured paths, which
+folds case and backslashes on a project whose `os` is windows and asks git nothing;
+any other ignored path is detected by neither.
 
 `/pnp:setup` creates `drafts/` and `readiness/` on a new install; an installation older than this
 rule creates them on first use - no update creates them, and git keeps no empty one - so
 the self-check only OBSERVES them (a note saying present or not created yet, never a failure), and
-observes in the same way whether git ignores `{{config.paths.scratchDir}}` at all.
+observes in the same way whether git ignores `{{config.paths.scratchDir}}` at all, and
+whether `{{config.paths.plansDir}}` lies under it.
 
 **Its suppression dual.** Exactly the behavior ledger's: small R1 and non-durable R2 work owe no
 readiness artifacts, so they owe no place for them.
@@ -503,7 +521,8 @@ implementation, not a code diff - the contract is different:
   through, before the first draft, a consumer-inventory scan: for every touched column, permission,
   command or contract, the consumers and adjacent contracts, harvested at scan tier
   (`docs/WORKFLOW.md` § Plan readiness review) - and, before this pass, Steps 2a, 2c, 2b and 2d in
-  that order: the behavior ledger, the consequence scan, the fact-check gate and the COO's own pass.
+  that order: the behavior ledger and the consequence scan (one dispatch, two tables), the
+  fact-check gate and the COO's own pass.
   Steps 2c and 2d leave the files the brief names, and a plan-class pass does not start without
   them (Step 2d). It matters here because a plan that arrives without them spends this paid pass on what
   a scan-tier agent returns for free.
@@ -561,7 +580,8 @@ implementation, not a code diff - the contract is different:
   means the plan gets no auditor at all - a configuration `/pnp:roles` prints as `no auditor`, never
   a shortcut this skill takes on its own. This skill does not loop the passes itself.
 - Each pass reads the **whole plan** and returns all material blockers at once - check repo-match,
-  scope, hidden discovery/architecture, dependency order, real acceptance/verification, and
+  scope, hidden discovery/architecture (for every write, the lock and what runs beside it - class 15),
+  dependency order, real acceptance/verification, and
   branch/worktree/Git prerequisites.
 - The verdict is exactly **`PASS`** or **`NEEDS-FIX`** (not `pass`/`pass-with-notes`/`fail`).
 - read-only: report to the COO; do not edit the plan.

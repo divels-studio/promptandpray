@@ -28,9 +28,12 @@
  *      written, an answer for an address nobody asked about is refused by name, "merge" is not an
  *      adopt word, an installed project is refused outright, the pre-adopt blockers keep their exact
  *      force, and the superseded-legacy list is advisory text that touches nothing;
- *  10. a project that ALREADY carries plans under `<plansDir>/active/`, or an overrides document, is
- *      warned about on both paths - the interview at the question, the generator as a note in its
- *      plan and report - and is never blocked, with a clean project as the flipping control.
+ *  10. the three warnings: a project that ALREADY carries plans under `<plansDir>/active/`, or whose
+ *      plansDir lies under the scratch directory, is warned about on both paths - the interview at
+ *      the question, the generator as a note in its plan and report (12b, 12c); an overrides
+ *      document that already exists is warned about at the interview question only (12b; the
+ *      generator's own note about it is not asserted here); none is ever blocked, with a clean
+ *      project as the flipping control.
  *
  * WHY MOST CASES PASS --no-selfcheck
  *   Every install below would otherwise pay for a full self-check run (300+ assertions, a fresh
@@ -45,7 +48,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { renderTemplate, scanSupersededLegacy, sha256, templateContext } from './generate.mjs';
+import { plansDirUnderScratchWarning, renderTemplate, scanSupersededLegacy, sha256, templateContext } from './generate.mjs';
 import { runInterview } from './interview.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -683,6 +686,81 @@ section('12b - a project that already has plans is WARNED about, on both paths, 
     said.join('').split('\n').filter((l) => l.trim().startsWith('docs')).join(' | ') || 'silent');
   const dry = install(clean, baseAnswers(), ['--no-seeds', '--dry-run']);
   check('and its dry-run report carries no such note', dry.status === 0 && !dry.out.includes('existing PLAN_*.md'), why(dry, true).slice(0, 120));
+  // The control of 12c below: a plansDir outside the scratch directory (the schema default,
+  // docs/backlogs) hears no under-scratch line on either path. It cannot fail alone - 12c's
+  // interview and dry-run checks are its flipping faces.
+  check('a plansDir outside the scratch directory hears no under-scratch warning',
+    !said.join('').includes('under the scratch directory') && !dry.out.includes('under the scratch directory'),
+    [...said.join('').split('\n'), ...dry.out.split('\n')].filter((l) => l.includes('scratch directory')).join(' | ') || 'silent');
+}
+
+// ---------------------------------------------------------------------------
+section('12c - a plansDir under the scratch directory is WARNED about, on both paths, and never blocked');
+{
+  // A plan canon under the scratch directory is outside git wherever the scratch directory is
+  // ignored (/pnp:review Step 2e). The schema admits the path and the operator may mean exactly
+  // this, so setup says it - at the plans question and as a note in the plan/report - and refuses
+  // nothing. A project of its own: the 12b project is already installed and does not serve a new
+  // dry-run.
+  const p3 = project('under-scratch');
+
+  // (a) the pure helper on ten inputs, each with one answer on every platform: nothing reads
+  // process.platform - the windows folding is the flag, never the host.
+  const matrix = [
+    [{ plansDir: '.aiwf/plans' }, true],
+    [{ plansDir: '.aiwf' }, true],
+    [{ plansDir: 'docs/../.aiwf/plans' }, true],
+    [{ plansDir: '.aiwf\\plans', windowsPaths: true }, true],
+    [{ plansDir: '.aiwf\\plans' }, false],
+    [{ plansDir: '.AIWF/plans', windowsPaths: true }, true],
+    [{ plansDir: '.AIWF/plans' }, false],
+    [{ plansDir: 'docs/backlogs' }, false],
+    [{ plansDir: '.aiwfx/plans' }, false],
+    [{ plansDir: '.aiwf/../docs/plans' }, false],
+  ];
+  const wrong = matrix.map(([input, under]) => [input, under, plansDirUnderScratchWarning(input)])
+    .filter(([, under, got]) => (under ? !(typeof got === 'string' && got.includes('is under the scratch directory .aiwf')) : got !== null));
+  check('plansDirUnderScratchWarning: under -> warning, outside and the prefix trap -> null',
+    wrong.length === 0, wrong.map(([input, under, got]) => `${JSON.stringify(input)} expected ${under ? 'a warning' : 'null'}, got ${JSON.stringify(got)}`).join('; '));
+
+  // (b) the interview path. `ask` receives the TEXT of the question, not the config key.
+  const interviewOver = async (ask) => {
+    const said = [];
+    await runInterview({ schema: loadSchemaJson(), ask, projectRoot: p3, out: { write: (s) => said.push(s) } });
+    return said.join('');
+  };
+  const heard = await interviewOver((q) => (q.startsWith('Plans directory') ? '.aiwf/plans' : scriptedAsk(q)));
+  check('the interview warns at the plans question when plansDir is under the scratch directory',
+    heard.includes('is under the scratch directory .aiwf'),
+    heard.split('\n').filter((l) => l.includes('scratch')).join(' | ') || '(no such line)');
+
+  // (g) the os flag reaches the interview: the same answer, two channels. The interview only asks -
+  // nothing is written - so a linux interview runs on any host.
+  const osAsk = (osName) => (q) => (q.startsWith('Operating system') ? osName
+    : q.startsWith('Plans directory') ? '.AIWF/plans' : scriptedAsk(q));
+  const heardLinux = await interviewOver(osAsk('linux'));
+  const heardWindows = await interviewOver(osAsk('windows'));
+  check('the os flag reaches the interview: a linux project hears no under-scratch warning for .AIWF/plans',
+    !heardLinux.includes('under the scratch directory') && heardWindows.includes('is under the scratch directory .aiwf'),
+    `linux: ${heardLinux.split('\n').filter((l) => l.includes('scratch')).join(' | ') || 'silent'}; windows: ${heardWindows.split('\n').filter((l) => l.includes('scratch')).join(' | ') || 'silent'}`);
+
+  // (c) the generator path: the non-interactive --answers-file install never sees a question, so
+  // its plan/report carries the same line as a note - and the dry-run is not refused.
+  const answers = { ...baseAnswers(), paths: { scratchDir: '.aiwf', plansDir: '.aiwf/plans', overridesDoc: 'docs/ai/PROJECT_OVERRIDES.md' } };
+  const dry = install(p3, answers, ['--no-seeds', '--dry-run']);
+  check('the dry-run carries the under-scratch note',
+    dry.status === 0 && dry.out.includes('note   paths.plansDir .aiwf/plans is under the scratch directory .aiwf'),
+    why(dry, true));
+
+  // (g) the os flag reaches the generator: the same plansDir, two channels. A dry-run plans and
+  // writes nothing, so a linux-os plan on a windows host is text only.
+  const dryOs = (osName) => install(p3, { ...baseAnswers(), os: osName, paths: { scratchDir: '.aiwf', plansDir: '.AIWF/plans', overridesDoc: 'docs/ai/PROJECT_OVERRIDES.md' } }, ['--no-seeds', '--dry-run']);
+  const dryWindows = dryOs('windows');
+  const dryLinux = dryOs('linux');
+  check('the os flag reaches the generator: .AIWF/plans is under scratch on a windows project and outside on a linux one',
+    dryWindows.status === 0 && dryWindows.out.includes('note   paths.plansDir .AIWF/plans is under the scratch directory .aiwf')
+    && dryLinux.status === 0 && !dryLinux.out.includes('under the scratch directory'),
+    `windows: ${why(dryWindows, true)}; linux: ${why(dryLinux, true)}`);
 }
 
 // ---------------------------------------------------------------------------

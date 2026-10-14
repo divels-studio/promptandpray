@@ -397,10 +397,18 @@ sit: in a measured readiness cycle the auditor's blockers were dominated by inte
 consumer the draft had never opened, an adjacent contract that had to move with the change - and
 each of them was a grep away. A paid pass that discovers them buys at the most expensive tier what
 the cheapest one proves.
+What the draft then carries of those pointers follows one discipline: `file:line` where the Writer
+acts or an acceptance check reads - the worklist, the guards, the commands - and section and symbol
+everywhere else, because a line number in context is re-verified by the fact-check gate at every
+revision and invalidated by the next commit; on one consumer's plan
+629 pointers opened by agents in the own pass yielded 4 FALSE after the gate had already run, while
+the auditor's blockers were mostly design and concurrency.
 
 **A decision is also read from the tree's side.** The behavior ledger and the fact-check gate read
 what the plan SAYS; neither can find a rule the plan never wrote down. Before every paid readiness
-pass, one scan-tier agent per ticket (`/pnp:review` Step 2c) takes every decision, invariant and
+pass, a scan-tier agent per ticket - before the first pass the Step 2a agent,
+the same context that writes the behavior ledger, in the same dispatch; before a further pass a
+dispatch of its own (`/pnp:review` Step 2c) - takes every decision, invariant and
 risk-threshold line of the ticket and searches the tree for a surface that can VIOLATE it - a
 screen, an action, a query, an import, a bulk path, another command - and for every other path that
 writes what the plan locks. Each finding is one numbered row in a file, and the COO closes every row
@@ -417,11 +425,13 @@ is owed, and small R1 and non-durable R2 work owe nothing.
 behavior ledger (`/pnp:review` Step 2a) - what each link does with the plan's input, read by a
 second context - not the pointers alone. It is the LAST act over the plan before an auditor is
 dispatched - after the consequence scan and the fact-check gate are closed - and the COO does it in
-a SEPARATE turn against the six readiness checks below: every
-`file:line` opened, every command executable on the OS channel the plan records and run on the real
-tree, never on a stub (an instrument proven on a stub has not been made to fail where it will run -
-tripwire 4 of § COO owns broad scans), not one "if the Writer finds ...", every promise of a
-guarantee checked against the code that gives it. Each fact-check agent over the plan is
+a SEPARATE turn against the six readiness checks below: every pointer the Writer acts on opened - the
+worklist, the guards, the commands - while the pointers that only explain are the fact-check gate's (a
+FALSE row carries the correct value); the ledger rows read as behavior, not as pointers; every
+instrument executable on the OS channel the plan records and run on the real tree with valid AND
+broken input, never on a stub (an instrument proven on a stub has not been made to fail where it
+will run - tripwire 4 of § COO owns broad scans); not one "if the Writer finds ..."; every promise of
+a guarantee checked against the code that gives it. Each fact-check agent over the plan is
 dispatched with three extra instructions alongside its standing task - "every acceptance command
 exists and can fail", "verify the behavior ledger - every link resolves and its DOES cell matches
 the code", and the six readiness checks applied adversarially, returned as a second list
@@ -505,7 +515,9 @@ The readiness review checks only:
 
 1. the plan matches the actual repository state;
 2. scope and out-of-scope boundaries are clear;
-3. no hidden discovery or unresolved architectural decision remains;
+3. no hidden discovery or unresolved architectural decision remains - for every write the plan
+   adds or changes, the lock that holds it and what runs beside it are named (`docs/READINESS_CLASSES.md`
+   class 15: a race left as an accepted residual is an open decision);
 4. tickets/steps are executable in the correct dependency order;
 5. acceptance criteria are sufficient, and every verification command is literal and can fail -
    runnable as written rather than described, with a named output that would mean "broken";
@@ -575,10 +587,14 @@ Six brief-authoring failures each cost a correction round:
 - **Walk any path a human executes** (runbook, setup, migration sequence) end to end yourself
   before briefing it. A runbook has been briefed as correct while one of its steps carried no
   command at all.
-- **A factual claim about existing code carries a `file:line` pointer** - or is marked explicitly
+- **A factual claim the Writer acts on carries a `file:line` pointer** - or is marked explicitly
   unverified, for the Writer to check. A claim dictated from memory of the design instead of read
   from the source comes back as a review blocker; a brief that instructs the Writer to read the
-  source before writing any factual claim produces zero factual errors.
+  source before writing a factual claim it acts on produces zero factual errors.
+  Where the pointer is owed is where the Writer ACTS or an acceptance check READS - a worklist line,
+  a guard, a command; context that only explains cites the section and the symbol, because a line
+  number in prose goes stale with the next commit and costs the fact-check gate a re-verification at
+  every revision for nothing anyone acts on.
 - **A scope or diff guard is anchored to HEAD at dispatch, never to an older commit.** A
   guard that asks "what did this ticket touch" must diff against the tree the Writer started
   from (`git rev-parse HEAD` at the moment of dispatch, written into the brief as a literal
@@ -780,8 +796,8 @@ Four sections, and each row is one line with a pointer rather than a retelling:
   earns its `<ABBR>-<NNN>` at the moment it is written into a plan, and not before.
 - **Ruling ledger** - one row per ruling that settled a conflict: what was ruled, and where the
   decision landed.
-- **Pass statistics** - one row per auditor pass: which pass it was, the start/stop pair the
-  operator read off the host, and what the pass cost.
+- **Pass statistics** - one row per auditor pass: which pass it was and what it cost as the engine
+  reported it.
 - **Event ledger** - one row per rule-class event: a violation, a catch, or an operator correction,
   each with the pointer that lets a later reader check it.
 
@@ -910,11 +926,8 @@ from another. The dialog is the backstop, not the rule; the rule is that the wor
 **A working tree carries one executing session.** Several sessions may be open at once - that is
 normal on a machine with more than one window - and the invariant that keeps them from writing over
 each other is this: on one working tree exactly ONE executing session; non-executing sessions may
-READ - zero repo writes, zero DB operations, zero paid auditor passes. The machine-wide "exactly one
-live auditor" clause is SCOPED TO MEASUREMENT (operator clarification 2026-09-16): it holds while a
-pass's counter start/stop pair is being recorded - otherwise the pair is not attributable - and is
-NOT a general work restriction. It is an OPERATOR-HELD invariant (no hook can see sibling sessions),
-written in the honest-limits register.
+READ - zero repo writes, zero DB operations, zero paid auditor passes. It is an OPERATOR-HELD
+invariant (no hook can see sibling sessions), written in the honest-limits register.
 
 ## Fail aggregation
 

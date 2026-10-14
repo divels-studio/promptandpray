@@ -103,10 +103,13 @@ then whatever is typed - and each can print one warning line:
   default nobody looked at.
 - `<overridesDoc> already exists - setup seeds that document once and never rewrites it ...` - the
   install is correct and writes nothing there, which is invisible unless it is said.
+- `paths.plansDir` under the scratch directory - a plan canon there is outside git wherever the
+  scratch directory is ignored (/pnp:review Step 2e); the generator repeats it as a note.
 
-Neither is a blocker: both describe a project an operator may want exactly as it is. The plans one is
-repeated by the generator as a `note` line in the plan and the report, so `--dry-run` (Step 3) shows
-it too - including on the non-interactive `--answers-file` path, which never sees the interview.
+None is a blocker: all three describe a project an operator may want exactly as it is. The
+existing-plans one is repeated by the generator as a `note` line in the plan and the report, so
+`--dry-run` (Step 3) shows it too - including on the non-interactive `--answers-file` path, which
+never sees the interview.
 
 ## Step 3 - Dry run, then generate
 

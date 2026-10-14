@@ -5126,6 +5126,23 @@ function scratchIgnored(projectRoot, scratchDir, gitArgs = [], env = undefined) 
   return 'git gave no answer (not a work tree, git not found, or git refused)';
 }
 
+// Lexical prefix test, no git and no file system: is plansDir the scratch directory or under it?
+// "." and ".." segments are folded; on a project whose `os` is windows (windowsPaths) backslashes
+// are separators and case is folded, as that file system and git's ignore matching fold them
+// there; on linux and macos the paths are compared as written (a volume's case rule is not in
+// the config, and a lexical test does not guess it). The same test lives in
+// scripts/setup/generate.mjs (plansDirUnderScratchWarning); the self-check imports nothing from setup.
+function plansDirUnderScratch(plansDir, scratchDir, windowsPaths = false) {
+  const norm = (p) => {
+    const s = windowsPaths ? String(p).replace(/\\/g, '/').toLowerCase() : String(p);
+    return path.posix.normalize(s).replace(/\/+$/, '');
+  };
+  const a = norm(plansDir);
+  const b = norm(scratchDir);
+  if (!a || !b || a === '.' || b === '.') return false;
+  return a === b || a.startsWith(b + '/');
+}
+
 function projectLayerFindings(projectRoot, pluginRoot, opts) {
   const out = [];
   const add = (id, name, ok, detail) => out.push({ id, name, ok: !!ok, detail: detail || '', note: false });
@@ -5465,6 +5482,16 @@ function projectLayerFindings(projectRoot, pluginRoot, opts) {
   // entry. Observed, never failed: the project is within its rights either way.
   addObservation('scratch-ignored', 'scratchDir ignored by git (observed)',
     typeof paths.scratchDir !== 'string' ? 'config paths unusable - nothing to observe' : scratchIgnored(projectRoot, paths.scratchDir));
+  // A plansDir under the scratch directory is outside git wherever the scratch directory is ignored
+  // (/pnp:review Step 2e). A lexical prefix test over the configured paths; case and backslashes fold
+  // on a project whose `os` is windows. An os outside the schema's enum reads "unusable" here and
+  // fails config-schema-valid below - it never reads "outside".
+  addObservation('plans-under-scratch', 'plansDir under scratchDir (observed)',
+    typeof paths.plansDir !== 'string' || typeof paths.scratchDir !== 'string' || !['windows', 'linux', 'macos'].includes(cfg.os)
+      ? 'config paths or os unusable - nothing to observe'
+      : plansDirUnderScratch(paths.plansDir, paths.scratchDir, cfg.os === 'windows')
+        ? `under the scratch directory ${paths.scratchDir} - nothing there is the Git canon while the scratch directory is ignored (/pnp:review Step 2e)`
+        : 'outside the scratch directory');
 
   // --- the transfer surface is OUTSIDE the managed set ------------------------------------------
   // Setup seeds it ONCE and then it is the operator's: no bookkeeping record, no `--resolve` address,
@@ -5524,9 +5551,10 @@ function sectionProjectLayer(projectRoot, selfAuthored) {
   return findings;
 }
 
-// The three (observed) project-layer rows assert nothing, so no negative control can target them -
-// what CAN fail is their text and their printer. Four fixtures flip the text (S1<->S2 for the two
-// directories, S3<->S4 for the ignore observation), S5 holds printerFor to each kind, and S6 runs
+// The four (observed) project-layer rows assert nothing, so no negative control can target them -
+// what CAN fail is their text and their printer. Six fixtures flip the text (S1<->S2 for the two
+// directories, S3<->S4 for the ignore observation, S7<->S8 for the plansDir observation), S5 holds
+// printerFor to each kind, and S6 runs
 // the REAL sectionProjectLayer over S1 and S2 with console.log captured and reads the printed
 // lines. The fixture facts are trimmed back out of results/notes/observations afterwards, so they
 // never reach the tally, NOT EXERCISED or OBSERVED ON THE INSPECTED PROJECT.
@@ -5642,6 +5670,8 @@ function sectionDraftsObservations(tmpRoot) {
   has(o1, '  [NOTE] plans readiness/ (observed) - present', 'S1');
   has(o2, '  [NOTE] plans drafts/ (observed) - not created yet - created on first use, or by /pnp:setup on a new install', 'S2');
   has(o2, '  [NOTE] plans readiness/ (observed) - not created yet - created on first use, or by /pnp:setup on a new install', 'S2');
+  has(o1, '  [NOTE] plansDir under scratchDir (observed) - outside the scratch directory', 'S1');
+  has(o2, '  [NOTE] plansDir under scratchDir (observed) - outside the scratch directory', 'S2');
   for (const [tag, o] of [['S1', o1], ['S2', o2]]) {
     if (o.error) problems.push(`${tag} threw: ${describeThrowable(o.error).headline}`);
     const scratchRows = o.lines.filter((l) => l.startsWith('  [NOTE] scratchDir ignored by git (observed) - ')).length;
@@ -5650,10 +5680,56 @@ function sectionDraftsObservations(tmpRoot) {
     if (notExercised) problems.push(`${tag} printed ${notExercised} (observed) row(s) through note()`);
     const fails = o.lines.filter((l) => l.includes('[FAIL]'));
     if (fails.length) problems.push(`${tag} printed [FAIL]: ${fails[0].trim().slice(0, 120)}`);
-    if (o.grew !== 3) problems.push(`${tag} grew observations by ${o.grew}, not 3`);
+    if (o.grew !== 4) problems.push(`${tag} grew observations by ${o.grew}, not 4`);
   }
-  check('[drafts-S6] the real sectionProjectLayer prints the three (observed) rows through observation() on both fixtures',
+  check('[drafts-S6] the real sectionProjectLayer prints the four (observed) rows through observation() on both fixtures',
     problems.length === 0, problems.length ? problems.join('; ').slice(0, 400) : 'S1 present / S2 not created yet, one scratch row each, no FAIL');
+
+  // S7/S8: the plansDir observation through the real finding (outside captured() - nothing is
+  // printed, nothing is counted; the other findings of these fixtures, path-plans and
+  // plans-active-subdir among them, fall inside the array and are not read). S7 also carries the
+  // helper's ten-input matrix, which reads nothing of the host (no process.platform), and the os
+  // wiring: the same .AIWF/plans under os windows (folded -> under), linux (as written -> outside),
+  // no os and an os outside the enum (both -> unusable; config-schema-valid in the same array is red
+  // and is not read).
+  const s7Fixture = (name, mutate) => {
+    const root = path.join(tmpRoot, name);
+    fs.mkdirSync(root, { recursive: true });
+    writeFixture(root, pluginVersion);
+    mutateJson(root, ['.claude', 'aiwf-native', 'aiwf.config.json'], mutate);
+    return String(byId(root, 'plans-under-scratch').detail);
+  };
+  const s7 = s7Fixture('drafts-s7', (c) => { c.paths.plansDir = '.aiwf/plans'; });
+  const s7Win = s7Fixture('drafts-s7-win', (c) => { c.paths.plansDir = '.AIWF/plans'; });
+  const s7Linux = s7Fixture('drafts-s7-linux', (c) => { c.paths.plansDir = '.AIWF/plans'; c.os = 'linux'; });
+  const s7NoOs = s7Fixture('drafts-s7-no-os', (c) => { c.paths.plansDir = '.AIWF/plans'; delete c.os; });
+  const s7BadOs = s7Fixture('drafts-s7-bad-os', (c) => { c.paths.plansDir = '.AIWF/plans'; c.os = 'solaris'; });
+  const matrix = [
+    [['.aiwf/plans', '.aiwf'], true],
+    [['.aiwf', '.aiwf'], true],
+    [['docs/../.aiwf/plans', '.aiwf'], true],
+    [['.aiwf\\plans', '.aiwf', true], true],
+    [['.aiwf\\plans', '.aiwf'], false],
+    [['.AIWF/plans', '.aiwf', true], true],
+    [['.AIWF/plans', '.aiwf'], false],
+    [['.aiwfx/plans', '.aiwf'], false],
+    [['docs/backlogs', '.aiwf'], false],
+    [['.aiwf/../docs/plans', '.aiwf'], false],
+  ];
+  const wrongMatrix = matrix.filter(([args, want]) => plansDirUnderScratch(...args) !== want);
+  const unusable = 'config paths or os unusable - nothing to observe';
+  const s7Problems = [];
+  if (!s7.startsWith('under the scratch directory .aiwf')) s7Problems.push(`.aiwf/plans: "${s7}"`);
+  if (!s7Win.startsWith('under the scratch directory')) s7Problems.push(`.AIWF/plans os windows: "${s7Win}"`);
+  if (s7Linux !== 'outside the scratch directory') s7Problems.push(`.AIWF/plans os linux: "${s7Linux}"`);
+  if (s7NoOs !== unusable) s7Problems.push(`.AIWF/plans no os: "${s7NoOs}"`);
+  if (s7BadOs !== unusable) s7Problems.push(`.AIWF/plans os solaris: "${s7BadOs}"`);
+  for (const [args, want] of wrongMatrix) s7Problems.push(`plansDirUnderScratch(${args.map((a) => JSON.stringify(a)).join(', ')}) !== ${want}`);
+  check('[drafts-S7] plansDir .aiwf/plans -> "under the scratch directory"; the prefix helper on ten inputs',
+    s7Problems.length === 0, s7Problems.length ? s7Problems.join('; ').slice(0, 400) : 'under / windows under / linux outside / no os and solaris unusable / ten inputs');
+  const s8 = String(byId(s2, 'plans-under-scratch').detail);
+  check('[drafts-S8] base plansDir docs/backlogs -> "outside the scratch directory"',
+    s8 === 'outside the scratch directory', `"${s8}"`);
 }
 
 // ---------------------------------------------------------------------------
@@ -8315,8 +8391,9 @@ function main() {
   console.log('config, the conditional-render contract (a Claude agent file exists iff its role is');
   console.log('claude-hosted), and version bookkeeping - proven able to fail by the negative controls,');
   console.log('which run against a fixture this script synthesises for that purpose alone. Checks with no');
-  console.log('control are named individually above, each with its reason. The three (observed) rows - plans');
-  console.log('drafts/, plans readiness/ and whether git ignores the scratch directory - are observations:');
+  console.log('control are named individually above, each with its reason. The four (observed) rows - plans');
+  console.log('drafts/, plans readiness/, whether git ignores the scratch directory and whether plansDir lies');
+  console.log('under it - are observations:');
   console.log('reported, never counted, outside the negative controls, and listed again under OBSERVED ON THE');
   console.log('INSPECTED PROJECT like every observation() row.');
   console.log('COMMIT AUTOMATION: the inspected project is read for an active pre-commit/post-commit hook and');
