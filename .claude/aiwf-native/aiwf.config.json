@@ -1,8 +1,8 @@
 {
-  "$schema": "D:/promptandpray/schema/aiwf.config.schema.json",
+  "$schema": "D:/pnp-live/schema/aiwf.config.schema.json",
   "_aiwf": {
-    "installedPluginVersion": "0.2.18",
-    "lastMigrationApplied": "0022_stab-prose",
+    "installedPluginVersion": "0.2.19",
+    "lastMigrationApplied": "0023_changes-dir-and-agents",
     "migrationJournal": null,
     "managedRegions": {
       ".claude/aiwf-native/roles.json": {
@@ -23,6 +23,11 @@
       ".claude/aiwf-native/ORCHESTRATOR.md": {
         "upstream": "2fcb823fadc2a2b6194a77770b1ff4e46cacd84cb79e00264c7c77d2b51f71a3",
         "local": "2fcb823fadc2a2b6194a77770b1ff4e46cacd84cb79e00264c7c77d2b51f71a3",
+        "override": false
+      },
+      "AGENTS.md": {
+        "upstream": "f5a718cd9afe6b0cda71a933073faf5f3b38f034e5a1adc5a71b1f2879d93c0f",
+        "local": "f5a718cd9afe6b0cda71a933073faf5f3b38f034e5a1adc5a71b1f2879d93c0f",
         "override": false
       }
     },
@@ -238,7 +243,8 @@
     "scratchDir": ".aiwf",
     "plansDir": "dev/backlogs",
     "overridesDoc": "dev/PROJECT_OVERRIDES.md",
-    "transferSurface": "dev/backlogs/CANDIDATES.md"
+    "transferSurface": "dev/backlogs/CANDIDATES.md",
+    "changesDir": "dev/changes"
   },
   "review": {
     "productBoundaryChecks": [

@@ -1001,6 +1001,30 @@ R1 без платен пас, 1 самохванато и самодоклад�
 размразява направо с операторска дума, без предусловие; CAP-001 продължава като обикновена мисия,
 не като пилотен носител.
 
+## `ORCHESTRATOR.md` is not in `ownedDestinations` (born 2026-10-15, PLB-003, raised by the Writer)
+
+A transfer surface or an overrides document configured at `.claude/aiwf-native/ORCHESTRATOR.md` is
+not refused by setup's collision checks, while `AGENTS.md`, `CLAUDE.md`, `roles.json` and the agent
+files are (the `ownedDestinations` list in `scripts/setup/generate.mjs`). One row in that list.
+
+## The root `CHANGES_*.md` history vs `dev/changes/` (born 2026-10-15, PLB-003 self-update)
+
+The 21 reports up to 0.2.18 are tracked at the repo root; from 0.2.19 this repo writes them under
+`dev/changes/` (`paths.changesDir`), because the 0.2.19 report carries the refreshed `$schema` path
+and the provenance scan reads root `*.md` as payload (self-check red at the D10 self-update, then
+green at 1262/1262 after the move). Either `git mv` the 21 into `dev/changes/`, or leave the split
+and say so in `dev/README.md` (done); a candidate, not a debt.
+
+## Plan layout: the tickets section never moves (operator thought 2026-10-15, for PLAN_FOLD)
+
+Operator, thinking aloud: a header index with a ticket tracker and a short handoff pointing at each
+ticket, then the `## Tickets` section as the durable contract, and everything after it - readiness,
+blockers, completion records - explanatory, so the ticket lines never shift (PLB-003 shifted by 47
+lines when PLB-002's record was inserted inside the section). Beside it, from the same day: a
+`file:line` pointer into the code goes stale with the previous ticket's commit whatever the layout
+(PLB-003 needed a 41-pointer re-anchor scan, 13 shifted) - the worklist in a plan names the symbol
+or section, and `file:line` is born in the dispatch brief. Input for the FOLD plan format.
+
 ## Ruling ledger (D18: | въпрос | решение | указател |)
 
 | Тикет с payload миграция: R2 или R3? (PLAN_STAB readiness пас 2) | R2, без пас 3 - операторско решение 2026-10-14; текстовото разминаване (WORKFLOW § R3, LOOP.md) - кандидат | `dev/backlogs/readiness/STAB/revisions.md` § Operator ruling |
@@ -1142,6 +1166,7 @@ xhigh) излиза по-скъп от студен. Решава се само 
 | LEAN-001 code p1 (2026-10-14, `gpt-6-sol`/xhigh, дума „пускай LEAN-001“; interlock през 0.2.16 wrapper по дума „да“) | code | студен | 120,726 | — | — | pass-with-notes (0 находки; бележка: VERIFY партидата е от доклада на Колегата) |
 | STAB-001 code p1 (2026-10-15, `gpt-6-sol`/xhigh, дума „пускай“; interlock през 0.2.17 wrapper по дума „да пусни го през 2.17“) | code | студен | 91,030 | — | — | fail (2 блокера - противоречия между одобрени блокове и съседни изречения: редът `COO:` срещу non-durable R2 без раздел в плана; scoped QA ре-рън срещу „the same suite“) → прозов рунд 1, без верификационен пас |
 | PLB-002 code p1 (2026-10-15, `gpt-6-sol`/xhigh, session `01a14015-0cfa-72d2-adba-62673936cfc4`, operator word „da"; pnp-live at 0.2.18 payload, as D10 orders) | code | cold | 92,361 | — | — | fail (2 blockers: the section-8 test assertion narrowed in the pre-verdict micro-round was vacuous when nothing was written; the full test-update exit 0 not yet shown) → code round 1 of 6 test lines in the audited file, red against HEAD's engine / green on the tree, no verification pass (suppression dual) |
+| PLB-003 code p1 (2026-10-15, `gpt-6-sol`/xhigh, session `01a1408b-181a-7941-bd7c-cb54f60cb901`, operator word „пускай"; pnp-live still at the 0.2.18 payload, D10) | code | cold | 114,008 | — | — | fail (1 blocker: `paths.overridesDoc = AGENTS.md` planned two writes to one path with no refusal; 1 note on the RECIPE sentence) → code round 1 (10 code lines + 10 test lines + 2 prose), no verification pass by operator word „без пас" on the COO's suppression-dual recommendation |
 
 ## Event ledger (D16 формат: | дата | правило | violation|catch|operator-correction | указател |)
 
@@ -1224,6 +1249,8 @@ xhigh) излиза по-скъп от студен. Решава се само 
 | 2026-10-15 | VERIFY, паднал по средова причина, спира и пита | catch (на Колегата) | STAB-001: партида 2 3/6 червени (fixture файлове изчезват в `%TEMP%` по средата на рън; на машината вървят `next dev` на Silerax и друга Claude сесия), партида 1 върху същото съдържание 6/6; Колегата спря без поправки, ре-рънът на празна машина 6/6. Второ наблюдение в същата посока: Silerax UIR-050 build падна при пуснат `next dev` и мина без него |
 | 2026-10-15 | нов доктринен блок срещу съседно изречение | catch (одиторски) | STAB-001 code p1: два одобрени блока (F, U) противоречаха на съседни изречения, които пасът на плана, own pass-ът и fact-check-ът не видяха (един чете твърдения, не съседство); затворено с по едно изречение около блока, блоковете дословно. Към кандидата „Доктринно изречение, което изброява света“ |
 | 2026-10-14 | Gate 3 затваря трансферната повърхност при отворен маршрут | наблюдение (за инструмента) | LEAN-001: кандидатите от проучванията и от докладите на Silerax чакаха в `.aiwf/candidates-queue.md`, защото маршрутът беше отворен; легнаха с docs commit-а след `{}`. Същото като Silerax UIR-047 (`.aiwf/pnp-ledger-pending.md`) — доказателство за кандидат (j) в § „Таван на контекста“ |
+| 2026-10-15 | a pre-verdict micro-round keeps the instrument fail-capable (WORKFLOW § COO owns broad scans, tripwire 4) | catch (auditor) | PLB-002: the COO's micro-round narrowed an existing test-update assertion to `every()` over a possibly empty list; the Writer reported "if no file changed at all, the check also passes" and the COO let it through; Codex pass 1 raised it as a blocker. Pointer: PLAN_PLB § PLB-002 completion record |
+| 2026-10-15 | the provenance scan reads root `*.md` as payload; the self-check is the gate (overrides § Hard rules Provenance) | catch (self-check, on the first consumer proof of 0023) | PLB-003 D10 self-update: the integrated self-check went red 1257/1262 because the new `$schema` line of `CHANGES_0.2.18-to-0.2.19.md` carries two drive-letter paths and the report sat at the root; resolved by `paths.changesDir = "dev/changes"` for this repo, then 1262/1262. Pointer: PLAN_PLB § PLB-003 completion record; candidate "root `CHANGES_*.md` history vs `dev/changes/`" |
 
 ## D2 pointer rows
 

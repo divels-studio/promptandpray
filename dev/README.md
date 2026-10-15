@@ -21,6 +21,10 @@ carry things the payload never may (the operator's language, machine-local paths
 - `dev/backlogs/active/` - open plans; `dev/backlogs/archive/` - finished ones (and a pointer to
   where the extraction history lives); `dev/backlogs/drafts/` - a plan's untracked draft until it
   lands; `dev/backlogs/readiness/<ABBR>/` - its readiness history, committed at landing and kept.
+- `dev/changes/` - this repo's own `CHANGES_<from>-to-<to>.md` update reports from 0.2.19 on
+  (`paths.changesDir`): a report at the root would be read as payload by the provenance scan, and
+  since 0.2.19 the report carries the refreshed `$schema` path. The reports up to 0.2.18 stay at
+  the root as history.
 
 ## The payload is code
 

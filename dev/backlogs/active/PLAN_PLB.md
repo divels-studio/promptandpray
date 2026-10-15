@@ -520,6 +520,54 @@ exits 0. Risk threshold: a write over an operator-owned file, a version, an abso
 verdict word in the template, blocks. Stop: template, render, resolve map, migration op, the four
 suites + the deferred selfcheck.
 
+**Completion record (CLOSED 2026-10-15, operator word „пускай", code commit `4b8f83a`).**
+- Actual changes: 12 files, 214 insertions / 11 deletions. `templates/AGENTS.md.tmpl` (new; a
+  `<!-- TEMPLATE CONTRACT -->` block the engine strips, then exactly the four D8 sections, two
+  placeholders); `generate.mjs` `CODEX_AGENTS_REL`, an `ownedDestinations` row, the unconditional
+  `addArtifact` after the Orchestrator one, and - from the Reviewer's blocker - a refusal in
+  `planInstall` when `paths.overridesDoc` is the same path as ANY other owned destination (generic, not
+  AGENTS.md-only; `ORCHESTRATOR.md` is not in that list, see Remaining); `migrate.mjs`
+  `RESOLVABLE_ARTIFACT_TEMPLATES['AGENTS.md']`; 0023 gains the `rerender-managed-region` /
+  `createIfAbsent` op LAST (D3) and a NOTES.md bullet; selfcheck cover set, fixture, needle and the
+  negative control "AGENTS.md rendered but not recorded"; example cycle asserts the artifact recorded
+  clean; tests `[setup-agents-1..6]`, `[update-agents-0..5]` (faces 11/12 of section 15, the SHIPPED op
+  read from the real ops.json); docs: RECIPE § The project's AGENTS.md, setup skill adopt/blocker
+  wording, CHANGELOG entry.
+- Deviations: (1) CHANGELOG says "ten interlocked `/pnp:*` skills" where the plan said eleven - the
+  tree has eleven skills carrying the `--check` call minus `update` = ten (fact-checked). (2)
+  `scripts/update/README.md` enumerates no managed artifacts, so it has no change. (3) Pointers were
+  re-anchored at `0d9e28f` before the brief by a sonnet scan (41 pointers, 13 shifted, 0 false) - the
+  cost of `file:line` in a multi-ticket plan, taken to the FOLD candidate.
+- Verification (check agents, fresh `sonnet`, D4; final tree): `node scripts/setup/test-setup.mjs`
+  exit 0, 502/0; `node scripts/update/test-update.mjs` exit 0, 623/0; `node
+  scripts/update/validate-payload.mjs --plugin-root .` exit 0; `node scripts/ci/run-example-cycle.mjs`
+  exit 0, 48/0; provenance grep exit 1. New tests seen red before (setup slices 9 red of 172, update
+  slice 6 red of 82; round-1 case red before its fix) and green after. Git Bash: the forbidden-pattern
+  grep over the template prints 0 / exit 1; `## Who reads this` count 1.
+- Review: fact-check gate over the diff 78 claims, 0 FALSE, 5 UNVERIFIABLE (rhetorical). Auditor
+  pass 1 (Codex gpt-6-sol/xhigh): `fail`, 1 blocker - `paths.overridesDoc = AGENTS.md` planned two
+  writes to one path with no refusal (the record would hold the first hash, the second write wins) -
+  and 1 note (RECIPE sentence: a file equal to the render is recorded without a write). Correction
+  round 1 (of 2): 10 code lines in `generate.mjs` (audited file), 10 test lines (`[setup-agents-6]`,
+  red before / green after), 2 prose lines; fact-check over the delta 19 claims, 0 FALSE; COO read the
+  hunks. No verification pass: operator word „без пас" (2026-10-15) on the COO's recommendation that
+  the suppression dual holds (10 code lines, audited file, red-before-fix test).
+- D10 self-update (this repo, first consumer proof of 0023): `D:\pnp-live` refreshed to `4b8f83a`;
+  `/pnp:update` dry run then `--apply` on the operator's word „да": `$schema` refreshed to the
+  pnp-live path, `paths.changesDir = "."` added, the note, `AGENTS.md` created and recorded; installed
+  0.2.19, `--check` green. The integrated self-check went RED on provenance: the report's new
+  `$schema` line carries two drive-letter paths and the report sat at the repo root, which the scan
+  reads as payload (the four PROVENANCE CONTROL rows are the cascade of the same file in the control
+  copy). Resolution (COO, this repo's own layer): `paths.changesDir = "dev/changes"` - `dev/` is
+  outside the payload by design - and the report moved there; the real selfcheck then:
+  `node scripts/selfcheck/aiwf-selfcheck.js --plugin-root . --project-fixture .` exit 0,
+  **1262/1262** - the DEFERRED acceptance item of PLB-002 and PLB-003, both closed. The 21 earlier
+  `CHANGES_*.md` stay tracked at the root (history; a candidate names the split).
+- Remaining: none blocking. Candidates recorded: `ORCHESTRATOR.md` is not in `ownedDestinations`;
+  the root `CHANGES_*.md` history vs `dev/changes/`; the plan layout (tickets section immutable,
+  records after it; worklist by symbol, `file:line` born in the brief). `README.md:22` moves to
+  0.2.19 in PLB-006. From this commit on `D:\pnp-live` is refreshed after every commit again.
+
 ### PLB-004 - Three small defects, one Writer, sequential
 COO: cheap (Opus), because all four no - ruling 2026-10-15 on check 2 (D7).
 Source: CANDIDATES § "`--show` на aiwf-roles.mjs печата таблицата и излиза с process.exit(0)",
