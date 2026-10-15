@@ -80,6 +80,38 @@
   правило знаено, не приложено; самоприсвоена власт; след грешка повече действие; претоварена сесия) е входът
   на плана - всяка точка горе е отговор на някоя от тях.
 
+## Direction 2026-10-15: three plans, in this order (operator word „да, записвай го и чертай плана за 0.2.19")
+
+Synthesis of `dev/PLAN REFACTOR/` (GPT answers 1-3), this file and a size measurement, done in one
+session so it is not re-derived. Three separate problems, not one:
+
+| Bucket | Measured | Source |
+|---|---|---|
+| Doctrine preflight (CLAUDE.md, ORCHESTRATOR, overrides, WORKFLOW, LOOP, CHECKLIST, PROTOCOL, READINESS_CLASSES, BRIEF_RECIPE) | 196,741 bytes, ~49k tokens at bytes/4; `/context` on this repo ~65k + overrides ~17k | haiku byte count 2026-10-15; intake item 18 |
+| `docs/WORKFLOW.md` alone / `skills/review/SKILL.md` | 82,708 bytes, 1,141 lines / 54,952 bytes | same |
+| Consumer active plan `PLAN_UIR.md` | 883 KB, 6,561 lines, >90% of lines outside the current phase | `Отговор 1.pdf` (KB/lines, not tokens) |
+| COO start after `/pnp:mission` (consumer) / spend at >150K context | 140.9K / 73-75% | § „Таван на контекста", UIR-038 table |
+
+Decision (COO, reported): the plugin is not rewritten - gates, hooks, roles and the audit table are
+not the cause (GPT agrees). Two text/structure refactors and one small code release, drafts under
+`dev/backlogs/drafts/` (untracked until each lands):
+
+1. **0.2.19 - `PLAN_PLB.draft.md`** - plan B, the CODE part only (`:28-31`). The rules queued under
+   „ВЛИЗАТ В ПЛАН Б" (`:42-81`) move to 2. and are written once, in the compact register.
+2. **0.2.20 - `PLAN_DOCT.draft.md`** - doctrine: contract apart from rationale (intake item 18 +
+   the plan-B rules). Rationale and incident history to a payload `docs/RATIONALE.md`; target
+   preflight <= 40k tokens by `/context`; equivalence proven by a normative-row map (scan agent),
+   docs class.
+3. **0.3.0 - `PLAN_FOLD.draft.md`** - the plan as a folder (intake item 19 = GPT proposals 1-11):
+   index, DECISIONS, phases, one ticket and one record per file; manifest detection, no migration of
+   old plans, one doctrine for both formats, four-stage rollout, dogfood on one consumer plan.
+   English for new plans inside it. The public README (HARD-011) becomes **0.3.1**, after the folder
+   format is proven - 0.3.0 does not ship on a README over an unoptimized system (operator, 2026-10-15).
+
+Stays deferred: § „Таван на контекста" beyond (j)/(k) - the operator stated sessions of 800-900k
+run fine and 2.+3. lower the pressure; „ГЛАВЕН ПРИОРИТЕТ" (warm vs cold pass) - research.
+Before each plan: its own analysis step and a readiness cycle (`review.plan` row) when durable.
+
 ## [ОТЛОЖЕН 2026-10-14, без (j) и (k)] Таван на контекста + чекпойнт по гейтове в payload-а (роден 2026-10-14, операторска дума „кандидат запис за версия и анализ“; ГЛАВЕН кандидат и на Silerax)
 
 **Произход:** Silerax (`D:\Stratex`) UIR-040 / UIR-041 + поправка `c37de33a`; правилото —
@@ -985,6 +1017,7 @@ R1 без платен пас, 1 самохванато и самодоклад�
 | Колко VERIFY за малка промяна? | Пропорционално на diff-а: тикетът пуска само суитите, които промяната може да счупи. Пълният набор (Windows + WSL) веднъж, преди tag. Обръща записания каданс „пълните 8/8 гейтват затварянето“ (PLAN_HARD § Ред и гейтове, COO решение 2026-09-13) | операторска дума 2026-09-24; `dev/PROJECT_OVERRIDES.md` § Test policy |
 | PLAN_RGATE RGATE-001: тикет с наблюдаемо поведение (отказ на wrapper-а, deny на Gate 2) минава ли през `/pnp:qa`, когато E2E е изключен? | Не — QA няма да има; поведението се доказва с изпълнени self-check/spike probe-ове. Изключение за този тикет от LOOP:15, loop SKILL:73-74, WORKFLOW:742/:770, CLAUDE.md:51, overrides:297 (тригер 4: Одиторът оспори D13 писмено; второто мнение е операторът) | операторска дума 2026-10-02 „QA няма да има“, след readiness пас 2; PLAN_RGATE D13 |
 | PLAN_DRAFTS D3/D11: разширение на вече приземен план (нов тикет под readiness) — редакция на активния план, или отделна чернова? | А: разширението е НЕКОМИТНАТА редакция на активния план и на `readiness/<ABBR>/`; планиращият lock забранява commit-а на тракнатия план, не черновата в него; readiness файловете се дописват/презаписват в работното дърво и лягат с docs commit-а на разширението. Б (отделен файл под `drafts/`, слят при одобрение) отхвърлена: одиторът би чел фрагмент, а сливането е редакция след одита (тригер 4: Одиторът оспори писмено на code пас 1) | операторска дума 2026-10-04 „А“; домове: `docs/WORKFLOW.md` § Planning lock (bullets 1 и 3), `skills/review/SKILL.md` Step 2e (изречението за разширение); DRAFTS-001 completion record, `008_PLAN_DRAFTS_2026-10-04.md` |
+| Language of the tree: should plans, candidates, rulings, memory and briefs be English, given Bulgarian tokenizes worse and the payload is already English by gate? | Yes, everything in the tree in English; two verbatim exceptions - the operator channel stays Bulgarian, and an operator decision or gate word is recorded in its own Bulgarian wording with the English reading beside it; existing text translated only where read every session (overrides, open sections of this file), archived plans and closed rows untouched (PLB-005) | operator word 2026-10-15 „приемам предложението на ГПТ за англо проект в който всичко е на английски, само комуникацията с оператора остава на български и операторските решения или гейтове да се записват дословно на български" + „да, записвай го"; home: `dev/PROJECT_OVERRIDES.md` § Communication; origin `dev/PLAN REFACTOR/Отговор 3.md` |
 
 ## Pass statistics (D22 формат: пас | клас | формат | токени | старт→стоп | минути | вердикт)
 

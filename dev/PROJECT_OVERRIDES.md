@@ -264,7 +264,13 @@ The documents the "status / release docs policy" in the payload doc `docs/WORKFL
   Reviewer = "Одитор", QA = "QA".
   These are conversational only - the technical identifiers (`writer`, `reviewer`, `qa`, file paths,
   frontmatter) never change.
-- Keep docs and plans in English unless the operator asks otherwise.
+- **English everywhere in the tree (operator rule 2026-10-15).** Plans, tickets, completion records,
+  candidates, rulings, event rows, memory, briefs and verdicts are written in English. Two
+  exceptions, both verbatim: the operator channel stays Bulgarian, and an operator decision or gate
+  word - a ruling, a standing word, a `COVERED BY` quote - is recorded in the operator's own
+  Bulgarian wording, unchanged, with the English reading beside it when one is needed. Existing
+  Bulgarian text is translated only where it is read every session (this document, the open sections
+  of the transfer surface); archived plans and closed rows stay as written.
 - Be concise; no step-by-step reasoning narration in the output. Explain concretely when
   architecture or product boundaries are involved.
 - Stop for an operator choice only when unresolved alternatives materially change product intent, an
