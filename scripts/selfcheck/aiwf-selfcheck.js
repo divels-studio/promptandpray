@@ -5143,6 +5143,24 @@ function plansDirUnderScratch(plansDir, scratchDir, windowsPaths = false) {
   return a === b || a.startsWith(b + '/');
 }
 
+// paths.changesDir is judged by THE containment rule of that key - containedRelativePath in
+// scripts/setup/validate-config.mjs, the one function setup and the update run call - not by a copy
+// of it here. This file is CommonJS and that module is ESM, so the rule runs in a child process that
+// imports the payload's module by URL. A child that cannot answer is a failure, never a pass.
+function changesDirContained(pluginRoot, value) {
+  const moduleUrl = pathToFileURL(path.join(pluginRoot, 'scripts', 'setup', 'validate-config.mjs')).href;
+  const code = `import { containedRelativePath } from ${JSON.stringify(moduleUrl)};\n`
+    + `process.stdout.write(JSON.stringify(containedRelativePath(${JSON.stringify(value)})));\n`;
+  const r = spawnSync(process.execPath, ['--input-type=module', '-e', code], { encoding: 'utf8' });
+  const answer = (r.stdout || '').trim();
+  if (r.status !== 0) {
+    return { ok: false, detail: `the rule could not be evaluated (exit ${r.status}): ${(r.stderr || '').trim().split('\n')[0].slice(0, 160)}` };
+  }
+  if (answer === 'true') return { ok: true, detail: 'contained' };
+  if (answer === 'false') return { ok: false, detail: 'NOT contained - an update refuses to run with it' };
+  return { ok: false, detail: `the rule gave no boolean answer (${JSON.stringify(answer.slice(0, 60))})` };
+}
+
 function projectLayerFindings(projectRoot, pluginRoot, opts) {
   const out = [];
   const add = (id, name, ok, detail) => out.push({ id, name, ok: !!ok, detail: detail || '', note: false });
@@ -5459,6 +5477,15 @@ function projectLayerFindings(projectRoot, pluginRoot, opts) {
     typeof paths.scratchDir === 'string' && fs.existsSync(path.join(projectRoot, paths.scratchDir)), String(paths.scratchDir));
   add('path-plans', 'paths.plansDir exists in the project',
     typeof paths.plansDir === 'string' && fs.existsSync(path.join(projectRoot, paths.plansDir)), String(paths.plansDir));
+  // OPTIONAL key: absent reads as "." (the project root), which is contained by definition. Present,
+  // it must satisfy the one containment rule (changesDirContained above) - the folder itself need not
+  // exist yet, the update creates it.
+  {
+    const present = Object.prototype.hasOwnProperty.call(paths, 'changesDir');
+    const verdict = present ? changesDirContained(pluginRoot, paths.changesDir) : { ok: true, detail: 'absent - reads as "." (the project root)' };
+    add('path-changesDir', 'paths.changesDir, when present, is a folder inside the project (containedRelativePath)',
+      verdict.ok, present ? `${JSON.stringify(paths.changesDir)}: ${verdict.detail}` : verdict.detail);
+  }
   // plansDir is the PARENT of active/, archive/, drafts/ and readiness/: a plan ENTERS the repo
   // into active/ and LEAVES into archive/ when every ticket is closed. A plansDir with no active/
   // means every consumer that globs `<plansDir>/active/PLAN_*.md` silently finds nothing.
@@ -8088,6 +8115,8 @@ const NEGATIVE_CONTROLS = [
     apply: (r) => fs.rmSync(path.join(r, '.aiwf'), { recursive: true, force: true }) },
   { id: 'path-plans', label: 'the configured plans directory is missing',
     apply: (r) => fs.rmSync(path.join(r, 'docs', 'backlogs'), { recursive: true, force: true }) },
+  { id: 'path-changesDir', label: 'paths.changesDir climbs out of the project ("../x")',
+    apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => { c.paths.changesDir = '../x'; }) },
   { id: 'plans-active-subdir', label: 'plansDir has no active/ subdirectory',
     apply: (r) => fs.rmSync(path.join(r, 'docs', 'backlogs', 'active'), { recursive: true, force: true }) },
   { id: 'scratch-is-aiwf', label: 'scratchDir moved away from .aiwf (the route guard would be unarmed)',
@@ -8180,6 +8209,19 @@ function sectionNegativeControls(tmpRoot, pluginVersion) {
     covered.add(m.id);
     check(`sabotage detected [${m.id}]: ${m.label}`, target.ok === false && target.note !== true,
       target.note ? 'the check degraded to a NOTE instead of failing' : (target.ok ? 'still PASS - the check is vacuous' : 'FAIL as required'));
+  }
+
+  // The POSITIVE face of path-changesDir. The control fixture carries no changesDir at all, so its
+  // clean pass is the absent branch; this fixture carries a value that climbs and comes back
+  // ("a/../reports" normalises to "reports") and must PASS - a check that refused every present value
+  // would satisfy the negative control above while breaking every installation that sets the key.
+  {
+    const accepted = path.join(tmpRoot, 'pos-changes-dir');
+    copyTree(base, accepted);
+    mutateJson(accepted, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => { c.paths.changesDir = 'a/../reports'; });
+    const target = projectLayerFindings(accepted, PLUGIN_ROOT, { selfAuthored: true }).find((f) => f.id === 'path-changesDir');
+    check('positive fixture [path-changesDir]: "a/../reports" is accepted', !!target && target.ok === true && target.note !== true,
+      target ? target.detail : 'no check with that id was produced');
   }
 
   // Honest coverage: which real checks have no control, and why.

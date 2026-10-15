@@ -21,7 +21,7 @@
     "$schema": {
       "type": "string",
       "minLength": 1,
-      "description": "Informational pointer at this file inside the installed plugin payload, written by /pnp:setup as an absolute path so an editor can resolve it. Nothing in the loop READS it: the authority for which payload version produced this config is _aiwf.installedPluginVersion. The path is machine-local and goes stale if the plugin root moves; that is harmless."
+      "description": "Informational pointer at this file inside the installed plugin payload, written by /pnp:setup as an absolute path so an editor can resolve it, and refreshed by /pnp:update whenever it runs from a different plugin root (before any migration is journalled, never during a resumed run). Nothing in the loop READS it: the authority for which payload version produced this config is _aiwf.installedPluginVersion. The path is machine-local; between a move of the plugin root and the next update it is stale, and that is harmless."
     },
 
     "_aiwf": {
@@ -325,6 +325,13 @@
           "minLength": 1,
           "$comment": "DELIBERATELY WITHOUT A `default`: the file is seeded ONCE and then belongs to the operator, so it carries no bookkeeping record, no RESOLVABLE address and no migration operation - ever. A schema default would put the key into every fresh config and invite exactly the managed-artifact treatment the surface must never get. Resolution is therefore a rule, not a value: read the key when it is there, fall back when it is not.",
           "description": "Project-relative path of the transfer surface - the operator-owned page where candidates, rulings, pass statistics and the event ledger are collected. Resolution rule: the configured paths.transferSurface, or <plansDir>/PNP_CANDIDATES.md when absent. Setup seeds the skeleton there once and never rewrites it; an installation that predates the key creates it by hand from the skeleton in docs/WORKFLOW.md."
+        },
+        "changesDir": {
+          "type": "string",
+          "minLength": 1,
+          "default": ".",
+          "$comment": "NOT in `required`, deliberately: an installation that predates the key reads an ABSENT value as \".\", the project root, so the report stays where it always was until a migration adds the key. Containment is one rule, containedRelativePath in scripts/setup/validate-config.mjs, called by setup and by the update run before any operation.",
+          "description": "Project-relative folder /pnp:update writes its CHANGES_<from>-to-<to>.md reports into; \".\" (the default) is the project root. It must stay inside the project - no absolute path, no drive letter, no climbing out with .. - and an update refuses before any operation when it does not, or when it names something that exists and is not a folder."
         }
       }
     },

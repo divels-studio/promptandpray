@@ -582,6 +582,8 @@ try {
     const bk = cfg._aiwf || {};
     const entry = (bk.managedRegions || {})[CLAUDE_KEY] || {};
     const ask = ((readJson(path.join(PROJECT, ...SETTINGS_REL.split('/'))) || {}).permissions || {}).ask || [];
+    // Read at the project root: the example answers set no paths.changesDir, so the config carries
+    // the schema default "." and the report lands where it always did.
     const changes = read(path.join(PROJECT, `CHANGES_${payload1Version}-to-${bumpVersion}.md`));
 
     check('keep-mine: the hand-edited content survived', claude.includes(MY_EDIT));

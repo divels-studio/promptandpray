@@ -85,7 +85,7 @@ import {
   CONFIG_REL, ROLES_REL, SETTINGS_REL,
   jsonText, lf, orderConfig, planAskRules, renderTemplate, sha256, templateContext,
 } from '../setup/generate.mjs';
-import { formatErrors, loadSchema, validate } from '../setup/validate-config.mjs';
+import { containedRelativePath, formatErrors, loadSchema, validate } from '../setup/validate-config.mjs';
 import { claudePinErrors } from '../setup/role-rules.mjs';
 import { compareVersions, parseVersion, validatePayload } from './validate-payload.mjs';
 
@@ -888,8 +888,74 @@ function mergeBookkeeping(config, bookkeeping) {
   if (bookkeeping.suppressedAskRules) bk.suppressedAskRules = bookkeeping.suppressedAskRules;
 }
 
+// `$schema` is NOT touched here. It is refreshed at exactly one point, refreshSchemaRef below, before
+// any operation is planned or journalled - a refresh inside this function would move the config hash
+// under a journal written a moment earlier, and a crash there would leave a hash matching neither.
 function writeConfig(ctx) {
   writeAtomic(ctx.configFile, jsonText(orderConfig(ctx.config)));
+}
+
+// ---------------------------------------------------------------------------
+// $schema - engine bookkeeping, like the _aiwf stamps, never an operation
+// ---------------------------------------------------------------------------
+/** The `$schema` value a config installed or updated from `pluginRoot` carries - setup's own form. */
+export const schemaRef = (pluginRoot) => toPosix(path.join(pluginRoot, 'schema', 'aiwf.config.schema.json'));
+
+/**
+ * Points a stale `$schema` at this run's payload. Called ONCE per update run, and only when no
+ * journal exists: every hash the run then takes is over the refreshed config, and a RESUMED run keeps
+ * the hashes its journal was written with (it refreshes on the next clean run instead). In a dry run
+ * the value is assigned in memory only. Idempotent: a value that is already right is not written, so
+ * the file stays byte for byte what it was. An update refused at a later operation keeps the
+ * refreshed pointer - the value is right either way. Returns { from, to }, or null when nothing was stale.
+ */
+export function refreshSchemaRef(configFile, config, pluginRoot, dryRun) {
+  const to = schemaRef(pluginRoot);
+  if (config.$schema === to) return null;
+  const from = own(config, '$schema') ? config.$schema : null;
+  config.$schema = to;
+  if (!dryRun) writeAtomic(configFile, jsonText(orderConfig(config)));
+  return { from, to };
+}
+
+export const schemaRefreshLine = ({ from, to }) => `refreshed $schema: ${from === null ? '(none)' : String(from)} -> ${to}`;
+
+// ---------------------------------------------------------------------------
+// paths.changesDir - where the CHANGES report goes
+// ---------------------------------------------------------------------------
+/**
+ * The folder the report is written into, judged BEFORE the first operation: a value that leaves the
+ * project, or names something that is not a folder, would otherwise fail the report write AFTER every
+ * operation had been applied and journalled. An ABSENT key reads as "." - the project root, where an
+ * installation that predates the key has always found its report. The containment rule is the one
+ * setup applies (containedRelativePath). Returns the absolute folder.
+ */
+function changesFolder(projectRoot, config) {
+  const paths = isPlainObject(config.paths) ? config.paths : {};
+  const value = own(paths, 'changesDir') ? paths.changesDir : '.';
+  if (!containedRelativePath(value)) {
+    throw new UpdateError(
+      `paths.changesDir (${JSON.stringify(value)}) is not a folder inside the project - the CHANGES report would be ` +
+      `written outside it. Nothing was applied; set it to a project-relative folder in ${CONFIG_POSIX} and run the update again.`,
+    );
+  }
+  const folder = path.resolve(projectRoot, value);
+  let stat = null;
+  try { stat = fs.statSync(folder); } catch (e) {
+    if (e.code !== 'ENOENT') {
+      throw new UpdateError(
+        `paths.changesDir (${JSON.stringify(value)}) cannot be used as a folder (${e.code || e.message}). Nothing was applied; ` +
+        `fix it in ${CONFIG_POSIX} and run the update again.`,
+      );
+    }
+  }
+  if (stat && !stat.isDirectory()) {
+    throw new UpdateError(
+      `paths.changesDir (${JSON.stringify(value)}) names something that exists and is not a folder. Nothing was applied; ` +
+      `point it at a folder in ${CONFIG_POSIX}, or move that file aside, and run the update again.`,
+    );
+  }
+  return folder;
 }
 
 /**
@@ -1317,7 +1383,7 @@ function measureForeignAskRules(ctx, pending) {
  * flag written into the operator's durable bookkeeping - would pay for a one-line label with a
  * permanent field in a record that describes content, not history.
  */
-export function assembleChanges({ from, to, pending, migrations, managedRegions, foreignAskRules = new Map(), createdOps = new Set() }) {
+export function assembleChanges({ from, to, pending, migrations, managedRegions, foreignAskRules = new Map(), createdOps = new Set(), schemaRefreshed = null }) {
   const notes = [];
   const held = [];
   // The managed-artifact renders this run really carried. A `rerender-managed-region` whose key has
@@ -1379,6 +1445,10 @@ export function assembleChanges({ from, to, pending, migrations, managedRegions,
   }
 
   lines.push('## Applied', '');
+  // The `$schema` refresh is the other input that is not derived from the final state: it happened
+  // in THIS process before the first operation, so a run resumed after a crash does not print it - the
+  // value on disk is right either way, and the line is a note about this process, not about the result.
+  if (schemaRefreshed) lines.push(`- ${schemaRefreshLine(schemaRefreshed)}`, '');
   for (const entry of pending) {
     const ops = (migrations.get(entry.id) || { operations: [] }).operations;
     lines.push(`### ${entry.id} (-> ${entry.targetPluginVersion})`, '');
@@ -1477,12 +1547,25 @@ export function runUpdate({ pluginRoot, projectRoot, resolve, dryRun = false, lo
 
   if (pending.length === 0) {
     if (journal) throw new UpdateError('invariant violated: a migration journal is present although no migration is pending.');
+    // The one write an already-current run can make: a `$schema` left pointing at another plugin
+    // root. No journal exists here (that is the invariant above), so this is the clean-run refresh.
+    const schemaRefreshed = refreshSchemaRef(configFile, config, pluginRoot, dryRun);
     // Nothing is in flight here (a journal on this path is the invariant violation above), so stage
     // debris left by a run that died between its final write and its cleanup is collected now -
     // otherwise "already current" would be the one answer that never cleans up after itself.
     if (!dryRun) removeStageRoot(projectRoot);
-    return { current: true, from, to, applied: [], pending: [], dryRun, changesFile: null, notes: [] };
+    return { current: true, from, to, applied: [], pending: [], dryRun, changesFile: null, notes: [], schemaRefreshed };
   }
+
+  // Judged before ANY write of this run - the $schema refresh included - so a refused value leaves the
+  // project byte for byte as it was. Not in preflight: --check and --resolve share it and never write
+  // a report, so a bad value must not refuse them.
+  const changesDir = changesFolder(projectRoot, config);
+
+  // A resumed run (journal present) keeps the hashes its journal was written with; it refreshes on the
+  // next clean run. A clean run refreshes here, before makeContext, so every hash it takes is over the
+  // refreshed config.
+  const schemaRefreshed = journal === null ? refreshSchemaRef(configFile, config, pluginRoot, dryRun) : null;
 
   const ctx = makeContext({
     pluginRoot, projectRoot, payload, configFile, config, resolve, log,
@@ -1509,7 +1592,7 @@ export function runUpdate({ pluginRoot, projectRoot, resolve, dryRun = false, lo
         if (plan.bookkeeping) mergeBookkeeping(ctx.config, plan.bookkeeping);
       }
     }
-    return { current: false, from, to, applied: [], preview, pending, dryRun: true, changesFile: null, notes: ctx.notes };
+    return { current: false, from, to, applied: [], preview, pending, dryRun: true, changesFile: null, notes: ctx.notes, schemaRefreshed };
   }
 
   // Taken BEFORE recovery and before the first operation, because this is the last moment the fact
@@ -1554,9 +1637,9 @@ export function runUpdate({ pluginRoot, projectRoot, resolve, dryRun = false, lo
   // atomic config write that moves the version stamps and clears the journal.
   const changes = assembleChanges({
     from, to, pending, migrations: payload.migrations, managedRegions: ctx.config._aiwf.managedRegions,
-    foreignAskRules: measureForeignAskRules(ctx, pending), createdOps,
+    foreignAskRules: measureForeignAskRules(ctx, pending), createdOps, schemaRefreshed,
   });
-  const changesFile = path.join(projectRoot, `CHANGES_${from}-to-${to}.md`);
+  const changesFile = path.join(changesDir, `CHANGES_${from}-to-${to}.md`);
   writeAtomic(changesFile, changes);
 
   ctx.config._aiwf.lastMigrationApplied = pending[pending.length - 1].id;
@@ -1565,7 +1648,7 @@ export function runUpdate({ pluginRoot, projectRoot, resolve, dryRun = false, lo
   writeConfig(ctx);
   removeStageRoot(projectRoot);
 
-  return { current: false, from, to, applied: ctx.applied, pending, dryRun: false, changesFile, notes: ctx.notes };
+  return { current: false, from, to, applied: ctx.applied, pending, dryRun: false, changesFile, notes: ctx.notes, schemaRefreshed };
 }
 
 /**

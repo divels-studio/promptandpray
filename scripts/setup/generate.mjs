@@ -98,7 +98,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { previewLines, promptSync } from './dialog.mjs';
-import { collectDefaults, formatErrors, loadSchema, validate } from './validate-config.mjs';
+import { collectDefaults, containedRelativePath, formatErrors, loadSchema, validate } from './validate-config.mjs';
 import { REVIEW_CLASSES, claudePinErrors } from './role-rules.mjs';
 import { validatePayload } from '../update/validate-payload.mjs';
 import { finishWithSelfCheck } from '../selfcheck/run-selfcheck.mjs';
@@ -1033,6 +1033,11 @@ export function planInstall({
     if (typeof value !== 'string' || value === '') continue; // absent optional key: nothing configured, nothing to contain
     const outside = path.isAbsolute(value) || path.relative(projectRoot, path.resolve(projectRoot, value)).split(/[\\/]/)[0] === '..';
     if (outside) blockers.push(`paths.${key} ("${value}") is not inside the project - configured paths are project-relative.`);
+  }
+  // `changesDir` has ONE containment rule, shared with the update run that writes there
+  // (containedRelativePath, validate-config.mjs); the four keys above keep their own check.
+  if (merged.paths.changesDir !== undefined && !containedRelativePath(merged.paths.changesDir)) {
+    blockers.push(`paths.changesDir (${JSON.stringify(merged.paths.changesDir)}) is not inside the project - configured paths are project-relative.`);
   }
 
   // THE TRANSFER SURFACE'S DESTINATION, judged HERE - before a single write is planned, and always,

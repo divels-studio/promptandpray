@@ -104,7 +104,8 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/update/aiwf-update.mjs" --resolve "<key>" --
 You do not have to remember this step: an `--apply` that really applied migrations, and every
 `--resolve`, **run the self-check themselves** as their last action, against the project they just
 wrote, and report `self-check: PASS` with the child's own summary line. `--check`, `--dry-run` and an
-"already current" run write nothing, so there is nothing for it to judge and it does not run.
+"already current" run write nothing, so there is nothing for it to judge and it does not run - except
+a stale `$schema`, which it refreshes, says so, and self-checks.
 
 - a **red** self-check makes the update exit **1** and says plainly that the migrations WERE applied
   and nothing was rolled back - the writes stand, and the verdict is EITHER that the result is not
@@ -119,7 +120,8 @@ remember after a write.
 
 Report in `{{config.operator.language}}`, short: the version diff, what was applied, every conflict
 you were actually asked about and how it was resolved, and the artifacts now held by the operator.
-Read the per-artifact outcomes off the generated `CHANGES_<old>-to-<new>.md` at the project root
+Read the per-artifact outcomes off the generated `CHANGES_<old>-to-<new>.md` in the configured
+`paths.changesDir` folder (the project root by default; the CLI prints its path as `report:`)
 rather than restating them: each `rerender-managed-region` line there carries the artifact's final
 state - `payload-current` (the payload version is what is on disk) or `held (your version kept)` -
 and the report also lists the doctrine sections worth re-reading and the artifacts whose payload

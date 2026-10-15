@@ -227,6 +227,8 @@ export async function runInterview({ schema, ask, installed = null, projectRoot 
     allowEmpty: false,
     warn: (value) => existingOverridesWarning({ projectRoot, overridesDoc: value }),
   });
+  // Empty takes the schema default ".", the project root - where the report has always been.
+  await text('paths.changesDir', 'update: folder for the CHANGES_<from>-to-<to>.md reports, relative to the project root', { allowEmpty: true });
 
   out.write('\n-- product boundary checks (rendered into the Reviewer; empty is a valid answer) --\n');
   const checks = [];

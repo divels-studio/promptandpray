@@ -85,11 +85,20 @@ migration's intent depend on which field the reader remembers first, and an auth
 has not decided yet.
 
 **`supersedes`** on a `note` is the list of ids this release RETIRES - rules, seeds or earlier notes
-an installation may still be carrying. Each entry is printed in `CHANGES_<from>-to-<to>.md` as a
+an installation may still be carrying. Each entry is printed in `CHANGES_<from>-to-<to>.md` (under
+`paths.changesDir`, the project root by default) as a
 `Supersedes: <id>` line under the note that carries it, and it applies **nothing**: a `note` never
 writes a file of the operator's, so the ids are a list to read and act on. Keep them generic - a
 consumer maps them onto whatever it calls those records locally - and validate the same way
 `docRefs` is validated: an array of non-empty strings, omitted when the release retires nothing.
+
+**The supersede duty of a re-render.** A migration that RE-renders an existing region with new
+sentences owes its `supersedes` list a search, not a recollection: before it lands, grep the
+region's new sentences against every consumer-local duplicate its `NOTES.md` names, and make the
+`supersedes` list equal that grep's hits - one id per hit, no more and no fewer. A release has
+already shipped with one id missing from such a list. A render that CREATES a
+new file has no consumer-local duplicate of its sentences; its `NOTES.md` says so and its note
+carries no list.
 
 **The word-gate convention.** A migration whose release introduces a word-gate carries this sentence
 in its note TEXT, verbatim:

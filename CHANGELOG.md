@@ -4,6 +4,37 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.2.19] - 2026-10-15
+
+The update engine: a configurable folder for the CHANGES reports, a `$schema` pointer that is kept
+current, and the supersede duty of a re-rendering migration written down.
+
+### Added
+
+- **CHANGES report folder (PLB-002)** - a new config key `paths.changesDir` names the
+  project-relative folder `/pnp:update` writes `CHANGES_<from>-to-<to>.md` into; its default `"."`
+  keeps the project root, and an installation without the key reads it the same way. One
+  containment rule (`containedRelativePath`) is shared by setup, the update run and the self-check:
+  an absolute value, a drive letter or a climb out of the project is refused - by the update before
+  any operation, as is a value naming an existing file; `--check` and `--resolve` never refuse on
+  it. Migration `0023` adds the key as `"."`; setup asks for it after the paths questions.
+
+### Changed
+
+- **Supersede duty for re-rendering migrations (PLB-002)** - `migrations/README.md`: a migration
+  that re-renders an existing region with new sentences greps them against every consumer-local
+  duplicate its NOTES.md names before it lands, and its note's `supersedes` list equals that grep's
+  hits.
+
+### Fixed
+
+- **`$schema` no longer goes stale (PLB-002)** - setup wrote the pointer once and update never did,
+  so an installation that only updated kept a path into an old plugin cache. Every update run from a
+  different plugin root now refreshes it once, before any migration is journalled (a resumed run
+  keeps its journal's hashes and the next clean run refreshes); an already-current run that refreshes
+  it prints `refreshed $schema: <from> -> <to>` and `nothing else was written` and runs the
+  self-check, and an applying run records the same line in its CHANGES report.
+
 ## [0.2.18] - 2026-10-15
 
 Doctrine text tightened where consumers found it silent or wrong: shell edits, dialogs, how passes

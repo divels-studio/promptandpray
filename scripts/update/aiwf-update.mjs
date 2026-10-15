@@ -19,7 +19,9 @@
  * THE SELF-CHECK IS THE LAST STEP OF A WRITING RUN
  *   `--apply` that really applied migrations, and `--resolve`, finish by RUNNING
  *   scripts/selfcheck/aiwf-selfcheck.js against the project. `--check`, `--dry-run` and an
- *   "already current" run write nothing, so there is nothing for it to judge and it does not run.
+ *   "already current" run write nothing, so there is nothing for it to judge and it does not run -
+ *   except an "already current" run that refreshed a stale `$schema`: the config changed on disk,
+ *   so it prints `refreshed $schema: <from> -> <to>`, then `nothing else was written`, and runs it.
  *   A red self-check makes this command exit 1 while saying plainly that the migrations WERE
  *   applied and nothing was rolled back; a self-check that cannot be spawned is also exit 1,
  *   because "could not check" is never reported as "checked". Contract:
@@ -63,7 +65,7 @@ import { finishWithSelfCheck } from '../selfcheck/run-selfcheck.mjs';
 import { PayloadError } from './validate-payload.mjs';
 import {
   DEFAULT_PLUGIN_ROOT, UpdateError, UpdateStartError,
-  checkInterlock, checkResolutionRecord, resolutionFileAdapter, resolveArtifact, runUpdate, stopAdapter,
+  checkInterlock, checkResolutionRecord, resolutionFileAdapter, resolveArtifact, runUpdate, schemaRefreshLine, stopAdapter,
 } from './migrate.mjs';
 
 const MODES = ['--check', '--dry-run', '--apply', '--resolve'];
@@ -197,11 +199,20 @@ function main() {
     const resolve = makeResolver({ resolutionFile: flag('--resolution-file'), dryRun });
     const report = runUpdate({ pluginRoot, projectRoot, resolve, dryRun, log: say });
     if (report.current) {
+      if (report.schemaRefreshed && !dryRun) {
+        // The config changed on disk, so this is a writing run and it is judged like one.
+        say(`already current: ${report.from} == the payload version, and no migrations are pending.`);
+        say(schemaRefreshLine(report.schemaRefreshed));
+        say('nothing else was written');
+        return finish(0, 'the refreshed config');
+      }
       say(`already current: ${report.from} == the payload version, and no migrations are pending. Nothing was written.`);
+      if (report.schemaRefreshed) say(`a real run would write: ${schemaRefreshLine(report.schemaRefreshed)}`);
       return 0;
     }
     if (dryRun) {
       say(`dry run: ${report.from} -> ${report.to}, ${report.preview.length} operation(s) planned. NOTHING was written.`);
+      if (report.schemaRefreshed) say(`  a real run would first write: ${schemaRefreshLine(report.schemaRefreshed)}`);
       for (const p of report.preview) say(`  ${p.migration}[${p.opIndex}] ${p.summary}`);
       return 0;
     }

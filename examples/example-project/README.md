@@ -100,7 +100,8 @@ node <payload2>/scripts/update/aiwf-update.mjs --apply --plugin-root <payload2> 
 
 exit 0 - your edit survives, that artifact is now held (`override: true`), the Writer agent quietly
 takes the payload version ("the payload version applied (you had not edited it)"), the other
-operations applied, `CHANGES_<installed>-to-<target>.md` appears at the project root listing each
+operations applied, `CHANGES_<installed>-to-<target>.md` appears in `paths.changesDir` (the project
+root here, the default) listing each
 re-rendered artifact as `payload-current` or `held (your version kept)`, and the update runs the
 self-check itself
 

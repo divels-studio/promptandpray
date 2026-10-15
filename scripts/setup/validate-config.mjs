@@ -24,6 +24,7 @@
  *   isValid(instance, schema)         -> boolean
  *   collectDefaults(schema)           -> a fresh object of every declared default (no input touched)
  *   formatErrors(errors)              -> one line per error
+ *   containedRelativePath(v)          -> boolean: the one containment rule of paths.changesDir
  *
  * CLI
  *   node validate-config.mjs <config.json> [--schema <schema.json>]
@@ -261,6 +262,21 @@ export function loadSchema(file = DEFAULT_SCHEMA_PATH) {
 
 export function formatErrors(errors) {
   return errors.map((e) => `  ${e.path}: ${e.message}`).join('\n');
+}
+
+/**
+ * THE containment rule of `paths.changesDir`, and the only one: setup, the update engine and the
+ * self-check all call this function, so no two of them can disagree about a value. True iff `v` is a
+ * non-empty string that is absolute in NEITHER dialect, carries no drive letter at all (`C:x` is not
+ * win32-absolute and still leaves the project on Windows), and does not climb out once normalised
+ * (`a/../reports` is `reports` and is contained; `a/../../x` is `../x` and is not). The answer is the
+ * same on every platform: a config written on one machine is read on another.
+ */
+export function containedRelativePath(v) {
+  if (typeof v !== 'string' || v === '') return false;
+  if (path.win32.isAbsolute(v) || path.posix.isAbsolute(v) || /^[A-Za-z]:/.test(v)) return false;
+  const n = path.posix.normalize(v.replace(/\\/g, '/'));
+  return n !== '..' && !n.startsWith('../');
 }
 
 // ---- CLI -------------------------------------------------------------------

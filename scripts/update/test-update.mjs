@@ -50,6 +50,9 @@ import { fileURLToPath } from 'node:url';
 import {
   UpdateError, assertNoForeignFileAtCreationTarget, extractRegion, resolveArtifact, runUpdate, writeCreatedTarget,
 } from './migrate.mjs';
+// The same module through its NAMESPACE, for helpers read in section 17: a helper this payload does
+// not export yet must fail the checks that need it, not abort the whole suite at load time.
+import * as engine from './migrate.mjs';
 import { sha256 } from '../setup/generate.mjs';
 import { validatePayload } from './validate-payload.mjs';
 import { buildExampleBump } from '../ci/example-bump.mjs';
@@ -1003,7 +1006,17 @@ section('8 - add-config-key: idempotent, answered, and never guessed');
   const before = snapshot(p7);
   const rejected = update(p7, ['--apply'], { payload: badSchema });
   check('a key the payload schema does not admit is refused (exit 1)', rejected.status === 1, why(rejected));
-  check('and nothing was written', diffSnapshots(before, snapshot(p7)).length === 0, diffSnapshots(before, snapshot(p7)).join(', '));
+  // The project was installed from another payload root, so the run refreshed `$schema` before its
+  // first operation (outside the journal) - that one write stands; the refused operation wrote nothing.
+  const after = snapshot(p7);
+  const strip = (text) => { try { const c = JSON.parse(text); delete c.$schema; return JSON.stringify(c); } catch { return null; } };
+  const changed = diffSnapshots(before, after);
+  const want = typeof engine.schemaRef === 'function' ? engine.schemaRef(badSchema) : '(migrate.mjs exports no schemaRef)';
+  const got = (() => { try { return JSON.parse(after[CONFIG_REL]).$schema; } catch { return null; } })();
+  check('and the $schema refresh to the attempted payload root was the ONLY write',
+    changed.length === 1 && changed[0] === CONFIG_REL && got === want
+      && strip(before[CONFIG_REL]) !== null && strip(before[CONFIG_REL]) === strip(after[CONFIG_REL]),
+    `changed [${changed.join(', ')}], $schema ${got} vs ${want}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -2545,6 +2558,218 @@ section('16 - a release never touches examples/: the example bump is numbered wh
   check('once the template is repaired, the SAME payload builds: 0003_example-bump -> 0.3.0',
     !!retry && retry.id === '0003_example-bump' && retry.targetPluginVersion === '0.3.0',
     retryError ? retryError.message : JSON.stringify(retry));
+}
+
+// ---------------------------------------------------------------------------
+section('17 - paths.changesDir places the CHANGES report; a stale $schema is refreshed outside the journal');
+// Each test below is ONE check named by its label; every sub-assertion that fails is listed in its
+// detail. "A" is the root a project was installed from, "B" another payload root.
+{
+  const CHANGES_NAME = `CHANGES_${BASELINE.targetPluginVersion}-to-0.2.0.md`;
+  const PNOTE = makePayload('changes-dir', {
+    version: '0.2.0', migrations: [{ id: '0002_note', version: '0.2.0', ops: [FIXTURE_NOTE] }],
+  });
+  // Another root at the BASELINE version: nothing is pending from it, so a run from it is a no-op
+  // whose only possible write is the $schema refresh.
+  const BASE_B = makePayload('schema-b', { version: BASELINE.targetPluginVersion, migrations: [] });
+  const SCHEMA_OPS = [{ op: 'add-config-key', path: 'enforcement.exampleToggle', default: true, askOperator: false }, FIXTURE_NOTE];
+  const schemaRefOf = (root) => (typeof engine.schemaRef === 'function' ? engine.schemaRef(root) : '(migrate.mjs exports no schemaRef)');
+  const schemaOf = (p) => (readJson(at(p, CONFIG_REL)) || {}).$schema;
+  const setChangesDir = (p, value) => {
+    const cfg = readJson(at(p, CONFIG_REL));
+    cfg.paths.changesDir = value;
+    writeJson(at(p, CONFIG_REL), cfg);
+  };
+  const expect = (problems, ok, what, r = null) => { if (!ok) problems.push(r ? `${what}\n${why(r)()}` : what); };
+  // Drive-letter literals are composed, never written out: the self-check's provenance section reads
+  // a written-out letter-colon-slash in this file as an absolute path (see PROV_ABS_RE there).
+  const DRIVE = 'C:';
+  const verdict = (label, problems) => check(label, problems.length === 0, () => problems.join('\n'));
+
+  {
+    const problems = [];
+    const p = project('changes-dir-configured');
+    const i = install(p, { answers: baseAnswers({ paths: { ...baseAnswers().paths, changesDir: 'reports' } }) });
+    expect(problems, i.status === 0, 'setup accepts paths.changesDir "reports" (exit 0)', i);
+    const r = update(p, ['--apply'], { payload: PNOTE });
+    expect(problems, r.status === 0, '--apply exits 0', r);
+    expect(problems, exists(at(p, `reports/${CHANGES_NAME}`)), `reports/${CHANGES_NAME} was not written`);
+    expect(problems, !exists(at(p, CHANGES_NAME)), `${CHANGES_NAME} was written at the project root`);
+    expect(problems, r.out.includes(`report:  reports/${CHANGES_NAME}`), 'the CLI does not name the report under reports/', r);
+    verdict('changesDir: report lands in the configured folder, none at the root', problems);
+  }
+  {
+    const problems = [];
+    const p = project('changes-dir-default');
+    expect(problems, install(p).status === 0, 'install exits 0');
+    expect(problems, ((readJson(at(p, CONFIG_REL)) || {}).paths || {}).changesDir === '.',
+      `a fresh config does not carry the schema default "." (paths: ${JSON.stringify((readJson(at(p, CONFIG_REL)) || {}).paths)})`);
+    const r = update(p, ['--apply'], { payload: PNOTE });
+    expect(problems, r.status === 0 && exists(at(p, CHANGES_NAME)), `the default "." did not put ${CHANGES_NAME} at the root`, r);
+    expect(problems, r.out.includes(`report:  ${CHANGES_NAME}`), 'the CLI does not name the report at the root', r);
+    // An installation that predates the key: ABSENT reads as ".".
+    const old = project('changes-dir-absent');
+    install(old);
+    const cfg = readJson(at(old, CONFIG_REL));
+    if (cfg && cfg.paths) delete cfg.paths.changesDir;
+    writeJson(at(old, CONFIG_REL), cfg);
+    const r2 = update(old, ['--apply'], { payload: PNOTE });
+    expect(problems, r2.status === 0 && exists(at(old, CHANGES_NAME)), `an ABSENT key did not put ${CHANGES_NAME} at the root`, r2);
+    verdict('changesDir: default keeps the report at the root', problems);
+  }
+  {
+    const problems = [];
+    for (const value of ['../x', 'a/../../x', '/x', `${DRIVE}/x`, `${DRIVE}\\x`, 'C:x']) {
+      const p = project('changes-dir-refused');
+      install(p);
+      setChangesDir(p, value);
+      const before = snapshot(p);
+      const r = update(p, ['--apply'], { payload: PNOTE });
+      expect(problems, r.status === 1 && r.out.includes('paths.changesDir'), `${JSON.stringify(value)}: not refused with exit 1 naming paths.changesDir`, r);
+      const changed = diffSnapshots(before, snapshot(p));
+      expect(problems, changed.length === 0, `${JSON.stringify(value)}: the refused run wrote ${changed.join(', ')}`);
+      expect(problems, bookkeeping(p).installedPluginVersion === BASELINE.targetPluginVersion, `${JSON.stringify(value)}: the version stamp moved`);
+      expect(problems, !exists(path.resolve(p, '..', 'x', CHANGES_NAME)), `${JSON.stringify(value)}: a report was written outside the project`);
+    }
+    const ok = project('changes-dir-normalised');
+    install(ok);
+    setChangesDir(ok, 'a/../reports');
+    const r = update(ok, ['--apply'], { payload: PNOTE });
+    expect(problems, r.status === 0 && exists(at(ok, `reports/${CHANGES_NAME}`)), '"a/../reports" was not accepted into reports/', r);
+    const file = project('changes-dir-file');
+    install(file);
+    fs.writeFileSync(at(file, 'reports.txt'), 'a file, not a folder\n', 'utf8');
+    setChangesDir(file, 'reports.txt');
+    const before = snapshot(file);
+    const f = update(file, ['--apply'], { payload: PNOTE });
+    expect(problems, f.status === 1 && f.out.includes('paths.changesDir'), 'a changesDir that is an existing FILE was not refused with exit 1', f);
+    expect(problems, diffSnapshots(before, snapshot(file)).length === 0, `the FILE refusal wrote ${diffSnapshots(before, snapshot(file)).join(', ')}`);
+    verdict(`changesDir: ../x, ${DRIVE}/x, C:x and /x are refused before any op runs, on every platform; a/../reports is accepted; a changesDir that is an existing FILE is refused`, problems);
+  }
+  {
+    const problems = [];
+    const p = project('changes-dir-check-resolve');
+    install(p);
+    setChangesDir(p, '../x');
+    const c = update(p, ['--check']);
+    expect(problems, c.status === 0 && c.out.includes('up to date'), '--check on a current project was refused', c);
+    const c2 = update(p, ['--check'], { payload: PNOTE });
+    expect(problems, c2.status === 1 && c2.out.includes('migration(s) pending') && !c2.out.includes('changesDir'),
+      '--check with a migration pending did not answer the interlock question alone', c2);
+    const res = update(p, ['--resolve', WRITER_REL, '--resolution-file', resolutionFile('changes-dir-resolve', {
+      [WRITER_REL]: { kind: 'conflict', resolution: 'take-new' },
+    })]);
+    expect(problems, res.status === 0 && !res.out.includes('changesDir'), '--resolve was refused', res);
+    // The control: the same value IS refused where it is used.
+    const a = update(p, ['--apply'], { payload: PNOTE });
+    expect(problems, a.status === 1 && a.out.includes('paths.changesDir'), 'the same value was NOT refused by --apply', a);
+    verdict('changesDir: --check and --resolve are not refused by a bad value', problems);
+  }
+  {
+    const problems = [];
+    const p = project('schema-apply');
+    install(p);
+    const from = schemaOf(p);
+    expect(problems, from === schemaRefOf(BASE), `setup and the engine disagree on the install root's value: ${from} vs ${schemaRefOf(BASE)}`);
+    const r = update(p, ['--apply'], { payload: PNOTE });
+    expect(problems, r.status === 0, '--apply exits 0', r);
+    expect(problems, schemaOf(p) === schemaRefOf(PNOTE), `$schema is ${schemaOf(p)}, not the update root's ${schemaRefOf(PNOTE)}`);
+    const changes = read(at(p, CHANGES_NAME)) || '';
+    expect(problems, changes.includes(`refreshed $schema: ${from} -> ${schemaRefOf(PNOTE)}`), `the report does not carry the refresh line:\n${changes}`);
+    verdict('$schema: rewritten on apply when the update root differs from the install root', problems);
+  }
+  {
+    const problems = [];
+    const p = project('schema-noop');
+    install(p);
+    const stale = schemaOf(p);
+    const cfgBefore = readJson(at(p, CONFIG_REL)) || {};
+    const before = snapshot(p);
+    const r1 = update(p, ['--apply'], { payload: BASE_B });
+    expect(problems, r1.status === 0 && r1.out.includes('already current'), 'the no-op run did not exit 0 as already current', r1);
+    expect(problems, schemaOf(p) === schemaRefOf(BASE_B) && schemaOf(p) !== stale, `the stale $schema ${stale} was not rewritten to ${schemaRefOf(BASE_B)} (now ${schemaOf(p)})`);
+    const changed = diffSnapshots(before, snapshot(p));
+    expect(problems, changed.length === 1 && changed[0] === CONFIG_REL, `the no-op run changed more than the config: ${changed.join(', ')}`);
+    const strip = (c) => { const x = { ...c }; delete x.$schema; return JSON.stringify(x); };
+    expect(problems, strip(cfgBefore) === strip(readJson(at(p, CONFIG_REL)) || {}), 'the config changed beyond $schema');
+    const fresh = snapshot(p);
+    const r2 = update(p, ['--apply'], { payload: BASE_B });
+    expect(problems, r2.status === 0 && !r2.out.includes('refreshed $schema'), 'the second run from the same root refreshed again', r2);
+    const again = diffSnapshots(fresh, snapshot(p));
+    expect(problems, again.length === 0, `a fresh $schema was not left byte-identical: ${again.join(', ')}`);
+    verdict('$schema: no-op run rewrites a stale value and leaves a fresh one byte-identical', problems);
+  }
+  {
+    const problems = [];
+    const p = project('schema-noop-selfcheck');
+    install(p);
+    const from = schemaOf(p);
+    const r = update(p, ['--apply'], { payload: BASE_B, selfcheck: true });
+    expect(problems, r.status === 0, 'the run exits 0', r);
+    const line = `refreshed $schema: ${from} -> ${schemaRefOf(BASE_B)}`;
+    const at1 = r.out.indexOf(line);
+    const at2 = r.out.indexOf('nothing else was written');
+    expect(problems, at1 !== -1 && at2 > at1, `the two lines ("${line}", then "nothing else was written") were not printed in order`, r);
+    expect(problems, !r.out.includes('Nothing was written'), 'the plain "Nothing was written" line was printed for a run that wrote', r);
+    expect(problems, r.out.includes('self-check: PASS'), 'the integrated self-check did not run and pass', r);
+    verdict('$schema: stale value on an already-current project is refreshed, the two lines print, the self-check runs', problems);
+  }
+  {
+    const problems = [];
+    // B is installed from AND updated from: the project is installed at the baseline from this root,
+    // and the SAME directory is then rebuilt as the next release, so both runs share one root.
+    const CRASH_B = makePayload('schema-crash', { version: BASELINE.targetPluginVersion, migrations: [] });
+    const p = project('schema-crash');
+    expect(problems, install(p, { payload: CRASH_B }).status === 0, 'install from B exits 0');
+    makePayload('schema-crash', {
+      version: '0.2.0', migrations: [{ id: '0002_schema', version: '0.2.0', ops: SCHEMA_OPS }], tweak: addExampleToggleToSchema,
+    });
+    const schemaBefore = schemaOf(p);
+    expect(problems, schemaBefore === schemaRefOf(CRASH_B), `precondition: $schema is B's (${schemaBefore})`);
+    const crashed = update(p, ['--apply'], { payload: CRASH_B, env: { PNP_UPDATE_CRASH_AT: '0002_schema/0/after-journal-prepared' } });
+    expect(problems, crashed.status === 86, 'the child did not die with exit 86 after the first journal write', crashed);
+    expect(problems, (bookkeeping(p).migrationJournal || {}).opIndex === 0, 'no journal on operation 0 was left behind');
+    expect(problems, schemaOf(p) === schemaBefore, `the crashed run changed $schema to ${schemaOf(p)}`);
+    const resumed = update(p, ['--apply'], { payload: CRASH_B });
+    expect(problems, resumed.status === 0, 'the resume did not complete', resumed);
+    const bk = bookkeeping(p);
+    expect(problems, bk.installedPluginVersion === '0.2.0' && bk.migrationJournal === null, `end state ${bk.installedPluginVersion} / ${JSON.stringify(bk.migrationJournal)}`);
+    expect(problems, schemaOf(p) === schemaBefore, `the resume changed $schema to ${schemaOf(p)}`);
+    expect(problems, !resumed.out.includes('refreshed $schema') && !(read(at(p, CHANGES_NAME)) || '').includes('refreshed $schema'),
+      'a refresh was reported for a run that had nothing to refresh', resumed);
+    verdict('$schema: crash after the first journal write, resume completes without touching $schema', problems);
+  }
+  {
+    const problems = [];
+    const JB = makePayload('schema-journal', {
+      version: '0.2.0', migrations: [{ id: '0002_schema', version: '0.2.0', ops: SCHEMA_OPS }], tweak: addExampleToggleToSchema,
+    });
+    const p = project('schema-journal');
+    install(p);
+    // The journal exactly as the engine leaves it when it dies after the first operation reached its
+    // target: the key is in the config, the journal is still `prepared`, and both hashes are over A's
+    // config - computed by the engine's own projection hash.
+    const cfg = readJson(at(p, CONFIG_REL));
+    const aSchema = cfg.$schema;
+    const preHash = typeof engine.configHash === 'function' ? engine.configHash(cfg) : null;
+    const next = JSON.parse(JSON.stringify(cfg));
+    next.enforcement.exampleToggle = true;
+    const postHash = typeof engine.configHash === 'function' ? engine.configHash(next) : null;
+    next._aiwf.migrationJournal = { migration: '0002_schema', opIndex: 0, state: 'prepared', target: CONFIG_REL, preHash, postHash, resolution: null };
+    writeJson(at(p, CONFIG_REL), next);
+    const resumed = update(p, ['--apply'], { payload: JB });
+    expect(problems, resumed.status === 0, 'the resume from B did not complete', resumed);
+    expect(problems, resumed.out.includes('resuming: 0002_schema operation 0 had already reached its target'),
+      'the journal hashes did not match on resume (a refresh moved the config under the journal)', resumed);
+    expect(problems, !resumed.out.includes('refreshed $schema') && schemaOf(p) === aSchema, `the resumed run refreshed $schema (now ${schemaOf(p)})`, resumed);
+    const bk = bookkeeping(p);
+    expect(problems, bk.installedPluginVersion === '0.2.0' && bk.migrationJournal === null, `end state ${bk.installedPluginVersion} / ${JSON.stringify(bk.migrationJournal)}`);
+    const clean = update(p, ['--apply'], { payload: JB });
+    expect(problems, clean.status === 0 && clean.out.includes(`refreshed $schema: ${aSchema} -> ${schemaRefOf(JB)}`),
+      'the next clean run from B did not refresh and say so', clean);
+    expect(problems, schemaOf(p) === schemaRefOf(JB), `after the clean run $schema is ${schemaOf(p)}, not B's`);
+    verdict('$schema: a journal written under another root is resumed without a refresh, and the next clean run refreshes', problems);
+  }
 }
 
 // ---------------------------------------------------------------------------

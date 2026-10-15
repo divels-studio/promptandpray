@@ -50,6 +50,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { plansDirUnderScratchWarning, renderTemplate, scanSupersededLegacy, sha256, templateContext } from './generate.mjs';
 import { runInterview } from './interview.mjs';
+// Read through the module NAMESPACE, not a named import: a helper this payload does not export yet
+// must fail the checks that need it (section 25), not abort the whole suite at load time.
+import * as validateConfig from './validate-config.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PLUGIN_ROOT = path.resolve(HERE, '..', '..');
@@ -2091,6 +2094,37 @@ section('24 - the transfer surface: seeded once at the resolved path, never mana
       }
     }
   }
+}
+
+section('25 - paths.changesDir: ONE containment rule, the same seven literals on every platform');
+{
+  // The rule is the exported production helper, called directly: the update engine and setup both
+  // call this one function, so its answers ARE the containment contract of the key. The six refused
+  // literals are refused on EVERY platform - a drive-letter form is refused on POSIX too, because a
+  // config written on one machine is read on another.
+  const fn = validateConfig.containedRelativePath;
+  check('validate-config.mjs exports containedRelativePath', typeof fn === 'function', typeof fn);
+  // Drive-letter literals are composed, never written out: the self-check's provenance section reads
+  // a written-out letter-colon-slash in this file as an absolute path.
+  const DRIVE = 'C:';
+  const LITERALS = [
+    ['a/../reports', true], ['../x', false], ['a/../../x', false], ['/x', false],
+    [`${DRIVE}/x`, false], [`${DRIVE}\\x`, false], ['C:x', false],
+  ];
+  for (const [value, expected] of LITERALS) {
+    const got = typeof fn === 'function' ? fn(value) : '(not exported)';
+    check(`containedRelativePath(${JSON.stringify(value)}) is ${expected}`, got === expected, String(got));
+  }
+
+  // The setup consumer: a configured changesDir that leaves the project is refused before a write,
+  // and the accepted literal installs.
+  const refused = project('changes-dir-refused');
+  const r = install(refused, baseAnswers({ paths: { ...baseAnswers().paths, changesDir: '../x' } }), ['--no-seeds']);
+  check('setup refuses paths.changesDir "../x" (exit 1), naming the key', r.status === 1 && r.out.includes('paths.changesDir'), why(r, true));
+  check('and that refusal wrote nothing', Object.keys(snapshot(refused)).length === 0, Object.keys(snapshot(refused)).join(', '));
+  const accepted = project('changes-dir-accepted');
+  const a = install(accepted, baseAnswers({ paths: { ...baseAnswers().paths, changesDir: 'a/../reports' } }), ['--no-seeds']);
+  check('setup accepts paths.changesDir "a/../reports" (exit 0)', a.status === 0, why(a));
 }
 
 // ---------------------------------------------------------------------------
