@@ -236,6 +236,18 @@ runs VERIFY - in full or in part - carries a pointer to it; a red test on a trap
 defect of the brief, not of the code. The runbook holds the working command shapes and the recorded
 incidents; this section stays the policy home.
 
+**Checks are run by a fresh scan agent, not the Writer (operator rule 2026-10-15, adopted from a
+consumer; first used on STAB-001).** The full VERIFY batch, the acceptance commands and every re-run
+are run by a new `general-purpose` agent on `sonnet` with only the commands of the COO's brief (and
+the pointer to `dev/VERIFY_RUNBOOK.md`); it fixes nothing, writes no tracked file and runs no git, and
+returns each command with its exact exit code, the pass/fail counts, the names of the failing checks
+and the tail of their output; on an environment failure it stops and reports. The Writer is called
+only when something fails and needs a fix - the live one if there is one, otherwise a new one. *Its
+suppression dual:* the Writer still runs the targeted check it needs while writing - a test it just
+added, seen red before the fix; the rule takes the full batch and the re-runs off it, not that.
+*Why:* a long procedure on a warm Writer pays its whole context on every step, and a mechanical
+procedure is cheap-agent work (payload `docs/WORKFLOW.md` § COO owns broad scans, tripwire 3).
+
 ## Status and release artifacts
 
 The documents the "status / release docs policy" in the payload doc `docs/WORKFLOW.md` applies to, in this project:
