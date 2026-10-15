@@ -1141,6 +1141,7 @@ xhigh) излиза по-скъп от студен. Решава се само 
 | PLAN_LEAN readiness p3 (2026-10-14, над r6, дума „studen ok“; hard max) | plan | студен | 131,408 | — | — | PASS (пренесеният блокер CLOSED, 0 нови) |
 | LEAN-001 code p1 (2026-10-14, `gpt-6-sol`/xhigh, дума „пускай LEAN-001“; interlock през 0.2.16 wrapper по дума „да“) | code | студен | 120,726 | — | — | pass-with-notes (0 находки; бележка: VERIFY партидата е от доклада на Колегата) |
 | STAB-001 code p1 (2026-10-15, `gpt-6-sol`/xhigh, дума „пускай“; interlock през 0.2.17 wrapper по дума „да пусни го през 2.17“) | code | студен | 91,030 | — | — | fail (2 блокера - противоречия между одобрени блокове и съседни изречения: редът `COO:` срещу non-durable R2 без раздел в плана; scoped QA ре-рън срещу „the same suite“) → прозов рунд 1, без верификационен пас |
+| PLB-002 code p1 (2026-10-15, `gpt-6-sol`/xhigh, session `01a14015-0cfa-72d2-adba-62673936cfc4`, operator word „da"; pnp-live at 0.2.18 payload, as D10 orders) | code | cold | 92,361 | — | — | fail (2 blockers: the section-8 test assertion narrowed in the pre-verdict micro-round was vacuous when nothing was written; the full test-update exit 0 not yet shown) → code round 1 of 6 test lines in the audited file, red against HEAD's engine / green on the tree, no verification pass (suppression dual) |
 
 ## Event ledger (D16 формат: | дата | правило | violation|catch|operator-correction | указател |)
 

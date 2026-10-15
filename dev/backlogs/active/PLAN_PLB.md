@@ -383,6 +383,52 @@ both tickets. Risk threshold: a
 fifth op, a changed default location, an uncontained `changesDir` that writes, or a `$schema` write
 that is not idempotent blocks. Stop: (a)-(d) and their tests.
 
+**Completion record (CLOSED 2026-10-15, operator word „da", code commit `3c1c314`).**
+- Actual changes: 18 files, 525 insertions / 18 deletions - the worklist as written. `containedRelativePath`
+  in `scripts/setup/validate-config.mjs`, consumed by `generate.mjs` (planInstall, after the four-key
+  loop), `migrate.mjs` (`changesFolder` in `runUpdate`, after the no-op branch and before the `$schema`
+  refresh and `makeContext`; also refuses an existing non-folder) and `aiwf-selfcheck.js` (row
+  `path-changesDir` via a `spawnSync` ESM import, negative control `../x`, positive fixture
+  `a/../reports`); `schemaRef` / `refreshSchemaRef` / `schemaRefreshLine` in `migrate.mjs`, called on
+  the no-op path and on the apply path only when `journal === null`; `aiwf-update.mjs` prints the two
+  lines and self-checks on a no-op refresh; `assembleChanges` writes the line first under `## Applied`;
+  migration `0023_changes-dir-and-agents` (`add-config-key` + `note`; the AGENTS.md render op is
+  PLB-003's), `plugin.json` 0.2.19, CHANGELOG `## [0.2.19] - 2026-10-15` opened; test-setup section
+  25, test-update section 17 (nine labels), the three doc homes.
+- Deviations: (1) the plan's "already current writes nothing" sentence sits at
+  `skills/update/SKILL.md:106-107`, not `:104`; the same sentence in the `aiwf-update.mjs` header
+  (`:21-22`) was updated too. (2) The suite has no config-hash helper, so test (iii) builds the journal
+  fixture with the engine's exported `configHash`. (3) Test (ii) and the resume half of (iii) cannot be
+  red against the old engine (it never wrote `$schema`); they are regression guards, and (iii) is the
+  one that discriminates a refresh inside `writeConfig`. (4) The existing section-8 case (a refused
+  `add-config-key` from a DIFFERENT payload root) now sees the config written, because the refresh runs
+  before the refused op exactly as Outcome (b) orders; its assertion became `and the $schema refresh to
+  the attempted payload root was the ONLY write` (config differs only in `$schema`, new value ==
+  `schemaRef(attempted root)`, nothing else on disk changed), and the `refreshSchemaRef` doc comment and
+  NOTES.md state that an update refused at a later operation keeps the refreshed pointer. (5) Drive-letter
+  test literals are composed from a `DRIVE = 'C:'` constant so the self-check's provenance regex does not
+  read them as absolute paths.
+- Verification (check agents, fresh `sonnet`, D4): `node scripts/update/validate-payload.mjs
+  --plugin-root .` exit 0 (23 migrations, payload 0.2.19); `node scripts/setup/test-setup.mjs` exit 0,
+  493/0; `node scripts/update/test-update.mjs` exit 0, 614/0 on the final tree (14m23s); `node
+  scripts/ci/run-example-cycle.mjs` exit 0, 47/0; provenance grep exit 1 (clean). The new tests were
+  seen red before the implementation (test-setup section 25: 10 of 11 red; test-update section 17: 9 of
+  9 red) and green after. `node scripts/selfcheck/aiwf-selfcheck.js --plugin-root . --project-fixture .`
+  was run informationally: 1260/1261, the ONLY red being `installedPluginVersion equals the payload
+  version` (installed 0.2.18, payload 0.2.19) - the acceptance item is DEFERRED to the D10 self-update,
+  result in PLB-003's record; `path-changesDir`, its control and fixture, and the provenance section PASS.
+- Review: fact-check gate over the diff 111 claims, 0 FALSE, 4 UNVERIFIABLE (the AGENTS.md sentences of
+  the 0023 note = PLB-003's half; the historical 0011 omission). Auditor pass 1 (Codex gpt-6-sol/xhigh):
+  `fail`, 2 blockers - the narrowed section-8 assertion passed when nothing was written (vacuous), and
+  the full test-update exit 0 was not yet shown. Correction round 1 (of 2): 6 test lines in
+  `test-update.mjs` section 8 (already audited), the instrument made to fail against HEAD's engine in a
+  scratch copy (`changed []`) and green on the tree; fact-check over the delta 15 claims, 0 FALSE; the
+  COO read the hunk first-hand. No verification pass: WORKFLOW § Loop shape suppression dual (<= ~10
+  lines, audited file, red-before-fix, no routing-check-1 surface). No second auditor pass.
+- Remaining: none blocking. `README.md:22` still says v0.2.18 - correct until the release; it moves to
+  0.2.19 in PLB-006's durable half. `D:\pnp-live` deliberately NOT refreshed after this commit and its
+  record commit (D10).
+
 ### PLB-003 - The Codex auditor's instruction file is rendered, not hand-written
 COO: top, because check 1 (D7).
 Source: CANDIDATES § "Прием от Silerax" item 2; evidence `D:\Stratex\AGENTS.md` (consumer,
