@@ -66,7 +66,8 @@ otherwise unchanged.
 - Proof for algorithmic/matcher/routing/transform/parser logic MUST exercise the production function
   or an extracted production helper - mirrored test-local logic is not proof.
 - Assertions must be unconditional. `expect()` wrapped in an `if` that passes silently when false is
-  rejected.
+  rejected. An assertion that cannot fail at all is rejected the same way: `expect(true)`, a count
+  asserted `>= 0`, an exit code swallowed by `|| true`.
 - A runtime check gated only behind an optional flag/param/shape, skipped on the default path, is
   incomplete implementation.
 - Tenancy/security/i18n: every tenant-owned query carries the project's tenant key; new

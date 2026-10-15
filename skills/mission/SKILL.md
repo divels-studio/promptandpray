@@ -46,8 +46,10 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
    allowed before reporting.
 3. **Reconstruct state.** From the chosen PLAN: mission status, the ticket ledger, the completion
    records, the execution order, any recorded operator gates. From memory: the resume point and
-   machine-local facts. From git: current branch, `git status` (identify uncommitted work - NEVER
-   touch or stage foreign uncommitted files), the last ~10 commits.
+   machine-local facts. The resume point is a status of at most ~10 lines, rewritten WHOLE
+   whenever it changes and never appended to - history lives in git and the PLAN, and an appended
+   note grows into a start-up cost of its own. From git: current branch, `git status` (identify
+   uncommitted work - NEVER touch or stage foreign uncommitted files), the last ~10 commits.
 4. **Write your own in-session brief.** Per the plugin's `docs/SESSION_BRIEF_RECIPE.md` -
    internally, in English; do not dump it on the operator.
 5. **Report and STOP.** Report to the operator in `{{config.operator.language}}`, short: one line of

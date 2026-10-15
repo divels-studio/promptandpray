@@ -136,7 +136,10 @@ Before anything reaches the operator, four questions - as questions, and in this
    what-lands-in-which-ticket. If yes, it is REPORTED as a decision with a one-line why, never
    raised as a question.
 2. **Is it one of the operator's gates - and is it carried as something visible?** A gate is a
-   dialog or a word, not a paragraph asking for agreement.
+   dialog or a word, not a paragraph asking for agreement. A question the operator must answer
+   before work goes on is raised only when the ticket cannot continue without it; any other -
+   outside the ticket, or a finding beyond its scope - is listed and asked at the ticket's close,
+   and the work goes on.
 3. **Is it real in this environment?** Checked with one Read before it is raised. A demand one Read
    would have cancelled is a workflow defect, not diligence.
 4. **Is it a self-correction that cost the operator nothing?** Then it is an event-ledger row, not a
@@ -197,7 +200,9 @@ be a dead letter - and only its FAILURES are observable, as operator corrections
 Rule health is read from the event ledger and from nothing else: violations, catches, and operator
 corrections attributable to a rule. **The happy path is never instrumented** - a rule that was
 obeyed produces no row, which is why a quiet rule and a dead rule look alike here and why the
-absence of rows is never read as evidence. One row per event, on the transfer surface:
+absence of rows is never read as evidence. An incident recorded only in the COO's memory is not
+recorded: the row goes on the transfer surface, and the memory points at it. One row per event, on
+the transfer surface:
 
 ```text
 | <date> | <rule or D-id> | violation|catch|operator-correction | <pointer> |

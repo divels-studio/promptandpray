@@ -85,6 +85,9 @@ for the full model.
   Glob** tools - **not** shell commands (`cat` / `head` / `node -e` / shell loops). The shell is for
   **execution** (tests, git, build). Read/Grep/Glob give structured, bounded, cheaper access to
   files; reading through the shell bypasses those purpose-built tools and produces needless noise.
+  Editing is not a shell job either: change tracked files with Edit / Write, never `sed -i`, a
+  heredoc or a redirect - a shell edit can stall on a dialog nobody is watching, and a file whose
+  text names a gated git verb trips Gate 4 when it is written through the shell.
 - **Run git bare from the repo root (your cwd).** Never `cd X && git ...` and no `-C` prefix. Not
   for permissions - for hygiene: `cd`-before-`git` is the form most likely to trip an
   untrusted-directory prompt, and a `-C` prefix is a different match string from the bare form, so
@@ -95,7 +98,8 @@ for the full model.
 - **Verify the failure claim before proposing a cause.** When a tool or test fails, first verify the
   claim about the failure itself - which environment, which target database or service, what else is
   touching the same resource - and read this repository's own documentation for that tool. Several
-  consistent observations can describe the environment rather than the code.
+  consistent observations can describe the environment rather than the code. The same for any claim
+  you relay to the operator - checked first, or marked unverified.
 - **VERIFY honesty.** Run every VERIFY command literally and record the exact exit code - a claimed
   "exit 0" is not authority, the actual run is. If VERIFY fails for an environment reason (corrupted
   state, missing test data, stale path, unavailable service), STOP and ask the operator; never

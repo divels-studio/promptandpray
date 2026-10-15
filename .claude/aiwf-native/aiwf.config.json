@@ -1,8 +1,8 @@
 {
   "$schema": "D:/promptandpray/schema/aiwf.config.schema.json",
   "_aiwf": {
-    "installedPluginVersion": "0.2.17",
-    "lastMigrationApplied": "0021_lean-readiness",
+    "installedPluginVersion": "0.2.18",
+    "lastMigrationApplied": "0022_stab-prose",
     "migrationJournal": null,
     "managedRegions": {
       ".claude/aiwf-native/roles.json": {
@@ -11,18 +11,18 @@
         "override": false
       },
       ".claude/agents/writer.md": {
-        "upstream": "8f99ff0cf6af8d9ef56fe2dfa1f0e797750156f540c18b2fdf96fd13eb7ad907",
-        "local": "8f99ff0cf6af8d9ef56fe2dfa1f0e797750156f540c18b2fdf96fd13eb7ad907",
+        "upstream": "f915125b40d04e26e92f2c8ef34d2de66b32f3c6a8a497eec6f6d9b69f6f98af",
+        "local": "f915125b40d04e26e92f2c8ef34d2de66b32f3c6a8a497eec6f6d9b69f6f98af",
         "override": false
       },
       "CLAUDE.md#aiwf-core": {
-        "upstream": "ae0291300b3392b12b6830b7bc09e4776f127206f3697ad5013c60ec4735cfbf",
-        "local": "ae0291300b3392b12b6830b7bc09e4776f127206f3697ad5013c60ec4735cfbf",
+        "upstream": "e184819f79138ddb52ad606f4b493c4378cf8ae086f6d8648c2b600d65a1a622",
+        "local": "e184819f79138ddb52ad606f4b493c4378cf8ae086f6d8648c2b600d65a1a622",
         "override": false
       },
       ".claude/aiwf-native/ORCHESTRATOR.md": {
-        "upstream": "c65cbd47f658d8baca140c1ebba01d018f9b8e5ac03f772c91474143ebe115dc",
-        "local": "c65cbd47f658d8baca140c1ebba01d018f9b8e5ac03f772c91474143ebe115dc",
+        "upstream": "2fcb823fadc2a2b6194a77770b1ff4e46cacd84cb79e00264c7c77d2b51f71a3",
+        "local": "2fcb823fadc2a2b6194a77770b1ff4e46cacd84cb79e00264c7c77d2b51f71a3",
         "override": false
       }
     },

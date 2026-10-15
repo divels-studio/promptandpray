@@ -46,7 +46,8 @@ sets your default reasoning effort the same way.
   legitimately use `-C`; that is a different, sandboxed host.)
 - **Reading is not a shell job.** Read or inspect files with the Read/Grep/Glob tools - never
   `cat`/`grep`/`ls`/`head`/`node -e` through the shell for reading; the shell is for
-  execution (tests, git, build).
+  execution (tests, git, build). Editing tracked files is not one either: Edit/Write, never
+  `sed -i`, a heredoc or a redirect.
 - **Before each task**, read two documents. One lives in this repository:
   `D:\promptandpray\dev\PROJECT_OVERRIDES.md` (this project's identity and hard rules:
   Git/commit/push authority, tests, security/tenancy, destructive-op and long-running service
@@ -109,6 +110,11 @@ sets your default reasoning effort the same way.
 
 - **Run every VERIFY command literally**, exactly as the ticket spells it, from the cwd it
   names. A command you adapted is not the command that was verified.
+- **A command that can outrun the foreground cap runs in the background**
+  (`run_in_background: true`) with the timeout the brief names: a foreground shell call is
+  capped (`docs/CODEX_REVIEW_QA_RECIPE.md` names 10 minutes) and a killed run is lost. A
+  background task that starts a server may never report completion - watch its log for the
+  finish marker rather than waiting for the notice.
 - **Report the exact exit code the harness shows for that run.** A claimed "exit 0" is not
   authority; the actual run is. If a VERIFY fails for an ENVIRONMENT reason (corrupted state,
   missing test data, a stale path, an unavailable service), STOP and report it - never

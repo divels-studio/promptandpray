@@ -4,6 +4,33 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.2.18] - 2026-10-15
+
+Doctrine text tightened where consumers found it silent or wrong: shell edits, dialogs, how passes
+are counted and named, a paid pass that dies, who commits what, and what a ticket's close leaves
+behind.
+
+### Changed
+
+- **Editing is not a shell job (STAB-001)** - tracked files change through Edit/Write; scan agents
+  answer in their reply; a procedure agent writes only under the scratch directory; a permission
+  gate is tested on a copy, never weakened.
+- **Dialogs and the operator channel (STAB-001)** - a question stops work only when the ticket
+  cannot continue; dialogs are named by what they approve; passes by role, number and engine;
+  verdicts by who gave them.
+- **Passes (STAB-001)** - a correction round counts from a verdict; a small code round after a
+  Reviewer fail needs no verification pass outside migration, access policy, grants, auth and the
+  permission model, and a QA fail is closed only by a QA run; a dead paid pass resumes on the
+  operator's word; the review brief is written before the dispatch.
+- **Plans and close (STAB-001)** - a ticket's COO routing line; the Writer commits code and the COO
+  its records; the close cleans the scratch directory and recommends the session; relayed claims
+  are checked or marked unverified.
+- **Smaller rules (STAB-001)** - parallel Writers over disjoint files, background long commands,
+  tests that cannot fail, the resume point rewritten whole, incidents in the ledger, host refusals
+  of self-modifying writes.
+- **Migration `0022_stab-prose` (STAB-001)** - re-renders the managed CLAUDE.md region, the Writer
+  agent, ORCHESTRATOR.md and, where present, the Reviewer agent.
+
 ## [0.2.17] - 2026-10-14
 
 The readiness cycle is leaner and sharper: one scan agent per ticket, no counter pair, a

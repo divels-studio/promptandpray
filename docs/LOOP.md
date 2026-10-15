@@ -46,6 +46,10 @@ counters** - the loop is convention + the native click-based permission gates on
   returns the diff, the tests it added, and VERIFY output with exact exit codes. It does not decide
   acceptance or invent ledger content; it performs the Git PLAN write only when the COO explicitly
   delegates that specific mutation (the initial PLAN write, an accepted-closeout section).
+  Several Writers may run on ONE ticket when its worklist splits into file sets that do not
+  overlap: the brief records the split, and one VERIFY and one commit close the ticket. The Agent
+  tool's `isolation: "worktree"` is not the instrument for it - its copy was observed on a consumer
+  to start from the default branch, not from the branch checked out.
   **Dispatch contract - do NOT pass `model` to the Agent tool for the Writer.** The Writer's model
   is pinned in its frontmatter (a tier alias or an exact model id); the Agent tool's `model`
   override takes precedence over frontmatter and takes a tier alias (`sonnet|opus|haiku|fable`) -
@@ -106,7 +110,9 @@ Reviewer/QA - so R1 is the deliberate exception, not a violation.
 **Reading is not a shell job (all roles).** Read or inspect files and config with the Read/Grep/Glob
 tools, not shell commands (`cat`/`head`/`node -e`/shell loops) - the shell is for execution
 (tests/git/build); reading through it is more powerful than the task needs and produces needless
-noise.
+noise. Editing is not a shell job either: change tracked files with Edit / Write, never `sed -i`, a
+heredoc or a redirect - a shell edit can stall on a dialog nobody is watching, and a file whose
+text names a gated git verb trips Gate 4 when it is written through the shell.
 
 Reviewer and QA are **engine-neutral**: the host is data in `.claude/aiwf-native/roles.json`. On the
 **codex** host the read-only boundary is a real **OS sandbox** (`--sandbox read-only`) the review

@@ -95,14 +95,19 @@ find/replace, a verify cycle over a fixed list, debugging a helper the COO wrote
 the job is counting) with exact inputs (paths, the mapping, the expected numbers, the verify
 commands) and an output contract. The COO decides, briefs, reads the result and commits; the SECOND
 inline fix of the same helper in one session is the countable moment - the first was the slide, the
-second is the pattern. (4) **An enumeration is closed by a grep, not by a feeling.** When a change
+second is the pattern. A scan agent's output contract is its reply: it writes no file. A procedure
+agent that must leave a file - a helper script, a measurement - writes it only under the scratch
+directory, at the absolute path its brief names; a shell write anywhere else is a write no gate
+sees. (4) **An enumeration is closed by a grep, not by a feeling.** When a change
 touches a set - every call site of a symbol, every statement of a count, every pointer to a moved
 document - enumeration ends when the closing grep - for the symbol itself, for the phrase or count
 the change invalidates, and for the bare pointer form - returns zero outside the list; the grep must
 first HIT the known list. Every new or changed evidentiary instrument is
 made to fail on purpose before it is trusted; retro-proofing existing instruments is a deliberate
-ticket, never an ambient duty. The seeds under `templates/memory-seeds/`
-are a home of that enumeration on every doctrine change - the closing grep covers them. A grep that
+ticket, never an ambient duty. A permission gate is made to fail on a copy - a fixture project or a
+scratch copy of its settings, as the self-check does - never by weakening the live gate. The seeds
+under `templates/memory-seeds/` are a home of that enumeration on every doctrine change - the closing
+grep covers them. A grep that
 matches nothing proves nothing, and the instrument nobody has seen go red is a belief rather than a
 check. All four exist because the category was known and
 the stopping moment was not: a COO can read this section in its own preflight, classify correctly,
@@ -170,7 +175,10 @@ correction round that touched code, and any pass beyond the contract are each di
 operator's own word, one word per pass),
 destructive or system-changing operations, and product/UX
 choices (what the user sees or loses as functionality). A question outside those gates blocks the
-operator without adding value - asking it is a workflow defect, not politeness.
+operator without adding value - asking it is a workflow defect, not politeness. A blocker that
+demands more than the product needs - a precision, a scale or a guarantee beyond the business
+scope - is a product choice of exactly this kind, and the plan cannot go on without its answer: it
+goes to the operator early, in plain words, before a revision or a pass is spent on it.
 
 ### How the COO speaks to the operator
 
@@ -179,7 +187,8 @@ Deciding well is not enough; the report has to land.
 1. **Plainly.** Answer the question and stop. One decision, one line; numbers and names rather
    than categories. The abstract vocabulary the COO thinks in - debt / blocker / follow-up /
    trade-off - is not the operator's, and the translation layer the COO skips is paid for in the
-   operator's confusion.
+   operator's confusion. A dialog is named by what it approves - "the commit of the ticket's code" -
+   and the operator is never told which button to press: the gate is their decision.
 2. **Invent no debts and no follow-up tickets.** A mission does not close while any debt stands,
    so a manufactured follow-up literally defers the closeout and reframes finished work as
    unfinished. Closing a ticket, ask whether the thing blocks anything real; if not, say
@@ -194,6 +203,9 @@ Deciding well is not enough; the report has to land.
    pass confirmed, or what its blockers and notes are. Never a bare "pass, moving on": the
    operator paid for that audit and a half-line on the way to the next step hides what it bought.
    Never the verdict's full text pasted as a wall either - two sentences, then the next step.
+   A pass is named by role, number and engine - "auditor pass 2 (Codex)" - a request for a word
+   names exactly the pass it unlocks, and a verdict names who gave it ("the auditor confirmed ..."),
+   never a bare verb the operator could read as addressed to them.
 
 ## Operator-interaction guards
 
@@ -278,6 +290,9 @@ the same local database as the gated tests will produce a stable, entirely misle
 signature, and a day can go into the wrong explanations before anyone states the environment
 explicitly.
 
+The same holds for every claim the COO relays to the operator, its own or an agent's: it is checked
+against the tree first, or it reaches the operator marked unverified.
+
 **VERIFY honesty.** Run every VERIFY command literally and record the exact exit code - a
 claimed "exit 0" is not authority, the actual run is. If VERIFY fails for an environment reason
 (corrupted state, missing test data, stale path, unavailable service), STOP and ask the
@@ -310,7 +325,9 @@ Not configurable, and enforced here regardless of the project:
 - **Only the operator lifts the correction-round cap.** After the cap without a passable result,
   stop and summarize to the operator. A round beyond the cap requires an explicit word in chat
   *before* the re-dispatch, granted one extension at a time and recorded in the ticket's PLAN
-  entry.
+  entry. A correction round is counted from an auditor's verdict: the Writer's fixes before the
+  first verdict - a fact-check micro-round, the COO's own notes - are ticket work, not rounds
+  against the cap.
 - Plan readiness runs on its own contract - `review.plan.passes`, the audit table's plan row
   (below) - independent of the correction cap.
 - The risk threshold and the stop condition are mandatory in every R2/R3 brief.
@@ -321,7 +338,14 @@ Not configurable, and enforced here regardless of the project:
   all: it is verified by the fact-check gate (one cheap scan agent over the changed text) plus the
   COO's own first-hand verification of the delta, and both are recorded in the ticket's completion
   record. The moment a correction round changes code the pass is warranted, on the row's host as
-  usual - what is gone is the default that dispatched it without asking.
+  usual - what is gone is the default that dispatched it without asking. **Its suppression dual,
+  an exception to the sentence before it:** a code round answering a Reviewer `fail` whose whole
+  delta is at most ~10 lines, in files the previous pass already audited, and which carries a unit
+  test seen red before the fix, warrants no verification pass - so there is no word to ask and
+  nothing to resume - unless the delta touches a surface of COO routing check 1 (migration, access
+  policy, grants, auth, permission model), where the pass stays warranted. A QA `fail` is closed
+  only by a QA run. The fact-check gate and the COO's first-hand check of the delta are recorded as
+  for a prose round.
 
 ## Planning lock
 
@@ -537,7 +561,7 @@ Scope / out of scope
 Acceptance criteria - testable
 Risk threshold     - which defect severity blocks (given to Reviewer/QA)
 Stop condition     - when Reviewer/QA have enough evidence and must stop
-Verify policy      - checks/proof required, by risk
+Verify policy      - checks/proof required, by risk; the project's VERIFY runbook, when it has one
 Assignee
 Working branch     - only when different from the default integration branch
 ```
@@ -665,11 +689,20 @@ tickets. Do not create a separate active BACKLOG file. The PLAN keeps:
 2. mission goal, scope/out-of-scope, architecture boundaries, decisions, and rejected
    alternatives that matter later;
 3. an executable ticket ledger: stable Ticket Ref, context/problem, outcome, scope, dependencies,
-   affected areas, acceptance criteria, and verification;
+   affected areas, acceptance criteria, and verification; a paid review the plan schedules beyond
+   the readiness passes and the diff audit - a cold audit of existing code, say - is written into
+   its ticket with its scope and estimated cost, and the plan's approval is then that pass's word,
+   quoted in its COVERED BY line;
 4. after each ticket is accepted, its durable completion record: actual changes, material
    decisions/deviations, verification results, Reviewer/QA conclusion, commit hash, and remaining
    debt. The COO writes this record **immediately after the ticket's commit, in the same session,
    unprompted** - a ticket is not closed without it, and tracking it is never the operator's job.
+   Two acts ride the record. The scratch directory goes back to the live loop mechanics: evidence
+   worth keeping moves into the record or the plan's `readiness/<ABBR>/`, and what is left to
+   delete is listed beside the record's commit, because a delete is the operator's dialog. And the
+   COO says in one line whether the next ticket stays in this session or wants a fresh one - a
+   recommendation, not a stop: compaction is tolerable inside a ticket, while a plan's planning and
+   readiness are not a boundary.
    That record does not ride along with the work it describes -
    the docs commit is separate from the code commit: the code commit carries only the ticket's
    work, and the record about it lands in its own commit, so what was audited and what is a note
@@ -872,12 +905,15 @@ Four checks, yes/no, read off the ticket before it starts:
 1. the ticket writes migration / access-policy / grants / auth / permission-model code;
 2. the contract leaves an architecture or a concurrency decision open - countable form: any worklist
    item without a `file:line` anchor, or any unresolved decision marker in the plan section (or, for
-   an unplanned R2, in the brief);
+   a non-durable R2 that has no plan section, in the brief);
 3. the diff surface greppably matches one of the escalation trigger classes (§ Escalation and the
    arbiter);
 4. a canon conflict or an open incident stands on the ticket's path.
 
-ANY "yes" puts the ticket on a COO at the top tier. ALL "no" puts it on the cheap COO.
+ANY "yes" puts the ticket on a COO at the top tier. ALL "no" puts it on the cheap COO. The plan
+records the answer in each ticket's entry as one line -
+`COO: top|cheap, because <check N | all four no>` - so the operator sees at approval which session
+each ticket needs. A non-durable R2 with no plan section records the same line in its brief.
 
 **The routing moves the COO and nothing else.** The Writer's model stays pinned in its agent
 frontmatter and the audit table stays exactly as `/pnp:roles` shows it - a cheap COO does not buy a
@@ -922,6 +958,9 @@ loop has. The `-C` forms ask by construction on both shell tools: the ruleset sp
 `git -C <projectRoot> ...` for push, merge and rebase only, and Gate 4 raises a dialog for **any**
 other `git -C <path> <verb>`, because a hook that reads no project directory cannot tell one path
 from another. The dialog is the backstop, not the rule; the rule is that the word comes first.
+A product named in a request is not a path: when "write it into X's file" can mean two trees - a
+plugin's own repository and a consumer's copy - the COO settles which tree before writing, and asks
+when the tree cannot settle it.
 
 **A working tree carries one executing session.** Several sessions may be open at once - that is
 normal on a machine with more than one window - and the invariant that keeps them from writing over
@@ -1006,9 +1045,11 @@ them:
 
 ## Commit & Push Authority
 
-- **Commit:** Writer only, local only, after the review route passes AND a human explicitly
-  approves. The approval is a native Claude Code visual Yes/No dialog - `Bash(git commit:*)` and
-  its `PowerShell(git commit:*)` mirror are `ask` rules in the project's `.claude/settings.json`;
+- **Commit:** the Writer commits the ticket's code and the COO commits what it writes itself - the
+  completion record, the plan landing, R1 work; local only, after the review route passes AND a
+  human explicitly approves. The approval is a native Claude Code visual Yes/No dialog -
+  `Bash(git commit:*)` and its `PowerShell(git commit:*)` mirror are `ask` rules in the project's
+  `.claude/settings.json`;
   the operator clicks **Yes** and types
   nothing (no approval token, no state file). No automatic commits. One click buys one commit of one
   kind - the docs commit is separate from the code commit: the code commit carries only the ticket's

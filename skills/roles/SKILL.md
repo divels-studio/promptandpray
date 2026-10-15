@@ -93,6 +93,11 @@ files, an artifact is left with a stamp that is not yet updated; `/pnp:selfcheck
 drifted managed artifact, and **running the same command again finishes it** - the file on disk
 already is the render, so the run takes the already-applied branch and completes the stamp.
 
+**When the host refuses the write.** In an auto-approving permission mode, Claude Code's own
+classifier may refuse the write to `aiwf.config.json` as self-modification, whatever the operator
+said. That is the host's rule and this command does not work around it: the refusal is an
+interruption like the one above - run the same command in a mode that asks, and it finishes.
+
 ## How to read the table
 
 ```

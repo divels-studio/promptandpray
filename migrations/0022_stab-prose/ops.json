@@ -1,0 +1,16 @@
+{
+  "migration": "0022_stab-prose",
+  "targetPluginVersion": "0.2.18",
+  "operations": [
+    { "op": "rerender-managed-region", "file": "CLAUDE.md", "region": "aiwf-core", "template": "templates/CLAUDE.md.tmpl#aiwf-core" },
+    { "op": "rerender-managed-region", "file": ".claude/agents/writer.md", "region": null, "template": "templates/agents/writer.md.tmpl" },
+    { "op": "rerender-managed-region", "file": ".claude/agents/reviewer.md", "region": null, "template": "templates/agents/reviewer.md.tmpl", "ifRecorded": true },
+    { "op": "rerender-managed-region", "file": ".claude/aiwf-native/ORCHESTRATOR.md", "region": null, "template": "templates/ORCHESTRATOR.md.tmpl" },
+    {
+      "op": "note",
+      "id": "stab-prose",
+      "text": "Doctrine text, tightened where consumers found it silent (STAB-001). EDITING is not a shell job either: tracked files change through Edit/Write, never sed, a heredoc or a redirect. DIALOGS: a question that stops work is raised only when the ticket cannot continue without it; the rest is asked at the ticket's close. PASSES: a correction round is counted from an auditor's verdict; a small code round answering a Reviewer fail (at most ~10 lines, in audited files, with a unit test seen red) warrants no verification pass unless it touches migration, access policy, grants, auth or the permission model; a QA fail is closed only by a QA run; a paid pass that dies is resumed only on the operator's word; a paid review beyond readiness and the diff audit is written into its plan with scope and cost; passes are named by role, number and engine. PLANS: each ticket records its COO routing in one line. COMMITS: the Writer commits code, the COO commits its own records. CLOSE: the scratch directory goes back to the live mechanics, and the COO recommends staying in the session or a fresh one. Re-rendered here: the CLAUDE.md managed region, .claude/agents/writer.md, .claude/aiwf-native/ORCHESTRATOR.md, and .claude/agents/reviewer.md where your installation has it. YOUR LOCAL RULES for any of these can be removed or become a one-line pointer to docs/WORKFLOW.md or docs/LOOP.md.",
+      "docRefs": ["CHANGELOG.md", "docs/WORKFLOW.md", "docs/LOOP.md"]
+    }
+  ]
+}

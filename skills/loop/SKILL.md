@@ -73,16 +73,19 @@ and `docs/LOOP.md` (the one-page native mapping).
 4. **QA (conditional).** If - and only if - the ticket declares observable runtime/UI behavior,
    run `/pnp:qa <TICKET_REF>`. Otherwise skip QA entirely.
 5. **Correction rounds.** On a Reviewer/QA `fail`, route the specific blockers back to the Writer -
-   **max `{{config.loop.correctionRoundsCap}}` correction rounds** (one round = COO -> Writer ->
-   COO). After the cap without a passable result, **stop** and summarize to the operator - do not
-   grind. Only the operator lifts the cap, by an explicit word before the re-dispatch, for one
-   extension, recorded in the PLAN entry.
+   **max `{{config.loop.correctionRoundsCap}}` correction rounds** (one round = a `fail` verdict ->
+   Writer -> COO; fixes before the first verdict are not rounds). After the cap without a passable
+   result, **stop** and summarize to the operator - do not grind. Only the operator lifts the cap,
+   by an explicit word before the re-dispatch, for one extension, recorded in the PLAN entry.
    A QA `BLOCKED` is **not** a Writer defect: it is an operator precondition (nothing is serving
    the app under test, and the Writer is forbidden to start a server). On `BLOCKED`, **pause** the
    loop and ask the operator to start the app, then re-run `/pnp:qa`. This does **not** consume a
    correction round and is **not** routed to the Writer.
 6. **Commit gate (click-based).** The gate passes when every required role returns `pass`
    **or** `pass-with-notes` (only a `fail` blocks; a QA `BLOCKED` pauses for the precondition above).
+   A Reviewer `fail` closed by a small round under the suppression dual of `docs/WORKFLOW.md`
+   § Loop shape counts as passed on the fact-check gate and the COO's recorded first-hand check of
+   the delta.
    The Writer then attempts the **local** `git commit`; `Bash(git commit:*)` - and its
    `PowerShell(...)` mirror - is an `ask` rule, so
    Claude Code shows a visual **Yes/No permission dialog** -> the operator clicks **Yes** to allow

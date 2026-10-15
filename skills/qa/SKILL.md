@@ -91,7 +91,9 @@ at Step 2.
 
 ## Step 2 - Orchestrator runs the E2E suite (browser lives here, not in the review engine)
 
-Run the scoped suite from the main session and let it write **persistent** artifacts. Do **not**
+Run the scoped suite from the main session and let it write **persistent** artifacts. After a
+correction round the re-run is scoped to what the round touched - the specs over the changed
+files - and the full ticket scope is the fallback when that set cannot be named. Do **not**
 start a dev server - the operator runs the app; if nothing is listening, stop and report the
 precondition rather than starting one.
 
@@ -205,8 +207,9 @@ Deliver the brief on **stdin** - never positionally. The wrapper reads its model
 so no model is passed here.
 
 **Write the brief to the fixed path `<root>/{{config.paths.scratchDir}}/qa-brief.txt`** (Write tool -
-an empty brief makes the wrapper exit 2, so write the file first), then invoke the wrapper of this
-project's OS channel (`{{config.os}}`) with exactly that command, character for character:
+an empty brief makes the wrapper exit 2, so write the file first and invoke in a later tool call,
+never in the same message), then invoke the wrapper of this project's OS channel (`{{config.os}}`)
+with exactly that command, character for character:
 
 **os `windows`:**
 
@@ -277,8 +280,8 @@ rules `/pnp:review` carries have no counterpart here.
 
 - **A verification pass after a correction round resumes by default** - the case the paragraph above
   describes, and the one where the delta really is what the previous session was judging: the same
-  ticket, the same acceptance criteria, a re-run of the same suite on top of the evidence it already
-  read.
+  ticket, the same acceptance criteria, a re-run of the same suite - or of the part of it Step 2
+  scopes to the round - on top of the evidence it already read.
 - **A correction round that RE-ARCHITECTED rather than closed the blockers re-poses the whole
   question, so its verification reverts to cold or to the operator's call** - the delta is no longer
   a delta against the behavior that was judged.
@@ -289,10 +292,12 @@ rules `/pnp:review` carries have no counterpart here.
 **An interrupted paid pass is NOT lost work.** A kill or an interruption ends the CLI process, while
 the session and the work already done survive in the engine's own session store - so the DEFAULT
 recovery is a bare resume plus a SHORT continuation prompt - "continue - you already have the brief
-and your progress; produce the verdict" - never a fresh dispatch carrying the full brief again. Bare
-means bare: `-Resume` / `--resume` with no id, off QA's own state file above; write the continuation
-prompt into the same `qa-brief.txt` and re-invoke the block, which keeps the command text in the
-fixed set a permission rule matches.
+and your progress; produce the verdict" - never a fresh dispatch carrying the full brief again.
+The recovery is still a paid dispatch: tell the operator what is known of the dead pass - how long
+it ran, and its cost where the engine reported one - and take their word before it; never
+re-dispatch on your own. Bare means bare: `-Resume` / `--resume` with no id, off QA's own state
+file above; write the continuation prompt into the same `qa-brief.txt` and re-invoke the block,
+which keeps the command text in the fixed set a permission rule matches.
 
 **How the id gets recorded, and when it does not.** The wrapper does **not** read the engine's
 output - it touches neither stdout nor stderr, so what you see is the engine's own bytes. A

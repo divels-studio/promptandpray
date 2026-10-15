@@ -79,7 +79,10 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/update/aiwf-update.mjs" --apply --project-ro
   `{ "kind": "answer", "value": <json> }` for a new config key that asks a question. A missing or
   malformed record stops the run naming the address - nothing is ever guessed;
 - if the process dies mid-run, just run it again: it resumes from the journal and replays the
-  accepted result from the stage, so no question is asked twice.
+  accepted result from the stage, so no question is asked twice;
+- in an auto-approving permission mode the host may refuse the engine's write to
+  `.claude/settings.json` or `aiwf.config.json` as self-modification; that is an interruption like
+  any other - run it again in a mode that asks, and it resumes from the journal.
 
 Exit codes: 0 applied (or already current), 1 blocked (an invariant, a validation failure, or a stop
 at a conflict), 2 could not start.

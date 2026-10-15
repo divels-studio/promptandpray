@@ -626,8 +626,9 @@ across sessions, tickets and correction rounds. Do not inline the brief into the
 not "improve" the path by making it unique per session or per ticket: either change silently
 reintroduces a dialog on every review.
 
-The brief must never be empty - an empty brief makes the wrapper exit 2. Write the file first, then
-invoke.
+The brief must never be empty - an empty brief makes the wrapper exit 2. Write the file first and
+invoke in a LATER tool call, never in the same message: calls in one message may start together,
+and a wrapper that reads the file before the write lands audits the previous brief.
 
 The wrapper passes every brief through the plan gate of Step 2d before the engine starts: for
 `-Class plan` / `--class plan`, or a brief carrying the `Class: plan` line, it refuses (exit 2),
@@ -708,10 +709,13 @@ below: **resume answers "is the DELTA sound"; cold answers "is the WHOLE still s
 **An interrupted paid pass is NOT lost work.** A kill or an interruption ends the CLI process, while
 the session and the work already done survive in the engine's own session store - so the DEFAULT
 recovery is a bare resume plus a SHORT continuation prompt - "continue - you already have the brief
-and your progress; produce the verdict" - never a fresh dispatch carrying the full brief again. Bare
-means bare: `-Resume` / `--resume` with no id, off the Reviewer's own state file above; write the
-continuation prompt into the same `review-brief.txt` and re-invoke the block, which keeps the
-command text in the fixed set a permission rule matches. For a plan-class pass the continuation prompt
+and your progress; produce the verdict" - never a fresh dispatch carrying the full brief again.
+The recovery is still a paid dispatch: tell the operator what is known of the dead pass - how long
+it ran, and its cost where the engine reported one - and take their word before it; never
+re-dispatch on your own. Bare means bare: `-Resume` / `--resume` with no id, off the Reviewer's
+own state file above; write the continuation prompt into the same `review-brief.txt` and
+re-invoke the block, which keeps the command text in the fixed set a permission rule matches.
+For a plan-class pass the continuation prompt
 carries the five fixed lines of the readiness brief as well - the plan has not changed, so the
 own pass's hash still holds, and the plan gate checks the continuation like any other plan
 brief.

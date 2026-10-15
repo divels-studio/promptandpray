@@ -66,6 +66,7 @@ plugin's `docs/REVIEW_CHECKLIST.md`:
 - Proof for algorithmic/matcher/routing/transform/parser logic MUST exercise the production
   function or an extracted production helper - mirrored test-local logic is not proof.
 - Assertions must be unconditional; an `expect()` inside an `if` that passes silently is rejected.
+  So is an assertion that cannot fail at all (`expect(true)`, `>= 0` on a count, `|| true`).
 - Security/i18n: every tenant-owned query carries the project's tenant-scoping predicate; new
   tables/endpoints have their access policy; server-only code does not leak into the client
   bundle; no new hardcoded user-facing strings. Migrations in the correct dir, correctly named,
