@@ -326,6 +326,10 @@ mechanics and are **not** editable here (see the payload doc `docs/WORKFLOW.md` 
   result, stop and summarize to the operator. Only the operator lifts the cap, by an explicit word
   before the re-dispatch, one extension at a time, recorded in the ticket's PLAN entry.
 - **R1 uses no orchestration loop** - it is done directly in the main session.
+- **COO routing tiers (operator rule 2026-10-15, „от сега нататък, впиши го в overrides").** The
+  "top" COO of `docs/WORKFLOW.md` § COO routing is Fable; the "cheap" COO is **Opus** - a Sonnet
+  COO is never used in this project. The routing moves the COO session only; Writer and audit
+  table stay as `/pnp:roles` shows them.
 - **QA is conditional** - only when a brief declares observable runtime/UI behavior; never in R1 or
   non-runtime R2.
 - Plan readiness runs `review.plan.passes` passes (the audit table, `/pnp:roles`; factory 2) as a

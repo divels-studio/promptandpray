@@ -106,8 +106,9 @@ In: PLB-001..006 below. Out, with the reason:
   migration is still a migration until a ruling says otherwise; PLB-003 also by check 2: a NEW
   template has no `file:line`); PLB-004 `COO: top, because check 2` (the new helper file has no
   anchor); PLB-005 `COO: top, because check 2` (a translation of 19 sections cannot be anchored
-  line by line); PLB-006 `COO: cheap, because all four no`. The routing moves the COO only; Writer
-  and audit table stay as `/pnp:roles` shows them.
+  line by line); PLB-006 `COO: cheap, because all four no`. Tiers: top = Fable, cheap = Opus
+  (overrides § Loop shape, operator rule 2026-10-15 - no Sonnet COO). The routing moves the COO
+  only; Writer and audit table stay as `/pnp:roles` shows them.
 - D8 (PLB-003 design). The rendered Codex instruction file carries NO plugin-root path, NO
   version and NO role-specific check: the brief on stdin names the files the pass needs by their
   resolved absolute path (the review brief supplies the path of `docs/REVIEW_CHECKLIST.md`, and of
