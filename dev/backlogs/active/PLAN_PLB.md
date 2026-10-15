@@ -103,10 +103,12 @@ In: PLB-001..006 below. Out, with the reason:
   consequence scan: PLB-001 `COO: top, because check 1` (it edits a permission-model gate);
   PLB-002 `COO: top, because check 1` and PLB-003 `COO: top, because check 1` (check 1 reads
   "writes migration ... code", `docs/WORKFLOW.md:905`, and both write migration 0023 - a payload
-  migration is still a migration until a ruling says otherwise; PLB-003 also by check 2: a NEW
-  template has no `file:line`); PLB-004 `COO: top, because check 2` (the new helper file has no
-  anchor); PLB-005 `COO: top, because check 2` (a translation of 19 sections cannot be anchored
-  line by line); PLB-006 `COO: cheap, because all four no`. Tiers: top = Fable, cheap = Opus
+  migration is still a migration until a ruling says otherwise); PLB-004 `COO: cheap, because all
+  four no` and PLB-005 `COO: cheap, because all four no` - by the operator's ruling of 2026-10-15
+  (CANDIDATES § Ruling ledger): check 2 counts a worklist item that still needs discovery to locate;
+  a NEW file with a fixed path and contract, or a section cited by its title, is anchored (PLB-003's
+  template likewise, but PLB-003 stays top by check 1); PLB-006 `COO: cheap, because all four no`.
+  Tiers: top = Fable, cheap = Opus
   (overrides § Loop shape, operator rule 2026-10-15 - no Sonnet COO). The routing moves the COO
   only; Writer and audit table stay as `/pnp:roles` shows them.
 - D8 (PLB-003 design). The rendered Codex instruction file carries NO plugin-root path, NO
@@ -473,7 +475,7 @@ verdict word in the template, blocks. Stop: template, render, resolve map, migra
 suites + the deferred selfcheck.
 
 ### PLB-004 - Three small defects, one Writer, sequential
-COO: top, because check 2 (D7).
+COO: cheap (Opus), because all four no - ruling 2026-10-15 on check 2 (D7).
 Source: CANDIDATES § "`--show` на aiwf-roles.mjs печата таблицата и излиза с process.exit(0)",
 § "Третият дом на изброяването", § "От Silerax UIR-003" (outputDir under a traced app root).
 (b) and (c) both edit `scripts/selfcheck/aiwf-selfcheck.js` (different functions), so one Writer.
@@ -534,7 +536,7 @@ present; the same without `next.config.js`, with `enabled: false`, and with no `
 script, or a note that becomes a failure, blocks. Stop: (a)-(d).
 
 ### PLB-005 - English where it is read every session
-COO: top, because check 2 (D7).
+COO: cheap (Opus), because all four no - ruling 2026-10-15 on check 2 (D7).
 Source: operator rule 2026-10-15 (overrides § Communication, "English everywhere in the tree").
 Outcome:
 - `dev/PROJECT_OVERRIDES.md`, the bullet "Чекпойнт по гейтове и таван на контекста" in § Loop shape
@@ -575,7 +577,7 @@ Risk threshold: a changed quote, a dropped row or a missing `(was:)` line blocks
 files.
 
 ### PLB-006 - Closeout 0.2.19
-COO: cheap, because all four no (D7).
+COO: cheap (Opus), because all four no (D7).
 Durable half (COO, after `{}` - D9): PLB-005's completion record, CANDIDATES rows (pass
 statistics, events), PLAN archive `git mv dev/backlogs/active/PLAN_PLB.md
 dev/backlogs/archive/011_PLAN_PLB_<date>.md` (the plan is tracked in `active/` since its landing),
