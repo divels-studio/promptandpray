@@ -2471,6 +2471,71 @@ section('15 - createIfAbsent: an unrecorded artifact is CREATED on empty ground,
       && !section('0003_again').includes('created (no record, no file)'),
       section('0003_again').split('\n').filter((l) => l.includes('reviewer.md')).join(' | ').slice(0, 160));
   }
+
+  // --- faces 11 and 12: the SHIPPED AGENTS.md operation of 0023, run as it ships ----------------
+  // The op is read out of the real migration rather than restated here, so these two faces prove the
+  // operation a consumer receives. It is the LAST op of 0023 on purpose: a refusal over a foreign file
+  // leaves the config key and the note applied and journalled, and the re-run after the file is moved
+  // aside resumes from there.
+  {
+    const shipped0023 = readJson(path.join(PLUGIN_ROOT, 'migrations', '0023_changes-dir-and-agents', 'ops.json'));
+    const ops0023 = (shipped0023 && shipped0023.operations) || [];
+    const agentsOp = ops0023.find((o) => o.op === 'rerender-managed-region' && o.file === 'AGENTS.md');
+    check('[update-agents-0] 0023 ships the AGENTS.md op as its LAST operation: whole file, the template, createIfAbsent',
+      !!agentsOp && ops0023[ops0023.length - 1] === agentsOp && agentsOp.region === null
+      && agentsOp.template === 'templates/AGENTS.md.tmpl' && agentsOp.createIfAbsent === true && !('ifRecorded' in agentsOp),
+      JSON.stringify(agentsOp || ops0023.map((o) => o.op)));
+    const agentsPayload = makePayload('agents-op', {
+      version: '0.2.0',
+      migrations: [{ id: '0002_agents', version: '0.2.0', ops: [agentsOp || { op: 'note', id: 'agents-op-missing', text: 'the shipped op is missing', docRefs: [] }] }],
+    });
+    // Takes the artifact setup wrote back OUT of the installation - the file and its record both -
+    // so the project is an installation older than the artifact: no record, and (face 11) no file.
+    const forgetAgents = (p) => {
+      const cfg = readJson(at(p, CONFIG_REL));
+      delete cfg._aiwf.managedRegions['AGENTS.md'];
+      writeJson(at(p, CONFIG_REL), cfg);
+      fs.rmSync(at(p, 'AGENTS.md'), { force: true });
+    };
+
+    // face 11: empty ground -> created, stamped, and byte-identical to what setup renders
+    {
+      const p = project('agents-empty');
+      check('install exits 0', install(p).status === 0);
+      const setupRender = read(at(p, 'AGENTS.md'));
+      forgetAgents(p);
+      check('precondition: neither AGENTS.md nor a record for it is there',
+        !exists(at(p, 'AGENTS.md')) && !Object.prototype.hasOwnProperty.call(bookkeeping(p).managedRegions, 'AGENTS.md'));
+      const a = update(p, ['--apply'], { payload: agentsPayload });
+      check('[update-agents-1] the shipped op over empty ground: exit 0, AGENTS.md created',
+        a.status === 0 && a.out.includes('AGENTS.md: created (no record, no file) - rendered and recorded'), why(a));
+      const onDisk = read(at(p, 'AGENTS.md'));
+      const rec = bookkeeping(p).managedRegions['AGENTS.md'] || {};
+      check('[update-agents-2] and it is stamped clean: upstream == local == sha(file), override false',
+        onDisk !== null && rec.upstream === sha256(onDisk) && rec.local === sha256(onDisk) && rec.override === false,
+        JSON.stringify(rec));
+      check('[update-agents-3] and the update render is byte-identical to the setup render',
+        setupRender !== null && onDisk === setupRender,
+        `${setupRender === null ? 'setup wrote none' : sha256(setupRender).slice(0, 12)} vs ${onDisk === null ? 'none' : sha256(onDisk).slice(0, 12)}`);
+    }
+
+    // face 12: a hand-written AGENTS.md and no record -> refused, the file untouched
+    {
+      const p = project('agents-foreign');
+      check('install exits 0', install(p).status === 0);
+      forgetAgents(p);
+      const MINE = '# My own auditor notes\n\nHand-written, pinned to a plugin path of my choosing.\n';
+      fs.writeFileSync(at(p, 'AGENTS.md'), MINE, 'utf8');
+      const a = update(p, ['--apply'], { payload: agentsPayload });
+      check('[update-agents-4] the shipped op over a hand-written AGENTS.md REFUSES (exit 1) with the move-it-aside sentence',
+        a.status === 1 && a.out.includes(`AGENTS.md: ${REFUSAL}`), why(a));
+      check('[update-agents-5] and the hand-written file is byte-untouched, with no record and the version unmoved',
+        read(at(p, 'AGENTS.md')) === MINE
+        && !Object.prototype.hasOwnProperty.call(bookkeeping(p).managedRegions, 'AGENTS.md')
+        && bookkeeping(p).installedPluginVersion === BASELINE.targetPluginVersion,
+        `${String(bookkeeping(p).installedPluginVersion)} / ${JSON.stringify(Object.keys(bookkeeping(p).managedRegions))}`);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

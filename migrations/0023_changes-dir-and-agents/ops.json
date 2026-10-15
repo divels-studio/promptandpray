@@ -13,6 +13,13 @@
       "id": "changes-dir-schema-agents",
       "text": "CHANGES REPORTS: a new config key, paths.changesDir, names the project-relative folder these reports are written into; it was added as \".\", the project root, so this report and the next ones stay where they always were until you change it. It must stay inside the project: an update refuses before any operation when it climbs out, is absolute, carries a drive letter, or names an existing file. $SCHEMA: the $schema pointer in .claude/aiwf-native/aiwf.config.json is now refreshed by every update run from a different plugin root, before any migration is journalled - an already-current run that refreshes it says so and runs the self-check; nothing reads the pointer, so a stale one was never a fault. AGENTS.md: the instruction file a Codex-hosted auditor reads at the project root becomes a managed artifact rendered from the payload. When you have no AGENTS.md it is created; a file whose bytes equal the render is recorded as it is; any other AGENTS.md makes the update STOP before writing it - an update never adopts a file it did not write; move yours aside or remove it, then run the update again.",
       "docRefs": ["CHANGELOG.md", "skills/update/SKILL.md"]
+    },
+    {
+      "op": "rerender-managed-region",
+      "file": "AGENTS.md",
+      "region": null,
+      "template": "templates/AGENTS.md.tmpl",
+      "createIfAbsent": true
     }
   ]
 }

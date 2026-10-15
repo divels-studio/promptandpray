@@ -182,6 +182,7 @@ export const RESOLVABLE_ARTIFACT_TEMPLATES = {
   '.claude/agents/writer.md': 'templates/agents/writer.md.tmpl',
   '.claude/agents/reviewer.md': 'templates/agents/reviewer.md.tmpl',
   '.claude/agents/qa.md': 'templates/agents/qa.md.tmpl',
+  'AGENTS.md': 'templates/AGENTS.md.tmpl',
 };
 
 // ---------------------------------------------------------------------------

@@ -115,6 +115,10 @@ const AGENTS_DIR = path.join('.claude', 'agents');
 // it lives beside the config rather than under .claude/agents/, carries no frontmatter, and is
 // rendered unconditionally: there is no configuration in which a project has no main session.
 const ORCHESTRATOR_REL = path.join('.claude', 'aiwf-native', 'ORCHESTRATOR.md');
+// The instruction file a Codex-hosted auditor reads at the project root (the wrappers run it with the
+// project root as its working root). A whole file, rendered unconditionally and version-free: it names
+// no plugin path, so an update can never leave it pointing at an old payload.
+const CODEX_AGENTS_REL = 'AGENTS.md';
 const REGION_ID = 'aiwf-core';
 const REGION_BEGIN = `<!-- BEGIN ${REGION_ID} -->`;
 const REGION_END = `<!-- END ${REGION_ID} -->`;
@@ -1079,6 +1083,7 @@ export function planInstall({
         { rel: ROLES_REL, kind: 'file', label: 'the rendered roles.json' },
         { rel: SETTINGS_REL, kind: 'file', label: 'the permission settings' },
         { rel: 'CLAUDE.md', kind: 'file', label: 'the file carrying the managed region' },
+        { rel: CODEX_AGENTS_REL, kind: 'file', label: 'the Codex auditor instruction file' },
         { rel: merged.paths.overridesDoc, kind: 'file', label: 'the overrides document' },
         { rel: path.join(AGENTS_DIR, 'writer.md'), kind: 'file', label: 'the Writer agent' },
         { rel: path.join(AGENTS_DIR, 'reviewer.md'), kind: 'file', label: 'the Reviewer agent' },
@@ -1131,6 +1136,15 @@ export function planInstall({
           );
         }
       }
+      // The overrides document is a second writer too: sharing a path with another owned destination,
+      // the later write wins over a render whose hash was already recorded. Refused, like the surface.
+      const overridesDoc = merged.paths.overridesDoc;
+      for (const { rel, label } of ownedDestinations) {
+        if (typeof overridesDoc !== 'string' || typeof rel !== 'string' || rel === '' || rel === '.' || label === 'the overrides document') continue;
+        if (samePath(canonicalPath(abs(rel)), canonicalPath(abs(overridesDoc)))) {
+          blockers.push(`paths.overridesDoc ("${overridesDoc}") is the same destination setup writes as ${label} ("${toPosix(rel)}") - one write would silently lose. Pick another paths.overridesDoc.`);
+        }
+      }
       // `statSync` FOLLOWS, on purpose: a symlink to a regular file inside the project is the
       // operator's own arrangement and is left alone like any other existing surface, while a symlink
       // that leaves the project was already refused by the containment test above.
@@ -1168,6 +1182,11 @@ export function planInstall({
   // no roles key and the artifacts loop below treats it like any other managed whole file.
   addArtifact(toPosix(ORCHESTRATOR_REL), ORCHESTRATOR_REL,
     renderTemplate(readTemplate(pluginRoot, 'ORCHESTRATOR.md.tmpl'), context));
+  // Unconditional as well: the file is what a Codex-hosted auditor reads, and a review class can move
+  // to that host at any time, so the artifact is not tied to the configuration of the day. A project
+  // whose audits all run on Claude carries a file nobody reads, which costs nothing.
+  addArtifact(CODEX_AGENTS_REL, CODEX_AGENTS_REL,
+    renderTemplate(readTemplate(pluginRoot, 'AGENTS.md.tmpl'), context));
 
   const stale = [];
   // reviewer.md is rendered for the Reviewer role OR for any claude-hosted review row (the row has

@@ -279,3 +279,10 @@ widening.
   plugin, `jq` is not.
 - Reviewer and QA are read-only by OS sandbox. **QAL is not read-only** - its containment is
   cwd/profile hygiene plus the operator gate, and that is stated honestly everywhere.
+
+## The project's AGENTS.md
+
+`/pnp:setup` and `/pnp:update` render the project-root `AGENTS.md` the Codex auditor reads from
+`templates/AGENTS.md.tmpl` as a managed artifact; it names no version and no plugin path, a file
+already there whose bytes equal the render is recorded without a write, and any other file at that
+path blocks the update until it is moved aside.

@@ -12,6 +12,7 @@
 
 - **Adds** `paths.changesDir` with the value `"."` (no question asked - the default keeps today's location).
 - **One `note`** saying the above.
+- **Creates `AGENTS.md`** at the project root from `templates/AGENTS.md.tmpl` (`rerender-managed-region` with `createIfAbsent: true`, the LAST operation): rendered and recorded where nothing is there, recorded without a write where the render already is, and a refusal where a different file stands - before anything is written to it. It is last on purpose: a refusal there leaves the first two operations (the config key and the note) applied and journalled, and once you have moved your own `AGENTS.md` aside the re-run resumes from that operation. The file names your project, says who reads it and that the brief on stdin is the auditor's contract, and lists your canon files by project-relative path - your overrides document, `.claude/aiwf-native/aiwf.config.json`, `.claude/aiwf-native/roles.json` and `CLAUDE.md`. It names no plugin version and no plugin path, so a later update has nothing in it to go stale. A fresh `/pnp:setup` renders the same file; a hand-written one there blocks setup too, and `/pnp:setup --adopt` (for a project with no installation) offers keep-mine or take-new for it.
 
 ## Superseded local rules
 

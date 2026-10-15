@@ -583,6 +583,9 @@ function writeFixture(root, pluginVersion) {
   // document the main session reads, not an agent anything dispatches. It is unconditional here for
   // the same reason it is unconditional in the generator: every installation has a main session.
   put('.claude/aiwf-native/ORCHESTRATOR.md', '# Orchestrator standing rules - Fixture\n\nFixture body.\n');
+  // The Codex auditor's instruction file: a managed WHOLE FILE at the project root, unconditional like
+  // the Orchestrator role.
+  put('AGENTS.md', '# AGENTS - Fixture\n\nFixture body.\n');
   // No qa.md ON PURPOSE: qa is codex-hosted here, and the conditional-render contract says a
   // codex-hosted role has NO Claude agent file. A file here would be a stale render.
 
@@ -616,9 +619,9 @@ function writeFixture(root, pluginVersion) {
   // The bookkeeping is computed from the files just written, never hand-typed: a fixture carrying
   // invented hashes would make the managed-region checks pass on nothing. Every artifact the config
   // implies gets an entry - roles.json, the Orchestrator role, the writer, the claude-hosted
-  // reviewer, and the region.
+  // reviewer, the Codex auditor's AGENTS.md, and the region.
   const managedRegions = {};
-  for (const key of ['CLAUDE.md#aiwf-core', '.claude/aiwf-native/roles.json', '.claude/aiwf-native/ORCHESTRATOR.md', '.claude/agents/writer.md', '.claude/agents/reviewer.md']) {
+  for (const key of ['CLAUDE.md#aiwf-core', '.claude/aiwf-native/roles.json', '.claude/aiwf-native/ORCHESTRATOR.md', '.claude/agents/writer.md', '.claude/agents/reviewer.md', 'AGENTS.md']) {
     const hash = managedHash(root, key);
     managedRegions[key] = { upstream: hash, local: hash, override: false };
   }
@@ -2066,7 +2069,7 @@ function sectionMigrationPayload(tmpRoot) {
   // template paths themselves are proven to exist by the payload cross-reference check below.
   const migrateSrc = readText(path.join(PLUGIN_ROOT, 'scripts', 'update', 'migrate.mjs')) || '';
   check('migrate.mjs maps every resolvable managed artifact to a payload template',
-    ['CLAUDE.md#aiwf-core', 'roles.json.tmpl', 'ORCHESTRATOR.md.tmpl', 'writer.md.tmpl', 'reviewer.md.tmpl', 'qa.md.tmpl']
+    ['CLAUDE.md#aiwf-core', 'roles.json.tmpl', 'ORCHESTRATOR.md.tmpl', 'writer.md.tmpl', 'reviewer.md.tmpl', 'qa.md.tmpl', 'AGENTS.md.tmpl']
       .every((needle) => migrateSrc.includes(needle)));
 
   // --- the controls: each way of breaking a payload must be REJECTED ------------------------
@@ -5437,9 +5440,11 @@ function projectLayerFindings(projectRoot, pluginRoot, opts) {
     // to touch it), and an entry with no artifact is a stamp for something that is not there.
     // The three unconditional artifacts, plus the Orchestrator role, which is unconditional for a
     // reason of its own: the review AGENTS depend on which host a role is configured for, and the
-    // main session does not depend on anything - every installation has one.
+    // main session does not depend on anything - every installation has one. And the Codex auditor's
+    // AGENTS.md at the project root, unconditional because a review class can move to that host at
+    // any time.
     const expected = new Set(['CLAUDE.md#aiwf-core', '.claude/aiwf-native/roles.json',
-      '.claude/aiwf-native/ORCHESTRATOR.md', '.claude/agents/writer.md']);
+      '.claude/aiwf-native/ORCHESTRATOR.md', '.claude/agents/writer.md', 'AGENTS.md']);
     // Same rule as agent-present-*: reviewer.md is part of this configuration when the Reviewer role
     // OR any review row is claude-hosted; qa.md follows its own role alone.
     if (reviewerAgentWanted) expected.add('.claude/agents/reviewer.md');
@@ -8145,6 +8150,12 @@ const NEGATIVE_CONTROLS = [
   { id: 'managed-regions-cover', label: 'the Orchestrator role rendered but not recorded (its bookkeeping entry deleted)',
     apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
       delete c._aiwf.managedRegions['.claude/aiwf-native/ORCHESTRATOR.md'];
+    }) },
+  // And the one after it, for the same reason: AGENTS.md is the artifact a hand-written file most
+  // often stands in for, so its missing record must be seen to turn the cover check red.
+  { id: 'managed-regions-cover', label: 'AGENTS.md rendered but not recorded (its bookkeeping entry deleted)',
+    apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
+      delete c._aiwf.managedRegions['AGENTS.md'];
     }) },
   // BOTH arms of the transfer-surface rule, because the check reads two spellings and a control for
   // one of them would leave the other able to pass while recording nothing.

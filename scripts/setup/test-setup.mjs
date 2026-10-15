@@ -243,7 +243,7 @@ check('memory seeds are PRINTED for the operator', r1.out.includes('MEMORY SEEDS
   const regions = bk.managedRegions || {};
   const keys = Object.keys(regions).sort();
   check('managedRegions covers exactly the rendered artifacts',
-    keys.join(',') === ['.claude/agents/reviewer.md', '.claude/agents/writer.md', '.claude/aiwf-native/ORCHESTRATOR.md', '.claude/aiwf-native/roles.json', 'CLAUDE.md#aiwf-core'].sort().join(','),
+    keys.join(',') === ['.claude/agents/reviewer.md', '.claude/agents/writer.md', '.claude/aiwf-native/ORCHESTRATOR.md', '.claude/aiwf-native/roles.json', 'AGENTS.md', 'CLAUDE.md#aiwf-core'].sort().join(','),
     keys.join(', '));
   // The render itself, against the production render path rather than against a copy of the
   // expectation: the same two exported functions the generator renders through, over the config
@@ -268,6 +268,26 @@ check('memory seeds are PRINTED for the operator', r1.out.includes('MEMORY SEEDS
       rendered ? JSON.stringify(String(rendered).split('\n')[0]).slice(0, 80) : '-');
     check('and the TEMPLATE still carries a contract block, so the render above stripped something',
       tmpl !== null && tmpl.includes('<!-- TEMPLATE CONTRACT') && !String(rendered).includes('TEMPLATE CONTRACT'));
+  }
+  // The Codex auditor's instruction file: UNCONDITIONAL like the Orchestrator role, a whole file at
+  // the project root. Its bytes are held to the production render path, and its shape to the
+  // template contract: four headings in a fixed order, two config values, and nothing that goes stale
+  // on an update - no resolved project root, no version, no placeholder left unrendered.
+  {
+    const tmpl = read(path.join(PLUGIN_ROOT, 'templates', 'AGENTS.md.tmpl'));
+    const rendered = read(at(p1, 'AGENTS.md'));
+    const expected = tmpl === null ? null : renderTemplate(tmpl, templateContext(cfg, p1));
+    check('[setup-agents-1] AGENTS.md is rendered at the project root, exactly the template render',
+      rendered !== null && rendered === expected,
+      rendered === null ? 'the file is missing' : `${rendered.length} bytes vs ${expected === null ? 'no template' : expected.length}`);
+    const headings = rendered === null ? [] : rendered.split('\n').filter((l) => l.startsWith('#'));
+    const wanted = [`# AGENTS - ${baseAnswers().project.name}`, '## Who reads this', '## Where the contract is', '## Where the project\'s canon is'];
+    check('[setup-agents-2] AGENTS.md carries exactly the four contract headings, in order',
+      headings.join(' | ') === wanted.join(' | '), headings.join(' | ') || '(no headings)');
+    check('[setup-agents-3] AGENTS.md names the overrides document project-relative, and no root, version or placeholder',
+      !!rendered && rendered.includes(`- \`${baseAnswers().paths.overridesDoc}\``) && !rendered.includes(p1)
+      && !/[0-9]+\.[0-9]+\.[0-9]+/.test(rendered) && !/[A-Za-z]:[\\/]/.test(rendered) && !rendered.includes('{{'),
+      rendered === null ? 'the file is missing' : `${rendered.length} bytes`);
   }
   let hashOk = keys.length > 0;
   for (const key of keys) {
@@ -568,6 +588,30 @@ section('10 - WITHOUT --adopt, a pre-existing artifact is never taken over (sect
   check('the message says setup will not take over a file it did not write, and names --adopt as the deliberate way',
     r.out.includes('not recorded in _aiwf.managedRegions') && r.out.includes('--adopt'));
   check('the operator\'s file is untouched and nothing else was written', diffSnapshots(before, snapshot(p12)).length === 0);
+}
+// The same rule for the Codex auditor's instruction file, which a project is the likeliest to have
+// written by hand before it ever installed: a foreign AGENTS.md on a fresh install BLOCKS the run.
+{
+  const pa = project('unadopted-agents');
+  const MINE = '# My own auditor notes\n\nHand-written before the install.\n';
+  fs.writeFileSync(at(pa, 'AGENTS.md'), MINE);
+  const before = snapshot(pa);
+  const r = install(pa, baseAnswers(), ['--no-seeds']);
+  check('[setup-agents-4] a foreign AGENTS.md on a fresh install BLOCKS the run (exit 1), naming the file',
+    r.status === 1 && r.out.includes('AGENTS.md already exists but is not recorded in _aiwf.managedRegions'), why(r, true));
+  check('[setup-agents-5] and the foreign AGENTS.md is byte-untouched, with nothing else written',
+    read(at(pa, 'AGENTS.md')) === MINE && diffSnapshots(before, snapshot(pa)).length === 0,
+    diffSnapshots(before, snapshot(pa)).join(', '));
+}
+// The overrides document is a second writer: pointed at the managed AGENTS.md it would overwrite the
+// render right after it was stamped, so the collision is a blocker before anything is written.
+{
+  const po = project('overrides-is-agents');
+  const before = snapshot(po);
+  const r = install(po, baseAnswers({ paths: { ...baseAnswers().paths, overridesDoc: 'AGENTS.md' } }), ['--no-seeds']);
+  check('[setup-agents-6] paths.overridesDoc = AGENTS.md is refused before any write (exit 1, names both)',
+    r.status === 1 && r.out.includes('paths.overridesDoc ("AGENTS.md")') && r.out.includes('the Codex auditor instruction file')
+    && diffSnapshots(before, snapshot(po)).length === 0, why(r, true));
 }
 
 // ---------------------------------------------------------------------------
@@ -1921,6 +1965,7 @@ section('24 - the transfer surface: seeded once at the resolved path, never mana
       ['the rendered roles.json', '.claude/aiwf-native/roles.json'],
       ['the permission settings', '.claude/settings.json'],
       ['the file carrying the managed region', 'CLAUDE.md'],
+      ['the Codex auditor instruction file', 'AGENTS.md'],
       ['the overrides document', 'docs/ai/PROJECT_OVERRIDES.md'],
       ['the scratch directory', '.aiwf'],
       ['the active plans directory', 'docs/backlogs/active'],

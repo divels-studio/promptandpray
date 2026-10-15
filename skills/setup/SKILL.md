@@ -42,8 +42,8 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
   not exist, and an installation this version cannot run is worse than a refusal.
 - **A legacy AIWF surface without an installation** - files at the managed paths (`CLAUDE.md` with
   an `aiwf-core` region, `.claude/aiwf-native/roles.json`, `.claude/aiwf-native/ORCHESTRATOR.md`,
-  `.claude/agents/*.md`) while `<root>/.claude/aiwf-native/aiwf.config.json` does not exist, or
-  exists without an `_aiwf` block:
+  `.claude/agents/*.md`, the Codex auditor's `AGENTS.md` at the project root) while
+  `<root>/.claude/aiwf-native/aiwf.config.json` does not exist, or exists without an `_aiwf` block:
   offer **adopt** (`--adopt`) instead of telling the operator to move files aside. Say what it does,
   in these words:
   - a file **identical** to what the payload would render is adopted **silently and clean** - nothing
@@ -122,9 +122,10 @@ The generator plans everything before it writes anything, so a blocked run leave
 - a managed artifact was edited by hand (`actual != local`): a conflict, resolved by
   `/pnp:update --resolve <key>`, never by an overwrite here;
 - a file it would manage already exists without bookkeeping **and this is not an adopt run**: setup
-  never takes over a file it did not write by accident. With `--adopt` that same file becomes the
-  decision described in Step 1 instead of a blocker - and an adopt decision that is left unanswered
-  is itself a blocker, so no branch of adopt writes before every question has an answer;
+  never takes over a file it did not write by accident - and a hand-written `AGENTS.md` at the
+  project root counts, because setup renders that file too. With `--adopt` that same file becomes
+  the decision described in Step 1 instead of a blocker - and an adopt decision that is left
+  unanswered is itself a blocker, so no branch of adopt writes before every question has an answer;
 - a stale Claude agent file sits next to a role that is now codex-hosted. Removing it is
   destructive, so it needs `--confirm-remove-stale` - which is an operator decision, exactly like
   any other delete. `--adopt` does not touch this case: the configuration renders nothing at that

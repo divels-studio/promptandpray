@@ -641,6 +641,16 @@ try {
   const selfcheck = run(CMD_SELFCHECK);
   check('the self-check exits 0 against the updated project', selfcheck.status === 0,
     selfcheck.status === 0 ? '' : '\n' + (selfcheck.out || '').trim().split('\n').slice(-16).join('\n'));
+  // The Codex auditor's instruction file is a managed artifact of every installation: after the
+  // whole cycle it is on disk at the project root and recorded clean under its own key. Whether the
+  // record still describes the bytes is the self-check's managed-regions-match, run just above.
+  {
+    const entry = (((readJson(path.join(PROJECT, ...CONFIG_REL.split('/'))) || {})._aiwf || {}).managedRegions || {})['AGENTS.md'];
+    check('AGENTS.md is on disk and recorded under the key "AGENTS.md" after the cycle (upstream == local, override false)',
+      fs.existsSync(path.join(PROJECT, 'AGENTS.md')) && !!entry && typeof entry.local === 'string'
+      && entry.local === entry.upstream && entry.override === false,
+      JSON.stringify(entry));
+  }
 } catch (e) {
   // An unexpected throw is a FAILED cycle, never a quiet one: it is recorded as a check so the
   // summary below cannot report "0 failures" for a run that did not finish.

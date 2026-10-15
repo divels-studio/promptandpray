@@ -18,6 +18,16 @@ current, and the supersede duty of a re-rendering migration written down.
   an absolute value, a drive letter or a climb out of the project is refused - by the update before
   any operation, as is a value naming an existing file; `--check` and `--resolve` never refuse on
   it. Migration `0023` adds the key as `"."`; setup asks for it after the paths questions.
+- **The Codex auditor's `AGENTS.md` is rendered (PLB-003)** - the project-root `AGENTS.md` a
+  Codex-hosted Reviewer or QA reads is now a managed artifact rendered from
+  `templates/AGENTS.md.tmpl` by setup and by update (the last operation of migration `0023`): the
+  project name, who reads the file, that the brief on stdin is the contract, and the project's canon
+  files by relative path - no plugin version and no plugin path, so an update cannot leave it stale.
+  If you keep a hand-written `AGENTS.md`, move it aside BEFORE `/pnp:update`: otherwise the update
+  refuses at that third operation with the first two applied and journalled, and `--check` stays red
+  (the ten interlocked `/pnp:*` skills blocked; `update` and `selfcheck` still run) until the
+  file is moved and the update re-run. Setup blocks on a foreign `AGENTS.md` the same way;
+  `--adopt` decides it on a project with no installation.
 
 ### Changed
 
