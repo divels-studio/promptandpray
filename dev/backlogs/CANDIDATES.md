@@ -1103,7 +1103,10 @@ template renders the project's § Hard rules (and the product boundary checks? -
 the Reviewer's) from the overrides into the body, so the file stops being hand-written; or a measured
 answer first - does Codex open the overrides when `AGENTS.md` names them? A product decision for the
 operator; the design cost is the render context (the overrides are operator-owned text, not a
-template variable today).
+template variable today). Beside it, from Furnissimo's cleanup the same day: a held artifact that
+the operator EDITS (their `AGENTS.md:188`) changes its local hash, so the next update reopens the
+dialog unless `--resolve <key>` keep-mine is run again - one sentence for `skills/update/SKILL.md`
+Step 4, and the `--resolution-file` form for agent shells with it.
 
 ## Payload says "a turn of its own" for the own pass; the consumers hold "a turn is not a stop" (born 2026-10-16, Furnissimo scan)
 
