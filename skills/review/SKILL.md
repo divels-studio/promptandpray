@@ -475,7 +475,10 @@ would write over the first's.
 `{{config.paths.scratchDir}}` carries the live loop mechanics only - `route-state.json`, the brief
 files, the engines' session files, and the artifacts of the CURRENT ticket - and it is the
 project's own ignore rules (`.gitignore`, or its excludes) that keep it out of git (setup writes no
-ignore entry). A draft and its
+ignore entry). While a route is open the main session's allowlist is `docs/**`, `.aiwf/**` and
+root-level `*.md`, plus the transfer surface, which it may write - so Gate 3 holds it out of a
+`{{config.paths.plansDir}}` that sits under neither `docs/` nor `{{config.paths.scratchDir}}`,
+drafts and readiness files included. A draft and its
 readiness artifacts are written there, under `{{config.paths.scratchDir}}/plan/<ABBR>/`, in exactly
 one case: Gate 3 holds the main session out of `{{config.paths.plansDir}}` because an R2/R3 route is
 open and `{{config.paths.plansDir}}` is under neither `docs/` nor `{{config.paths.scratchDir}}`

@@ -583,16 +583,19 @@ At the same moment - dispatch of an R2/R3 ticket - the COO writes the **route st
 `{ "ticket": "<REF>", "route": "R2"|"R3" }`, and on
 closing the ticket clears it by writing `{}`. While that file names an R2/R3 route, **Gate 3**
 (the route-state guard inside the Gate 1 hook) lets the **main session** write only `docs/**`,
-`.aiwf/**` and root-level `*.md`; anything else is denied with a message naming the open ticket,
+`.aiwf/**` and root-level `*.md`, plus the transfer surface (`paths.transferSurface`, else
+`<plansDir>/PNP_CANDIDATES.md` - one file, and only when it is contained, ends in `.md` and is not
+under `.claude`); anything else is denied with a message naming the open ticket,
 because code-class work belongs to the Writer while a ticket is open. With no state file - or
 with the cleared `{}` - behaviour is exactly what it was before, so R1 work is untouched, and the
 Writer is never affected in either case. A present-but-unusable state (a route that is not
 R2/R3, a non-string route, malformed JSON) denies by design, and is self-healing because
-`.aiwf/**` stays writable. A `paths.plansDir` under neither `docs/` nor `.aiwf/` puts the plan's
-own draft and readiness files behind this guard while a route is open; `/pnp:review` Step 2e says
-what stands in for them. Two honest limits, stated in the same breath: the guard covers the
-**Edit/Write tool class only**, so a main-session mutation performed through a shell command is
-not caught and remains doctrine; and it only bites if the COO actually writes the file at
+`.aiwf/**` stays writable; an unusable state never opens the transfer surface. A `paths.plansDir`
+under neither `docs/` nor `.aiwf/` puts the plan's own draft and readiness files behind this guard
+while a route is open - all except the transfer surface under it, which stays writable;
+`/pnp:review` Step 2e says what stands in for them. Two honest limits, stated in the same breath:
+the guard covers the **Edit/Write tool class only**, so a main-session mutation performed through a
+shell command is not caught and remains doctrine; and it only bites if the COO actually writes the file at
 dispatch - a convention, not an enforcement. The paths and the state-file location are fixed in
 v0.1. The guard is configurable per project through `enforcement.routeWriteGuard` in
 `aiwf.config.json`: an explicit `false` skips the route-state check, and EVERY other state -

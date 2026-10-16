@@ -1910,6 +1910,143 @@ function sectionGate3Toggle(tmpRoot) {
 }
 
 // ---------------------------------------------------------------------------
+// SECTION 3b2 - Gate 3's transfer surface (paths.transferSurface)
+// ---------------------------------------------------------------------------
+// While a ticket is open the main session may write ONE more file than the fixed allowlist: the one
+// `paths.transferSurface` resolves to (else `<plansDir>/PNP_CANDIDATES.md`), and only when that path
+// is contained, ends in `.md` and does not sit under `.claude`. The allow rows are the change; the deny
+// rows are the negative controls proving the allow did not widen into anything else.
+function sectionGate3Surface(tmpRoot) {
+  section('GATE 3 SURFACE - the main session may write the resolved transfer surface while a ticket is open, nothing more');
+  const TICKET_STATE = JSON.stringify({ ticket: 'SURFACE-FIXTURE', route: 'R2' });
+  const mkProject = (name, paths, stateRaw) => {
+    const root = path.join(tmpRoot, 'g3s-' + name);
+    fs.mkdirSync(path.join(root, '.aiwf'), { recursive: true });
+    fs.mkdirSync(path.join(root, '.claude', 'aiwf-native'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.aiwf', 'route-state.json'), stateRaw === undefined ? TICKET_STATE : stateRaw);
+    const config = { project: { name: 'Surface' } };
+    if (paths !== undefined) config.paths = paths;
+    fs.writeFileSync(path.join(root, '.claude', 'aiwf-native', 'aiwf.config.json'), JSON.stringify(config));
+    return root;
+  };
+  const G = (root, filePath) => runHook(GATE1, { hook_event_name: 'PreToolUse', tool_name: 'Write',
+    tool_input: { file_path: filePath, content: 'x' } }, root);
+  const allow = (r) => r.decision === 'allow(passthrough)' && r.exit === 0;
+  const deny = (r) => r.decision === 'deny' && r.exit === 0;
+  const SURFACE = 'dev/backlogs/CANDIDATES.md';
+  const CLAUSE = 'plus the transfer surface';
+  const surfaceText = (p) => `${CLAUSE} ${p} (gate 3)`;
+
+  const CONF = mkProject('configured', { plansDir: 'dev/backlogs', transferSurface: SURFACE });
+  // `route: "R9"` is a present-but-unusable state: the hook arms the guard with the plain allowlist.
+  const UNUSABLE = mkProject('unusable', { plansDir: 'dev/backlogs', transferSurface: SURFACE },
+    JSON.stringify({ ticket: 'SURFACE-FIXTURE', route: 'R9' }));
+  const REFUSED = mkProject('refused', { plansDir: 'dev/backlogs', transferSurface: 'src/app.ts' });
+
+  // --- allow rows: the change itself --------------------------------------------------------------
+  check('main + R2 open + configured surface dev/backlogs/CANDIDATES.md -> allow (the surface is writable)',
+    allow(G(CONF, SURFACE)));
+  check('main + R2 open + ./dev/backlogs/CANDIDATES.md -> allow (same file, the host resolves the ./)',
+    allow(G(CONF, './' + SURFACE)));
+
+  // --- deny rows: negative controls ---------------------------------------------------------------
+  {
+    const r = G(UNUSABLE, SURFACE);
+    check('main + UNUSABLE state (route "R9") + the configured surface -> DENY, and the text has no surface clause',
+      deny(r) && !r.reason.includes(CLAUSE), r.reason.slice(0, 70));
+  }
+  check('main + R2 open + dev/backlogs/CANDIDATES.md.bak -> DENY (only the surface itself, not a sibling)',
+    deny(G(CONF, SURFACE + '.bak')));
+  {
+    const r = G(CONF, 'dev/notes.md');
+    check('main + R2 open + dev/notes.md -> DENY (another .md under the same tree stays closed)', deny(r));
+    check('the deny text names the surface: "plus the transfer surface dev/backlogs/CANDIDATES.md (gate 3)"',
+      deny(r) && r.reason.includes(surfaceText(SURFACE)), r.reason.slice(0, 70));
+  }
+  check('main + R2 open + .claude/aiwf-native/aiwf.config.json -> DENY (the config never becomes writable)',
+    deny(G(CONF, '.claude/aiwf-native/aiwf.config.json')));
+  check('main + R2 open + .claude/aiwf-native/roles.json -> DENY',
+    deny(G(CONF, '.claude/aiwf-native/roles.json')));
+  {
+    const r = G(REFUSED, 'dev/x.md');
+    check('configured surface src/app.ts (refused) + dev/x.md -> DENY, no surface clause (no widening)',
+      deny(r) && !r.reason.includes(CLAUSE), r.reason.slice(0, 70));
+  }
+  check('configured surface src/app.ts (refused) + src/app.ts itself -> DENY (a refused surface is not writable)',
+    deny(G(REFUSED, 'src/app.ts')));
+
+  // --- platform rows: the identity test is the HOST's path identity -------------------------------
+  // No skipWhen exists on check() rows, so the expected decision is computed from process.platform.
+  const FOLD = process.platform === 'win32' || process.platform === 'darwin';
+  const BACKSLASH_IS_SEPARATOR = process.platform === 'win32';
+  check(`(p1) main + R2 open + DEV/backlogs/CANDIDATES.md -> ${FOLD ? 'allow' : 'DENY'} on ${process.platform} ` +
+    '(case-insensitive by default on win32/darwin; another file on linux)',
+    FOLD ? allow(G(CONF, 'DEV/backlogs/CANDIDATES.md')) : deny(G(CONF, 'DEV/backlogs/CANDIDATES.md')));
+  check(`(p2) main + R2 open + dev\\backlogs\\CANDIDATES.md -> ${BACKSLASH_IS_SEPARATOR ? 'allow' : 'DENY'} on ` +
+    `${process.platform} (a separator on win32; a filename character elsewhere)`,
+    BACKSLASH_IS_SEPARATOR ? allow(G(CONF, 'dev\\backlogs\\CANDIDATES.md')) : deny(G(CONF, 'dev\\backlogs\\CANDIDATES.md')));
+
+  // --- fallback rows: `<plansDir>/PNP_CANDIDATES.md`, the rule copied by hand from the generator ---
+  // Each row asserts the decision on the literal expected path AND that a denied code write names that
+  // same path as the surface - the second half is what proves the fallback resolved, since the two
+  // default-plansDir paths sit under docs/ and are allowed regardless.
+  for (const [name, paths, expected, why] of [
+    ['fb-configured', { plansDir: 'dev/backlogs' }, 'dev/backlogs/PNP_CANDIDATES.md', 'configured plansDir, no transferSurface'],
+    ['fb-default', {}, 'docs/backlogs/PNP_CANDIDATES.md', 'plansDir absent -> the schema default docs/backlogs'],
+    ['fb-blank', { plansDir: '  ' }, 'docs/backlogs/PNP_CANDIDATES.md', 'blank plansDir -> the schema default docs/backlogs'],
+  ]) {
+    const root = mkProject(name, paths);
+    const denied = G(root, 'src/x.ts');
+    check(`fallback (${why}): ${expected} -> allow, and a denied src/x.ts names it as the surface`,
+      allow(G(root, expected)) && deny(denied) && denied.reason.includes(surfaceText(expected)), denied.reason.slice(0, 70));
+  }
+
+  // --- resolver rows: the exported resolver called directly, no hook run --------------------------
+  // Requiring a hook that does not guard its entrypoint RUNS it: it would read this process's stdin
+  // and exit this process with a hook decision, ending the self-check with a status not its own.
+  let source = '';
+  try { source = fs.readFileSync(GATE1, 'utf8'); } catch (e) { source = ''; }
+  let hook = null;
+  if (check('the Gate 1/3 hook guards its entrypoint (require.main === module), so requiring it runs nothing',
+    /\brequire\.main === module\b/.test(source))) {
+    try { hook = require(GATE1); } catch (e) { hook = null; }
+  }
+  if (!check('the hook exports resolveTransferSurface and isAllowlisted (these rows call the REAL resolver)',
+    hook != null && typeof hook.resolveTransferSurface === 'function' && typeof hook.isAllowlisted === 'function')) return;
+  const resolve = (ts) => hook.resolveTransferSurface(
+    { project: { name: 'Surface' }, paths: { plansDir: 'dev/backlogs', transferSurface: ts } }, CONF);
+  check('resolver control: configured dev/backlogs/CANDIDATES.md -> that same path (the rows below can pass only by refusing)',
+    resolve(SURFACE) === SURFACE, JSON.stringify(resolve(SURFACE)));
+  check('resolver: a padded "  dev/backlogs/CANDIDATES.md  " -> the trimmed path',
+    resolve('  ' + SURFACE + '  ') === SURFACE, JSON.stringify(resolve('  ' + SURFACE + '  ')));
+  const DRIVE = 'C:'; // composed so the provenance scan does not read a drive-letter path in this source
+  for (const [ts, why] of [
+    ['src/app.ts', 'not .md'],
+    ['../x.md', 'a .. segment'],
+    [DRIVE + '/x.md', 'win32-absolute'],
+    ['/abs/x.md', 'posix-absolute'],
+    ['.claude/agents/writer.md', 'under .claude'],
+    ['./.claude/agents/writer.md', 'under .claude once normalised'],
+    ['.claude./agents/writer.md', 'trailing dot stripped by Windows'],
+    ['.claude /agents/writer.md', 'trailing space stripped by Windows'],
+  ]) {
+    const got = resolve(ts);
+    check(`resolver: configured ${ts} -> null (${why})`, got === null, JSON.stringify(got));
+  }
+  {
+    // A platform resolver row: on win32 the backslash is a separator, so this IS under .claude; on
+    // every other platform it is one root file whose name holds backslashes - not under `.claude`, so
+    // the resolver returns it (the fixed allowlist does not: `isAllowlisted` splits on backslashes
+    // everywhere).
+    const ts = '.claude\\agents\\writer.md';
+    const got = resolve(ts);
+    const WIN = process.platform === 'win32';
+    check(`(p3) resolver: configured ${ts} -> ${WIN ? 'null' : 'the value itself'} on ${process.platform} ` +
+      '(a separator on win32; a filename character elsewhere)', WIN ? got === null : got === ts, JSON.stringify(got));
+  }
+}
+
+// ---------------------------------------------------------------------------
 // SECTION 3c - the config schema and its interpreter
 // ---------------------------------------------------------------------------
 // Both directions are asserted: the shipped schema ACCEPTS a healthy config, and it REJECTS the
@@ -8292,6 +8429,7 @@ function main() {
     sectionGate4();
     sectionGate3(tmpRoot);
     sectionGate3Toggle(tmpRoot);
+    sectionGate3Surface(tmpRoot);
     sectionConfigSchema(tmpRoot);
     sectionMigrationPayload(tmpRoot);
     sectionHookWiring();

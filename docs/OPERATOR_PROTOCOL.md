@@ -52,8 +52,9 @@ The rules do not rely on the session "remembering" them - they are enforced mech
   and not that the scan covered the latest revision - so the step happens without you reading those
   files.
 - **Gate 3 (hook)** - while a ticket is dispatched, the main session cannot edit code: with an open
-  R2/R3 route recorded in `.aiwf/route-state.json` it may write only docs, `.aiwf/` and root
-  `*.md`. Code goes to the Writer, where the review gates are.
+  R2/R3 route recorded in `.aiwf/route-state.json` it may write only `docs/**`, `.aiwf/**` and
+  root-level `*.md`, plus the transfer surface (the one file where incident rows are recorded). Code
+  goes to the Writer, where the review gates are.
 - **Gate 4 (hook)** - a git command whose verb is one of the gated ones (commit, push, reset,
   checkout, ...) is **refused outright** when a background agent tries to run it: its dialog would
   never reach your screen. From the session itself nothing changes for the commands you already

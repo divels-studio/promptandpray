@@ -254,7 +254,7 @@
         "routeWriteGuard": {
           "type": "boolean",
           "default": true,
-          "description": "Gate 3. true (or the key/config absent) = while .aiwf/route-state.json names an R2/R3 route, the main session may write only docs/**, .aiwf/** and root-level *.md. Only an explicit boolean false switches the route-state check off; Gate 1 (non-writer subagents cannot write) is never affected by this key."
+          "description": "Gate 3. true (or the key/config absent) = while .aiwf/route-state.json names an R2/R3 route, the main session may write only docs/**, .aiwf/** and root-level *.md, plus the transfer surface (paths.transferSurface, else <plansDir>/PNP_CANDIDATES.md: one contained .md file not under .claude, and never while the route state is unusable). Only an explicit boolean false switches the route-state check off; Gate 1 (non-writer subagents cannot write) is never affected by this key."
         }
       }
     },

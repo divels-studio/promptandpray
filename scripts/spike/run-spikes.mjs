@@ -195,6 +195,30 @@ const gate3ToggleCases = [
   { name: 'routeWriteGuard "false" as a STRING: main session -> src/** (armed, no coercion)', projectDir: toggleString, payload: writeEnvelope({}, path.join(toggleString, 'src', 'probe.txt')), expect: 'deny' },
 ];
 
+// Gate 3's transfer surface (`paths.transferSurface`). Plugin only, for the same reason as the toggle
+// table above: the reference implementation predates the surface, so parity would report the change
+// itself as a divergence. The fixtures carry an R2 route state (or an unusable one) plus a config
+// naming the surface under a non-docs plansDir.
+const projectSurface = (name, stateRaw) => {
+  const root = path.join(tmpRoot, 'surface-' + name);
+  fs.mkdirSync(path.join(root, '.aiwf'), { recursive: true });
+  fs.mkdirSync(path.join(root, '.claude', 'aiwf-native'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.aiwf', 'route-state.json'), stateRaw);
+  fs.writeFileSync(path.join(root, '.claude', 'aiwf-native', 'aiwf.config.json'), JSON.stringify({
+    project: { name: 'Spike' }, paths: { plansDir: 'dev/backlogs', transferSurface: 'dev/backlogs/CANDIDATES.md' },
+  }));
+  return root;
+};
+const surfaceTicket = projectSurface('ticket', JSON.stringify({ route: 'R2', ticket: 'DEMO-1' }));
+const surfaceUnusable = projectSurface('unusable', JSON.stringify({ route: 'R9', ticket: 'DEMO-1' }));
+
+const gate3SurfaceCases = [
+  { name: 'surface: main session -> the configured transfer surface, R2 open', projectDir: surfaceTicket, payload: writeEnvelope({}, path.join(surfaceTicket, 'dev', 'backlogs', 'CANDIDATES.md')), expect: 'allow(passthrough)' },
+  { name: 'surface: main session -> dev/notes.md, R2 open (not the surface)', projectDir: surfaceTicket, payload: writeEnvelope({}, path.join(surfaceTicket, 'dev', 'notes.md')), expect: 'deny' },
+  { name: 'surface: main session -> the configured config file, R2 open', projectDir: surfaceTicket, payload: writeEnvelope({}, path.join(surfaceTicket, '.claude', 'aiwf-native', 'aiwf.config.json')), expect: 'deny' },
+  { name: 'surface: main session -> the surface, UNUSABLE state (fixed allowlist only)', projectDir: surfaceUnusable, payload: writeEnvelope({}, path.join(surfaceUnusable, 'dev', 'backlogs', 'CANDIDATES.md')), expect: 'deny' },
+];
+
 // Gate 2: the Agent-dispatch envelope, from the live shape (subagent_type next to
 // description/prompt/model/run_in_background).
 const agentEnvelope = (toolInput, extra = {}) => ({
@@ -576,6 +600,20 @@ console.log('== Gate 3 toggle - enforcement.routeWriteGuard (plugin only: the re
 console.log('per case: [1] plugin decision matches the expectation  [2] plugin exited 0');
 console.log(`${pad('case', 62)} ${pad('expected', 18)} ${pad('plugin', 18)} ${pad('exit', 5)} verdict`);
 for (const c of gate3ToggleCases) {
+  const got = runHook(path.join(PLUGIN_HOOKS, GATE1), c.payload, c.projectDir);
+  let ok = record(got.decision === c.expect);
+  ok = record(got.exit === 0) && ok;
+  const verdict = ok ? 'PASS' : 'FAIL';
+  const gotExit = got.exit === null ? 'null' : String(got.exit);
+  console.log(`${pad(c.name, 62)} ${pad(c.expect, 18)} ${pad(got.decision, 18)} ${pad(gotExit, 5)} ${verdict}`);
+  if (verdict === 'FAIL') console.log(`    plugin reason: ${got.reason || '(none)'}`);
+}
+
+console.log('');
+console.log('== Gate 3 transfer surface - paths.transferSurface (plugin only: the reference predates the surface) ==');
+console.log('per case: [1] plugin decision matches the expectation  [2] plugin exited 0');
+console.log(`${pad('case', 62)} ${pad('expected', 18)} ${pad('plugin', 18)} ${pad('exit', 5)} verdict`);
+for (const c of gate3SurfaceCases) {
   const got = runHook(path.join(PLUGIN_HOOKS, GATE1), c.payload, c.projectDir);
   let ok = record(got.decision === c.expect);
   ok = record(got.exit === 0) && ok;

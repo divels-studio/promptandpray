@@ -35,6 +35,13 @@ current, and the supersede duty of a re-rendering migration written down.
   that re-renders an existing region with new sentences greps them against every consumer-local
   duplicate its NOTES.md names before it lands, and its note's `supersedes` list equals that grep's
   hits.
+- **Gate 3 lets the main session write the transfer surface (PLB-001)** - while an R2/R3 route is
+  open, the main session may now also write the one file `paths.transferSurface` resolves to (else
+  `<plansDir>/PNP_CANDIDATES.md`), so an incident row no longer waits for the ticket to close. The
+  surface is honoured only when it is a contained relative path with no `..` segment, ends in `.md`
+  and is not under `.claude`, and never while the route state is unusable; every other code-class
+  path stays denied, and a config that cannot be read opens nothing. The deny text names the
+  surface when one is in force.
 
 ### Fixed
 

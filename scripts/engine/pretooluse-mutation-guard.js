@@ -27,11 +27,14 @@
  *                                ticket dispatched, R1 work is completely untouched.
  *   - `route` own property ABSENT (e.g. the cleared state `{}`) -> passthrough, ticket closed.
  *   - `route` exactly "R2"/"R3" -> guard ACTIVE: the main session may write only
- *                                `docs/**`, `.aiwf/**` and root-level `*.md`; anything else DENIES.
+ *                                `docs/**`, `.aiwf/**` and root-level `*.md`, plus the transfer surface
+ *                                (`paths.transferSurface`, else `<plansDir>/PNP_CANDIDATES.md` - one
+ *                                file, and only when it is contained, ends in `.md` and is not under
+ *                                `.claude`); anything else DENIES.
  *   - present but unreadable / not JSON / not an object / `route` present with any other value
- *                             -> guard ACTIVE under the SAME allowlist, denying with an "unusable
- *                                state" reason. We cannot tell whether a ticket is open, and this
- *                                gate's direction is FAIL-CLOSED. Keeping the allowlist (rather than
+ *                             -> guard ACTIVE under the SAME fixed allowlist (never the transfer
+ *                                surface), denying with an "unusable state" reason. We cannot tell
+ *                                whether a ticket is open, and this gate's direction is FAIL-CLOSED. Keeping the allowlist (rather than
  *                                denying everything) is what makes it self-healing instead of a trap:
  *                                `.aiwf/**` stays writable, so the fix is ONE allowed write.
  * Targets OUTSIDE the project dir pass through deliberately (see the path check in
@@ -50,6 +53,8 @@
  *     STRING "false" is not the boolean false and leaves the guard armed.
  * Responsibility (1), the identity check, is NEVER affected by this key - a config file cannot buy a
  * non-writer subagent the right to write.
+ * The same file names the TRANSFER SURFACE (`paths.transferSurface`, `paths.plansDir`); one reader,
+ * one failure rule - a config that cannot be read, parsed or typed resolves to no surface at all.
  *
  * HONEST LIMIT: this covers the Edit/Write TOOL CLASS only. A main-session mutation performed through
  * a shell command (`echo … > file` on Bash, `Set-Content` on PowerShell, a script) is NOT caught here
@@ -111,25 +116,84 @@ function targetPathOf(toolInput) {
   return null;
 }
 
-// The per-project toggle. Returns TRUE (armed) for every state except an explicit boolean `false`,
-// so every failure mode of reading the config - absent, unreadable, malformed, key missing, key of
-// the wrong type - leaves the guard exactly as armed as it is on a project with no config at all.
+// The project config, through ONE reader with ONE failure rule: anything that cannot be read, parsed
+// or typed as a plain object is `null`, and every consumer below reads `null` as the narrower, armed
+// allowlist - never as a reason to allow more.
 const CONFIG_REL = path.join('.claude', 'aiwf-native', 'aiwf.config.json');
-function routeWriteGuardEnabled(projectDir) {
+function readProjectConfig(projectDir) {
   let raw;
   try {
     raw = fs.readFileSync(path.join(projectDir, CONFIG_REL), 'utf8');
   } catch (e) {
-    return true; // no config layer (or unreadable) -> today's behaviour
+    return null; // no config layer (or unreadable)
   }
   let config;
   try {
     config = JSON.parse(raw);
   } catch (e) {
-    return true; // a corrupt config must not disarm a gate
+    return null; // a corrupt config
   }
+  return isPlainObject(config) ? config : null;
+}
+
+// The per-project toggle. Returns TRUE (armed) for every state except an explicit boolean `false`,
+// so every failure mode of reading the config - absent, unreadable, malformed, key missing, key of
+// the wrong type - leaves the guard exactly as armed as it is on a project with no config at all.
+function routeWriteGuardEnabled(config) {
   if (!isPlainObject(config) || !isPlainObject(config.enforcement)) return true;
   return config.enforcement.routeWriteGuard !== false;
+}
+
+// The hooks' first `process.platform` branch: win32 and darwin default to case-insensitive
+// filesystems, so the transfer-surface identity folds case there; linux compares exactly, because
+// there `DEV/x.md` is another file. (A case-sensitive macOS volume is the stated residual.)
+const FOLD_CASE = process.platform === 'win32' || process.platform === 'darwin';
+const TRANSFER_SURFACE_BASENAME = 'PNP_CANDIDATES.md';
+const DEFAULT_PLANS_DIR = 'docs/backlogs'; // the schema default of paths.plansDir
+
+// The transfer surface: the configured `paths.transferSurface` (trimmed) when it is a non-blank
+// string, else `<plansDir>/PNP_CANDIDATES.md` - the rule of `resolveTransferSurface` in
+// scripts/setup/generate.mjs, copied rather than imported: this hook loads nothing but aiwf-lib.js,
+// and whether a CommonJS `require()` of an ESM module works depends on the Node version.
+// Returns the project-relative string, or `null` when no surface may be allowed: an unusable config
+// (the narrower allowlist), an absolute value on either dialect, ANY `..` segment (stricter than a
+// report location's containment - nothing is normalised here), a basename that is not `.md` (which
+// keeps the config and every code file out), or a value whose normalised first segment is `.claude`
+// (agent files and the rendered rules are `.md` too). Pure: no filesystem access.
+function resolveTransferSurface(config, projectDir) {
+  if (!isPlainObject(config)) return null;
+  const paths = isPlainObject(config.paths) ? config.paths : {};
+  let value;
+  if (typeof paths.transferSurface === 'string' && paths.transferSurface.trim() !== '') {
+    value = paths.transferSurface.trim();
+  } else {
+    const plansDir = typeof paths.plansDir === 'string' && paths.plansDir.trim() !== ''
+      ? paths.plansDir.trim() : DEFAULT_PLANS_DIR;
+    value = plansDir.replace(/[\\/]+$/, '') + '/' + TRANSFER_SURFACE_BASENAME;
+  }
+  if (path.win32.isAbsolute(value) || path.posix.isAbsolute(value)) return null;
+  const segs = value.split(/[\\/]/);
+  if (segs.includes('..')) return null;
+  if (!segs[segs.length - 1].endsWith('.md')) return null;
+  const rel = path.relative(projectDir, path.resolve(projectDir, value));
+  if (rel === '' || path.isAbsolute(rel)) return null;
+  const relSegs = rel.split(path.sep).filter((s) => s !== '' && s !== '.');
+  if (relSegs.length === 0 || relSegs[0] === '..') return null;
+  let first = FOLD_CASE ? relSegs[0].toLowerCase() : relSegs[0];
+  // Windows strips trailing dots and spaces at the filesystem (`.claude.` IS `.claude`); one rule on
+  // every platform, since refusing such a name elsewhere costs nothing.
+  first = first.replace(/[. ]+$/, '');
+  if (first === '.claude') return null;
+  return value;
+}
+
+// Is the resolved write target the transfer surface itself? The HOST's path identity, not a string
+// rewrite: on linux a backslash is a filename character, on win32 a separator.
+function isTransferSurface(projectDir, surface, resolved) {
+  const surfaceAbs = path.resolve(projectDir, surface);
+  const a = FOLD_CASE ? surfaceAbs.toLowerCase() : surfaceAbs;
+  const b = FOLD_CASE ? resolved.toLowerCase() : resolved;
+  return path.relative(a, b) === '';
 }
 
 // Reads the route state and reports WHETHER the guard is armed, never touching the tool payload.
@@ -175,13 +239,17 @@ function readGuardState(projectDir) {
 function mainSessionDecision(input) {
   const tool = input.tool_name || 'mutation';
   const projectDir = projectDirOf();
-  if (!routeWriteGuardEnabled(projectDir)) return lib.allowPassthrough(); // enforcement.routeWriteGuard === false
+  const config = readProjectConfig(projectDir);
+  if (!routeWriteGuardEnabled(config)) return lib.allowPassthrough(); // enforcement.routeWriteGuard === false
   const st = readGuardState(projectDir);
   if (st.off) return lib.allowPassthrough(); // no ticket dispatched -> nothing about today's behaviour changes
+  // The transfer surface is an extra allow for a TICKET state only; an unusable state keeps exactly
+  // the fixed allowlist below.
+  const surface = st.why !== 'unusable' ? resolveTransferSurface(config, projectDir) : null;
 
   // WHY the guard is armed, in the deny text. An unusable state arms it exactly like an open ticket —
-  // SAME allowlist, different explanation. That equality is what makes the unusable case self-healing
-  // instead of a lock: `.aiwf/**` stays writable, so the fix really is one allowed write. Denying
+  // SAME fixed allowlist (without the transfer surface), different explanation. That equality is
+  // what makes the unusable case self-healing instead of a lock: `.aiwf/**` stays writable, so the fix really is one allowed write. Denying
   // everything on an unusable state would block the very write the message asks for.
   const because = st.why === 'ticket'
     ? `ticket ${st.ticket} is dispatched on route ${st.route}`
@@ -205,15 +273,17 @@ function mainSessionDecision(input) {
   if (rel === '' || path.isAbsolute(rel) || rel.split(/[\\/]/)[0] === '..') return lib.allowPassthrough();
 
   if (isAllowlisted(rel)) return lib.allowPassthrough();
+  if (surface !== null && isTransferSurface(projectDir, surface, resolved)) return lib.allowPassthrough();
 
+  const plusSurface = surface !== null ? `, plus the transfer surface ${surface} (gate 3)` : '';
   return lib.denyPreTool(
     `Blocked ${tool}: ${because}, so the MAIN SESSION may not write ${target} — while a ticket is open ` +
-    `it may write only docs/**, .aiwf/** and root-level *.md. Code-class work goes to the Writer ` +
+    `it may write only docs/**, .aiwf/** and root-level *.md${plusSurface}. Code-class work goes to the Writer ` +
     `subagent (.claude/agents/writer.md), which this gate never blocks. ${HOW_TO_CLEAR} ${G3}`
   );
 }
 
-lib.runFailClosed(async () => {
+if (require.main === module) lib.runFailClosed(async () => {
   const input = lib.parseInput(await lib.readStdin());
 
   // Input must be a plain object (not array/primitive/null) — otherwise we cannot read a
@@ -244,3 +314,6 @@ lib.runFailClosed(async () => {
     `edits through the Writer (.claude/agents/writer.md). [AIWF-N3 gate 1: non-writer subagents cannot write]`
   );
 });
+
+// Required (not run) by the self-check, which calls the resolver directly; as a hook nothing changes.
+module.exports = { resolveTransferSurface, isAllowlisted };
