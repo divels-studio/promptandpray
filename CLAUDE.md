@@ -164,7 +164,8 @@ for the full model.
 
 - File: `CHANGELOG.md`, one block per released version, written at the version bump.
 - Language: English (the changelog ships with the payload).
-- Entry shape: `- **Title (TICKET-ID)** - summary`.
+- Entry shape: `- **Title (TICKET-ID)** - summary`; bold title up to ~80 characters; optional
+  sub-items, at most 3-5 per entry.
 - Grouping: `### Added`, `### Changed`, `### Fixed`, `### Removed`, `### Security` - one section per
   type per version block, newest first, no per-entry dates.
 
