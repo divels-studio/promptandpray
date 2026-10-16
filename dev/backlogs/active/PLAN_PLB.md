@@ -761,6 +761,54 @@ through `tiktoken` `o200k_base` - and the completion record carries the four num
 commands that produced them (Bulgarian vs English cost, overrides § Data discipline: measured or not
 stated). The step changes nothing in the ticket's acceptance.
 
+**Completion record (CLOSED 2026-10-16, operator word „пускай", code commit `ef2695d`).**
+- COO routing: run on the TOP COO (Fable, the same session as PLB-004) instead of D7's cheap COO -
+  operator word „пускай" on the mission report of 2026-10-16, which named the deviation; Writer and
+  audit table unchanged. No auditor (docs row 0, D2).
+- Actual changes: 2 files, 489 insertions / 439 deletions. `dev/PROJECT_OVERRIDES.md`: the HARD-024
+  bullet in § Loop shape in English, now `:342-360` (was `:342-358`), the four `„…“` spans verbatim
+  and each on one line, the rest of the file byte-identical. `dev/backlogs/CANDIDATES.md`: the 19
+  open Bulgarian sections translated, each with a `(was: „<old title>“)` first line; the 22 other
+  sections (14 prefixed, 4 already English - the plan's "20 content sections at r3" had grown to 23
+  open ones by PLB-003's three English sections - and the 4 ledgers) byte-identical; 41 headings
+  before and after.
+- Deviations (COO decisions, none changing the Outcome): (1) the acceptance grep's exclusion list
+  gained `впиши го в overrides|важно правило|от днес завинаги|давай одитор` - operator quotes that
+  entered the overrides after the plan's r3 (`8e80a05` and the routing bullet), which the r3 command
+  would have reported as failures; (2) the equivalence scan's "stray Cyrillic lines expected 0" is
+  "exactly six": four literals (`[ПУСНАТ]`, the consumer heading `## PromptAndPray (плъгин,
+  D:\promptandpray)` in backticks, `CANDIDATES_PNP §тиер-агенти`, `§статистика`) and two references to
+  untranslated `[ОТЛОЖЕН]` sections (`§ VERIFY без POSIX крак`, `§ GO-дума`), the latter restored in a
+  one-line micro-round after the Writer had translated them; (3) "Оператор: …" remarks without quote
+  marks are the COO's paraphrases and were translated; (4) English readings were added as ASCII
+  `("…")` after the verbatim spans where a sentence needs one.
+- Verification (check agent, fresh `sonnet`, D4, Git Bash; exit codes taken from a second run with
+  `; echo "exit=$?"` because the harness shows none): Cyrillic filter on the overrides prints nothing,
+  exit 1 (positive control: 12 Cyrillic lines before the filter); `grep -c "^## "` 41 in the worktree
+  and 41 at `8e80a05`; `(was: „` lines 19, each old title found once as a `## ` heading at `8e80a05`
+  and each `(was:)` line found once (19/19; `grep -o -P` needed `LC_ALL=C.UTF-8`); negative control
+  `(was: „zzqq-no-such-title“)` 0, exit 1; `git status --short` the two files only; provenance grep
+  over the payload paths exit 1. Equivalence scan (second `sonnet` agent, `8e80a05` vs worktree, spans
+  closed by `“` or by ASCII `"` - the file carries both, 247+118 at BEFORE): 0 missing / 0 extra
+  `„…“` spans per translated section, 0 spans across lines, every added ASCII span an English reading,
+  the six known Cyrillic spots and no other, the 22 untouched sections byte-identical, the overrides
+  byte-identical outside `:342-360` with the four spans equal. The COO read the full diff first-hand
+  before the commit (1018 lines).
+- Measurement step (two `sonnet` agents; texts taken with `git show <commit>:<path>`, the bullet
+  through `sed -n '342,358p'` before and `'342,360p'` after; tiktoken 0.14.0 `o200k_base` via
+  `count.py`; Claude via `POST /v1/messages/count_tokens`, model `claude-opus-5-5`, via
+  `count_claude.py` - both scripts in the session scratchpad `measure/`, the key read from
+  `.aiwf/anthropic_key`, deleted after the run):
+  | text | tiktoken before -> after | Claude before -> after | UTF-8 bytes | chars |
+  |---|---|---|---|---|
+  | `CANDIDATES.md` whole (`8e80a05` -> `ef2695d`) | 50806 -> 49530 | 66911 -> 66820 | 214284 -> 202447 | 143711 -> 149340 |
+  | overrides bullet (`:342-358` -> `:342-360`) | 573 -> 474 | 733 -> 670 | 2467 -> 1747 | 1566 -> 1658 |
+  The whole file moves little because 22 of its 41 sections stay Bulgarian and every translated
+  section keeps its verbatim spans plus a `(was:)` line and English readings; the bullet is the clean
+  comparison.
+- Remaining: none. Next: PLB-006 (cheap COO by D7) - waits for its own word; the session is the
+  operator's call.
+
 ### PLB-006 - Closeout 0.2.19
 COO: cheap (Opus), because all four no (D7).
 Durable half (COO, after `{}` - D9): PLB-005's completion record, CANDIDATES rows (pass
