@@ -92,6 +92,8 @@ PromptAndPray is **not**:
 - **Checklist first.** Prepare a short checklist for the current scope only, execute only that
   checklist, and self-check against it before the final response.
 - **Restate scope.** Restate the task scope in 1-3 bullets and confirm it before changing anything.
+- **Surgical edits over rewrites** (operator rule 2026-10-02). Edit the lines that change; never
+  rewrite a whole file when the result is the same - COO, Writer briefs and ad-hoc agents alike.
 
 ## Sibling products and negative scope
 
@@ -255,6 +257,8 @@ The documents the "status / release docs policy" in the payload doc `docs/WORKFL
   rule text; a rule needs no retelling of the incident that bore it.
 - Be concise; no step-by-step reasoning narration in the output. Explain concretely when
   architecture or product boundaries are involved.
+- **Operator channel stays short** (operator rule 2026-09-22). One or two sentences per turn; no
+  `file:line`, no counts - the evidence lives in briefs and records, not in the channel.
 - Stop for an operator choice only when unresolved alternatives materially change product intent, an
   architecture boundary, external risk/cost, or an irreversible outcome. The COO owns routine
   engineering decisions; do not turn the operator into a tie-breaker for them.
