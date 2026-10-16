@@ -339,23 +339,25 @@ mechanics and are **not** editable here (see the payload doc `docs/WORKFLOW.md` 
   ceiling: the first on the ticket's standing word, each further one on the operator's own explicit
   word - one word per pass - and one more beyond the configured number is always available with
   that word. Independent of the cap above.
-- **Чекпойнт по гейтове и таван на контекста (операторско правило 2026-10-14, пренесено от Silerax
-  UIR-040 / UIR-041; HARD-024).** COO пренаписва `.aiwf/checkpoint.md` ЦЕЛИЯ (Write, не допълване;
-  ≤ 60 реда: състояние, решения на оператора, живи агенти, следващи стъпки, „След компресиране
-  направи“) на всеки гейт — диспач, предаване, вердикт, преди commit — и когато куката
-  `.claude/hooks/context-gate.mjs` съобщи ≥ 950k токена контекст; при ≥ 1000k — ВЕДНАГА, след текущата
-  стъпка. Автоматичното компресиране се управлява от оператора (`/autocompact`); куката не приема
-  стойност. Праговете: 950k / 1000k (оператор 2026-10-14; преди - 400k / 450k: объркваха COO-то при
-  изключено компресиране; сесии от 800-900k са без проблем). След компресиране куката (`SessionStart`, `compact`) връща файла в
-  контекста; COO чете само него и файловете, които той назовава. Дълъг контекст не е повод за нова
-  сесия — сесията продължава през компресирането. Куката чете `~/.claude/ctx/<session_id>.pct` и
-  `.size`, които пише потребителският `~/.claude/statusline.sh`; без тях мълчи.
-  **Заглавие не е текст (операторска дума 2026-10-14, „да, впиши го в overrides“; от инцидента в
-  Silerax — CANDIDATES § „Таван на контекста“):** след компресиране обобщението носи правилата само като
-  заглавия: преди гейт, readiness стъпка или диспач COO препрочита текста на правилото. За readiness
-  първо се зарежда `/pnp:review`, преди който и да е scan агент.
-  *Изтича:* когато payload-ът носи механизма (кандидат в `dev/backlogs/CANDIDATES.md` § „Таван на
-  контекста“).
+- **Gate checkpoint and context ceiling (operator rule 2026-10-14, carried over from Silerax
+  UIR-040 / UIR-041; HARD-024).** The COO rewrites `.aiwf/checkpoint.md` WHOLE (Write, not an
+  append; ≤ 60 lines: state, operator decisions, live agents, next steps,
+  „След компресиране направи“ ("After compaction do")) at every gate - dispatch, handoff, verdict,
+  before a commit - and when the hook `.claude/hooks/context-gate.mjs` reports ≥ 950k tokens of
+  context; at ≥ 1000k - IMMEDIATELY, after the current step. Automatic compaction is controlled by
+  the operator (`/autocompact`); the hook takes no value. The thresholds: 950k / 1000k (operator
+  2026-10-14; before - 400k / 450k: they confused the COO with compaction switched off; sessions of
+  800-900k run without a problem). After compaction the hook (`SessionStart`, `compact`) returns the
+  file to the context; the COO reads only it and the files it names. A long context is no reason
+  for a new session - the session continues through compaction. The hook reads
+  `~/.claude/ctx/<session_id>.pct` and `.size`, which the user's `~/.claude/statusline.sh` writes;
+  without them it stays silent.
+  **A title is not the text (operator word 2026-10-14, „да, впиши го в overrides“; from the
+  incident in Silerax - CANDIDATES § „Таван на контекста“):** after compaction the summary carries
+  the rules only as titles: before a gate, a readiness step or a dispatch the COO rereads the text
+  of the rule. For readiness, `/pnp:review` is loaded first, before any scan agent.
+  *Expires:* when the payload carries the mechanism (a candidate in
+  `dev/backlogs/CANDIDATES.md` § „Таван на контекста“).
 
 ## Product boundary checks (rendered into the Reviewer)
 

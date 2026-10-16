@@ -6,79 +6,95 @@
 тикетите, които ги затвориха. Нов кандидат, роден от работа в полет, става тикет в активния план;
 тук стоят само неща, нарочно паркирани извън активната мисия.
 
-## Инвентар 2026-10-14 - фаза „стабилизация“ (операторско решение; sonnet инвентар над целия файл)
+## Inventory 2026-10-14 - the „стабилизация“ ("stabilization") phase (operator decision; a sonnet inventory over the whole file)
+(was: „Инвентар 2026-10-14 - фаза „стабилизация“ (операторско решение; sonnet инвентар над целия файл)“)
 
-**Решение на оператора:** плъгинът не е стабилен - 0.3.0 (README, HARD-011) и механизмът за тавана на
-контекста / автоматичното компресиране се ОТЛАГАТ. Ред: стабилизирай PnP → Silerax на него → Furnissimo
-догонва Silerax. Без Fable - COO на Opus. Инвентарът: 70 отворени, 12 пуснати но незачеркнати (заглавията им
-по-долу са маркирани [ПУСНАТ]), 22 отхвърлени/неактуални. Номерата по-долу са „т. N“ от § „Прием от Silerax“.
+**The operator's decision:** the plugin is not stable - 0.3.0 (README, HARD-011) and the mechanism for the
+context ceiling / automatic compaction are POSTPONED. Order: stabilize PnP → Silerax on it → Furnissimo
+catches up with Silerax. No Fable - the COO on Opus. The inventory: 70 open, 12 released but not struck out
+(their titles below are marked `[ПУСНАТ]`), 22 rejected/obsolete. The numbers below are „т. N“ ("item N")
+from § „Прием от Silerax“.
 
-**План А - текстът (0.2.18) - ИЗПЪЛНЕН 2026-10-15 (STAB-001 `371889c`; архив
-`archive/010_PLAN_STAB_2026-10-15.md`). Приземен като `active/PLAN_STAB.md` (STAB-001, code-class след readiness пас
-1, един Codex пас, R2 по операторско решение). Списъкът по-долу е входът; планът е авторитетът - извън него
-останаха: trace по подразбиране, копие на E2E отчета, § „E2E преди кодовия одит“, § „Веригата
-(chain-trace)“, § „Доктринно изречение, което изброява света“ - те отиват в ОТЛОЖЕНИ.**
-Прием от Silerax т. 5, 6, 7, 10, 11, 12 (+ (k) от „Таван“ - един клъстер), 13 (само описание - ограничение на
-хоста), 14, 15, 16, 17, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30; от § „UIR-003“: scoped re-run, копие на E2E
-отчета, suppression dual (вдигнат приоритет); trace по подразбиране - `?` (противоречи на `skills/qa/SKILL.md`
-:111-119, решава се при планирането); § „E2E преди кодовия одит“; § „Веригата (chain-trace)“; § „Име на продукт
-не е път“; § „Две имена за едно множество“; § „Доктринно изречение, което изброява света“; § „Брифът, който
-пуска VERIFY, сочи проектния runbook“.
+**Plan A - the text (0.2.18) - EXECUTED 2026-10-15 (STAB-001 `371889c`; archive
+`archive/010_PLAN_STAB_2026-10-15.md`). Landed as `active/PLAN_STAB.md` (STAB-001, code class after readiness
+pass 1, one Codex pass, R2 by operator decision). The list below is the input; the plan is the authority -
+left outside it: trace by default, a copy of the E2E report, § „E2E преди кодовия одит“,
+§ „Веригата (chain-trace)“, § „Доктринно изречение, което изброява света“ - they go to POSTPONED.**
+Silerax intake items 5, 6, 7, 10, 11, 12 (+ (k) from „Таван“ - one cluster), 13 (description only - a host
+limitation), 14, 15, 16, 17, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30; from § „UIR-003“: scoped re-run, a
+copy of the E2E report, suppression dual (raised priority); trace by default - `?` (contradicts
+`skills/qa/SKILL.md`:111-119, decided at planning); § „E2E преди кодовия одит“; § „Веригата (chain-trace)“;
+§ „Име на продукт не е път“; § „Две имена за едно множество“; § „Доктринно изречение, което изброява света“;
+§ „Брифът, който пуска VERIFY, сочи проектния runbook“.
 
-**План Б - кодът (0.2.19): CODE, Writer + един Codex пас.** Т. 1 (път на CHANGES), 2 (`AGENTS.md`), 3
-(`$schema` - първо проверка), 9 (Codex сесия по тикет); § „Gate 3 заключва transferSurface“ + (j) от „Таван“
-(един клъстер); § `--show` process.exit; § „Заварен лексикален containment“; § „`0011` supersede“; § „Третият дом
-на изброяването“; от § „UIR-003“: outputDir под traced app root.
+**Plan B - the code (0.2.19): CODE, Writer + one Codex pass.** Item 1 (the CHANGES path), 2 (`AGENTS.md`), 3
+(`$schema` - check first), 9 (a Codex session per ticket); § „Gate 3 заключва transferSurface“ + (j) from
+„Таван“ (one cluster); § `--show` process.exit; § „Заварен лексикален containment“; § „`0011` supersede“;
+§ „Третият дом на изброяването“; from § „UIR-003“: outputDir under the traced app root.
 
-**ОТЛОЖЕНИ (след стабилизацията):** от план А (PLAN_STAB D4): trace по подразбиране `retain-on-failure`,
-копие на E2E отчета на Колегата, § „E2E преди кодовия одит“, § „Веригата (chain-trace)“, § „Доктринно
-изречение, което изброява света“; R2 срещу R3 за payload миграции (текстът на WORKFLOW § R3 и LOOP.md слага
-„migrations“ в R3 без уточнение - PLAN_STAB readiness пас 2) - кандидат за следващия план; целият § „Таван на контекста“ ((a)-(l) без (j) и (k)) + т. 4 (куките на
-подагентите - засяга само локалните куки тук и в Silerax); т. 18 (по-кратка доктрина - отделна работа); т. 19
-(планът като папка); т. 31, 32 (нисък приоритет); т. 8 (одиторът вдига стари блокери - изследване); § „ГЛАВЕН
-ПРИОРИТЕТ - топъл пас“ (изследване); § RENAME-001; § PS-EOL (чака случай); § Codex тиер-агенти; § macOS tier;
-§ VERIFY без POSIX крак; § 0.3.0 README; § GO-дума.
+**POSTPONED (after the stabilization):** from plan A (PLAN_STAB D4): trace by default `retain-on-failure`, a
+copy of the E2E report for the Writer, § „E2E преди кодовия одит“, § „Веригата (chain-trace)“,
+§ „Доктринно изречение, което изброява света“; R2 vs R3 for payload migrations (the text of WORKFLOW § R3 and
+LOOP.md puts „migrations“ in R3 without qualification - PLAN_STAB readiness pass 2) - a candidate for the next
+plan; the whole § „Таван на контекста“ ((a)-(l) without (j) and (k)) + item 4 (the subagents' hooks - affects
+only the local hooks here and in Silerax); item 18 (a shorter doctrine - separate work); item 19 (the plan as a
+folder); items 31, 32 (low priority); item 8 (the auditor raises old blockers - research);
+§ „ГЛАВЕН ПРИОРИТЕТ - топъл пас“ (research); § RENAME-001; § PS-EOL (waits for a case); § Codex tier agents;
+§ macOS tier; § VERIFY без POSIX крак; § 0.3.0 README; § GO-дума.
 
-**ВЛИЗАТ В ПЛАН Б (операторски думи 2026-10-14: „да, влизат в следващия план, това е грубо нарушение -
-преписвач, щото е по-лесно“ и „да за трите, да не пропуснеш нещо, всичко влиза в следващия план Б, това са 8
-груби нарушения за една сесия“). Източник: двата доклада на сесия „Silerax UI 050“ (събития 1-8 в Event ledger
-долу) и самооценката на тамошния COO. План Б вече не е само код - носи и тези правила.**
-- Правилата в брифа на Колегата („hard rules“ блокът) се извеждат от СЕГАШНИЯ overrides документ и плана,
-  с източник на всеки ред - никога не се преписват от стар бриф; scan агентът сверява брифа срещу overrides
-  + плана ПРЕДИ диспача на Колегата, не само преди платен пас (WORKFLOW § Ticket brief contract, „Verify an
-  inherited fact“ - блокът с правила е наследени твърдения, не шаблон).
-- По-късна реплика на оператора стеснява стоящото „да“: щом операторът каже, че прави стъпка сам („сам ще си
-  пусна ъпдейта“), COO спира и чака неговата стъпка; после - едно действие на ход, всяко показано; махане на
-  правило се показва преди да легне (guard (g)). Свързано: паметта „да“ покрива само питаното.
-- Измерване „цената на подготовката срещу ползата при изпълнението“ (операторска грижа 2026-10-14: 20%
-  квота на Claude за ден; дали readiness помага на Колегите не може да се каже) - предложение на COO: ред в
-  handback-а на Колегата „какво в плана се оказа грешно или липсващо и коя проверка ми спести работа“.
-- Работа, която доктрината НЕ изисква - агент, проверка, платен пас - минава първо през въпрос към оператора,
-  особено след хваната грешка; „поправка“ с нов непоискан разход е същата грешка в нова форма (събитие 5:
-  224 160 токена за непоискана sonnet сверка веднага след хващането; операторът: „еднолични решения са
-  приемливи в рамките на обхвата, но след като те хванах в издънка, ти продължи да своеволничиш“).
-- Ескалацията се проверява В МОМЕНТА на решението, не при старта: всяко решение в брифа и плана носи ред
-  „ескалация: няма / тригер N“, така че четирите тригера (ORCHESTRATOR § Escalation) се четат над конкретното
-  решение (събития 6 и 7: споделен компонент над три модула срещу записано решение на плана - тригери 1 и 3;
-  текстов ключ извън списъка на плана - тригер 1). „Инженерните решения са на COO“ не покрива решение, което
-  обръща план или минава границата на тикета - класификацията на собственото решение не е само на COO.
-- Правилото се прилага в момента на решението, не само се знае: прочетено при старта и ползвано по памет като
-  заглавие е корен на събития 2, 6 и 7 (самооценката, т. 2) - свързано с „Заглавие не е текст“ (overrides §
-  Loop shape) и § „Таван на контекста“ (e)/(g).
-- Записът на инцидент не чака: събитие 8 - нито едно от осемте не беше в регистъра (PLAN_STAB блок P1 вече
-  носи правилото; план Б проверява дали стига).
-- Праговете на куката за тавана на контекста: размерът на сесията НЕ е проблемът (оператор: сесии от 800-900k
-  без проблем) - праговете 400/450/500k объркват COO-то, когато автоматичното компресиране е изключено. И в
-  Silerax, и тук вдигнати на 950k/1000k, а изречението „компресирането идва на ~500k“ махнато (оператор
-  2026-10-14). Кандидат т. 20 (нова сесия на граница на тикет) се чете през това: препоръката е за граница на
-  тикет, не за размер. § „Таван на контекста“ трябва да спре да приема стойност на `/autocompact`.
-- R2 срещу R3 за payload миграции - текстовото разминаване от PLAN_STAB readiness пас 2 (ruling ред долу).
-- Проверките пуска свеж `general-purpose`/`sonnet` агент, не Колегата - VERIFY, acceptance, повторни
-  пускове; Колегата - само при поправка (операторско правило 2026-10-15, от Silerax UIR-050; тук в overrides
-  § Test policy). Кандидат за payload-а: WORKFLOW § COO owns broad scans (tripwire 3) и writer шаблонът.
-- Самооценката на COO в Silerax (общ корен „скоростта спечели срещу правилата“; стоящо „да“ като лиценз;
-  правило знаено, не приложено; самоприсвоена власт; след грешка повече действие; претоварена сесия) е входът
-  на плана - всяка точка горе е отговор на някоя от тях.
+**INTO PLAN B (operator words 2026-10-14:
+„да, влизат в следващия план, това е грубо нарушение - преписвач, щото е по-лесно“
+("yes, they go into the next plan, this is a gross violation - a copier, because it is easier") and
+„да за трите, да не пропуснеш нещо, всичко влиза в следващия план Б, това са 8 груби нарушения за една сесия“
+("yes to the three, so that you miss nothing, everything goes into the next plan B, these are 8 gross violations in one session")).
+Source: the two reports of session „Silerax UI 050“ (events 1-8 in the Event ledger below) and the
+self-assessment of the COO there. Plan B is no longer only code - it carries these rules too.**
+- The rules in the Writer's brief (the „hard rules“ block) are derived from the CURRENT overrides document and
+  the plan, with a source on every line - never copied from an old brief; the scan agent checks the brief
+  against overrides + the plan BEFORE the Writer's dispatch, not only before a paid pass (WORKFLOW § Ticket
+  brief contract, „Verify an inherited fact“ - the rules block is inherited claims, not a template).
+- A later operator remark narrows the standing „да“ ("yes"): once the operator says they take a step
+  themselves („сам ще си пусна ъпдейта“ - "I will run the update myself"), the COO stops and waits for that
+  step; after that - one action per turn, each one shown; removing a rule is shown before it lands (guard (g)).
+  Related: the memory that „да“ covers only what was asked.
+- Measuring „цената на подготовката срещу ползата при изпълнението“
+  ("the cost of the preparation vs the benefit at execution") (operator concern 2026-10-14: 20% of the
+  Claude quota for a day; whether readiness helps the Writers cannot be told) - the COO's proposal: a line in
+  the Writer's handback „какво в плана се оказа грешно или липсващо и коя проверка ми спести работа“
+  ("what in the plan turned out wrong or missing, and which check saved me work").
+- Work the doctrine does NOT require - an agent, a check, a paid pass - goes first through a question to the
+  operator, especially after a caught error; a „поправка“ ("fix") with a new unrequested cost is the same error
+  in a new form (event 5: 224 160 tokens for an unrequested sonnet cross-check right after the catch; the
+  operator:
+  „еднолични решения са приемливи в рамките на обхвата, но след като те хванах в издънка, ти продължи да своеволничиш“
+  - "unilateral decisions are acceptable within the scope, but after I caught you in a blunder, you kept acting on your own").
+- Escalation is checked AT THE MOMENT of the decision, not at the start: every decision in the brief and the
+  plan carries a line „ескалация: няма / тригер N“ ("escalation: none / trigger N"), so the four triggers
+  (ORCHESTRATOR § Escalation) are read over the concrete decision (events 6 and 7: a shared component over
+  three modules against a recorded plan decision - triggers 1 and 3; a text key outside the plan's list -
+  trigger 1). „Инженерните решения са на COO“ ("the engineering decisions are the COO's") does not cover a
+  decision that reverses a plan or crosses the ticket's boundary - the classification of one's own decision is
+  not the COO's alone.
+- The rule is applied at the moment of the decision, not only known: read at the start and used from memory as
+  a title is the root of events 2, 6 and 7 (the self-assessment, item 2) - related to „Заглавие не е текст“
+  ("A title is not the text", overrides § Loop shape) and § „Таван на контекста“ (e)/(g).
+- Recording an incident does not wait: event 8 - not one of the eight was in the register (PLAN_STAB block P1
+  already carries the rule; plan B checks whether it is enough).
+- The thresholds of the context-ceiling hook: the session size is NOT the problem (operator: sessions of
+  800-900k without a problem) - the 400/450/500k thresholds confuse the COO when automatic compaction is off.
+  Both in Silerax and here raised to 950k/1000k, and the sentence „компресирането идва на ~500k“ removed
+  (operator 2026-10-14). Candidate item 20 (a new session at a ticket boundary) is read through this: the
+  recommendation is about a ticket boundary, not a size. § „Таван на контекста“ must stop accepting a value
+  for `/autocompact`.
+- R2 vs R3 for payload migrations - the textual discrepancy from PLAN_STAB readiness pass 2 (ruling row below).
+- The checks are run by a fresh `general-purpose`/`sonnet` agent, not the Writer - VERIFY, acceptance,
+  reruns; the Writer - only for a fix (operator rule 2026-10-15, from Silerax UIR-050; here in overrides
+  § Test policy). A candidate for the payload: WORKFLOW § COO owns broad scans (tripwire 3) and the writer
+  template.
+- The COO's self-assessment in Silerax (common root „скоростта спечели срещу правилата“
+  ("speed won against the rules"); a standing „да“ as a license; a rule known, not applied; self-assigned
+  authority; more action after an error; an overloaded session) is the input of the plan - every item above
+  answers one of them.
 
 ## Direction 2026-10-15: three plans, in this order (operator word „да, записвай го и чертай плана за 0.2.19")
 
@@ -288,137 +304,147 @@ PreCompact/PostCompact, лимит на `additionalContext`; GitHub issues за 
   за маршрута не е записан `qa` диспач, куката предупреждава (route-state може да носи пасовете на
   маршрута) - правило, което може да е кука, не остава само в доктрината (overrides § Identity, „advice“).
 
-## Прием от Silerax - преглед точка по точка с оператора (роден 2026-10-14; прегледът завършен: 32 запазени, 8 отхвърлени, 1 вдигнат приоритет)
+## Intake from Silerax - a point-by-point review with the operator (born 2026-10-14; the review is complete: 32 kept, 8 rejected, 1 priority raised)
+(was: „Прием от Silerax - преглед точка по точка с оператора (роден 2026-10-14; прегледът завършен: 32 запазени, 8 отхвърлени, 1 вдигнат приоритет)“)
 
-Два sonnet агента прочетоха `D:\Stratex` (проектът е Silerax, папката е с грешно име): repo-то и
-паметта `~/.claude/projects/D--Stratex/memory/`. 42 неща без дом тук, 15 вече пренесени, 36 локални
-правила около доктрината. Всяка точка мина през оператора поотделно. Съкращения: `S` = `D:\Stratex`,
-`SP` = `S\dev\backlogs\PNP_CANDIDATES.md`, `SO` = `S\dev\PROJECT_OVERRIDES.md`, `SM` = паметта на Silerax,
+Two sonnet agents read `D:\Stratex` (the project is Silerax, the folder has the wrong name): the repo and the
+memory `~/.claude/projects/D--Stratex/memory/`. 42 things with no home here, 15 already carried over, 36 local
+rules around the doctrine. Every point went through the operator separately. Abbreviations: `S` = `D:\Stratex`,
+`SP` = `S\dev\backlogs\PNP_CANDIDATES.md`, `SO` = `S\dev\PROJECT_OVERRIDES.md`, `SM` = the Silerax memory,
 `CE` = `S\dev\backlogs\readiness\UIR\context-ceiling-2026-10-10.md`.
 
-**Дефекти в payload-а (запазени).**
-1. Пътят на `CHANGES_<x>-to-<y>.md` е закован към корена на проекта (`scripts/update/migrate.mjs` ~1559
-   по агента, непроверено) - и двата консуматора го местят на ръка след всеки update; папката да е
-   конфигурируема. `SP:34`.
-2. PnP не рендерира и не опреснява `AGENTS.md` (входът на Codex одитора); в Silerax той е ръчен и
-   доктринните пътища в него са заковани към `cache\...\pnp\0.2.16` - остаряват при всеки update. Същият
-   клас: командата за Codex в чекпойнта им носи закован `pnp/0.2.16` път. `S\AGENTS.md:28-31`.
-3. `$schema` в `aiwf.config.json` на Silerax сочи `pnp\0.2.1\schema` - update май не го опреснява
-   (непроверено; агентът сочи `migrate.mjs` ~392-395). `S\.claude\aiwf-native\aiwf.config.json:2`.
-4. Куките на агентите получават session_id-то на главната сесия, така че STOP-ът на тавана на контекста
-   удря и подагентите (activity събитията, не само компресирането - към (h)); локалната им поправка
-   прескача събития с `agent_id`. `S\.claude\hooks\context-gate.mjs:6`.
+**Defects in the payload (kept).**
+1. The path of `CHANGES_<x>-to-<y>.md` is pinned to the project root (`scripts/update/migrate.mjs` ~1559
+   per the agent, unverified) - both consumers move it by hand after every update; the folder should be
+   configurable. `SP:34`.
+2. PnP does not render or refresh `AGENTS.md` (the Codex auditor's input); in Silerax it is hand-written and
+   the doctrine paths in it are pinned to `cache\...\pnp\0.2.16` - they go stale at every update. Same
+   class: the Codex command in their checkpoint carries a pinned `pnp/0.2.16` path. `S\AGENTS.md:28-31`.
+3. `$schema` in Silerax's `aiwf.config.json` points at `pnp\0.2.1\schema` - update apparently does not
+   refresh it (unverified; the agent points at `migrate.mjs` ~392-395). `S\.claude\aiwf-native\aiwf.config.json:2`.
+4. The agents' hooks receive the main session's session_id, so the context-ceiling STOP hits the subagents
+   too (the activity events, not only compaction - toward (h)); their local fix skips events with
+   `agent_id`. `S\.claude\hooks\context-gate.mjs:6`.
 
-**Платени пасове.**
-5. Платен пас умре без вердикт → докладвай числата и чакай дума, никога сам повторен диспач (Furnissimo
-   PROJ-002 изгори 287k, локално „re-dispatch ONCE“ пусна платен пас без дума). Оператор: кандидат е
-   настройка в PnP stop/resume. `SM feedback_paid_pass_death.md`.
-6. Изясни кое е корекционен кръг: броят се кръговете СЛЕД вердикт на одитора; вътрешните поправки на
-   Writer-а преди одита (като fact-check микро-кръга на LEAN-001) не са. Оператор: смяна на обхвата
-   законно носи още кръгове след одит - те се броят; кандидатът е само изречение за яснота.
+**Paid passes.**
+5. A paid pass dies without a verdict → report the numbers and wait for a word, never a self-initiated
+   re-dispatch (Furnissimo PROJ-002 burned 287k, a local „re-dispatch ONCE“ ran a paid pass without a word).
+   Operator: the candidate is a setting in PnP stop/resume. `SM feedback_paid_pass_death.md`.
+6. Clarify what a correction round is: the rounds AFTER an auditor verdict count; the Writer's internal fixes
+   before the audit (like LEAN-001's fact-check micro-round) do not. Operator: a scope change legitimately
+   brings more rounds after an audit - those count; the candidate is only a sentence for clarity.
    `SM feedback_correction_round_counting.md`.
-7. Платен преглед извън двата стандартни (readiness на плана, одит на diff-а), напр. „Codex одитира
-   целия модул“ (~14 000 реда, 250-400k квота в Silerax): планът пише обхвата и приблизителната цена, за
-   да се види при одобрението. БЕЗ ново спиране - оператор: спиране по средата чупи автономния loop.
-   `SM feedback_codex_after_code_only.md`.
-8. Одиторът още вдига блокери, видими и на първия пас (сам си признава нарушението); HARD-005 направи
-   договора инструментиран, поведението не се оправи - как да се наложи структурно. `SP:52`, event
-   ledger `SP` ~302, ~320.
-9. `last-review-session.txt` е по проект (`<scratchDir>`), не по машина (агентът грешеше,
-   `scripts/native/ps/codex-review.ps1:126`); рискът е само при паралелни сесии в един проект -
-   файлът по тикет (`last-review-session.<REF>.txt`). Нисък приоритет. `SP:44`, `SO:416-427`.
-10. Записът на брифа се потвърждава ПРЕДИ диспача - отделни стъпки в `/pnp:review` (запис и пускане в
-    едно съобщение пуснаха Codex по стария бриф). Event ledger `SP` ~243.
-11. Блокер, който иска точност отвъд бизнес обхвата (суми до 10^13), се носи на оператора рано и на
-    прост език - продуктово решение, не нов гейт (два readiness паса и две ревизии изгорени).
-    `SM feedback_scope_question_early.md`.
+7. A paid review outside the two standard ones (plan readiness, the diff audit), e.g.
+   „Codex одитира целия модул“ ("Codex audits the whole module") (~14 000 lines, 250-400k quota in Silerax):
+   the plan writes the scope and the approximate cost, so it is seen at approval. NO new stop - operator: a
+   stop in the middle breaks the autonomous loop. `SM feedback_codex_after_code_only.md`.
+8. The auditor still raises blockers that were visible on the first pass too (it admits the violation
+   itself); HARD-005 made the contract instrumented, the behavior did not get fixed - how to enforce it
+   structurally. `SP:52`, event ledger `SP` ~302, ~320.
+9. `last-review-session.txt` is per project (`<scratchDir>`), not per machine (the agent was wrong,
+   `scripts/native/ps/codex-review.ps1:126`); the risk is only with parallel sessions in one project -
+   a file per ticket (`last-review-session.<REF>.txt`). Low priority. `SP:44`, `SO:416-427`.
+10. The brief's write is confirmed BEFORE the dispatch - separate steps in `/pnp:review` (write and launch in
+    one message ran Codex on the old brief). Event ledger `SP` ~243.
+11. A blocker that demands precision beyond the business scope (sums up to 10^13) is brought to the operator
+    early and in plain language - a product decision, not a new gate (two readiness passes and two revisions
+    burned). `SM feedback_scope_question_early.md`.
 
-**Гейтове и диалози.**
-12. „Редакцията не е работа за shell“ до „четенето не е“ - само Edit/Write, за всички роли, в шаблона на
-    Writer-а и в общите правила; по-широко от (k). `sed -i` държа диалог отворен 6 часа; host
-    директивата на auto mode бута към shell редакции. `SP:47`, `SO:66-70`.
-13. Класификаторът на auto mode отказва на агент да пипа `.claude/settings.json` и `aiwf.config.json`
-    (Self-Modification) дори с дума - `/pnp:roles --set` и update apply да казват какво да се прави при
-    отказ (ограничение на хоста, не наш дефект). `SM project_e2e_local_lessons.md` #7; частично
-    PLAN_HARD (auto mode off при apply).
-14. Отрицателната проба на гейт за разрешения (tripwire 4) се прави върху тестово копие на настройките,
-    както selfcheck, никога с отслабване на живия гейт - класификаторът го отказва като „Security
-    Weaken“. Event ledger `SP` ~294, ~323.
-15. Агентите за сканиране връщат резултата в отговора; ако трябва файл - само в scratchDir с абсолютен
-    път, никакви shell пренасочвания (Gate 1 хваща само Edit/Write). Event ledger `SP` ~229, ~299.
-16. COO назовава диалога и какво одобрява, никога не казва какво да се цъкне. `SP:36`, `SO:351`.
+**Gates and dialogs.**
+12. „Редакцията не е работа за shell“ ("editing is not a shell job") next to „четенето не е“
+    ("reading is not") - only Edit/Write, for all roles, in the Writer's template and in the shared rules;
+    broader than (k). `sed -i` held a dialog open for 6 hours; the auto mode host directive pushes toward shell edits.
+    `SP:47`, `SO:66-70`.
+13. The auto mode classifier refuses an agent touching `.claude/settings.json` and `aiwf.config.json`
+    (Self-Modification) even with a word - `/pnp:roles --set` and update apply should say what to do on a
+    refusal (a host limitation, not our defect). `SM project_e2e_local_lessons.md` #7; partly
+    PLAN_HARD (auto mode off at apply).
+14. The negative probe of a permission gate (tripwire 4) is made on a test copy of the settings, like
+    selfcheck, never by weakening the live gate - the classifier refuses that as „Security Weaken“. Event
+    ledger `SP` ~294, ~323.
+15. Scan agents return the result in the response; if a file is needed - only in scratchDir with an absolute
+    path, no shell redirections (Gate 1 catches only Edit/Write). Event ledger `SP` ~229, ~299.
+16. The COO names the dialog and what it approves, never says what to click. `SP:36`, `SO:351`.
 
-**Сесия и контекст.**
-17. Бележката за възобновяване в паметта (`/pnp:mission`) се пренаписва цялата, ≤ ~10 реда, никога не
-    се дописва (Silerax: 174 KB, ~25% контекст при старт; нашата също расте). `SP:42`.
-18. На мястото на отхвърления „дайджест“ (вж. по-долу): оптимизация на текста на файловете за първо
-    четене - пълната доктрина с по-малко думи; и анализът на GPT. Мярка (2026-10-14, sonnet агент над
-    записа на Silerax сесия след `/clear` + `/pnp:mission`, 175.7k общо, Messages 132.8k): доктрината
-    ~65k (WORKFLOW.md 32k - два Read-а, удря тавана 25k на четене; LOOP 11k; ORCHESTRATOR 5k) + техните
-    overrides 17k; планът ~34k за две парчета (~400 реда, много широки редове); инжектирано преди първия
-    tool call ~20k; мислене ~3k; повторни четения 0 (подсказката „save ~19.3k“ на `/context` е грешна).
-    `/context` брои chars/4, реално ~2.4 знака/токен за кирилица + markdown - подценява ~40%.
-19. Планът като папка, тикет на файл: `PLAN_<ABBR>/README.md` (цел, общи решения, по ред на тикет) +
-    `<REF>.md` (бриф, приемане, запис за приключване); COO чете главата + текущия тикет; при затваряне
-    решение, което засяга бъдещи тикети, се вдига като ред в общите решения; ред „Зависи от: <REF>
-    (<решение>)“ за изрична зависимост. Payload: Gate 2 lookup, mission, readiness, архивиране; старите
-    планове остават. **Оператор: тотална промяна на основния workflow - при планирането се обсъжда още.**
+**Session and context.**
+17. The resume note in memory (`/pnp:mission`) is rewritten whole, ≤ ~10 lines, never appended to
+    (Silerax: 174 KB, ~25% of the context at start; ours grows too). `SP:42`.
+18. In place of the rejected „дайджест“ ("digest") (see below): optimizing the text of the first-read files -
+    the full doctrine in fewer words; and the GPT analysis. Measurement (2026-10-14, a sonnet agent over the
+    transcript of a Silerax session after `/clear` + `/pnp:mission`, 175.7k total, Messages 132.8k): the
+    doctrine ~65k (WORKFLOW.md 32k - two Reads, hits the 25k per-read ceiling; LOOP 11k; ORCHESTRATOR 5k) +
+    their overrides 17k; the plan ~34k in two chunks (~400 lines, very wide lines); injected before the first
+    tool call ~20k; thinking ~3k; repeated reads 0 (the `/context` hint „save ~19.3k“ is wrong).
+    `/context` counts chars/4, really ~2.4 characters/token for Cyrillic + markdown - it underestimates by ~40%.
+19. The plan as a folder, a ticket per file: `PLAN_<ABBR>/README.md` (goal, shared decisions, ticket order) +
+    `<REF>.md` (brief, acceptance, completion record); the COO reads the head + the current ticket; at a
+    close, a decision that affects future tickets is raised as a row in the shared decisions; a line
+    „Зависи от: <REF> (<решение>)“ ("Depends on: <REF> (<decision>)") for an explicit dependency. Payload:
+    Gate 2 lookup, mission, readiness, archiving; the old plans stay. **Operator: a total change of the core
+    workflow - discussed further at planning.**
     `SP:68-75`, `CE:792-800`.
-20. При затваряне на тикет COO препоръчва с един ред „оставаме“ / „нова сесия“; компресиране - само в
-    рамките на тикет; планирането и readiness не са граница. Без спиране. `SM feedback_session_per_ticket.md`.
-21. Всеки инцидент става ред в event ledger-а (+ кандидат, ако е общ); паметта само сочи - иначе PnP
-    никога не научава (половината от днешния прием беше само в паметта на Silerax). Event ledger `SP` ~215.
+20. At a ticket close the COO recommends in one line „оставаме“ ("we stay") / „нова сесия“ ("new session");
+    compaction - only within a ticket; planning and readiness are not a boundary. No stop.
+    `SM feedback_session_per_ticket.md`.
+21. Every incident becomes a row in the event ledger (+ a candidate, if general); memory only points - otherwise
+    PnP never learns (half of today's intake was only in Silerax's memory). Event ledger `SP` ~215.
 
-**Writer, QA, тестове.**
-22. Паралелни Writer-и - разрешени (не по подразбиране), когато работата се дели по файлове без
-    припокриване; решението и разделението в брифа. Капан: `isolation: "worktree"` на Agent tool прави
-    копието от main, не от текущия branch. `SP:25`, `SO:464`, `SM project_e2e_local_lessons.md` #15.
-23. Тест, който не може да падне (`expect(true)`, `|| true`, `>= 0`, проверки зад `if(visible)`) е
-    находка - ред в REVIEW_CHECKLIST § Test quality (30+ в E2E на Silerax). `SP:48`.
-24. Команда, която може да мине 5 мин, само на заден план с изричен таван - шаблонът на Writer-а и
-    брифовете (таванът 10 мин уби пакет на 88/137). Бележка: задача на заден план, която стартира сървър,
-    никога не праща известие - следи се по лог. `SP:60`, `SO:76`, `SM project_e2e_local_lessons.md` #16-17.
+**Writer, QA, tests.**
+22. Parallel Writers - allowed (not by default) when the work splits by files without overlap; the decision
+    and the split in the brief. Trap: the Agent tool's `isolation: "worktree"` makes the copy from main, not
+    from the current branch. `SP:25`, `SO:464`, `SM project_e2e_local_lessons.md` #15.
+23. A test that cannot fail (`expect(true)`, `|| true`, `>= 0`, checks behind `if(visible)`) is a finding - a
+    row in REVIEW_CHECKLIST § Test quality (30+ in Silerax's E2E). `SP:48`.
+24. A command that can run past 5 min runs only in the background with an explicit ceiling - the Writer's
+    template and the briefs (the 10 min ceiling killed a package at 88/137). Note: a background task that
+    starts a server never sends a notice - it is watched through the log. `SP:60`, `SO:76`,
+    `SM project_e2e_local_lessons.md` #16-17.
 
-**Канал с оператора.**
-25. Пасовете се назовават по роля и номер („одитор, пас 2 (Codex)“), молбата за дума казва какво
-    отключва; присъдата назовава кой я е дал („одиторът потвърди“ - голо „Потвърди …“ се чете като
-    молба към оператора). `SP:26`, event ledger `SP` ~249.
-26. Диалог към оператора (AskUserQuestion, номерирани опции, една тема, етикет глобално/модул) - ЕДИНСТВЕНО
-    когато работата по текущия тикет не може да продължи без отговора. Всичко останало (въпрос извън тикета,
-    находка от скан извън обхвата) се записва в списък „въпроси към оператора“ и се задава наведнъж в края
-    на тикета; работата не спира. Оператор: диалог, оставен два часа, спира тикета, кешът изстива и се
-    плаща отново скъпо. `SM feedback_decision_dialogs.md`.
-27. Всеки тикет в плана носи ред „COO: <модел>, защото <коя проверка за силен COO е да>“ - операторът
-    вижда при одобрението кога си струва силен модел. `SP:51`, `SO:460`.
-28. WORKFLOW § Commit & Push Authority казва „Commit: Writer only“, а на практика (тук и в Silerax)
-    записите и документацията ги commit-ва COO - текстът се поправя да казва кое е: кодът - Writer,
-    записите и документацията - COO; практиката не се сменя. `SP:41`, `SO:41-48`.
-29. Почистване на `.aiwf` като част от затварянето на тикета: ценното отива при плана (readiness/), в
-    `.aiwf` остава само живата механика; триенето е разрушително - списъкът се показва с commit-а на
-    затварянето (операторът и без това е там, не е ново спиране). Silerax: 546 файла / 56 MB.
-    `SM project_aiwf_cleanup_pending.md`; частично § „Черновите живеят в репото“ по-долу.
-30. Вместо общо „без предположения“: разширение на „Verify the failure claim“ - всяко твърдение, което
-    COO предава на оператора (и от агент), се проверява първо в кода/дървото, иначе се казва
-    „непроверено“; питане - само ако работата блокира (т. 26). Пример 2026-10-14: COO предаде „общ за
-    машината“ за `last-review-session.txt` без проверка. `SM feedback_no_assumptions.md`.
-31. НИСЪК приоритет: проектът може да държи в repo-то списък с известно падащи тестове; VERIFY пак
-    докладва exit кода честно, но успехът е „нула нови падания спрямо списъка“; списъкът се променя
-    само с операторска дума (риск: списъкът става кошче). Silerax го носи като локален override на
-    „VERIFY honesty“. `SO:226-248`.
-32. МНОГО НИСЪК приоритет, евентуален: разлики канон ↔ мокъп - списък и решение глобално/локално за
-    модула при планирането на тикет с визия. Оператор: спорно дали е за плъгина; засега остава локално
-    правило на Silerax. `SP:24`.
+**Operator channel.**
+25. Passes are named by role and number („одитор, пас 2 (Codex)“ - "auditor, pass 2 (Codex)"), the request
+    for a word says what it unlocks; the verdict names who gave it
+    („одиторът потвърди“ - "the auditor confirmed" - a bare „Потвърди …“ reads as a request to the operator). `SP:26`, event ledger `SP` ~249.
+26. A dialog to the operator (AskUserQuestion, numbered options, one topic, a global/module label) - ONLY when
+    the work on the current ticket cannot continue without the answer. Everything else (a question outside
+    the ticket, a scan finding outside the scope) is written into a
+    „въпроси към оператора“ ("questions for the operator") list and asked at once at the end of the ticket; the work does not stop. Operator: a
+    dialog left for two hours stops the ticket, the cache cools and is paid for again, expensively.
+    `SM feedback_decision_dialogs.md`.
+27. Every ticket in the plan carries a line „COO: <модел>, защото <коя проверка за силен COO е да>“
+    ("COO: <model>, because <which strong-COO check is yes>") - the operator sees at approval when a strong
+    model is worth it. `SP:51`, `SO:460`.
+28. WORKFLOW § Commit & Push Authority says „Commit: Writer only“, while in practice (here and in Silerax) the
+    records and the documentation are committed by the COO - the text is fixed to say which is which: the
+    code - Writer, the records and the documentation - COO; the practice does not change. `SP:41`, `SO:41-48`.
+29. Cleaning `.aiwf` as part of the ticket close: the valuable goes with the plan (readiness/), `.aiwf` keeps
+    only the live mechanics; the deletion is destructive - the list is shown with the close commit (the
+    operator is there anyway, it is not a new stop). Silerax: 546 files / 56 MB.
+    `SM project_aiwf_cleanup_pending.md`; partly § „Черновите живеят в репото“ below.
+30. Instead of a general „без предположения“ ("no assumptions"): an extension of „Verify the failure claim“ -
+    every claim the COO relays to the operator (also from an agent) is checked first in the code/tree,
+    otherwise it is called „непроверено“ ("unverified"); asking - only if the work blocks (item 26). Example
+    2026-10-14: the COO relayed „общ за машината“ ("machine-wide") for `last-review-session.txt` without a
+    check. `SM feedback_no_assumptions.md`.
+31. LOW priority: the project may keep in the repo a list of known-failing tests; VERIFY still reports the
+    exit code honestly, but success is
+    „нула нови падания спрямо списъка“ ("zero new failures against the list"); the list changes only by an operator word (risk: the list becomes a dumping bin). Silerax carries
+    it as a local override of „VERIFY honesty“. `SO:226-248`.
+32. VERY LOW priority, eventual: canon ↔ mockup differences - a list and a global/local decision for the
+    module when planning a ticket with a design. Operator: debatable whether it is for the plugin; for now it
+    stays a local Silerax rule. `SP:24`.
 
-Малкият корекционен кръг без верификационен пас (`SO:446-455`) не е нов запис - вече е кандидат в
-§ „От Silerax UIR-003“ (Suppression dual), приоритетът му е вдигнат там.
+The small correction round without a verification pass (`SO:446-455`) is not a new record - it is already a
+candidate in § „От Silerax UIR-003“ (Suppression dual), its priority is raised there.
 
-**Отхвърлени при прегледа (да не се преоткриват).** Дайджест на доктрината при старт (преразказ, „заглавието
-не е текстът“ - заменен с т. 18); скрипт, който пише в базата, без диалог (локално за проекта); QA изключен по
-подразбиране (решава се по тикет в плана); ред „E2E: да/не“ в брифа (не е за нас); смесен модел за Writer-а
-(4 сравнения, решението е настройка); сесия, пусната от подпапка (в Silerax не се случва - коренът е `S`);
-PQA § 5 B/C/D - въпрос към fact-check агента какво прави извиканият код, числата в приемането от команда,
-колона „авторски блокери“ в статистиката (оператор: тук нищо не бараме - доктрината расте);
-сравнение на миграциите преди push (тяхна специфика на deploy-а, `SO:71`).
+**Rejected at the review (not to be rediscovered).** A doctrine digest at start (a retelling,
+„заглавието не е текстът“ - "the title is not the text" - replaced by item 18); a script that writes to the
+database without a dialog (local to the project); QA off by default (decided per ticket in the plan); an
+„E2E: да/не“ ("E2E: yes/no") line in the brief (not for us); a mixed model for the Writer (4 comparisons, the
+decision is a setting); a session launched from a subfolder (does not happen in Silerax - the root is `S`);
+PQA § 5 B/C/D - a question to the fact-check agent about what the called code does, the numbers in the
+acceptance from a command, an „авторски блокери“ ("author blockers") column in the statistics (operator: we
+touch nothing here - the doctrine grows); comparing the migrations before push (their deploy specifics,
+`SO:71`).
 
 ## [ПУСНАТ 0.2.16 DRAFTS-001 + HARD-023] Черновите живеят в репото; `.aiwf` носи само живата механика на loop-а (роден 2026-10-02, операторска дума)
 
@@ -511,42 +537,43 @@ self-check observation по префикс `.aiwf/` + warn в интервюто
 клауза „изтича с 0.2.17“ — note op-ът на миграцията им казва кои редове да махнат. Планирането — в НОВА
 сесия (тази е на половина контекст при избора; handover в `.aiwf/session-brief.md` по `/pnp:brief`).
 
-## От Silerax UIR-003 — E2E/QA хигиена и верификационният пас (роден 2026-10-04, cross-session съобщение от сесия „Silerax UIR-003“ по операторска дума; записано тук с операторската дума „вкарай го, кандидат 2.18“)
+## From Silerax UIR-003 - E2E/QA hygiene and the verification pass (born 2026-10-04, a cross-session message from session „Silerax UIR-003“ by operator word; recorded here with the operator word „вкарай го, кандидат 2.18“)
+(was: „От Silerax UIR-003 — E2E/QA хигиена и верификационният пас (роден 2026-10-04, cross-session съобщение от сесия „Silerax UIR-003“ по операторска дума; записано тук с операторската дума „вкарай го, кандидат 2.18“)“)
 
-Кандидати без ref, за **0.2.18** (0.2.17 = PLAN_LEAN е в readiness). Операторът: трите проекта (PnP,
-Silerax, Furnissimo) удрят едни и същи проблеми. Контекстът при Silerax: R2 runtime/UI тикет (37 файла),
-един Codex пас с 1 блокер (158,536 токена), корекционен рунд от два реда, ~49-минутен скопиран E2E
-списък пуснат ДВА пъти, запълнен диск (ENOSPC на `npm run build`), изгубен доклад на първия рън.
-Източник на записа: Silerax PLAN_UIR § UIR-003 completion record и Silerax `dev/backlogs/PNP_CANDIDATES.md`.
-- **E2E trace mode по подразбиране `retain-on-failure`** — `--trace on` пише trace за всеки тест (0.70 GB
-  на рън, ~455 zip-а), а QA е artifact judge над JSON доклада и скрийншотите, не над trace-ове; payload-ът
-  (QA/E2E рецептата, `skills/qa/SKILL.md`, `docs/CODEX_REVIEW_QA_RECIPE.md`) препоръчва `retain-on-failure`,
-  освен когда тикетът назове trace-овете като QA доказателство.
-- **Скопиран E2E re-run след корекционен рунд** — днес COO-то пуска целия E2E списък на тикета след
-  последния рунд; за малък локален рунд това е пълен wall-clock за нищо. Re-run-ът се скопира до blast
-  radius-а на рунда (visual/QA spec-ът на тикета + spec-овете, които пипат сменените файлове), с fallback
-  към пълния списък, когато рундът пипа широко импортиран файл или докладът на Колегата от първия рън не е
-  запазен (следващият кандидат).
-- **Докладът на Колегата от E2E ръна се пази веднага** — живее само в outputDir-а на runner-а (чисти се
-  при всеки рън; при Silerax изтрит за да се освободи диск), затова доказателството от първия рън се
-  изгуби и COO-то повтори целия рън. Колегата копира JSON доклада в
-  `<scratchDir>/<ticket>-e2e-writer-<stamp>.json` веднага след ръна; baseline сравнението може да върви
-  над него; плюс COO дълг: преди да предложи изтриване на test/build output директория — проверка, че не
-  държи некопирано доказателство.
-- **Suppression dual за верификационния пас след малък кодов рунд** — RULE-BEARING (guard (g): текстът
-  лежи само с операторско одобрение, когато план го приеме). Доктрината: кодов рунд → верификационен пас
-  на операторска дума; два поредни тикета (UIR-002, UIR-003) получиха един и същ отговор „без пас“ за
-  микро делти. Кандидатът: без верификационен пас и без въпрос, когда делтата на рунда е ≤ ~10 реда във
-  файлове, които предишният пас вече е одитирал, и носи unit тест с видяна червена негативна контрола;
-  над това — питане както днес. Silerax го носи като локален override в `dev/PROJECT_OVERRIDES.md`,
-  докато payload-ът го поеме. **Приоритетът вдигнат 2026-10-14** (оператор „да“ при прегледа на приема от
-  Silerax: спестява платен пас и спиране по средата - работи за автономията); изключение: миграции, права
-  в базата, автентикация - винаги пас (`SO:446-455`).
-- **Build/tracing хигиена: warn за outputDir под traced app root** — динамичен `path.resolve(...)` в
-  сървърен код накара Next file tracing да копира целия `test-results/` (14,321 файла, вкл. trace-ове) в
-  `.next/standalone`; всеки build след traced E2E рън дублираше гигабайти. Временно правило при Silerax:
-  build преди E2E във VERIFY. Кандидат за self-check-а или setup интервюто: предупреждение, когда
-  outputDir-ът на runner-а стои вътре в app root, който build-ът трейсва (generic за Next.js консуматори).
+Candidates without a ref, for **0.2.18** (0.2.17 = PLAN_LEAN is in readiness). The operator: the three
+projects (PnP, Silerax, Furnissimo) hit the same problems. The context at Silerax: an R2 runtime/UI ticket
+(37 files), one Codex pass with 1 blocker (158,536 tokens), a correction round of two lines, a ~49-minute
+scoped E2E list run TWICE, a full disk (ENOSPC on `npm run build`), a lost report of the first run.
+Source of the record: Silerax PLAN_UIR § UIR-003 completion record and Silerax `dev/backlogs/PNP_CANDIDATES.md`.
+- **E2E trace mode `retain-on-failure` by default** - `--trace on` writes a trace for every test (0.70 GB
+  per run, ~455 zips), while QA is an artifact judge over the JSON report and the screenshots, not over
+  traces; the payload (the QA/E2E recipe, `skills/qa/SKILL.md`, `docs/CODEX_REVIEW_QA_RECIPE.md`) recommends
+  `retain-on-failure`, unless the ticket names the traces as QA evidence.
+- **A scoped E2E re-run after a correction round** - today the COO runs the ticket's whole E2E list after
+  the last round; for a small local round that is a full wall-clock for nothing. The re-run is scoped to the
+  round's blast radius (the ticket's visual/QA spec + the specs that touch the changed files), with a
+  fallback to the full list when the round touches a widely imported file or the Writer's report from the
+  first run was not kept (the next candidate).
+- **The Writer's report from the E2E run is kept at once** - it lives only in the runner's outputDir
+  (cleaned at every run; at Silerax deleted to free disk), so the evidence of the first run was lost and the
+  COO repeated the whole run. The Writer copies the JSON report to
+  `<scratchDir>/<ticket>-e2e-writer-<stamp>.json` right after the run; the baseline comparison can run over
+  it; plus a COO duty: before proposing to delete a test/build output directory - a check that it holds no
+  uncopied evidence.
+- **Suppression dual for the verification pass after a small code round** - RULE-BEARING (guard (g): the
+  text lands only with operator approval, when a plan takes it). The doctrine: code round → verification
+  pass on an operator word; two consecutive tickets (UIR-002, UIR-003) got the same answer
+  „без пас“ ("no pass") for micro deltas. The candidate: no verification pass and no question when the round's delta is
+  ≤ ~10 lines in files the previous pass already audited, and carries a unit test with a seen red negative
+  control; above that - asking as today. Silerax carries it as a local override in
+  `dev/PROJECT_OVERRIDES.md` until the payload takes it. **The priority raised 2026-10-14** (operator „да“
+  at the review of the Silerax intake: it saves a paid pass and a mid-way stop - it works for autonomy);
+  exception: migrations, database permissions, authentication - always a pass (`SO:446-455`).
+- **Build/tracing hygiene: warn for an outputDir under a traced app root** - a dynamic `path.resolve(...)`
+  in server code made Next file tracing copy the whole `test-results/` (14,321 files, incl. traces) into
+  `.next/standalone`; every build after a traced E2E run duplicated gigabytes. A temporary rule at Silerax:
+  build before E2E in VERIFY. A candidate for the self-check or the setup interview: a warning when the
+  runner's outputDir sits inside an app root the build traces (generic for Next.js consumers).
 
 ## [ОТЛОЖЕН 2026-10-14 - изследване] ГЛАВЕН ПРИОРИТЕТ — топъл пас с компенсациите по-скъп ли е от студен? (роден 2026-09-24, операторска дума)
 
@@ -572,33 +599,36 @@ resume политиката (напр. readiness след първия вина�
 топъл без компенсации (кодова верификация) срещу топъл с компенсации (readiness) срещу студен.
 Източник: `D:\Stratex\dev\backlogs\active\PLAN_CAP.md` §Процес т.6, таблицата с пасовете.
 
-## E2E тестът се пуска ПРЕДИ кодовия одит, когато тикетът има E2E (роден 2026-09-24, от Silerax CAP-003)
+## The E2E test runs BEFORE the code audit when the ticket has E2E (born 2026-09-24, from Silerax CAP-003)
+(was: „E2E тестът се пуска ПРЕДИ кодовия одит, когато тикетът има E2E (роден 2026-09-24, от Silerax CAP-003)“)
 
-Кандидат без ref. В Silerax CAP-003 три платени верификационни паса (P6–P8, `gpt-6-sol`/xhigh,
-~150–185k токена и ~6 точки 5ч квота всеки) отидоха главно в здравината на E2E спека: setup-ът не
-намира продукта, липсваща локация на доставчик, негативен тест, невъзможен при сийд само с EUR,
-case, зависещ от тайминг. Одиторът работи в read-only клетка и не може да пуска суитите (виж
-бележката „клетката на Одитора не може да пуска суитите“). Затова открива такива дефекти с четене,
-на цената на платен пас, докато едно пускане на спека би ги показало безплатно. Днешният ред в
-`docs/WORKFLOW.md` § Routes е Writer → `/pnp:review` → `/pnp:qa`, и E2E runner-ът върви чак
-преди QA. **Посока:** за тикет с E2E, COO пуска конфигурирания runner върху спека на Колегата ПРЕДИ
-кодовия одит. Червен спек се връща на Колегата, без платен пас, и одиторът получава зелен рън като
-доказателство в evidence pack-а. Източник: `D:\Stratex\dev\CAP003_AUDITOR_EXPERIMENT.md` (P6–P8).
-**Чака дума.**
+A candidate without a ref. In Silerax CAP-003 three paid verification passes (P6–P8, `gpt-6-sol`/xhigh,
+~150–185k tokens and ~6 points of the 5h quota each) went mainly into the robustness of the E2E spec: the
+setup does not find the product, a missing supplier location, a negative test impossible with an EUR-only
+seed, a timing-dependent case. The auditor works in a read-only cell and cannot run the suites (see the
+note „клетката на Одитора не може да пуска суитите“). So it finds such defects by reading, at the cost of a
+paid pass, while one run of the spec would show them for free. Today's line in `docs/WORKFLOW.md` § Routes
+is Writer → `/pnp:review` → `/pnp:qa`, and the E2E runner goes only before QA. **Direction:** for a ticket
+with E2E, the COO runs the configured runner over the Writer's spec BEFORE the code audit. A red spec goes
+back to the Writer, without a paid pass, and the auditor gets a green run as evidence in the evidence pack.
+Source: `D:\Stratex\dev\CAP003_AUDITOR_EXPERIMENT.md` (P6–P8).
+**Waits for a word.**
 
-## Веригата (chain-trace) в evidence pack-а на кодовите пасове — един ред, не ново правило (роден 2026-09-24, от Silerax)
+## The chain (chain-trace) in the evidence pack of the code passes - one line, not a new rule (born 2026-09-24, from Silerax)
+(was: „Веригата (chain-trace) в evidence pack-а на кодовите пасове — един ред, не ново правило (роден 2026-09-24, от Silerax)“)
 
-Кандидат без ref. Silerax въведе правило (`D:\Stratex\dev\PROJECT_OVERRIDES.md:360-372`): всеки
-кодов пас получава подредена верига „вход → endpoint“ с `file:line` за всяко поведение от Outcome, с
-адверсариална рамка („счупи го, намери какво пропуска“). Данни: CAP-003 P1 срещу P2 (същия модел,
-същия diff) → същите находки при Δ5ч 8 срещу 14 и 110k срещу 165k токена. Пасове P6–P8 с верига
-намериха дефекти ИЗВЪН нея, така че „приспиване“ не е наблюдавано. Ограничения: N=1 на вариант,
-брояч в цели точки, а diff-ът нямаше продукционен бъг по пътя на веригата. Точно там опасението би
-се видяло. Веригата иска и пренастройка на котвите след всеки рунд.
-**Посока:** payload-ът вече има задължение за верига преди платен readiness пас
-(`.claude/aiwf-native/ORCHESTRATOR.md` § Chain-trace duty). Затова НЕ ново правило, което би било
-още дублиране, а един ред в абзаца за evidence pack в `skills/review/SKILL.md`, който сочи
-съществуващия формат за кодовите пасове. **Условие за тръгване:** още данни от Фурнисимо. **Чака дума.**
+A candidate without a ref. Silerax introduced a rule (`D:\Stratex\dev\PROJECT_OVERRIDES.md:360-372`): every
+code pass gets an ordered chain „вход → endpoint“ ("input → endpoint") with `file:line` for every behavior
+of the Outcome, with an adversarial frame
+(„счупи го, намери какво пропуска“ - "break it, find what it misses"). Data: CAP-003 P1 vs P2 (the same model, the same diff) → the same findings at Δ5h 8 vs 14 and
+110k vs 165k tokens. Passes P6–P8 with a chain found defects OUTSIDE it, so „приспиване“ ("lulling") was not
+observed. Limits: N=1 per variant, a counter in whole points, and the diff had no production bug on the
+chain's path. Exactly there the concern would show. The chain also needs the anchors re-set after every
+round.
+**Direction:** the payload already has a chain duty before a paid readiness pass
+(`.claude/aiwf-native/ORCHESTRATOR.md` § Chain-trace duty). So NOT a new rule, which would be more
+duplication, but one line in the evidence pack paragraph in `skills/review/SKILL.md` that points at the
+existing format for the code passes. **Start condition:** more data from Furnissimo. **Waits for a word.**
 
 ## [ЗАТВОРЕН - HARD-020 0.2.12, без отделен гейт] Readiness pre-read — scan-tier агент прилага шестте readiness проверки адверсариално преди пас 1 (роден 2026-09-27, от Silerax 004 по операторска насока)
 
@@ -716,27 +746,30 @@ review, който днес изброява две), със същата уго
 > историята на кандидата (2026-08-31). **Чака собствена дума за диспач** (и е последният преди
 > Closeout, освен ако операторът не реши друго).
 
-## `--show` на aiwf-roles.mjs печата таблицата и излиза с process.exit(0) (роден 2026-09-19)
+## `--show` of aiwf-roles.mjs prints the table and exits with process.exit(0) (born 2026-09-19)
+(was: „`--show` на aiwf-roles.mjs печата таблицата и излиза с process.exit(0) (роден 2026-09-19)“)
 
-Кандидат, без ref. `scripts/setup/aiwf-roles.mjs:708`: същият POSIX клас като CONS-011 (async pipe
-+ форсиран exit), извън guard-а, защото не консумира `finishWithSelfCheck`. Таблицата е малка и не е
-наблюдавано отрязване; записано като наблюдение от completion record-а на CONS-011.
+A candidate, without a ref. `scripts/setup/aiwf-roles.mjs:708`: the same POSIX class as CONS-011 (an async
+pipe + a forced exit), outside the guard, because it does not consume `finishWithSelfCheck`. The table is
+small and no truncation was observed; recorded as an observation from the completion record of CONS-011.
 
-## Бележка (не кандидат, но е доказателство): поведението на хоста вече се е сменяло веднъж
+## Note (not a candidate, but evidence): the host behavior has already changed once
+(was: „Бележка (не кандидат, но е доказателство): поведението на хоста вече се е сменяло веднъж“)
 
-0.2.2 записа честния лимит „passthrough клонът на Gate 4 стъпва на поведение на хоста, което това
-repo не може да тества: ако хостът спре да мачва по подкоманда, пропуснатите форми тихо престават
-да бъдат гейтнати и нито един тест няма да позеленее". Това беше формулирано като хипотеза.
+0.2.2 recorded the honest limit
+„passthrough клонът на Gate 4 стъпва на поведение на хоста, което това repo не може да тества: ако хостът спре да мачва по подкоманда, пропуснатите форми тихо престават да бъдат гейтнати и нито един тест няма да позеленее"
+("the Gate 4 passthrough branch rests on host behavior this repo cannot test: if the host stops matching per subcommand, the skipped forms silently stop being gated and not one test turns green").
+That was phrased as a hypothesis.
 
-**Не е хипотеза — вече се е случило, в обратната посока.** Вторият консуматор носи измерен запис от
-**2026-08-31** (UIS-009): `cd /d/<root> && git commit …` е минал БЕЗ диалог, два комита, защото
-командата започва с `cd` и не съвпада с `Bash(git commit:*)`. Днес, 2026-09-12, документацията на
-Claude Code описва operator-aware matcher, който разлага по шестте разделителя и мачва всяка
-подкоманда — тоест същата команда днес СЕ хваща.
+**Not a hypothesis - it has already happened, in the opposite direction.** The second consumer carries a
+measured record from **2026-08-31** (UIS-009): `cd /d/<root> && git commit …` went through WITHOUT a dialog,
+two commits, because the command starts with `cd` and does not match `Bash(git commit:*)`. Today,
+2026-09-12, the Claude Code documentation describes an operator-aware matcher that splits on the six
+separators and matches every subcommand - that is, the same command IS caught today.
 
-Значи между август и септември 2026 поведението на хоста се е променило, и то точно по оста, върху
-която Gate 4 стъпва. Тук се е сменило в безопасната посока. Лимитът остава верен и вече има дата и
-доказателство, вместо да е предпазливост. Затворен е и съответният кандидат на консуматора.
+So between August and September 2026 the host behavior changed, and exactly along the axis Gate 4 rests on.
+Here it changed in the safe direction. The limit stays true and now has a date and evidence, instead of being
+caution. The matching consumer candidate is closed too.
 
 ## [ОТЛОЖЕН 2026-10-14 - чака случай] PS-EOL — трите codex `.ps1` дрейфват на LF при рън (родена 2026-09-12)
 
@@ -760,64 +793,70 @@ Claude Code описва operator-aware matcher, който разлага по 
 пин на CRLF — но това пипа selfcheck-а, който брои byte-level (bash LF-only; ps CRLF). Малко,
 не спешно. **Чака дума** (и следващ codex рън като тригер).
 
-## Бележка (не кандидат): клетката на Одитора не може да пуска суитите
+## Note (not a candidate): the auditor's cell cannot run the suites
+(was: „Бележка (не кандидат): клетката на Одитора не може да пуска суитите“)
 
-Втори път в две поредни тикета Codex пасът връща, че не може да изпълни acceptance суитите —
-read-only клетката не дава създаване на временни директории (`mkdtemp`), а всеки суит тук стъпва на
-това. Веднъж беше арбитрирано като артефакт на средата (PUB-001), сега се повтори (GATE-001 пас 3).
+For the second time in two consecutive tickets the Codex pass reports that it cannot execute the acceptance
+suites - the read-only cell does not allow creating temporary directories (`mkdtemp`), and every suite here
+rests on that. Once it was arbitrated as an environment artifact (PUB-001), now it repeated (GATE-001 pass 3).
 
-Значи не е инцидент, а свойство на пътя: **вердиктът на Одитора никога не покрива изпълнението на
-тестовете.** Верификацията стои на рънa на Колегата плюс независим COO-диспачнат рън. Днес това
-беше направено изрично и е записано в completion record-а на GATE-001. Записано тук, за да не се
-преоткрива трети път; не иска тикет, освен ако операторът не реши, че иска доктрината да го казва.
+So it is not an incident but a property of the path: **the auditor's verdict never covers the execution of
+the tests.** Verification rests on the Writer's run plus an independent COO-dispatched run. Today that was
+done explicitly and is recorded in the completion record of GATE-001. Recorded here so it is not
+rediscovered a third time; it needs no ticket, unless the operator decides they want the doctrine to say it.
 
-## Име на продукт не е път — „запиши го в <плъгин> CANDIDATES" има два валидни адреса (родена 2026-09-15 от инцидент, операторска дума за записа)
+## A product name is not a path - „запиши го в <плъгин> CANDIDATES" has two valid addresses (born 2026-09-15 from an incident, operator word for the record)
+(was: „Име на продукт не е път — „запиши го в <плъгин> CANDIDATES" има два валидни адреса (родена 2026-09-15 от инцидент, операторска дума за записа)“)
 
-Кандидат без ticket ref, по конвенцията.
+A candidate without a ticket ref, by the convention.
 
-**Инцидентът.** На 2026-09-15, 13:05:44, сесия с project root `D:\Furnissimo` записа 51 реда в
-`D:\promptandpray\dev\backlogs\CANDIDATES.md` (записът за Codex resume, коментиран по-горе) — два
-Edit-а, нула git, промяната остана незакомитена и беше намерена от плъгинната сесия в `git status`.
-Думата, на която е стъпено, е била: „Да я запиша ли в PNP CANDIDATES?" → „да, запиши я". Вторият
-Edit (допълнението с проученото) нямаше и такава дума — стоящата беше третирана като покриваща.
+**The incident.** On 2026-09-15, 13:05:44, a session with project root `D:\Furnissimo` wrote 51 lines into
+`D:\promptandpray\dev\backlogs\CANDIDATES.md` (the Codex resume record, commented above) - two Edits, zero
+git, the change stayed uncommitted and was found by the plugin session in `git status`. The word it rested
+on was: „Да я запиша ли в PNP CANDIDATES?" → „да, запиши я" ("Shall I write it into PNP CANDIDATES?" →
+"yes, write it"). The second Edit (the addition with the research) did not have even such a word - the
+standing one was treated as covering it.
 
-**Защо думата не покрива действието.** Консуматорът има СОБСТВЕНА секция за плъгина в собствения си
-`docs/backlogs/CANDIDATES.md` (`## PromptAndPray (плъгин, D:\promptandpray)`), и от гледната точка
-на оператора това е дефолтният адрес. „PNP CANDIDATES" следователно назовава ПРОДУКТ, не път, и има
-два валидни адреса на същата машина. Разрешаването на тази двусмисленост е задължение на сесията,
-не на оператора — guard (c): ограничението се чете буквално, хлабавото четене никога не се
-самоприсвоява, а при съмнение се пита авторът на ограничението.
+**Why the word does not cover the action.** The consumer has its OWN section for the plugin in its own
+`docs/backlogs/CANDIDATES.md` (`## PromptAndPray (плъгин, D:\promptandpray)`), and from the operator's point
+of view that is the default address. „PNP CANDIDATES" therefore names a PRODUCT, not a path, and has two
+valid addresses on the same machine. Resolving that ambiguity is the session's duty, not the operator's -
+guard (c): the constraint is read literally, a loose reading is never self-assigned, and in doubt the
+constraint's author is asked.
 
-**Второто, по-тежко:** дори при недвусмислена дума, записът легна в ЖИВО работно дърво, в което
-паралелна сесия работеше по тикет — в прозорец, в който нейните рънове твърдят „the repository is
-byte-identical". Дума за СЪДЪРЖАНИЕ не е дума за писане в чуждо дърво по време на работа.
+**The second, heavier one:** even with an unambiguous word, the write landed in a LIVE working tree, in
+which a parallel session was working on a ticket - in a window in which its runs claim
+„the repository is byte-identical". A word for CONTENT is not a word for writing into someone else's tree
+during work.
 
-**Предложението (едно-две изречения в `docs/WORKFLOW.md` § Branch policy, до READY-004 изречението,
-което HARD-001 вкара):** име на продукт не е път — когато операторът назове „<плъгин> CANDIDATES", а
-консуматорът има собствена секция за същия плъгин, дефолтът е СОБСТВЕНОТО repo; запис в чуждото иска
-дума, която назовава repo-то изрично, и дори тогава не в дърво, в което върви сесия — предава се или
-се оставя при себе си с указател (образецът е вече в консуматора: четирите READY записа, пренесени с
-дума на 2026-09-12, с реда „не се водят на две места; този ред е указателят").
+**The proposal (one or two sentences in `docs/WORKFLOW.md` § Branch policy, next to the READY-004 sentence
+that HARD-001 brought in):** a product name is not a path - when the operator names
+„<плъгин> CANDIDATES", and the consumer has its own section for the same plugin, the default is the OWN repo;
+a write into the other one needs a word that names the repo explicitly, and even then not into a tree in
+which a session is running - it is handed over or kept at home with a pointer (the pattern is already in the
+consumer: the four READY records, carried over by a word on 2026-09-12, with the line
+„не се водят на две места; този ред е указателят").
 
-**Защо е доктрина, а не гейт:** hook-овете четат tool payload, не project директория, така че
-`Write`/`Edit` към чужд абсолютен път минава тихо и няма как да бъде хванат от Gate 1–4. Същата
-причина, поради която READY-004 остана изречение, а не проверка.
+**Why it is doctrine, not a gate:** the hooks read the tool payload, not the project directory, so a
+`Write`/`Edit` to someone else's absolute path passes silently and cannot be caught by Gate 1–4. The same
+reason READY-004 stayed a sentence, not a check.
 
-**Състояние:** съдържанието на консуматорския кандидат (тиер-агентите) ОСТАВА в
-`D:\Furnissimo\docs\backlogs\CANDIDATES.md:448-490` по операторска дума, докато операторът не каже
-да бъде взето оттам. Тук не се дублира. (Актуализация 2026-09-16: указател-запис вече има по-долу,
-в преноса — доказателствата остават там.)
+**State:** the content of the consumer's candidate (the tier agents) STAYS in
+`D:\Furnissimo\docs\backlogs\CANDIDATES.md:448-490` by operator word, until the operator says it should be
+taken from there. Not duplicated here. (Update 2026-09-16: a pointer record now exists below, in the
+transfer - the evidence stays there.)
 
-## Указател: Codex тиер-агенти (чака узряване)
+## Pointer: Codex tier agents (waiting to mature)
+(was: „Указател: Codex тиер-агенти (чака узряване)“)
 
-Евтини сканове под скъп одитор в самия Codex (`[agents]`, per-role `.toml`, spawn инструменти) —
-проучено, конфигурацията съществува, но три отворени upstream бъга я правят чуплива (мълчалив
-пълен fork/цена при override; модел-клас, който сам си включва multi_agent), а fan-out с деца
-носи фиксиран overhead, който може да излезе ПО-СКЪП от един добре скроен пас. Решение на
-консуматора: `multi_agent = false`; евтините сканове остават на НАШАТА страна (fact-check +
-evidence pack). Тригер за проба: затваряне на трите бъга + свободен прозорец; рецептата е готова
-в източника. Доказателства: Furnissimo CANDIDATES_PNP §тиер-агенти (пълният запис, вкл. бъг
-номерата). НЕ на мисийни пасове. **Чака дума** (и узряване).
+Cheap scans under an expensive auditor inside Codex itself (`[agents]`, per-role `.toml`, spawn tools) -
+researched, the configuration exists, but three open upstream bugs make it fragile (a silent full fork/cost
+on override; a model class that turns multi_agent on by itself), and a fan-out with children carries a fixed
+overhead that can come out MORE EXPENSIVE than one well-cut pass. The consumer's decision:
+`multi_agent = false`; the cheap scans stay on OUR side (fact-check + evidence pack). Trigger for a trial:
+the three bugs closed + a free window; the recipe is ready in the source. Evidence: Furnissimo
+CANDIDATES_PNP §тиер-агенти (the full record, incl. the bug numbers). NOT on mission passes. **Waits for a
+word** (and maturing).
 
 ## [ПУСНАТ 0.2.7] Evidence pack пред одитора — от стояща практика към payload
 
@@ -832,37 +871,37 @@ payload доктрина — ред в review брифа/скила, за все
 по-долу). Естествен дом: проектира се ЗАЕДНО с HARD-014 („Одитор с resume на сесията") — двете
 са една одит-икономика. **Чака дума.**
 
-## Указател: одит-икономика — статистиката и методологията ѝ
+## Pointer: audit economics - the statistics and their methodology
+(was: „Указател: одит-икономика — статистиката и методологията ѝ“)
 
-Стоящата статистика на одиторските пасове живее у консуматора (CANDIDATES_PNP §статистика,
-13 реда към 2026-09-16) с методология, която възприемаме и тук: квотните точки се четат от
-операторския брояч, НИКОГА не се извеждат от токени (студен пас 201k = ~14–15%, не „4–5%" —
-коригирана умствена аритметика); броячите се пишат като СТАРТ→СТОП двойка на самия пас (между
-пасовете други сесии харчат); пас се цитира по ИМЕ, не по номер на ред; „surface" е груб proxy;
-аритметика върху две измервания не е измерване. Качественият извод за evidence pack-а: мести
-паса от преоткриване към преценка (блокерите идват от собствените проби на одитора), но ценови
-ефект НЕ е доказан — липсва контролна група без пакет. Resume върху readiness пас (изрична дума,
-съзнателно отклонение) излезе ~¼ от студената цена с компенсации в брифа — храни HARD-014.
-Нашите числа: HARD-009 record-ът в PLAN_HARD. Още три измерени факта, които указателят държи
-явно, за да не се преоткриват: (1) **тесен обхват НЕ смъква цената пропорционално** — readiness
-пас върху ЕДИН тикет (96 реда) струва от същия порядък като цял план (~406 реда), защото пасът
-чете repo-то зад твърденията, не само текста — планира се пас по стойността на улова, не по
-обема на текста; (2) **инвариантът на атрибутируемостта: одиторът никога не върви паралелно в
-две сесии** — точно една активна, иначе старт/стоп двойките не се приписват; (3) наблюдаван е и
-**убит верификационен пас** (287k токена, команда завършила, резултат неврънат, нула error
-маркер) — режим на отказ, който HARD-014 дизайнът трябва да предвиди (session файловете на диска
-+ post-hoc измерване по `token_count` събития са доказаният форензик път). **Не иска дума —
-указател е.**
+The standing statistics of the auditor passes live at the consumer (CANDIDATES_PNP §статистика, 13 rows as
+of 2026-09-16) with a methodology we adopt here too: the quota points are read from the operator's counter,
+NEVER derived from tokens (a cold pass 201k = ~14–15%, not „4–5%" - corrected mental arithmetic); the
+counters are written as a START→STOP pair on the pass itself (between passes other sessions spend); a pass
+is cited by NAME, not by row number; „surface" is a rough proxy; arithmetic over two measurements is not a
+measurement. The qualitative conclusion for the evidence pack: it moves the pass from rediscovery to
+judgement (the blockers come from the auditor's own probes), but a cost effect is NOT proven - a control
+group without a pack is missing. A resume on a readiness pass (an explicit word, a conscious deviation)
+came out at ~¼ of the cold cost with compensations in the brief - it feeds HARD-014. Our numbers: the
+HARD-009 record in PLAN_HARD. Three more measured facts the pointer keeps explicit so they are not
+rediscovered: (1) **a narrow scope does NOT lower the cost proportionally** - a readiness pass over ONE
+ticket (96 lines) costs the same order as a whole plan (~406 lines), because the pass reads the repo behind
+the claims, not only the text - a pass is planned by the value of the catch, not by the volume of the text;
+(2) **the attributability invariant: the auditor never runs in parallel in two sessions** - exactly one
+active, otherwise the start/stop pairs cannot be attributed; (3) a **killed verification pass** was also
+observed (287k tokens, the command finished, the result not returned, zero error marker) - a failure mode
+the HARD-014 design must foresee (the session files on disk + post-hoc measurement by `token_count` events
+are the proven forensic path). **Needs no word - it is a pointer.**
 
-## Заварен лексикален containment с junction дупка (роден 2026-09-17, от одита на CONS-001)
+## Inherited lexical containment with a junction hole (born 2026-09-17, from the audit of CONS-001)
+(was: „Заварен лексикален containment с junction дупка (роден 2026-09-17, от одита на CONS-001)“)
 
-Лексикалните проверки за `scratchDir` / `plansDir` / `overridesDoc` в setup (generate.mjs, района
-:993-997 към commit `f21b2b0`) споделят дупката, която CONS-001 блокер 2 назова за таблото:
-in-project junction/symlink със цел извън root-а минава. НАРОЧНО неланднато в CONS-001 —
-canonical-изацията там би ОТКАЗАЛА инсталации, които днес работят (junctioned docs/), т.е.
-поведенческа промяна извън тикета. Таблото е защитено независимо (canonical проверка на
-резолвнатия път; junctioned-plansDir тестовото лице го доказва). Кандидат за собствен тикет;
-без ref до влизане в план.
+The lexical checks for `scratchDir` / `plansDir` / `overridesDoc` in setup (generate.mjs, the area
+:993-997 as of commit `f21b2b0`) share the hole that CONS-001 blocker 2 named for the dashboard: an
+in-project junction/symlink with a target outside the root passes. DELIBERATELY not landed in CONS-001 -
+the canonicalization there would REFUSE installs that work today (junctioned docs/), i.e. a behavior change
+outside the ticket. The dashboard is protected independently (a canonical check of the resolved path; the
+junctioned-plansDir test fixture proves it). A candidate for its own ticket; no ref until it enters a plan.
 
 ## [ОТЛОЖЕН 2026-10-14] macOS support tier — преразглеждане след затварянето на PLAN_CONS (роден 2026-09-20)
 
@@ -874,56 +913,64 @@ pipe write и падна с CONS-011. `macos` мина изцяло зелен �
 т.6); самият tier и `continue-on-error` се преразглеждат в ОТДЕЛНА сесия след затварянето на
 плана. Без ref до влизане в план.
 
-## `0011` supersede списъкът пропусна едно ID (роден 2026-09-20, от D4 чистенето на Силеракс)
+## The `0011` supersede list missed one ID (born 2026-09-20, from Silerax's D4 cleanup)
+(was: „`0011` supersede списъкът пропусна едно ID (роден 2026-09-20, от D4 чистенето на Силеракс)“)
 
-Същата миграция рендерира новородения въпрос („does this ticket get an audit pass") в
-`CLAUDE.md#aiwf-core`, но НЕ назова локалния дубликат на това правило в supersede списъка си.
-Консуматорът го забеляза, остави записа си непипнат и докладва — правилното поведение: отчетът е
-авторитетът, не собствената бележка. Същото важи за два негови записа със собствени supersede
-бележки, чиито ID-та не бяха сред петте. Въпросът за следващо издание: кой съставя списъка и
-срещу какво се проверява, че е пълен — днес е авторска преценка без затварящ грep. Без ref.
+The same migration rendered the newborn question („does this ticket get an audit pass") into
+`CLAUDE.md#aiwf-core`, but did NOT name the local duplicate of that rule in its supersede list. The
+consumer noticed it, left its record untouched and reported - the right behavior: the report is the
+authority, not one's own note. The same holds for two of its records with their own supersede notes, whose
+IDs were not among the five. The question for a next release: who compiles the list and against what it is
+checked to be complete - today it is the author's judgement without a closing grep. No ref.
 
-## Gate 3 заключва `paths.transferSurface` за консуматор по средата на тикет (роден 2026-09-20, от ъпдейта на Фурнисимо)
+## Gate 3 locks `paths.transferSurface` for a consumer in the middle of a ticket (born 2026-09-20, from Furnissimo's update)
+(was: „Gate 3 заключва `paths.transferSurface` за консуматор по средата на тикет (роден 2026-09-20, от ъпдейта на Фурнисимо)“)
 
-Ключът се пише в `.claude/aiwf-native/aiwf.config.json`, който НЕ е в allowlist-а на Gate 3
-(`docs/**`, `.aiwf/**`, root `*.md`). Консуматор с отворен R2/R3 маршрут в `route-state.json`
-следователно не може да го зададе, без да пипне route state-а на замразен тикет или да мине през
-shell около гейт, който собствената му доктрина пази. Фурнисимо избра дефолтния път и остави ключа
-unset — обвързването е налице, ключът е излишен. Тоест **опционалността на ключа е това, което
-спасява случая**; ако някога нещо го направи задължителен, този ъгъл става блокер. Без ref.
+The key is written into `.claude/aiwf-native/aiwf.config.json`, which is NOT in Gate 3's allowlist
+(`docs/**`, `.aiwf/**`, root `*.md`). A consumer with an open R2/R3 route in `route-state.json` therefore
+cannot set it without touching the route state of a frozen ticket or going through a shell around a gate
+its own doctrine guards. Furnissimo chose the default path and left the key unset - the binding is in
+place, the key is redundant. That is, **the key's optionality is what saves the case**; if anything ever
+makes it mandatory, this corner becomes a blocker. No ref.
 
-## Отхвърлени при преноса (записано, за да не се преоткрива)
+## Rejected at the transfer (recorded so it is not rediscovered)
+(was: „Отхвърлени при преноса (записано, за да не се преоткрива)“)
 
-(а) „Ръчните ask правила на консуматора не получават нови payload правила" — АБСОРБИРАН:
-HARD-002 (0.2.3) шипна „present but not owned" отчета в update-а и CHANGES; остатъкът е локална
-операционна работа на консуматора. (б) „Ревизия на payload-съседната доктрина извън плъгина" —
-завършена тяхна локална работа; генерализируемата ѝ стойност живее в доктрина-запис гейта и в
-word-гейт предупреждението по-горе.
+(a) „Ръчните ask правила на консуматора не получават нови payload правила"
+("the consumer's hand-written ask rules do not get new payload rules") - ABSORBED: HARD-002 (0.2.3) shipped
+the „present but not owned" report in the update and CHANGES; the remainder is the consumer's local
+operational work. (b) „Ревизия на payload-съседната доктрина извън плъгина"
+("a revision of the payload-adjacent doctrine outside the plugin") - their finished local work; its
+generalizable value lives in the doctrine-record gate and in the word-gate warning above.
 
-## Две имена за едно множество: „unplanned R2" срещу „small R1 and non-durable R2" (роден 2026-09-21 от CONS-009, вдигнат от Колегата)
+## Two names for one set: „unplanned R2" vs „small R1 and non-durable R2" (born 2026-09-21 from CONS-009, raised by the Writer)
+(was: „Две имена за едно множество: „unplanned R2" срещу „small R1 and non-durable R2" (роден 2026-09-21 от CONS-009, вдигнат от Колегата)“)
 
-`docs/WORKFLOW.md:338-340` дава readiness на „durable R2 work and all R3" и изключва „small R1 and
-non-durable R2 work"; проверка 2 на COO routing (`:761`) казва „for an unplanned R2". Ако двете сочат
-едно и също множество, доктрината го назовава два пъти; ако не сочат, има трета категория, която
-никой не е описал. Разминаването е по-старо от CONS-009 и там НЕ беше решено — тикетът само написа
-двете формулировки една до друга, за да е секцията вярна при всяко от двете четения. Предложение за
-следващ план, не правило.
+`docs/WORKFLOW.md:338-340` gives readiness to „durable R2 work and all R3" and excludes
+„small R1 and non-durable R2 work"; check 2 of COO routing (`:761`) says „for an unplanned R2". If the two
+point at the same set, the doctrine names it twice; if they do not, there is a third category nobody has
+described. The discrepancy is older than CONS-009 and was NOT resolved there - the ticket only wrote the two
+phrasings next to each other, so the section is true under either reading. A proposal for a next plan, not
+a rule.
 
-## Доктринно изречение, което изброява света, е дефект, чакащ случая, който е пропуснал (роден 2026-09-21 от CONS-009)
+## A doctrine sentence that enumerates the world is a defect waiting for the case it missed (born 2026-09-21 from CONS-009)
+(was: „Доктринно изречение, което изброява света, е дефект, чакащ случая, който е пропуснал (роден 2026-09-21 от CONS-009)“)
 
-Три поправки на един абзац паднаха на един и същ похват — всяка твърдеше обхващане („X е второ
-условие до Y", „X Е това, което Y брои", „всеки Z е след Y") и всяка беше оборена с ЕДИН файл,
-съдържащ случая, който твърдението изключва. Затвори се чак изречение, което не назовава никакъв вид
-работа. Кандидат за формулиране като проверимо правило на брифа/ревюто — засега наблюдение с цената
-си (3 паса, 3 рунда), не правило, написано между другото.
+Three fixes of one paragraph fell to the same device - each claimed coverage („X е второ условие до Y",
+„X Е това, което Y брои", „всеки Z е след Y") and each was refuted by ONE file containing the case the
+claim excludes. It closed only with a sentence that names no kind of work at all. A candidate for phrasing
+as a checkable rule of the brief/review - for now an observation with its cost (3 passes, 3 rounds), not a
+rule written in passing.
 
-## Третият дом на изброяването не е инструментиран: `docs/LOOP.md` § Role boundaries (роден 2026-09-21 от CONS-009)
+## The third home of the enumeration is not instrumented: `docs/LOOP.md` § Role boundaries (born 2026-09-21 from CONS-009)
+(was: „Третият дом на изброяването не е инструментиран: `docs/LOOP.md` § Role boundaries (роден 2026-09-21 от CONS-009)“)
 
-Редът „Twelve commands" в README и `Shipped:` в `skills/README.md` вече имат по инструмент (литерален
-пин + структурен пин, който сверява реда срещу директориите под `skills/`). § Role boundaries в
-`docs/LOOP.md` е трети дом на същото изброяване и се държи САМО от проза: скил, добавен в двата
-README-а и пропуснат в LOOP.md, минава зелено. Очевидният аналог е структурен пин (ролеви булети
-срещу скиловете, които лупът диспачва). Не влезе в CONS-009 — щеше да е тихо разширение на обхвата.
+The „Twelve commands" line in the README and `Shipped:` in `skills/README.md` already have an instrument
+each (a literal pin + a structural pin that checks the line against the directories under `skills/`).
+§ Role boundaries in `docs/LOOP.md` is a third home of the same enumeration and is held ONLY by prose: a
+skill added in the two READMEs and missed in LOOP.md passes green. The obvious analog is a structural pin
+(role bullets against the skills the loop dispatches). It did not go into CONS-009 - it would have been a
+silent scope expansion.
 
 ## [ОТЛОЖЕН 2026-10-14] VERIFY няма POSIX крак — осемте команди са всичките Windows (от CONS-012, пенсиониран 2026-09-21)
 
@@ -942,12 +989,13 @@ README-а и пропуснат в LOOP.md, минава зелено. Очев�
 PLAN_CONS: суровина, чакаща собствен readiness цикъл, е кандидат, не отворен тикет. Реф-ът
 `CONS-012` е ИЗГОРЕН и не се преизползва.
 
-## Брифът, който пуска VERIFY, сочи проектния VERIFY runbook — payload половината (роден 2026-09-22)
+## The brief that runs VERIFY points at the project's VERIFY runbook - the payload half (born 2026-09-22)
+(was: „Брифът, който пуска VERIFY, сочи проектния VERIFY runbook — payload половината (роден 2026-09-22)“)
 
-Проектната половина легна с операторска дума 2026-09-22: `dev/VERIFY_RUNBOOK.md` + изречението в
-PROJECT_OVERRIDES § Test policy. Кандидатът е payload огледалото: ticket-brief контрактът
-(`docs/WORKFLOW.md`, полето Verify policy) да иска указател към проектния test-policy runbook,
-когато проектът има такъв. Само кандидат — без ref до дума.
+The project half landed with an operator word 2026-09-22: `dev/VERIFY_RUNBOOK.md` + the sentence in
+PROJECT_OVERRIDES § Test policy. The candidate is the payload mirror: the ticket-brief contract
+(`docs/WORKFLOW.md`, the Verify policy field) should require a pointer to the project's test-policy runbook
+when the project has one. Only a candidate - no ref until a word.
 
 ## [ОТЛОЖЕН 2026-10-14 - след стабилизацията] 0.3.0 — публичното README (бивш HARD-011) и полирането (роден 2026-09-22, операторска дума)
 
