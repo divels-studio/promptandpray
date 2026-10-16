@@ -49,7 +49,7 @@ PromptAndPray is **not**:
   execution, even when a backlog, runbook, or brief marks them `MUST`. `MUST` means "mandatory
   before completing", not "execute now". In this project that class is:
   - `git tag` (a release tag is the irreversible half of a release - separate operator word; that
-    word also covers pushing the tag, operator word 2026-10-01);
+    word also covers pushing the tag; operator rule 2026-10-01);
   - `git push` / merge / rebase to either this repo or a consumer project (separate word each; the
     release-tag push rides the tag word above);
   - removing anything under `docs/` (a payload doc leaves only through a migration that names it
@@ -75,14 +75,12 @@ PromptAndPray is **not**:
   `migrations/NNNN_<slug>/` + a `version` bump in `.claude-plugin/plugin.json` + a `CHANGELOG.md`
   block. The tag is created LOCALLY on the record commit and pushed WITH `main` in ONE push - two
   words (the tag word, the push word), one dialog; CI is not waited for (operator rule 2026-10-02,
-  standing until the operator revokes it: every consumer is Windows today and the local self-check
-  is the proof). A consumer project picks the new version up only through `/plugin update` +
-  `/pnp:update` - that path is the product; a version is called released when that push lands; CI
-  runs on the pushed commit afterwards, and a red POSIX leg is a defect ticket, not a release
-  block; a consumer proves the version on its own next update. A prose-only release (docs/,
-  skills/) is the version bump, the CHANGELOG block and a note-only migration - nothing else runs
-  locally (commit click -> tag word -> tag locally -> push word -> main + tag in one push -> CI
-  after).
+  standing until revoked).
+  A version is released when that push lands; CI proves the pushed commit afterwards, and a red
+  POSIX leg is a defect ticket, not a release block. A consumer picks the version up only through
+  `/plugin update` + `/pnp:update` - that path is the product - and proves it on its own next
+  update. A prose-only release (docs/, skills/) is the version bump, the CHANGELOG block and a
+  note-only migration; nothing else runs locally.
 - **Provenance.** `git grep -nP "[\x{0400}-\x{04FF}]" -- docs skills templates scripts schema hooks
   migrations` is empty before every commit - for a prose-only diff that grep IS the gate; the
   self-check's provenance section (origin names as digests, e-mail, Cyrillic by code point,
@@ -192,61 +190,40 @@ The literal VERIFY commands live in `aiwf.config.json`:
 - `spikes`: `node scripts/spike/run-spikes.mjs` (cwd: `.`)
 - `plugin-validate`: `claude plugin validate .` (cwd: `.`)
 
-**VERIFY is proportional to the change** (operator word 2026-09-24; it supersedes "the full 8/8
-gate every ticket close" in PLAN_HARD § Ред и гейтове). A ticket runs only the suites its diff can
-break, and the brief names them:
+**VERIFY is proportional to the change** (operator rule 2026-09-24). A ticket runs only the suites
+its diff can break, and the brief names them:
 - schema / config / roles -> `selfcheck`, `validate-payload`, `setup-suite`;
 - update engine / migrations / examples -> `update-suite`, `validate-payload`,
   `example-cycle-windows`, `selfcheck`;
 - hooks / gates -> `selfcheck`, `spikes`;
 - docs / skills prose -> `validate-payload` + the provenance grep (`git grep -nP "[\x{0400}-\x{04FF}]" -- docs skills templates scripts schema hooks migrations examples README.md`); `selfcheck` only when the diff also touches `scripts/`, `hooks/`, `templates/` or `schema/`.
-A diff that spans several rows runs their union. CI runs the full set on the pushed commit; the tag goes out with `main` in one push, and CI proves the pushed commit AFTER the fact on `windows` and `ubuntu` (operator rule 2026-10-02, § Hard rules Release discipline - it supersedes HARD-021's tag-after-green-CI) - nothing beyond the ticket's own row runs locally (HARD-021, 2026-09-28).
+A diff that spans several rows runs their union; nothing beyond the ticket's own row runs locally
+(operator rule 2026-09-28, HARD-021). CI runs the full set on the pushed commit, after the fact, on
+`windows` and `ubuntu` (§ Hard rules, Release discipline).
 
-**NOT A GATE since 2026-09-28 (HARD-021; operator word the same day): CI is the POSIX proof after the push (since 2026-10-02 the tag no longer waits for it), and the Portion 2 (WSL) paragraphs below never run as a release condition. They stay as the LOCAL REPRODUCTION path: when a POSIX CI leg goes red, WSL is how the failure is reproduced and diagnosed on this machine instead of blind from CI logs.**
-**VERIFY runs in PORTIONS, each portion ONE PARALLEL batch** (operator words 2026-09-17 and
-2026-09-19). Portion 1: the eight Windows commands above as one parallel batch (~10.4 min wall
-measured). Portion 2: the POSIX suites under WSL (non-root user `pnp`) as their own batch, AFTER the
-Windows batch has finished - never concurrent with it. A sequential run inside a portion is a defect
-of the brief, not a choice; running the two portions at once is the opposite defect: 8 Windows + 3 WSL
-node processes together exhausted the machine's memory on 2026-09-19 and the harness killed both
-batches. Every Writer brief states the portions and "one parallel batch per portion", never "parallel
-is allowed". WSL specifics: `/tmp` is tmpfs and is wiped when WSL idles between commands, so a prep
-step and the run that consumes it are ONE invocation; never pass a bare `/tmp/...` path as its own
-argument to `wsl.exe` from Git Bash (it is rewritten to a Windows path) - keep paths inside the `-lc`
-string; snap `pwsh` under `pnp` can break after many parallel spawns and is repaired by clearing
-`~/.cache/powershell` (operator word).
-**Portion discipline sharpened (operator word 2026-09-22, option A):** the ONE-PARALLEL-batch
-sentence above applies to Portion 1 (the eight Windows commands). Portion 2 (WSL) runs as ONE
-invocation with its legs SEQUENTIAL inside it - the measured working form of the 0.2.8 release;
-parallel spawns inside WSL are exactly what trips the snap pwsh cache trap, and a parallel
-Portion 2 has never been measured.
-**Third trap, added 2026-09-21 from the 0.2.8 release:** `git archive` against `/mnt/d/...` does NOT
-work as `pnp` - it fails with `dubious ownership`, that message flows into `tar`, and the copy comes
-out SILENTLY EMPTY, after which every leg fails in seconds against nothing. The prep (archive +
-`chown`) runs as **root** and the legs run as `pnp`; the work copy lives under `/home/pnp`, not under
-`/tmp`; and the prep carries a `test -f` guard on a file the copy must contain, so an empty copy dies
-THERE instead of as a batch of mystery failures. This also sharpens the `/tmp` sentence above, which
-is what misled the release run: "prep and run are ONE invocation" is right about tmpfs and impossible
-taken literally, because prep needs root and the legs need `pnp` - the working form is ONE invocation
-in which root prepares and `su - pnp` runs the legs. Measured the hard way: three attempts, two lost,
-on 2026-09-21 (PLAN_CONS, CONS-010 record).
+**VERIFY runs in PORTIONS** (operator rules 2026-09-17, 2026-09-19, 2026-09-22). Portion 1: the
+eight Windows commands above as ONE parallel batch. Portion 2: the POSIX suites under WSL (user
+`pnp`) as ONE invocation with its legs SEQUENTIAL inside it, started only AFTER Portion 1 has
+finished - never concurrent with it (the two together exhaust the machine's memory). A sequential
+Portion 1 and a concurrent pair are both defects of the brief; every Writer brief states the
+portions in those words. Portion 2 is NOT a release gate (operator rule 2026-09-28, HARD-021): it is
+the local reproduction path when a POSIX CI leg goes red.
 
-**The operational runbook is `dev/VERIFY_RUNBOOK.md`** (operator word 2026-09-22). Every brief that
-runs VERIFY - in full or in part - carries a pointer to it; a red test on a trap described there is a
-defect of the brief, not of the code. The runbook holds the working command shapes and the recorded
-incidents; this section stays the policy home.
+**The operational runbook is `dev/VERIFY_RUNBOOK.md`** (operator rule 2026-09-22): the working
+command shapes and every recorded trap (tmpfs `/tmp`, `dubious ownership` on `git archive`, the
+snap `pwsh` cache, root prep + `su - pnp` legs) live there; this section stays the policy home.
+Every brief that runs VERIFY carries the pointer, and a red test on a trap described there is a
+defect of the brief, not of the code.
 
-**Checks are run by a fresh scan agent, not the Writer (operator rule 2026-10-15, adopted from a
-consumer; first used on STAB-001).** The full VERIFY batch, the acceptance commands and every re-run
-are run by a new `general-purpose` agent on `sonnet` with only the commands of the COO's brief (and
-the pointer to `dev/VERIFY_RUNBOOK.md`); it fixes nothing, writes no tracked file and runs no git, and
-returns each command with its exact exit code, the pass/fail counts, the names of the failing checks
-and the tail of their output; on an environment failure it stops and reports. The Writer is called
-only when something fails and needs a fix - the live one if there is one, otherwise a new one. *Its
-suppression dual:* the Writer still runs the targeted check it needs while writing - a test it just
-added, seen red before the fix; the rule takes the full batch and the re-runs off it, not that.
-*Why:* a long procedure on a warm Writer pays its whole context on every step, and a mechanical
-procedure is cheap-agent work (payload `docs/WORKFLOW.md` § COO owns broad scans, tripwire 3).
+**Checks are run by a fresh scan agent, not the Writer** (operator rule 2026-10-15). The full
+VERIFY batch, the acceptance commands and every re-run are run by a new `general-purpose` agent on
+`sonnet` with only the commands of the COO's brief and the runbook pointer; it fixes nothing, writes
+no tracked file, runs no git, and returns each command with its exact exit code, the pass/fail
+counts, the failing checks' names and the tail of their output; on an environment failure it stops
+and reports. The Writer is called only when something fails and needs a fix - the live one if there
+is one, otherwise a new one. *Suppression dual:* the Writer still runs the targeted check it needs while writing (a test
+it just added, seen red before the fix). Rationale: payload `docs/WORKFLOW.md` § COO owns broad
+scans, tripwire 3.
 
 ## Status and release artifacts
 
@@ -264,16 +241,18 @@ The documents the "status / release docs policy" in the payload doc `docs/WORKFL
   Reviewer = "Одитор", QA = "QA".
   These are conversational only - the technical identifiers (`writer`, `reviewer`, `qa`, file paths,
   frontmatter) never change.
-- **English everywhere in the tree (operator rule 2026-10-15; restated 2026-10-16: „важно правило
-  от днес завинаги").** Everything written into the project - plans, tickets, completion records,
-  candidates, rulings, ledger rows, memory, briefs, verdicts, commit messages, code comments, docs -
-  is in English. Two things stay Bulgarian: the operator channel (the conversation with the
-  operator), and the operator's own words wherever they are recorded - a gate word, a ruling, a
-  `COVERED BY` quote is written verbatim in the operator's Bulgarian wording („давай одитор" stays
-  „давай одитор"), never translated; an English reading may stand beside it when a sentence needs
-  one. Existing Bulgarian text stays as written: it is translated only when a ticket names it
-  (here: PLB-005, for the sections read every session); nothing translates it ambiently, and
-  archived plans and closed rows stay as they are.
+- **English everywhere in the tree** (operator rule 2026-10-15, restated 2026-10-16). Everything
+  written into the project - plans, tickets, records, candidates, ledger rows, memory, briefs,
+  verdicts, commit messages, code comments, docs - is English. Two things stay Bulgarian: the
+  operator channel, and the operator's own words wherever they are recorded (a gate word, a ruling, a
+  `COVERED BY` quote - verbatim, never translated; an English reading beside it when a sentence needs
+  one). Existing Bulgarian text stays as written and is translated only when a ticket names it;
+  archived plans and closed rows stay.
+- **A rule record carries a marker, not its story** (operator rule 2026-10-16). A rule in this
+  document says only whose it is and when - `(operator rule <date>)`, or nothing when it is the
+  COO's generalisation. The operator's wording, the occasion and the evidence pointer live in ONE
+  row of the transfer surface (`dev/backlogs/CANDIDATES.md`, ruling or event ledger), never in the
+  rule text; a rule needs no retelling of the incident that bore it.
 - Be concise; no step-by-step reasoning narration in the output. Explain concretely when
   architecture or product boundaries are involved.
 - Stop for an operator choice only when unresolved alternatives materially change product intent, an
@@ -329,35 +308,28 @@ mechanics and are **not** editable here (see the payload doc `docs/WORKFLOW.md` 
   result, stop and summarize to the operator. Only the operator lifts the cap, by an explicit word
   before the re-dispatch, one extension at a time, recorded in the ticket's PLAN entry.
 - **R1 uses no orchestration loop** - it is done directly in the main session.
-- **COO routing tiers (operator rule 2026-10-15, „от сега нататък, впиши го в overrides").** The
-  "top" COO of `docs/WORKFLOW.md` § COO routing is Fable; the "cheap" COO is **Opus** - a Sonnet
-  COO is never used in this project. The routing moves the COO session only; Writer and audit
-  table stay as `/pnp:roles` shows them.
+- **COO routing tiers** (operator rule 2026-10-15). The "top" COO of `docs/WORKFLOW.md` § COO
+  routing is Fable; the "cheap" COO is **Opus** - a Sonnet COO is never used in this project. The
+  routing moves the COO session only; Writer and audit table stay as `/pnp:roles` shows them.
 - **QA is conditional** - only when a brief declares observable runtime/UI behavior; never in R1 or
   non-runtime R2.
 - Plan readiness runs `review.plan.passes` passes (the audit table, `/pnp:roles`; factory 2) as a
   ceiling: the first on the ticket's standing word, each further one on the operator's own explicit
   word - one word per pass - and one more beyond the configured number is always available with
   that word. Independent of the cap above.
-- **Gate checkpoint and context ceiling (operator rule 2026-10-14, carried over from Silerax
-  UIR-040 / UIR-041; HARD-024).** The COO rewrites `.aiwf/checkpoint.md` WHOLE (Write, not an
-  append; ≤ 60 lines: state, operator decisions, live agents, next steps,
-  „След компресиране направи“ ("After compaction do")) at every gate - dispatch, handoff, verdict,
-  before a commit - and when the hook `.claude/hooks/context-gate.mjs` reports ≥ 950k tokens of
-  context; at ≥ 1000k - IMMEDIATELY, after the current step. Automatic compaction is controlled by
-  the operator (`/autocompact`); the hook takes no value. The thresholds: 950k / 1000k (operator
-  2026-10-14; before - 400k / 450k: they confused the COO with compaction switched off; sessions of
-  800-900k run without a problem). After compaction the hook (`SessionStart`, `compact`) returns the
-  file to the context; the COO reads only it and the files it names. A long context is no reason
-  for a new session - the session continues through compaction. The hook reads
-  `~/.claude/ctx/<session_id>.pct` and `.size`, which the user's `~/.claude/statusline.sh` writes;
-  without them it stays silent.
-  **A title is not the text (operator word 2026-10-14, „да, впиши го в overrides“; from the
-  incident in Silerax - CANDIDATES § „Таван на контекста“):** after compaction the summary carries
-  the rules only as titles: before a gate, a readiness step or a dispatch the COO rereads the text
-  of the rule. For readiness, `/pnp:review` is loaded first, before any scan agent.
-  *Expires:* when the payload carries the mechanism (a candidate in
-  `dev/backlogs/CANDIDATES.md` § „Таван на контекста“).
+- **Gate checkpoint and context ceiling** (operator rule 2026-10-14; HARD-024). The COO rewrites
+  `.aiwf/checkpoint.md` WHOLE (Write, not an append; <= 60 lines: state, operator decisions, live
+  agents, next steps, "After compaction do") at every gate - dispatch, handoff, verdict, before a
+  commit - and when the hook `.claude/hooks/context-gate.mjs` reports >= 950k tokens of context; at
+  >= 1000k IMMEDIATELY, after the current step. Automatic compaction is the operator's
+  (`/autocompact`); the hook takes no value and stays silent without the statusline's `~/.claude/ctx/`
+  files. After compaction the hook returns the checkpoint to the context; the COO reads only it and
+  the files it names. A long context is no reason for a new session - the session continues through
+  compaction.
+  **A title is not the text** (operator rule 2026-10-14): after compaction the summary carries the
+  rules only as titles; before a gate, a readiness step or a dispatch the COO rereads the text of the
+  rule, and for readiness `/pnp:review` is loaded first, before any scan agent.
+  *Expires* when the payload carries the mechanism (candidate: CANDIDATES § „Таван на контекста“).
 
 ## Product boundary checks (rendered into the Reviewer)
 
