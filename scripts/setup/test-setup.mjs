@@ -50,6 +50,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { plansDirUnderScratchWarning, renderTemplate, scanSupersededLegacy, sha256, templateContext } from './generate.mjs';
 import { runInterview } from './interview.mjs';
+import { E2E_TRACE_NOTE } from './e2e-trace-note.mjs';
 // Read through the module NAMESPACE, not a named import: a helper this payload does not export yet
 // must fail the checks that need it (section 25), not abort the whole suite at load time.
 import * as validateConfig from './validate-config.mjs';
@@ -811,6 +812,32 @@ section('12c - a plansDir under the scratch directory is WARNED about, on both p
 }
 
 // ---------------------------------------------------------------------------
+section('12d - an E2E output directory under a traced app root is NOTED after the outputDir answer');
+{
+  // The same answers twice: a project whose app root holds a next.config.* hears the note, the same
+  // project without one hears nothing. The sentence is the module's own, never restated here.
+  const e2eAsk = (q) => (q.startsWith('Does this project have an end-to-end proof surface') ? 'y'
+    : q.startsWith('e2e: cwd') ? 'app'
+      : q.startsWith('e2e: artifact output directory') ? 'test-results'
+        : q.startsWith('e2e: runner command') ? 'x'
+          : q.startsWith('e2e: spec directory') ? 'e2e' : scriptedAsk(q));
+  const heardOver = async (withNextConfig) => {
+    const p = project(withNextConfig ? 'e2e-traced' : 'e2e-untraced');
+    fs.mkdirSync(at(p, 'app'), { recursive: true });
+    if (withNextConfig) fs.writeFileSync(at(p, 'app/next.config.js'), 'module.exports = {};\n');
+    const said = [];
+    await runInterview({ schema: loadSchemaJson(), ask: e2eAsk, projectRoot: p, out: { write: (s) => said.push(s) } });
+    return said.join('');
+  };
+  const traced = await heardOver(true);
+  check('a projectRoot whose app/ holds next.config.js hears the e2e trace note after the outputDir answer',
+    traced.includes(E2E_TRACE_NOTE), traced.split('\n').filter((l) => l.includes('next.config')).join(' | ') || '(no such line)');
+  const untraced = await heardOver(false);
+  check('the same answers with no next.config.js hear no such note',
+    !untraced.includes(E2E_TRACE_NOTE), untraced.split('\n').filter((l) => l.includes('next.config')).join(' | ') || 'silent');
+}
+
+// ---------------------------------------------------------------------------
 section('13 - dry run writes nothing; unreadable state and escaping paths stop the run');
 {
   const p14 = project('dryrun');
@@ -1007,7 +1034,7 @@ section('17 - the self-check is the install\'s own last step, and "could not che
     { file: 'scripts/setup/interview.mjs',
       present: 'process.exitCode = code;', absent: ['process.exit(code);'] },
     { file: 'scripts/setup/aiwf-roles.mjs',
-      present: 'process.exitCode = code;', absent: ['process.exit(code);'] },
+      present: 'process.exitCode = code;', absent: ['process.exit(code);', 'process.exit(0);'] },
   ];
 
   // THE instrument. It takes the file CONTENTS, so the controls below run THIS function over a
@@ -1077,6 +1104,16 @@ section('17 - the self-check is the install\'s own last step, and "could not che
   const fifthOk = cFifth.length === 1
     && cFifth[0] === `payload scripts+hooks: count ${CALL_SITES} got ${CALL_SITES + 1}`;
   check('pin control: a fifth call site is reported by the count pin', fifthOk, saw(fifthOk, cFifth));
+
+  // The FIXTURE is built from `present` only, so the `--show` branch's absent entry would pass
+  // vacuously without a fixture that carries the forced exit.
+  const ROLES = 'scripts/setup/aiwf-roles.mjs';
+  const cShowExit = pinViolations(FIXTURE.map((s) => (s.file === ROLES
+    ? { file: s.file, contents: `${s.contents}  process.exit(0);\n` }
+    : s)));
+  const showExitOk = cShowExit.length === 1 && cShowExit[0] === `${ROLES}: absent 0 got 1`;
+  check('pin control: roles-show-exit-zero - a process.exit(0) injected into the aiwf-roles fixture is reported',
+    showExitOk, saw(showExitOk, cShowExit));
 
   const violations = pinViolations(
     scriptsUnder(path.join(PLUGIN_ROOT, 'scripts')).concat(scriptsUnder(path.join(PLUGIN_ROOT, 'hooks'))),

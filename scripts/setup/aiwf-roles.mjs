@@ -719,39 +719,42 @@ if (isMain()) {
       throw new RolesUsageError(`${toPosix(CONFIG_REL)} is not valid JSON (${e.message}) - nothing is written over a config that cannot be read.`);
     }
 
+    // `--show` RETURNS its status like the write path below, for the same drained-output reason;
+    // the write path therefore sits in the `else` - a bare `exitCode` here would fall through into
+    // planRoles/applyRoles and print the table a second time.
     if (opts.show) {
       for (const line of showLines(config)) console.log(line);
-      process.exit(0);
+      process.exitCode = 0;
+    } else {
+      const schema = loadSchema(path.join(pluginRoot, 'schema', 'aiwf.config.schema.json'));
+      const plan = planRoles({
+        pluginRoot, projectRoot, config, schema,
+        sets: opts.sets, resets: opts.resets, confirmRemoveStale: opts.confirmRemoveStale,
+      });
+      const applied = applyRoles({ projectRoot, plan });
+      if (!opts.quiet) {
+        for (const n of plan.notes) console.log(`  note   ${n}`);
+        if (applied.length === 0) console.log('no changes - the project layer already matches the config.');
+        else for (const line of applied) console.log(`  ${line}`);
+        console.log('');
+      }
+      const code = finishWithSelfCheck({
+        pluginRoot, projectRoot, code: 0,
+        wouldRun: applied.length > 0,
+        skipped: opts.noSelfcheck,
+        quiet: opts.quiet,
+        subject: 'the roles and the audit table',
+      });
+      if (code === 0 && !opts.quiet) {
+        console.log('');
+        for (const line of showLines(plan.config)) console.log(line);
+      }
+      // The code is RETURNED, never forced: `process.exit()` would kill the run while this process's
+      // OWN stdout write is still pending - a pipe is synchronous on Windows but asynchronous on POSIX
+      // (Node, "A note on process I/O") - and the self-check report written by the call above would
+      // reach the operator truncated. Same exit code, drained output.
+      process.exitCode = code;
     }
-
-    const schema = loadSchema(path.join(pluginRoot, 'schema', 'aiwf.config.schema.json'));
-    const plan = planRoles({
-      pluginRoot, projectRoot, config, schema,
-      sets: opts.sets, resets: opts.resets, confirmRemoveStale: opts.confirmRemoveStale,
-    });
-    const applied = applyRoles({ projectRoot, plan });
-    if (!opts.quiet) {
-      for (const n of plan.notes) console.log(`  note   ${n}`);
-      if (applied.length === 0) console.log('no changes - the project layer already matches the config.');
-      else for (const line of applied) console.log(`  ${line}`);
-      console.log('');
-    }
-    const code = finishWithSelfCheck({
-      pluginRoot, projectRoot, code: 0,
-      wouldRun: applied.length > 0,
-      skipped: opts.noSelfcheck,
-      quiet: opts.quiet,
-      subject: 'the roles and the audit table',
-    });
-    if (code === 0 && !opts.quiet) {
-      console.log('');
-      for (const line of showLines(plan.config)) console.log(line);
-    }
-    // The code is RETURNED, never forced: `process.exit()` would kill the run while this process's
-    // OWN stdout write is still pending - a pipe is synchronous on Windows but asynchronous on POSIX
-    // (Node, "A note on process I/O") - and the self-check report written by the call above would
-    // reach the operator truncated. Same exit code, drained output.
-    process.exitCode = code;
   } catch (e) {
     console.error(`pnp-roles: ${e.message}`);
     process.exit(e instanceof RolesUsageError ? 2 : 1);

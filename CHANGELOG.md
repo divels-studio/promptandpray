@@ -28,6 +28,16 @@ current, and the supersede duty of a re-rendering migration written down.
   (the ten interlocked `/pnp:*` skills blocked; `update` and `selfcheck` still run) until the
   file is moved and the update re-run. Setup blocks on a foreign `AGENTS.md` the same way;
   `--adopt` decides it on a project with no installation.
+- **Self-check pin on the role section of `docs/LOOP.md` (PLB-004)** - a structural check reads the
+  top-level bullets of `## Role boundaries` and holds them to exactly the seven roles (COO, Writer,
+  Reviewer, QA, QAL, Arbiter, Operator) in both directions: a role whose bullet is gone, a bullet
+  that names no role and a second bullet for the same role all fail, each proven by its own negative
+  control.
+- **E2E trace note (PLB-004)** - when `verify.e2e.outputDir` resolves under `verify.e2e.cwd` and that
+  directory holds a `next.config.*`, the setup interview says so right after the outputDir answer and
+  the self-check prints it as a `[NOTE]`: a traced build may copy the whole E2E output into the
+  standalone bundle. One predicate and one sentence (`scripts/setup/e2e-trace-note.mjs`) serve both;
+  it is an observation and never a failure.
 
 ### Changed
 
@@ -51,6 +61,10 @@ current, and the supersede duty of a re-rendering migration written down.
   keeps its journal's hashes and the next clean run refreshes); an already-current run that refreshes
   it prints `refreshed $schema: <from> -> <to>` and `nothing else was written` and runs the
   self-check, and an applying run records the same line in its CHANGES report.
+- **`/pnp:roles --show` no longer forces its exit (PLB-004)** - `aiwf-roles.mjs --show` ended with
+  `process.exit(0)`, which can cut its own pending stdout short on a POSIX pipe; it now returns
+  status 0 through `process.exitCode`, with the write path in its own branch so the table is never
+  printed twice. The setup suite's exit pin now also refuses `process.exit(0);` in that file.
 
 ## [0.2.18] - 2026-10-15
 

@@ -5301,6 +5301,23 @@ function changesDirContained(pluginRoot, value) {
   return { ok: false, detail: `the rule gave no boolean answer (${JSON.stringify(answer.slice(0, 60))})` };
 }
 
+// verify.e2e.outputDir under a traced app root is judged by THE predicate the setup interview calls -
+// tracedOutputDir in scripts/setup/e2e-trace-note.mjs - and the sentence comes from the same module,
+// so it lives in one place. ESM again, so a child process answers. This is an OBSERVATION: a child
+// that cannot answer, or answers anything but a boolean, yields null and the caller adds NOTHING -
+// never a failure.
+function e2eTraceNote(pluginRoot, projectRoot, e2e) {
+  const moduleUrl = pathToFileURL(path.join(pluginRoot, 'scripts', 'setup', 'e2e-trace-note.mjs')).href;
+  const code = `import { tracedOutputDir, E2E_TRACE_NOTE } from ${JSON.stringify(moduleUrl)};\n`
+    + `process.stdout.write(JSON.stringify({ traced: tracedOutputDir(${JSON.stringify(projectRoot)}, ${JSON.stringify(e2e === undefined ? null : e2e)}), note: E2E_TRACE_NOTE }));\n`;
+  const r = spawnSync(process.execPath, ['--input-type=module', '-e', code], { encoding: 'utf8' });
+  if (r.status !== 0) return null;
+  let answer;
+  try { answer = JSON.parse((r.stdout || '').trim()); } catch (e) { return null; }
+  if (!answer || typeof answer.traced !== 'boolean' || typeof answer.note !== 'string') return null;
+  return answer;
+}
+
 function projectLayerFindings(projectRoot, pluginRoot, opts) {
   const out = [];
   const add = (id, name, ok, detail) => out.push({ id, name, ok: !!ok, detail: detail || '', note: false });
@@ -5661,6 +5678,17 @@ function projectLayerFindings(projectRoot, pluginRoot, opts) {
       : plansDirUnderScratch(paths.plansDir, paths.scratchDir, cfg.os === 'windows')
         ? `under the scratch directory ${paths.scratchDir} - nothing there is the Git canon while the scratch directory is ignored (/pnp:review Step 2e)`
         : 'outside the scratch directory');
+  // An E2E output directory inside an app root whose build traces its files. Added ONLY when the
+  // predicate answers true - an untraced project, or a predicate that could not answer, prints nothing.
+  {
+    const e2e = cfg.verify && cfg.verify.e2e;
+    if (e2e) {
+      const traced = e2eTraceNote(pluginRoot, projectRoot, e2e);
+      if (traced && traced.traced === true) {
+        addObservation('e2e-outputdir-traced', 'verify.e2e.outputDir under a traced app root', traced.note);
+      }
+    }
+  }
 
   // --- the transfer surface is OUTSIDE the managed set ------------------------------------------
   // Setup seeds it ONCE and then it is the operator's: no bookkeeping record, no `--resolve` address,
@@ -5899,6 +5927,42 @@ function sectionDraftsObservations(tmpRoot) {
   const s8 = String(byId(s2, 'plans-under-scratch').detail);
   check('[drafts-S8] base plansDir docs/backlogs -> "outside the scratch directory"',
     s8 === 'outside the scratch directory', `"${s8}"`);
+}
+
+// The e2e trace observation, on fixtures of its OWN: the drafts fixtures above pin their observation
+// count at exactly four and stay free of a traced e2e. Read through the real projectLayerFindings
+// (outside captured() - nothing printed, nothing counted). The expected sentence is taken from the
+// module itself, never restated here.
+function sectionE2eTraceObservation(tmpRoot) {
+  section('PROJECT LAYER OBSERVATIONS - verify.e2e.outputDir under a traced app root (own fixtures)');
+  const pj = readJson(path.join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json'));
+  const pluginVersion = (pj && pj.version) || '0.0.0';
+  const ID = 'e2e-outputdir-traced';
+  const fixture = (name, { e2e, nextConfig }) => {
+    const root = path.join(tmpRoot, name);
+    fs.mkdirSync(root, { recursive: true });
+    writeFixture(root, pluginVersion);
+    mutateJson(root, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
+      c.verify = c.verify || {};
+      if (e2e === undefined) delete c.verify.e2e; else c.verify.e2e = e2e;
+    });
+    fs.mkdirSync(path.join(root, 'app'), { recursive: true });
+    if (nextConfig) fs.writeFileSync(path.join(root, 'app', 'next.config.js'), 'module.exports = {};\n');
+    return projectLayerFindings(root, PLUGIN_ROOT, { selfAuthored: true }).filter((f) => f.id === ID);
+  };
+  const traced = { enabled: true, cwd: 'app', runner: 'x', specDir: 'e2e', outputDir: 'test-results' };
+  const answer = e2eTraceNote(PLUGIN_ROOT, tmpRoot, null);
+  const note = answer ? answer.note : null;
+
+  const t1 = fixture('e2e-trace-t1', { e2e: traced, nextConfig: true });
+  const t1Ok = note !== null && t1.length === 1 && printerFor(t1[0]) === 'observation' && t1[0].detail === note;
+  check('[e2e-trace-T1] cwd app, outputDir test-results, app/next.config.js -> the observation, with the module\'s sentence',
+    t1Ok, t1Ok ? 'one observation' : `module note=${note === null ? 'unreadable' : 'read'}; found ${JSON.stringify(t1).slice(0, 240)}`);
+  const absent = (tag, label, found) => check(`[e2e-trace-${tag}] ${label} -> no observation`,
+    found.length === 0, found.length ? JSON.stringify(found).slice(0, 240) : 'none');
+  absent('T2', 'the same without app/next.config.js', fixture('e2e-trace-t2', { e2e: traced, nextConfig: false }));
+  absent('T3', 'the same with enabled: false', fixture('e2e-trace-t3', { e2e: { ...traced, enabled: false }, nextConfig: true }));
+  absent('T4', 'the same with no e2e key', fixture('e2e-trace-t4', { e2e: undefined, nextConfig: true }));
 }
 
 // ---------------------------------------------------------------------------
@@ -6513,6 +6577,24 @@ const shippedIndexNames = (text) => {
   if (!m) return null;
   return m[1].replace(/\.\s*$/, '').split(',').map((s) => s.trim().replace(/`/g, '')).filter(Boolean);
 };
+// The role section of docs/LOOP.md, read STRUCTURALLY as its top-level bullets: a role added to or
+// dropped from the section without the other enumerations of the roles following is how the doctrine
+// forks. Order is not asserted; the set is, in both directions.
+const DOCTRINE_ROLE_BOUNDARIES = ['COO', 'Writer', 'Reviewer', 'QA', 'QAL', 'Arbiter', 'Operator'];
+// The names the section's top-level bullets carry, taken as data: the bold text before ` /` when it
+// has one (`COO / Orchestrator` -> `COO`), else the whole bold text. Continuation lines and the
+// section's non-bullet paragraphs do not match. null = no section to read.
+const roleBoundaryNames = (text) => {
+  const lines = (text || '').split(/\r?\n/);
+  const start = lines.findIndex((l) => /^## Role boundaries\s*$/.test(l));
+  if (start < 0) return null;
+  const names = [];
+  for (let i = start + 1; i < lines.length && !lines[i].startsWith('## '); i++) {
+    const m = /^- \*\*(.+?)\*\*/.exec(lines[i]);
+    if (m) names.push(m[1].includes(' /') ? m[1].slice(0, m[1].indexOf(' /')).trim() : m[1].trim());
+  }
+  return names;
+};
 const skillDirNames = (root) => {
   try {
     return fs.readdirSync(path.join(root, 'skills'), { withFileTypes: true })
@@ -6576,6 +6658,25 @@ function payloadDoctrineFindings(pluginRoot) {
           .filter(Boolean).join('; ')
         : `${dirs.length} directories, ${indexed.length} names, one to one`));
 
+  // The roles of docs/LOOP.md "## Role boundaries", read the same way in both directions: a role the
+  // section lost, and a bullet the section gained that is not one of the roles.
+  const roleNames = roleBoundaryNames(readText(path.join(pluginRoot, 'docs', 'LOOP.md')));
+  const missingRoles = roleNames == null ? DOCTRINE_ROLE_BOUNDARIES : DOCTRINE_ROLE_BOUNDARIES.filter((n) => !roleNames.includes(n));
+  const strangerRoles = roleNames == null ? [] : roleNames.filter((n) => !DOCTRINE_ROLE_BOUNDARIES.includes(n));
+  // One to one also means once: a second bullet for the same role is a fork inside the section.
+  const duplicateRoles = roleNames == null ? []
+    : [...new Set(roleNames.filter((n, i) => roleNames.indexOf(n) !== i))];
+  add('doctrine-role-boundaries-structure',
+    'docs/LOOP.md "## Role boundaries": the top-level bullets are exactly the seven roles, one to one',
+    roleNames != null && missingRoles.length === 0 && strangerRoles.length === 0 && duplicateRoles.length === 0,
+    roleNames == null ? 'no "## Role boundaries" section to read'
+      : (missingRoles.length || strangerRoles.length || duplicateRoles.length
+        ? [missingRoles.length ? `roles without a bullet: ${missingRoles.join(', ')}` : null,
+          strangerRoles.length ? `bullets that are not a role: ${strangerRoles.join(', ')}` : null,
+          duplicateRoles.length ? `duplicate bullets: ${duplicateRoles.join(', ')}` : null]
+          .filter(Boolean).join('; ')
+        : `${DOCTRINE_ROLE_BOUNDARIES.length} roles, ${roleNames.length} bullets, one to one`));
+
   const ruleset = readJson(path.join(pluginRoot, 'templates', 'settings.ask-ruleset.json'));
   const ask = (ruleset && ruleset.permissions && Array.isArray(ruleset.permissions.ask)) ? ruleset.permissions.ask : null;
   add('doctrine-no-blanket-git-c',
@@ -6629,6 +6730,16 @@ const phraseRe = (phrase) => new RegExp(
 const doctrinePhrase = (root, rel, phrase, replacement) => doctrineFile(root, rel, (t) => {
   if (!phraseRe(phrase).test(t)) throw new Error(`the phrase is not in ${rel}: ${phrase}`);
   return t.replace(phraseRe(phrase), replacement);
+});
+// Insert one line right after the Operator bullet's last continuation line of docs/LOOP.md - the
+// end of the role section's bullet list. Throws when the anchor is not in the copy.
+const afterOperatorBullet = (root, line) => doctrineFile(root, 'docs/LOOP.md', (t) => {
+  const lines = t.split('\n');
+  const from = lines.findIndex((l) => l.startsWith('- **Operator**'));
+  if (from < 0) throw new Error('the control copy has no Operator bullet in docs/LOOP.md');
+  let to = from + 1;
+  while (to < lines.length && /^\s+\S/.test(lines[to])) to++;
+  return lines.slice(0, to).concat([line], lines.slice(to)).join('\n');
 });
 const DOCTRINE_CONTROLS = [
   // One control per SPELLING, because the assertion reads three and a single control would leave the
@@ -6694,6 +6805,26 @@ const DOCTRINE_CONTROLS = [
     label: 'the index line names `telemetry`, which is not a skill directory (a rename, a removal, or a name added by hand)',
     apply: (r) => doctrinePhrase(r, 'skills/README.md', DOCTRINE_SHIPPED_COMMANDS,
       'Shipped: loop, review, qa, qal, brief, mission, work, roles, arbiter, setup, update, selfcheck, telemetry.') },
+  // The role section's structural check, one control per failure: a role's WHOLE multi-line bullet
+  // cut (a half-cut bullet would leave continuation lines a reader skips anyway), a bullet added that
+  // names no role, and a second bullet for a role already present. Each throws when its anchor is not in the copy, so a reworded section fails
+  // the control loudly instead of leaving the copy clean.
+  { id: 'doctrine-role-boundaries-structure',
+    label: 'loop-role-bullet-removed: the whole QAL bullet cut from docs/LOOP.md "## Role boundaries"',
+    apply: (r) => doctrineFile(r, 'docs/LOOP.md', (t) => {
+      const lines = t.split('\n');
+      const from = lines.findIndex((l) => l.startsWith('- **QAL**'));
+      if (from < 0) throw new Error('the control copy has no QAL bullet in docs/LOOP.md');
+      let to = from + 1;
+      while (to < lines.length && !lines[to].startsWith('- **')) to++;
+      return lines.slice(0, from).concat(lines.slice(to)).join('\n');
+    }) },
+  { id: 'doctrine-role-boundaries-structure',
+    label: 'loop-role-bullet-stranger: a `Scribe` bullet added after the Operator bullet of docs/LOOP.md "## Role boundaries"',
+    apply: (r) => afterOperatorBullet(r, '- **Scribe** - a role nobody defined.') },
+  { id: 'doctrine-role-boundaries-structure',
+    label: 'loop-role-bullet-duplicate: a second `Writer` bullet added after the Operator bullet of docs/LOOP.md "## Role boundaries"',
+    apply: (r) => afterOperatorBullet(r, '- **Writer** - a second bullet.') },
 ];
 
 function sectionPayloadDoctrine(tmpRoot) {
@@ -8445,6 +8576,7 @@ function main() {
     sectionExampleFixture(tmpRoot);
     sectionProjectLayer(PROJECT, selfAuthored);
     sectionDraftsObservations(tmpRoot);
+    sectionE2eTraceObservation(tmpRoot);
     sectionCommitAutomation(PROJECT, tmpRoot);
     sectionNegativeControls(tmpRoot, pluginVersion);
   } catch (e) {

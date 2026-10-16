@@ -65,6 +65,7 @@ import {
   readMemorySeeds, resolveProjectRoot,
 } from './generate.mjs';
 import { TIER_ALIASES } from './role-rules.mjs';
+import { tracedOutputDir, E2E_TRACE_NOTE } from './e2e-trace-note.mjs';
 import { finishWithSelfCheck } from '../selfcheck/run-selfcheck.mjs';
 
 // A disabled QAL still renders into roles.json, and inventing a plausible codex model id would be
@@ -207,10 +208,15 @@ export async function runInterview({ schema, ask, installed = null, projectRoot 
   set(answers, 'verify.commands', commands.length ? commands : (fallback('verify.commands') || []));
   const e2e = await yesNo('verify.e2e.enabled', 'Does this project have an end-to-end proof surface (QA reads its artifacts)');
   if (e2e) {
-    await text('verify.e2e.cwd', 'e2e: cwd');
+    const e2eCwd = await text('verify.e2e.cwd', 'e2e: cwd');
     await text('verify.e2e.runner', 'e2e: runner command');
     await text('verify.e2e.specDir', 'e2e: spec directory');
-    await text('verify.e2e.outputDir', 'e2e: artifact output directory');
+    const e2eOutputDir = await text('verify.e2e.outputDir', 'e2e: artifact output directory');
+    // The effective values (a defaulted answer included), judged by the one predicate the
+    // self-check also runs - an observation, never a refusal.
+    if (projectRoot && tracedOutputDir(projectRoot, { enabled: true, cwd: e2eCwd, outputDir: e2eOutputDir })) {
+      out.write(`  ${E2E_TRACE_NOTE}\n`);
+    }
   }
 
   // The two path questions are the only ones whose answer can silently ADOPT something the project
