@@ -264,13 +264,16 @@ The documents the "status / release docs policy" in the payload doc `docs/WORKFL
   Reviewer = "Одитор", QA = "QA".
   These are conversational only - the technical identifiers (`writer`, `reviewer`, `qa`, file paths,
   frontmatter) never change.
-- **English everywhere in the tree (operator rule 2026-10-15).** Plans, tickets, completion records,
-  candidates, rulings, event rows, memory, briefs and verdicts are written in English. Two
-  exceptions, both verbatim: the operator channel stays Bulgarian, and an operator decision or gate
-  word - a ruling, a standing word, a `COVERED BY` quote - is recorded in the operator's own
-  Bulgarian wording, unchanged, with the English reading beside it when one is needed. Existing
-  Bulgarian text is translated only where it is read every session (this document, the open sections
-  of the transfer surface); archived plans and closed rows stay as written.
+- **English everywhere in the tree (operator rule 2026-10-15; restated 2026-10-16: „важно правило
+  от днес завинаги").** Everything written into the project - plans, tickets, completion records,
+  candidates, rulings, ledger rows, memory, briefs, verdicts, commit messages, code comments, docs -
+  is in English. Two things stay Bulgarian: the operator channel (the conversation with the
+  operator), and the operator's own words wherever they are recorded - a gate word, a ruling, a
+  `COVERED BY` quote is written verbatim in the operator's Bulgarian wording („давай одитор" stays
+  „давай одитор"), never translated; an English reading may stand beside it when a sentence needs
+  one. Existing Bulgarian text stays as written: it is translated only when a ticket names it
+  (here: PLB-005, for the sections read every session); nothing translates it ambiently, and
+  archived plans and closed rows stay as they are.
 - Be concise; no step-by-step reasoning narration in the output. Explain concretely when
   architecture or product boundaries are involved.
 - Stop for an operator choice only when unresolved alternatives materially change product intent, an
