@@ -265,6 +265,48 @@ Acceptance (run by the check agent, exact exit codes recorded):
 Risk threshold: any allow beyond the resolved transfer surface, a writable config, or a change to
 the unusable-state allowlist, blocks. Stop: the hook, the two suites, the doc homes.
 
+**Completion record (CLOSED 2026-10-16, operator word „пускай 001", code commit `2cdda73`).**
+- Actual changes: 11 files, 298 insertions / 32 deletions - the worklist as written. Hook:
+  `readProjectConfig` (one reader, `null` on any failure) with `routeWriteGuardEnabled` refactored
+  onto it; `resolveTransferSurface(config, projectDir)` (trimmed value or `<plansDir>/PNP_CANDIDATES.md`
+  with the schema default `docs/backlogs`; refuses win32/posix-absolute, any `..` segment, a non-`.md`
+  basename, a normalised first segment `.claude` - case-folded on win32/darwin, trailing dots and
+  spaces stripped on every platform - and a value that resolves outside the project); `isTransferSurface`
+  on host path identity with the win32/darwin case fold (the hooks' first `process.platform` branch);
+  the extra allow and the deny-text clause only for a ticket state; entrypoint under
+  `require.main === module` + `module.exports`. Selfcheck section 3b2 `sectionGate3Surface` (allow,
+  deny, platform p1-p3, fallback and resolver rows, with a positive control and an entrypoint-guard
+  pre-check); spike table `gate3SurfaceCases` (4 cases); the eight doc homes on the common phrase;
+  CHANGELOG entry under 0.2.19.
+- Deviations: (1) rows (iii) and (p2) of the plan are one platform row (same literal, same
+  expectation); (2) an unreadable or non-object config yields no surface (D5's narrower allowlist,
+  not the fallback); (3) `routeWriteGuardEnabled` takes the parsed config, read once per decision;
+  (4) extra rows beyond the plan: a resolver positive control, a padded value, the refused surface
+  written itself, the entrypoint-guard pre-check (requiring an unguarded hook would end the self-check
+  process with exit 0), the fallback rows also pin the surface named in the deny text, and the spike
+  table's config-file case; (5) the plan's "test label" hit is `aiwf-selfcheck.js:1797`, not `:1794`;
+  (6) the trailing-dot/space fold was added in a pre-verdict micro-round from the Writer's own open
+  question - two resolver rows, red before / green after.
+- Verification (check agent, fresh `sonnet`, D4; Portion 1 as one parallel batch): `node
+  scripts/selfcheck/aiwf-selfcheck.js --plugin-root . --project-fixture .` exit 0, 1290/1290 (and
+  again on the final tree after the prose delta); `node scripts/spike/run-spikes.mjs` exit 0, checks
+  330 / failures 0; `node scripts/setup/test-setup.mjs` exit 0, 502/0; `node
+  scripts/update/validate-payload.mjs --plugin-root .` exit 0; provenance grep exit 1 (clean); the
+  closing grep hits exactly the 11 files (9 at HEAD before the ticket). The Writer saw the new rows
+  red on the pre-fix hook (10 rows, 1269/1279) and green after; the two micro-round rows likewise
+  (1288/1290 -> 1290/1290).
+- Review: fact-check gate over the diff 155 claims, 2 FALSE (a selfcheck comment calling the
+  backslash-named root file "already root-level *.md" - `isAllowlisted` splits on backslashes
+  everywhere; the review-skill Step 2e sentence stating Gate 3 holds plansDir closed unconditionally),
+  both corrected in a prose-only micro-round before the pass; 6 UNVERIFIABLE (OS facts stated as
+  such, the external spike reference, a process rule). Auditor pass 1 (Codex gpt-6-sol/xhigh, session
+  `01a1431e-1fb0-78b3-8afb-fb833ebfb33a`): `pass`, no findings at the risk threshold; the stated
+  residuals (symlink/junction, case-sensitive macOS volume, shell writes) remain. No correction round.
+- Remaining: none blocking. `.aiwf/` holds only the live mechanics (route-state `{}`, the review
+  brief, the session file, the checkpoint); the check agent's logs live in the session scratchpad -
+  nothing to delete under the repo. `D:\pnp-live` refreshed after the record commit, so the new Gate 3
+  is live for PLB-004 onward. Next ticket PLB-004 is routed cheap (Opus, D7): a FRESH session.
+
 ### PLB-002 - Update engine: CHANGES folder, `$schema` refresh, supersede duty; opens 0.2.19
 COO: top, because check 1 (D7).
 Source: CANDIDATES § "Прием от Silerax" items 1 and 3; § "`0011` supersede списъкът".
