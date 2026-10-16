@@ -1157,6 +1157,64 @@ and the first resolve of two may exit 1 because its self-check sees the second a
 unrecorded. Three sentences in Step 4 (hold = edit, then resolve keep-mine; the resolution-file form
 and its key shape; resolve several artifacts before judging the self-check). PLAN_DOCT material.
 
+## UPDATE ARCHITECTURE - the update overwrites, rendered files go thin (operator decision 2026-10-16, the next work; two tickets, NO plan, NO readiness cycle)
+
+Read this before explaining anything to the operator again: it was said once, at length, on
+2026-10-16 night, after PLAN_DOCT's readiness pass 1 (Codex, 12 blockers, ~12% of the weekly quota)
+and an unasked writer-template fix that was reverted.
+
+The operator's words, verbatim (Bulgarian, the operator's channel): „три думи в един файл, 1 час
+тестове и процедури. това спира сега веднага!"; „кой ти даде право да вземаш решения, които съм
+скипнал, вместо мен"; „това не е мое правило! този плъгин е написан от АИ и решенията са ваши -
+уж с цел сигурност, ама на каква цена? три думи струват ли цял тикет, одит, блокери, щото сте
+инженери и все едно строим електроцентрала?"; „минаваме през ада само и само да доставим ново
+правило или поправка на старото до консуматорите. това е прекалено"; „вбесява ме фактът, че ние
+проверяваме някакви си литерали, защото видиш ли да се предпазим от това някой консуматор да не
+ги е редактирал и после да не можем да го ъпдейтнем. ами негова си работа. след като е решил да
+ги бара, да си работи на неговата си версия. ъпдейтът спира или презаписва неговия. точка.
+неговите неща да си ги пише другаде. или да ми се даде възможност във всеки файл да има секция за
+добавяне на негови проектни изисквания или овъррайди. толкова ли е сложно. ... Claude Code ми
+спира ъпдейта, когато имам настройка, която те са премахнали в новата версия, или когато съм
+редактирал settings файл. схващаш ли. цялата архитектура на плъгина е сбъркана. овър тотален
+инженеринг. мега плъгин за 200k доктрина!"; „не, DOCT няма да се закрие, защото проблемът е в
+архитектурата, а не в компактирането на доктрината"; „и на следващия план да минем 5 Codex паса
+с 25 блокера? той и DOCT трябваше да е много простичък docs тикет, а стана план с 6 тикета".
+
+The decision, in English:
+
+- **The update OVERWRITES managed files. Period.** No two-hash bookkeeping, no hold / `--resolve` /
+  `--adopt` / take-new / merge dialogs, no "an update never adopts a file it did not write". A
+  consumer who edited a managed file either does not update or loses the edit - the same contract
+  Claude Code applies to its own settings.
+- **One place for the consumer's own text:** the overrides document, plus ONE marked section
+  (`<!-- project additions -->` ... `<!-- /project additions -->`) in every rendered file that the
+  update preserves verbatim and never reads.
+- **Rules live only in the payload; rendered files are THIN:** project name, paths, model pins,
+  roles, and one pointer line to the payload docs. No rule text is copied into a consumer's project.
+  Delivering a rule or a three-word fix = edit, commit, push, `/plugin update`. Migrations only
+  when the STRUCTURE changes (a new file, a new config key), rarely.
+- **The self-check checks presence and working hooks**, not words: no verbatim-phrase pins, no
+  cross-file literal counts ("230,386 проверки на думи" - the operator's hyperbole, the point stands).
+- **Process for prose in the payload: R1.** Edit, provenance grep, commit. No Writer, no auditor, no
+  plan, no migration, no bump, no readiness. A Codex pass only over CODE and only when the operator
+  asks for it. The AI-written rules "the payload is code = R2" and "a managed-artifact change ships
+  as migration + bump" were never the operator's and STOP (the overrides' § Hard rules bullets are
+  rewritten with the first ticket).
+
+The two tickets (no plan file; recorded here and executed as plain tickets on the operator's word):
+1. **Update engine** - `scripts/update/migrate.mjs` and `aiwf-update.mjs`: rerender ops overwrite;
+   the project-additions section preserved; hold/resolve/adopt/take-new/merge removed with their
+   dialogs; `managedRegions` bookkeeping reduced to "rendered from version X"; the self-check
+   reduced to presence + hooks; the skills (`update`, `setup`, `roles`) rewritten to say so. Code
+   class: one Codex pass over the diff IF the operator asks.
+2. **Thin templates** - `templates/CLAUDE.md.tmpl` region, `ORCHESTRATOR.md.tmpl`,
+   `agents/*.tmpl`, `AGENTS.md.tmpl`: project data + pointer; the rule text they carry today goes
+   back to `docs/` (where it already is, mostly); one migration re-renders them once; the
+   writer-template routing fix rides here.
+
+PLAN_DOCT is PARKED, not closed (the draft r5 and `readiness/DOCT/` stay on disk, uncommitted);
+the compaction of the doctrine is a separate question for after the architecture.
+
 ## The Writer template inlines a test routing that contradicts the project's (born 2026-10-16, Furnissimo closing grep after the alignment)
 
 `templates/agents/writer.md.tmpl:80-82` says "Route per this project's test policy (named in the
@@ -1352,6 +1410,7 @@ xhigh) излиза по-скъп от студен. Решава се само 
 | PLB-003 code p1 (2026-10-15, `gpt-6-sol`/xhigh, session `01a1408b-181a-7941-bd7c-cb54f60cb901`, operator word „пускай"; pnp-live still at the 0.2.18 payload, D10) | code | cold | 114,008 | — | — | fail (1 blocker: `paths.overridesDoc = AGENTS.md` planned two writes to one path with no refusal; 1 note on the RECIPE sentence) → code round 1 (10 code lines + 10 test lines + 2 prose), no verification pass by operator word „без пас" on the COO's suppression-dual recommendation |
 | PLB-001 code p1 (2026-10-16, `gpt-6-sol`/xhigh, session `01a1431e-1fb0-78b3-8afb-fb833ebfb33a`, operator word „пускай 001"; pnp-live at `695a8fc`, 0.2.19 payload) | code | cold | 55,959 | — | — | pass (0 findings; fact-check before it 155 claims / 2 FALSE fixed in a prose micro-round; the evidence pack carried the check agent's green VERIFY) |
 | PLB-004 code p1 (2026-10-16, `gpt-6-sol`/xhigh, session `01a1435c-65af-7b93-8e79-a744772e1102`, operator word „пускай"; top COO by operator word instead of D7's cheap; pnp-live at `2afa758`) | code | cold | 60,325 | — | — | pass-with-notes (0 blockers; 2 notes: CHANGELOG section of the `--show` entry - kept; a controls comment - one line fixed before the commit; fact-check before it 84 claims / 0 FALSE) |
+| PLAN_DOCT readiness p1 (2026-10-16, `gpt-6-sol`/xhigh, session `01a1461e-ac90-7810-8995-12577d2784c4`, operator word „пускай PLAN_DOCT"; pnp-live at `bd8fd57`, 0.2.19 payload; draft r3 hash `5ba2fb6c`) | plan | cold | 215,992 | — | 6.2 (output file 22:09:35 -> 22:15:47) | NEEDS-FIX (12 blockers, all instrument/contract precision: counts-before line count, B-rule split unproven, map checks without range identity, keys per file, the qa Step 3 fence vs C-040, the BLOCKED precondition, qa.md.tmpl scope, the ops.json key name, op coverage scope, the live-copy refresh word, overrides-equivalence per bullet, the D8 write-path lock decision; 0 design blockers; before it: ledger 124 rows, scan 190 rows, fact-check 624 claims / 48 FALSE fixed, own pass 3 blockers) -> r4 |
 
 ## Event ledger (D16 формат: | дата | правило | violation|catch|operator-correction | указател |)
 
@@ -1437,6 +1496,7 @@ xhigh) излиза по-скъп от студен. Решава се само 
 | 2026-10-15 | a pre-verdict micro-round keeps the instrument fail-capable (WORKFLOW § COO owns broad scans, tripwire 4) | catch (auditor) | PLB-002: the COO's micro-round narrowed an existing test-update assertion to `every()` over a possibly empty list; the Writer reported "if no file changed at all, the check also passes" and the COO let it through; Codex pass 1 raised it as a blocker. Pointer: PLAN_PLB § PLB-002 completion record |
 | 2026-10-15 | the provenance scan reads root `*.md` as payload; the self-check is the gate (overrides § Hard rules Provenance) | catch (self-check, on the first consumer proof of 0023) | PLB-003 D10 self-update: the integrated self-check went red 1257/1262 because the new `$schema` line of `CHANGES_0.2.18-to-0.2.19.md` carries two drive-letter paths and the report sat at the root; resolved by `paths.changesDir = "dev/changes"` for this repo, then 1262/1262. Pointer: PLAN_PLB § PLB-003 completion record; candidate "root `CHANGES_*.md` history vs `dev/changes/`" |
 | 2026-10-16 | CLAUDE.md § Shared rules "Run git bare from the repo root ... no `-C` prefix" | operator-correction | `/pnp:mission` reconstruction: the COO ran `git -C D:\pnp-live log --oneline -1` to confirm the live copy's HEAD, which raised a dialog; the operator: „защо ми поиска гит диалог". The check was not needed for the reconstruction; the only `-C` form in this project is the documented pnp-live refresh after a commit. Pointer: this row |
+| 2026-10-16 | a skipped dialog answer is NOT delegation; the plugin's own ceremony applied to three words of prose | operator-correction | PLAN_DOCT night: the COO read "[No preference]" on an AskUserQuestion as "decide yourself" and started an R1 writer-template fix with migration 0024 + bump + CHANGELOG + validate; the operator: „кой ти даде право да вземаш решения, които съм скипнал, вместо мен"; reverted on „ревът" (payload back to `7a3ec90`). Same night: the readiness cycle on PLAN_DOCT (4 scans, ledger 124, scan 190, fact-check 624 claims, Codex pass 12 blockers, two delta gates) was the plugin's doctrine followed literally on a prose plan; the operator: „три думи в един файл, 1 час тестове и процедури - това спира сега". Pointer: § UPDATE ARCHITECTURE above |
 | 2026-10-16 | overrides § Communication "A dialog only when the ticket cannot continue" (operator rule 2026-10-16, landed `c8378f6` the same session) | operator-correction (PnP and Furnissimo) | The same session that landed the rule asked two blocking questions in chat instead of the AskUserQuestion dialog (what to do with the denied candidate commit; the „да" for the writer.md interim fix); the Furnissimo session asked in chat too. Operator: „единствено Silerax спазват правилото за задаване на въпроси с диалог, нито ти нито Фурнисимо го спазват макар че вече е влязло в сила". Cause: habit, and the rule text not re-read before the gate („Заглавие не е текст"). Corrected in both sessions the same turn |
 
 ## D2 pointer rows
