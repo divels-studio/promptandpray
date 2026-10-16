@@ -671,6 +671,48 @@ present; the same without `next.config.js`, with `enabled: false`, and with no `
 `app/next.config.js` sees `E2E_TRACE_NOTE` in `out`. Risk threshold: a changed exit code of any
 script, or a note that becomes a failure, blocks. Stop: (a)-(d).
 
+**Completion record (CLOSED 2026-10-16, operator word „пускай", code commit `1b2045f`).**
+- COO routing: run on the TOP COO (Fable, this session) instead of D7's cheap COO - operator word
+  „пускай" after „новата сесия струва 180К пейлоад" (2026-10-16): the start-up cost of a fresh session
+  outweighed the top-tier premium on a three-defect ticket. Writer and audit table unchanged.
+- Actual changes: 7 files, 258 insertions / 33 deletions. (a) `aiwf-roles.mjs` `--show` sets
+  `process.exitCode = 0` and the write path sits in the `else`; the setup suite's pin gains
+  `'process.exit(0);'` in the aiwf-roles `absent` array (the entry already carried `absent`) with the
+  control `roles-show-exit-zero`. (b) selfcheck pin `doctrine-role-boundaries-structure` (readers
+  `roleBoundaryNames` / `DOCTRINE_ROLE_BOUNDARIES`; a missing role, a stranger bullet AND a duplicate
+  bullet fail) with three controls `loop-role-bullet-removed` / `-stranger` / `-duplicate` through a
+  shared `afterOperatorBullet` helper. (c) new `scripts/setup/e2e-trace-note.mjs` (`tracedOutputDir`,
+  `E2E_TRACE_NOTE`); selfcheck `e2eTraceNote` child-process evaluation + `addObservation(
+  'e2e-outputdir-traced', ...)` in `projectLayerFindings`, own section `sectionE2eTraceObservation`
+  (T1-T4); interview prints the note after the outputDir answer on the effective values when
+  `projectRoot` is given; test-setup section 12d (two scripted runs); `scripts/setup/README.md` row.
+  (d) CHANGELOG: two `### Added` entries, one `### Fixed`.
+- Deviations: (1) labels and comments say `"## Role boundaries"` instead of `§` (ASCII payload);
+  (2) the selfcheck rows are their own section after `sectionDraftsObservations`, read through the
+  real `projectLayerFindings` outside `captured()`; (3) the predicate child is spawned only when
+  `cfg.verify.e2e` is truthy; (4) beyond the plan, from the Writer's handoff questions: the README
+  row and the duplicate-bullet check + control (COO decision, same ticket); (5) the plan's "test
+  label" pointer and the test-setup/selfcheck line numbers were re-anchored by a sonnet scan before
+  the brief (test-setup +47, selfcheck +160..170).
+- Verification (check agent, fresh `sonnet`, D4; Portion 1 as one parallel batch, ~13 min): `node
+  scripts/selfcheck/aiwf-selfcheck.js --plugin-root . --project-fixture .` exit 0, 1298/1298; `node
+  scripts/setup/test-setup.mjs` exit 0, 505/0; `node scripts/update/validate-payload.mjs --plugin-root .`
+  exit 0; `claude plugin validate .` exit 0 (one pre-existing warning about root CLAUDE.md); Git Bash:
+  `--show` redirected exit 0, `grep -c "role/class"` = 1, `git diff --exit-code --
+  .claude/aiwf-native/aiwf.config.json` exit 0; provenance grep exit 1; the new file has no non-ASCII
+  byte (`LC_ALL=C grep -n "[^[:print:][:space:]]"` exit 1). Red before / green after (Writer): the
+  roles control (`saw []`), section 12d (`no such line`), selfcheck T1 with the wiring disabled
+  (1296/1297); the three doctrine controls report `sabotage detected ... FAIL as required`.
+- Review: fact-check gate over the diff 84 claims, 0 FALSE, 8 UNVERIFIABLE (Next.js tracing and
+  Node's process-I/O note - external, stated as such; one rationale sentence). Auditor pass 1 (Codex
+  gpt-6-sol/xhigh, session `01a1435c-65af-7b93-8e79-a744772e1102`): `pass-with-notes`, no blockers;
+  two notes - the `--show` CHANGELOG entry sits under `### Fixed` (the COO's two briefs disagreed;
+  `Fixed` is right, kept) and the controls comment said "one control per direction" with three
+  controls (one comment line rewritten before the commit, no rerun). No correction round.
+- Remaining: none blocking. `.aiwf/` holds only the live mechanics; the check agent's logs are in the
+  session scratchpad. `D:\pnp-live` refreshed after the record commit. Next: PLB-005 (cheap COO by
+  D7) - the operator decides the session at its word; the ticket gains the measurement step below.
+
 ### PLB-005 - English where it is read every session
 COO: cheap (Opus), because all four no - ruling 2026-10-15 on check 2 (D7).
 Source: operator rule 2026-10-15 (overrides § Communication, "English everywhere in the tree").
@@ -711,6 +753,13 @@ Git Bash, D4):
 - the equivalence scan reports 0 differing spans and 0 stray Cyrillic lines.
 Risk threshold: a changed quote, a dropped row or a missing `(was:)` line blocks. Stop: the two
 files.
+Measurement step (added 2026-10-16, operator word „да" to the COO's proposal; a record item, not a
+gate): BEFORE the translation and AFTER it, a `sonnet` scan agent counts the tokens of
+`dev/backlogs/CANDIDATES.md` and of the translated overrides bullet - for Claude through the
+Anthropic token-count endpoint (`messages.count_tokens`, the model named in the record), for Codex
+through `tiktoken` `o200k_base` - and the completion record carries the four numbers with the exact
+commands that produced them (Bulgarian vs English cost, overrides § Data discipline: measured or not
+stated). The step changes nothing in the ticket's acceptance.
 
 ### PLB-006 - Closeout 0.2.19
 COO: cheap (Opus), because all four no (D7).
