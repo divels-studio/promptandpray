@@ -1206,7 +1206,13 @@ The two tickets (no plan file; recorded here and executed as plain tickets on th
    the project-additions section preserved; hold/resolve/adopt/take-new/merge removed with their
    dialogs; `managedRegions` bookkeeping reduced to "rendered from version X"; the self-check
    reduced to presence + hooks; the skills (`update`, `setup`, `roles`) rewritten to say so. Code
-   class: one Codex pass over the diff IF the operator asks.
+   class: one Codex pass over the diff IF the operator asks. **What the consumer learns after
+   `/plugin update` (operator question 2026-10-16):** the CHANGELOG travels with the plugin; every
+   entry carries one line `Retires local rules: ...` naming the local rules the payload now carries;
+   at session start (`/pnp:mission` / `/pnp:update`) the consumer's COO compares the installed
+   version with the payload's and prints the CHANGELOG blocks in between ONCE - that replaces the
+   migration note + `supersedes` list. Deleting the local rules stays the consumer COO's act on its
+   own overrides document, on its operator's word - never automatic.
 2. **Thin templates** - `templates/CLAUDE.md.tmpl` region, `ORCHESTRATOR.md.tmpl`,
    `agents/*.tmpl`, `AGENTS.md.tmpl`: project data + pointer; the rule text they carry today goes
    back to `docs/` (where it already is, mostly); one migration re-renders them once; the
