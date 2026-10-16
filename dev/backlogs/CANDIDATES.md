@@ -1063,6 +1063,23 @@ and the provenance scan reads root `*.md` as payload (self-check red at the D10 
 green at 1262/1262 after the move). Either `git mv` the 21 into `dev/changes/`, or leave the split
 and say so in `dev/README.md` (done); a candidate, not a debt.
 
+## Update: a `createIfAbsent` op meeting a foreign file offers keep-mine instead of refusing (born 2026-10-16, Furnissimo's first 0.2.19 update)
+
+Migration 0023's AGENTS.md op refuses a hand-written file at the path ("this installation has no
+record of it ... move it aside"), by the PLB-003 design: the conflict vocabulary is wrong for a
+creation. On the first consumer both installations had such a file (Furnissimo 258 lines, Silerax
+272 - the root agent entrypoint their Codex hosts load natively), and `--resolve AGENTS.md` works
+only on a RECORDED key (`resolveArtifact`, `scripts/update/migrate.mjs`), so the working path is
+three steps: `git mv` aside -> update (renders + records) -> put the file back -> `--resolve
+AGENTS.md` keep-mine (override). The candidate: on a `createIfAbsent` op with no record and a
+differing file on disk, open the ordinary conflict dialog with `keep-mine` (record the standing file
+as held: local = hash(actual), upstream = hash(render), override true) and `take-new` (the operator
+moved it aside themselves); `merge` stays out, and a dry run reports the pending decision instead of
+exit 1. Setup's `--adopt` already has `adoptDecide` for the same state (`generate.mjs`). Cost: the
+engine branch at `migrate.mjs` ~:642-660 plus the resume rule ~:1191-1205, two update-suite cases,
+NOTES.md of the next migration. For PLAN_DOCT or PLAN_FOLD; the three-step path stands meanwhile
+(both consumers were sent it on 2026-10-16).
+
 ## Plan layout: the tickets section never moves (operator thought 2026-10-15, for PLAN_FOLD)
 
 Operator, thinking aloud: a header index with a ticket tracker and a short handoff pointing at each
