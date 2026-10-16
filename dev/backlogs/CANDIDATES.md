@@ -1143,6 +1143,23 @@ Each is a local rule whose own text names the payload as its successor; none is 
   PLAN_PLB § Scope - the consumer's "ПРЕНЕСЕН" marker should read "rejected, reason in PLAN_PLB".
 PLAN_DOCT material; each takes its own row when written into a plan.
 
+## The Writer template inlines a test routing that contradicts the project's (born 2026-10-16, Furnissimo closing grep after the alignment)
+
+`templates/agents/writer.md.tmpl:80-82` says "Route per this project's test policy (named in the
+overrides)" and then inlines a routing of its own: "pure logic -> unit tests; route/auth/navigation/
+runtime -> runtime/E2E proof; mixed -> both". After the 2026-10-16 alignment the three projects carry
+the C-006 routing (E2E only for a business result through server + browser that cannot be proven
+otherwise; never a visual property, a text or "the page loads"; operator rule 2026-10-05), so the
+rendered `writer.md` in every consumer states a routing the overrides no longer hold; auth or
+navigation alone is no E2E trigger any more. A hand edit of the rendered file is an update conflict,
+so the fix is the template: drop the inline summary, keep the pointer ("Route per this project's test
+policy - `{{config.paths.overridesDoc}}` § Test policy"), one home per project. Managed artifact ->
+migration + version bump; PLAN_DOCT (0.2.20) material. Interim in both consumers (operator word
+2026-10-16 „да"): the rendered `writer.md` edited to the pointer only and HELD keep-mine
+(`/pnp:update --resolve .claude/agents/writer.md`, the operator's own command there); when the
+template fix ships, the resolution is take-new. Until the hold is recorded every Writer brief carries
+the routing line.
+
 ## The diff-review record before the auditor pass (born 2026-10-16, from the cross-project alignment)
 
 Silerax holds "before the auditor pass the COO reads the ticket's whole diff in person and records it
@@ -1406,6 +1423,7 @@ xhigh) излиза по-скъп от студен. Решава се само 
 | 2026-10-15 | a pre-verdict micro-round keeps the instrument fail-capable (WORKFLOW § COO owns broad scans, tripwire 4) | catch (auditor) | PLB-002: the COO's micro-round narrowed an existing test-update assertion to `every()` over a possibly empty list; the Writer reported "if no file changed at all, the check also passes" and the COO let it through; Codex pass 1 raised it as a blocker. Pointer: PLAN_PLB § PLB-002 completion record |
 | 2026-10-15 | the provenance scan reads root `*.md` as payload; the self-check is the gate (overrides § Hard rules Provenance) | catch (self-check, on the first consumer proof of 0023) | PLB-003 D10 self-update: the integrated self-check went red 1257/1262 because the new `$schema` line of `CHANGES_0.2.18-to-0.2.19.md` carries two drive-letter paths and the report sat at the root; resolved by `paths.changesDir = "dev/changes"` for this repo, then 1262/1262. Pointer: PLAN_PLB § PLB-003 completion record; candidate "root `CHANGES_*.md` history vs `dev/changes/`" |
 | 2026-10-16 | CLAUDE.md § Shared rules "Run git bare from the repo root ... no `-C` prefix" | operator-correction | `/pnp:mission` reconstruction: the COO ran `git -C D:\pnp-live log --oneline -1` to confirm the live copy's HEAD, which raised a dialog; the operator: „защо ми поиска гит диалог". The check was not needed for the reconstruction; the only `-C` form in this project is the documented pnp-live refresh after a commit. Pointer: this row |
+| 2026-10-16 | overrides § Communication "A dialog only when the ticket cannot continue" (operator rule 2026-10-16, landed `c8378f6` the same session) | operator-correction (PnP and Furnissimo) | The same session that landed the rule asked two blocking questions in chat instead of the AskUserQuestion dialog (what to do with the denied candidate commit; the „да" for the writer.md interim fix); the Furnissimo session asked in chat too. Operator: „единствено Silerax спазват правилото за задаване на въпроси с диалог, нито ти нито Фурнисимо го спазват макар че вече е влязло в сила". Cause: habit, and the rule text not re-read before the gate („Заглавие не е текст"). Corrected in both sessions the same turn |
 
 ## D2 pointer rows
 
