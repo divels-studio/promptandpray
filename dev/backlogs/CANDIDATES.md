@@ -1093,6 +1093,53 @@ host's auto-mode classifier refused the first `--apply` as self-modification (th
 started); the operator switched auto mode off for the run - a host behaviour worth one sentence in
 the update skill.
 
+## The rendered `AGENTS.md` carries the hard rules, not only pointers (born 2026-10-16, both consumers' 0.2.19 updates)
+
+Both consumers keep a hand-written `AGENTS.md` (Furnissimo 258 lines, Silerax 272) because the Codex
+auditor reads that file natively and nothing else of the doctrine; its body duplicates their own
+overrides (Furnissimo: 14 twin sections). The 0.2.19 render (D8) carries three sections and pointers
+to the canon, so neither consumer could take it - both hold their file as keep-mine. Candidate: the
+template renders the project's § Hard rules (and the product boundary checks? - D8 said no: they are
+the Reviewer's) from the overrides into the body, so the file stops being hand-written; or a measured
+answer first - does Codex open the overrides when `AGENTS.md` names them? A product decision for the
+operator; the design cost is the render context (the overrides are operator-owned text, not a
+template variable today).
+
+## Payload says "a turn of its own" for the own pass; the consumers hold "a turn is not a stop" (born 2026-10-16, Furnissimo scan)
+
+`docs/WORKFLOW.md` (§ Plan readiness review: "the COO does it in a SEPARATE turn", and twice more)
+and `skills/review/SKILL.md` Step 2d ("in a turn of its own") still say a separate turn for the own
+pass, while `templates/ORCHESTRATOR.md.tmpl` § Verdict and dispatch carries the dual "a verdict gets
+its own message, not its own turn" for the verdict only. Furnissimo keeps a local rule "a turn of its
+own is not a stop" (`docs/ai/PROJECT_OVERRIDES.md:339-342`, `PNP_CANDIDATES.md:49-52`) against that
+reading. One sentence in the payload: the own pass is its own MESSAGE after the gate inputs are
+closed, and the turn goes on to the dispatch. PLAN_DOCT material.
+
+## Consumer rules with an unmet "expires when PnP carries it" (born 2026-10-16, Furnissimo and Silerax scans)
+
+Each is a local rule whose own text names the payload as its successor; none is carried by 0.2.19:
+- chain-trace in the evidence pack (Furnissimo overrides:329-330, PNP_CANDIDATES:27-28; Silerax
+  overrides:444-456): the code-pass evidence pack is `file:line` pointers (`skills/review/SKILL.md`
+  § evidence pack); the consumers add an ordered entry-point-to-endpoint chain per Outcome behaviour;
+- the delta consequence scan and the delta fact-check run in PARALLEL, with no separate
+  pointer-refresh agent (Furnissimo overrides:337; Step 2c says nothing about running beside Step 2b);
+- `--trace retain-on-failure` instead of `--trace on` in the QA run (Furnissimo UIR-003 (1);
+  `skills/qa/SKILL.md` canonical command);
+- the Writer copies the runner's JSON report into `.aiwf/` right after the run, before anything can
+  clean the output dir (Furnissimo UIR-003 (3));
+- "no `cd` prefix on ANY command", not only before git (Furnissimo overrides:289-296; the managed
+  CLAUDE.md covers `cd X && git`);
+- surgical edits over whole-file rewrites (Furnissimo memory; this repo's memory too - 0022 carries
+  only "Edit/Write, not the shell");
+- the host's auto mode refuses writes to `.claude/settings.json` and refused Furnissimo's
+  `/pnp:update --apply` as self-modification (memory `automode-blocks-settings-json.md`; the 0.2.19
+  run) - a sentence in the setup/update skills;
+- "do not offer `/pnp:brief` when the state is durable - `/pnp:mission` reconstructs it"
+  (Furnissimo memory `no-brief-offer-when-durable.md`);
+- Silerax: a per-ticket `last-review-session.<REF>.txt` (item 9 of § „Прием от Silerax") stays OUT by
+  PLAN_PLB § Scope - the consumer's "ПРЕНЕСЕН" marker should read "rejected, reason in PLAN_PLB".
+PLAN_DOCT material; each takes its own row when written into a plan.
+
 ## Plan layout: the tickets section never moves (operator thought 2026-10-15, for PLAN_FOLD)
 
 Operator, thinking aloud: a header index with a ticket tracker and a short handoff pointing at each
