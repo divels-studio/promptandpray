@@ -65,22 +65,21 @@ PromptAndPray is **not**:
   the native `ask` dialog. Fetch, cherry-pick, and sync likewise need explicit approval.
 - Do not start long-running services. There are none in this project; a `claude` session started
   to observe a gate live is the operator's, never an agent's.
-- **The payload is code.** Every change under `skills/`, `docs/`, `templates/`, `scripts/`,
-  `schema/`, `hooks/`, `migrations/`, `examples/` or `.claude-plugin/` is **R2** at least - through the
-  Writer, never a direct edit from the main session; the auditor is the audit table's row for the
-  class (docs row 0 = none, code row 1). `dev/` and the self-install layer
-  (`.claude/`, root `CLAUDE.md`) are R1 docs unless the ticket says otherwise.
-- **Release discipline.** A managed artifact (anything `templates/` renders, the ask-ruleset, the
-  managed `CLAUDE.md` region) never changes silently: the change ships as a migration under
-  `migrations/NNNN_<slug>/` + a `version` bump in `.claude-plugin/plugin.json` + a `CHANGELOG.md`
-  block. The tag is created LOCALLY on the record commit and pushed WITH `main` in ONE push - two
-  words (the tag word, the push word), one dialog; CI is not waited for (operator rule 2026-10-02,
-  standing until revoked).
-  A version is released when that push lands; CI proves the pushed commit afterwards, and a red
-  POSIX leg is a defect ticket, not a release block. A consumer picks the version up only through
-  `/plugin update` + `/pnp:update` - that path is the product - and proves it on its own next
-  update. A prose-only release (docs/, skills/) is the version bump, the CHANGELOG block and a
-  note-only migration; nothing else runs locally.
+- **Prose in the payload is R1; code goes through the Writer** (operator decision 2026-10-16).
+  Prose - `docs/`, `skills/`, the text of `templates/`, `README.md`, `CHANGELOG.md` - is edited in the
+  main session: edit, provenance grep, `validate-payload`, commit; no Writer, no auditor, no plan, no
+  readiness. Code - `scripts/`, `hooks/`, `schema/`, `.claude-plugin/` - goes through the Writer; a
+  Codex pass over code only on the operator's word, never by default. `dev/` and the self-install
+  layer (`.claude/`, root `CLAUDE.md`) are R1.
+- **Release discipline** (operator decision 2026-10-16). A migration only when the STRUCTURE changes -
+  a new file, a new config key, a re-render of the managed artifacts; a prose change ships with the
+  plugin itself (commit, push, `/plugin update`) and needs no migration. A version bump in
+  `.claude-plugin/plugin.json` and a `CHANGELOG.md` block (ending `Retires local rules:`) when a
+  release is cut. The tag is created LOCALLY on the record commit and pushed WITH `main` in ONE
+  push - two words (the tag word, the push word), one dialog; CI is not waited for (operator rule
+  2026-10-02). A version is released when that push lands; CI proves the pushed commit afterwards,
+  and a red POSIX leg is a defect ticket, not a release block. A consumer picks the version up only
+  through `/plugin update` + `/pnp:update` - that path is the product.
 - **Provenance.** `git grep -nP "[\x{0400}-\x{04FF}]" -- docs skills templates scripts schema hooks
   migrations` is empty before every commit - for a prose-only diff that grep IS the gate; the
   self-check's provenance section (origin names as digests, e-mail, Cyrillic by code point,
@@ -222,16 +221,18 @@ The literal VERIFY commands live in `aiwf.config.json`:
 - `spikes`: `node scripts/spike/run-spikes.mjs` (cwd: `.`)
 - `plugin-validate`: `claude plugin validate .` (cwd: `.`)
 
-**VERIFY is proportional to the change** (operator rule 2026-09-24). A ticket runs only the suites
-its diff can break, and the brief names them:
+**VERIFY is proportional to the change** (operator rules 2026-09-24, 2026-10-17). A change owes
+only what its diff can break, run ONCE:
+- prose, skills, docs, templates, README, CHANGELOG -> NO suite: the provenance grep (`git grep -nP
+  "[\x{0400}-\x{04FF}]" -- docs skills templates scripts schema hooks migrations examples README.md`)
+  + `validate-payload`; a template change adds one render dry-run on a scratch copy (seconds);
 - schema / config / roles -> `selfcheck`, `validate-payload`, `setup-suite`;
-- update engine / migrations / examples -> `update-suite`, `validate-payload`,
-  `example-cycle-windows`, `selfcheck`;
+- update engine / migrations -> `update-suite`, `validate-payload`, `selfcheck`;
 - hooks / gates -> `selfcheck`, `spikes`;
-- docs / skills prose -> `validate-payload` + the provenance grep (`git grep -nP "[\x{0400}-\x{04FF}]" -- docs skills templates scripts schema hooks migrations examples README.md`); `selfcheck` only when the diff also touches `scripts/`, `hooks/`, `templates/` or `schema/`.
-A diff that spans several rows runs their union; nothing beyond the ticket's own row runs locally
-(operator rule 2026-09-28, HARD-021). CI runs the full set on the pushed commit, after the fact, on
-`windows` and `ubuntu` (§ Hard rules, Release discipline).
+- `scripts/ci/` or `examples/` -> the example cycle too.
+A diff that spans several rows runs their union; nothing beyond the ticket's own rows runs locally
+(operator rule 2026-09-28, HARD-021), and no row runs twice. CI runs the full set on the pushed
+commit, after the fact, on `windows` and `ubuntu` (§ Hard rules, Release discipline).
 
 **VERIFY runs in PORTIONS** (operator rules 2026-09-17, 2026-09-19, 2026-09-22). Portion 1: the
 eight Windows commands above as ONE parallel batch. Portion 2: the POSIX suites under WSL (user
@@ -247,15 +248,12 @@ snap `pwsh` cache, root prep + `su - pnp` legs) live there; this section stays t
 Every brief that runs VERIFY carries the pointer, and a red test on a trap described there is a
 defect of the brief, not of the code.
 
-**Checks are run by a fresh scan agent, not the Writer** (operator rule 2026-10-15). The full
-VERIFY batch, the acceptance commands and every re-run are run by a new `general-purpose` agent on
-`sonnet` with only the commands of the COO's brief and the runbook pointer; it fixes nothing, writes
-no tracked file, runs no git, and returns each command with its exact exit code, the pass/fail
-counts, the failing checks' names and the tail of their output; on an environment failure it stops
-and reports. The Writer is called only when something fails and needs a fix - the live one if there
-is one, otherwise a new one. *Suppression dual:* the Writer still runs the targeted check it needs while writing (a test
-it just added, seen red before the fix). Rationale: payload `docs/WORKFLOW.md` § COO owns broad
-scans, tripwire 3.
+**The Writer's green run of a row IS its verification** (operator rule 2026-10-17, replacing the
+2026-10-15 rule). A row the Writer ran green while writing is verified; a fresh `general-purpose`
+agent on `sonnet` runs ONLY a row the Writer did not run, with the exact commands and the runbook
+pointer, fixes nothing, writes no tracked file, runs no git, and returns exit codes and summary
+lines. Never a second full batch over rows already green. Logs of any run go OUTSIDE the repository
+(the example cycle asserts a byte-identical tree).
 
 **Independent units run in parallel by default** (operator rule 2026-10-02 and 2026-10-05) -
 independent steps, large mechanical Writer work split across two or more Writers from the dispatch,
@@ -404,6 +402,9 @@ mechanics and are **not** editable here (see the payload doc `docs/WORKFLOW.md` 
 - **Dialogs only at the gates** (operator rule 2026-10-05). Agents work without dialogs: dialogs stay
   only at the gates (commit, push/merge/rebase, destructive or system-changing operations, the word
   for a paid pass), and every Writer brief carries this line.
+- **No audit-pass question for prose** (operator decision 2026-10-16). Prose takes no auditor pass, so
+  the "does this ticket get an audit pass?" question is asked only for a code ticket; a Codex pass
+  over code runs only on the operator's word.
 - **Ticket-end cleanup** (operator rule 2026-10-06, widened 2026-10-16). At the end of a ticket
   everything the ticket created under `.aiwf/` is deleted, with no chat question - the delete dialog
   is the gate; anything worth keeping moves to the documentation folder (`readiness/<ABBR>/` or the
