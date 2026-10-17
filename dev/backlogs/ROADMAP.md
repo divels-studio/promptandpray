@@ -19,6 +19,6 @@ The COO writes the entries, one `##` per idea, in the format below; entries foll
 - Why: „не искам да гася пожара, а да го предотвратя"
 - Scope: in - the cycle, its gate, its skill, its docs, the measurement; out - the suites, the public README
 - Size: M
-- Plans: PLAN_RBA (done 2026-10-17, archived as `012_PLAN_RBA_2026-10-17/`); PLAN_RBB (`active/RBB/`, approved 2026-10-17 after one cold + one resumed Codex pass, in progress); plan C not yet
+- Plans: PLAN_RBA (done 2026-10-17, archived as `012_PLAN_RBA_2026-10-17/`); PLAN_RBB (`active/RBB/`, approved 2026-10-17 after one cold + one resumed Codex pass, in progress); plan C not yet - it also takes the plan gate's byte cap counting a ticket's `Status:` line (status belongs to the index table; arbitration note 2026-10-17, CANDIDATES § Ruling ledger)
 - Status: in progress
 - Born: 2026-10-17, operator word „да"
