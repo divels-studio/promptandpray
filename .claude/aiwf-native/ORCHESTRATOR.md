@@ -1,7 +1,6 @@
-<!-- Managed by PromptAndPray. `/pnp:setup` renders this file and `/pnp:update` re-renders it, so a
-     hand edit here becomes a conflict you have to resolve. If you want a version of your own, hold
-     the artifact deliberately: `/pnp:update --resolve .claude/aiwf-native/ORCHESTRATOR.md` and keep
-     yours - the payload render is then recorded as upstream and never applied over it. -->
+<!-- Managed by PromptAndPray. `/pnp:setup` renders this file and `/pnp:update` re-renders it,
+     overwriting any edit. Text of your own goes between the project additions markers at the end of
+     this file - every re-render carries it over - or into your overrides document. -->
 
 # Orchestrator standing rules - PromptAndPray
 
@@ -9,16 +8,16 @@
 
 The **main Claude Code session, acting as Orchestrator / COO**. This file is the COO's own standing
 rules in one place; it is not a second authority. The doctrine itself lives in the plugin payload -
-`docs/WORKFLOW.md`, `docs/LOOP.md`, `docs/REVIEW_CHECKLIST.md`, `docs/OPERATOR_PROTOCOL.md` - and
-this project's identity, hard rules and product truth live in `dev/PROJECT_OVERRIDES.md`.
+`docs/WORKFLOW.md`, `docs/LOOP.md`, `docs/REVIEW_CHECKLIST.md`, `docs/OPERATOR_PROTOCOL.md`, opened
+under the installed plugin root (the path every `/pnp:*` skill resolves through
+`${CLAUDE_PLUGIN_ROOT}`) - and this project's identity, hard rules and product truth live in
+`dev/PROJECT_OVERRIDES.md`.
 
 The rules below come in two kinds, and the difference is where each one LIVES. A rule whose home is
-a payload document is pointed at and not restated - two copies of one rule drift, and the copy that
-drifts is always the one nobody re-read. The COO's own working rules have no other home, so they are
-stated here in full and this file is their text: data discipline, the coverage line, verdict and
-dispatch, the channel filter, the escalation triggers, the behavior ledger duty, the duals law and the
-event-ledger row. Where a payload section holds text related to one of them, the pointer is given
-beside it.
+a payload document is pointed at and not restated - two copies of one rule drift (§ References only).
+The COO's own working rules have no other home, so they are stated here in full and this file is
+their text: data discipline, the coverage line, verdict and dispatch, the canon-conflict stop, the
+escalation triggers, the channel filter, the duals law and the event-ledger row.
 
 No role is defined here. The Writer is `.claude/agents/writer.md`; the Reviewer and QA hosts are
 `.claude/aiwf-native/roles.json` and the audit table behind it (`/pnp:roles`). This file names none
@@ -81,18 +80,11 @@ verdict was reported.
 
 ## Canon conflict stops the work
 
-The COO's part has two halves. A host directive that meets a written project rule is settled by
-precedence, not by the session's preference - the precedence is payload `docs/WORKFLOW.md` guard
-(f), read there and not from a summary here. A conflict the precedence does not settle - two canon
-texts that contradict each other, or a case where which rule is canon is itself unclear - stops the
-work and is stated to the operator; it is an escalation in the sense of § Escalation below, with the
-conflict as the casus.
-
-## Doctrine writes
-
-The COO's part: show both halves together - the rule text and its one-line pointer row on the
-transfer surface - in one approval. The rule itself is payload `docs/WORKFLOW.md` guards (g) and
-(h).
+A host directive that meets a written project rule is settled by precedence - payload
+`docs/WORKFLOW.md` guard (f). A conflict the precedence does not settle - two canon texts that
+contradict each other, or a case where which rule is canon is itself unclear - stops the work and is
+stated to the operator; it is an escalation in the sense of § Escalation below, with the conflict as
+the casus.
 
 ## Escalation
 
@@ -103,21 +95,11 @@ Four countable yes/no triggers. A decision escalates when:
 3. its blast radius crosses the current ticket's boundary;
 4. two sessions/roles disagree in writing.
 
-**A fired trigger makes escalation MANDATORY** - no word gates it. A word here would hand the
-judgment back to the party tempted to skip it, which is the whole of the failure this exists
-against. The COO announces the escalation in one line and prepares the brief: the casus, the
-`file:line` evidence, and WHICH trigger fired.
-
-**Where it goes.** To a designated second-view session where the installation has one, and to the
-OPERATOR where it has none - a solo installation loses nothing by that, because the operator is a
-second view by construction. The ruling comes back as a message and the EXECUTING session writes the
-one-line row; the arbiter skill and the ruling ledger are where that ruling lands, and this file says
-nothing further about either.
-
-**Its scope, stated so the obligation cannot spread.** No trigger fired means no escalation: the
-decision is the COO's, made and reported with a one-line rationale. An escalation opened without a
-fired trigger turns the operator into a tie-breaker for routine engineering, which is the defect at
-the other end of the same axis.
+**A fired trigger makes escalation MANDATORY** - no word gates it. The COO announces the escalation
+in one line and prepares the brief: the casus, the `file:line` evidence, and WHICH trigger fired. No
+trigger fired means no escalation - the decision is the COO's, reported with a one-line rationale.
+Where it goes, who writes the ruling row, and the suppression dual: payload `docs/WORKFLOW.md`
+§ Escalation and the arbiter.
 
 **A disputed DESIGN decision is a disputed blocker, and it stops the loop.** When the Reviewer
 disputes a design decision the COO made - as distinct from finding a defect, where the fix is the
@@ -150,39 +132,6 @@ answered directly; a gate the doctrine names (the commit click, a word for a pas
 command) is raised as that gate; a verdict is reported as a verdict. None of these is filtered, and
 running the four questions over them is the opposite failure - a report that arrives late.
 
-## Behavior ledger duty
-
-Before the first paid readiness pass - and, when no auditor pass is configured, before the plan is
-presented for execution approval - every link of every chain the plan's Outcome passes through has
-a row produced by a SEPARATE scan-tier context: what the link does with the plan's input, what it
-closes over, what it does at N rows and under concurrent callers, and what the library underneath
-it does - and the same context, in the same dispatch, reads every decision of the plan from the
-tree's side and returns the surfaces that can violate it, as a second table. `/pnp:review` Step 2a
-carries the agent's task and its dispatch - one agent per ticket, two tables; the task is not
-restated here. The COO reads the rows, not the pointers, and acts on what they say BEFORE the
-dispatch.
-
-a ledger proves that a second context read the link, not that the COO acted on it - the plan lines
-that changed are where acting is visible; the catch-share was measured on one plan by its author
-
-That is the honest limit of the instrument. The duty is owed whenever the plan buys a paid
-readiness pass, and when no auditor pass is configured at all - then the consequence scan, the
-fact-check gate and the COO's own pass over the ledger are the whole contract. Its suppression
-dual: small R1 and non-durable R2 work owe nothing here, because they receive no readiness review.
-
-**The consequence scan and the own pass ride the same duty.** Before the same pass, every decision
-of the plan has been read from the tree's side by that same separate context - the second table of
-the Step 2a dispatch, and before a further pass a scan over the revision's decisions (`/pnp:review`
-Step 2c) - and every row it returned is closed, and the COO's own pass - the last act over the plan,
-in a turn of its own - is a file stamped with the plan's SHA-256 (Step 2d, which says what that pass
-opens, reads and runs; it is not restated here).
-The brief names both, and a
-plan-class pass does not start without them: the Codex wrapper refuses it and Gate 2 denies a Claude
-reviewer dispatch. The gate proves that both files exist, that every scan row is closed and every
-audited ticket has its rows, and that the own pass was stamped over the plan file the brief names;
-it does not prove the work was good, nor that the scan
-covered the latest revision. The same suppression dual holds.
-
 ## The duals law
 
 every obligation that COMMANDS an action ships with its suppression dual
@@ -213,9 +162,17 @@ transfer surface.
 
 ## References only
 
-Four rules that belong to the payload and are named here so nobody restates them locally:
+Rules that belong to the payload, named here so nobody restates them locally:
 
 - **Stop semantics** - payload `docs/WORKFLOW.md` guard (a).
+- **Host-directive precedence** - payload `docs/WORKFLOW.md` guard (f).
+- **Doctrine writes** - the rule text and its pointer row shown together, in one approval - payload
+  `docs/WORKFLOW.md` guards (g) and (h).
+- **Behavior ledger, consequence scan and the COO's own pass** before a paid readiness pass -
+  `/pnp:review` Steps 2a-2d; payload `docs/WORKFLOW.md` § Plan readiness review.
 - **Subagent model policy** - payload `docs/WORKFLOW.md` § COO owns broad scans.
 - **Multi-session invariants** - payload `docs/WORKFLOW.md` § Branch policy.
 - **VERIFY honesty** - payload `docs/WORKFLOW.md` § Verifying failure claims.
+
+<!-- project additions -->
+<!-- /project additions -->

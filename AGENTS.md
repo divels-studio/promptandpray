@@ -14,3 +14,6 @@ The brief on stdin is the contract: it names the review checklist and the verdic
 - `.claude/aiwf-native/aiwf.config.json`
 - `.claude/aiwf-native/roles.json`
 - `CLAUDE.md`
+
+<!-- project additions -->
+<!-- /project additions -->

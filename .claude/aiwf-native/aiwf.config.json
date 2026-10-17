@@ -1,14 +1,14 @@
 {
   "$schema": "D:/promptandpray/schema/aiwf.config.schema.json",
   "_aiwf": {
-    "installedPluginVersion": "0.2.19",
-    "lastMigrationApplied": "0023_changes-dir-and-agents",
+    "installedPluginVersion": "0.2.20",
+    "lastMigrationApplied": "0024_thin-rendered-files",
     "managedRegions": {
       ".claude/aiwf-native/roles.json": "0.2.19",
-      ".claude/agents/writer.md": "0.2.19",
-      "CLAUDE.md#aiwf-core": "0.2.19",
-      ".claude/aiwf-native/ORCHESTRATOR.md": "0.2.19",
-      "AGENTS.md": "0.2.19"
+      ".claude/agents/writer.md": "0.2.20",
+      "CLAUDE.md#aiwf-core": "0.2.20",
+      ".claude/aiwf-native/ORCHESTRATOR.md": "0.2.20",
+      "AGENTS.md": "0.2.20"
     },
     "ownedAskRules": [
       "Bash(git commit:*)",

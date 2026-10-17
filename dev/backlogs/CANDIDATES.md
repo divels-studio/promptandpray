@@ -1242,8 +1242,46 @@ format). The repo's `$schema` now points at this checkout; a run from `D:\pnp-li
 (informational, documented). Handoffs with per-file diff summaries and test matrices were under
 `.aiwf/UPDARCH-001-*` and are deleted with the ticket.
 
+**Ticket 2 DONE 2026-10-17 (UPDARCH-002), commit `8bef63f`** - word „пускай цялостния замисъл на
+ticket 2"; no audit pass (Codex only on the word; none given); the operator tests the result in a
+consumer next. One Writer, 18 files, +403 / -432: the six templates thinned (CLAUDE.md region 149 -> 95
+lines, ORCHESTRATOR 242 -> 191, writer 167 -> 143, reviewer 127 -> 102, qa 81 -> 77, AGENTS +5) - project
+data, each role's behaviour contract and one pointer per dropped rule cluster to its `docs/` section (the
+template -> cluster -> home table was in the handoff; every pointer checked against the heading text);
+the Writer's inlined test routing replaced by the pointer to the overrides' § Test policy; an empty
+`<!-- project additions -->` block ends every whole-file Markdown template; one dropped sentence with no
+home (the behavior ledger's honest limit) moved into `docs/WORKFLOW.md` § Plan readiness review;
+migration `0024_thin-rendered-files` (six re-render ops, Reviewer/QA `ifRecorded`), manifest entry,
+`plugin.json` 0.2.20, CHANGELOG block for both tickets ending `Retires local rules: none`. COO decision:
+the operator-channel block stays in the CLAUDE.md operator zone (moving it into the region would
+duplicate it in every consumer). Writer's targeted runs: setup 413/0, update 373/0, validate-payload 0,
+both provenance greps empty; the example cycle was abandoned mid-run on the operator's objection to the
+test cost (see the section below) - no second batch. Then `aiwf-update.mjs --apply` on this repo:
+migration 0024 applied (four renders written, reviewer/qa skipped - not on this installation),
+self-check 1247/1247, the CLAUDE.md operator zone byte-identical. Release half NOT done: no tag, no push -
+each on its own word; before the push the operator hears that the consumers' held `writer.md` is
+overwritten by this update.
+
 PLAN_DOCT is PARKED, not closed (the draft r5 and `readiness/DOCT/` stay on disk, uncommitted);
 the compaction of the doctrine is a separate question for after the architecture.
+
+## The suites cost an hour, and a rule change owes them nothing (operator objection 2026-10-17, during ticket 2)
+
+The operator, during UPDARCH-002: „следващите 3 реда редакция пак ли ще дремем един час на тестовете ...
+какво отношение имат тестовете към новото правило което въвеждаме". Two things, decided and recorded:
+
+- **What a change owes.** A rule, a doc, a skill, a TEMPLATE (text with placeholders): the provenance
+  grep, `validate-payload` (0.2 s) and - for a template - one render dry-run on a scratch copy
+  (seconds). No suite. The suites exist for code that EXECUTES: hooks, the engines, the wrappers,
+  the self-check itself; a template change does not test the engine, the engine's suite does. The COO
+  overran this on UPDARCH-002 by letting the Writer run four suites and planning a second full batch -
+  the double run (Writer + fresh agent) is withdrawn: the Writer's green run of a row IS the
+  verification of that row; a fresh agent runs only a row the Writer did not.
+- **Candidate - make the suites fast.** `test-setup.mjs` ~16 min, `test-update.mjs` ~19 min,
+  `run-example-cycle.mjs` ~16 min, `aiwf-selfcheck.js` ~6 min (measured 2026-10-17, Portion 1 of
+  UPDARCH-001). Each builds fixture projects and spawns hundreds of `node` processes serially. Target:
+  under 3 minutes each - parallel fixture groups, one install reused across read-only cases, the
+  duplicated cases cut. A code ticket of its own, on the operator's word.
 
 ## The Writer template inlines a test routing that contradicts the project's (born 2026-10-16, Furnissimo closing grep after the alignment)
 
