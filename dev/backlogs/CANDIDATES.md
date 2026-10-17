@@ -1218,6 +1218,30 @@ The two tickets (no plan file; recorded here and executed as plain tickets on th
    back to `docs/` (where it already is, mostly); one migration re-renders them once; the
    writer-template routing fix rides here.
 
+**Ticket 1 DONE 2026-10-17 (UPDARCH-001), commit `b3be045`** - dispatch word „комитни абзаца и пускай
+тикет 1". Two Writers in parallel on disjoint files (A: engines, setup, schema, tests, examples; B:
+self-check, skills, docs), three micro-rounds, 37 files, +1951 / -5718. Delivered as decided above:
+`_aiwf.managedRegions[key] = "<version>"`, `migrationJournal` gone, legacy shape normalized on load and
+written back by `--apply` even on a current project; `<!-- project additions -->` block carried verbatim
+on every whole-file Markdown re-render (setup, update, `/pnp:roles`), malformed block = exit 1 naming the
+file; no conflicts, no `--resolve`/`--adopt`, no stage/journal/recover, no CHANGES report;
+`--dry-run`/`--apply` print the CHANGELOG blocks between versions, `--check` adds a `behind:` line;
+`paths.changesDir` kept optional and unused; self-check: PAYLOAD DOCTRINE section deleted, PROJECT LAYER
+reduced to presence + version + roles/agent field equality (`managed-regions-present`, legacy records a
+`[NOTE]`). COO decisions during the round: an unrecorded file at a stale agent path is left alone and
+named, never a blocker; the reconcile op writes the config right after settings.json (a re-run of an
+interrupted migration would otherwise tombstone a rule the engine removed); version and migration stamps
+move together per migration; region writes keep the file's own line endings (the old engine LF-normalized
+the whole CLAUDE.md). VERIFY by a fresh sonnet agent, Portion 1 as one batch: validate-payload 0,
+setup 412/0, update 372/0, example-cycle windows and linux 41/0 each, spikes 330/0, plugin-validate 0,
+self-check 1247/1247 after the repo's own config was normalized by the new engine (auto mode had refused
+the engine's write; the operator switched it off). No Codex pass - the operator's decision for this
+ticket. No version bump: 0.2.20 is cut with ticket 2 (thin templates + the one re-render migration), which
+also carries the `Retires local rules:` CHANGELOG line (convention recorded in CLAUDE.md § Changelog
+format). The repo's `$schema` now points at this checkout; a run from `D:\pnp-live` flips it back
+(informational, documented). Handoffs with per-file diff summaries and test matrices were under
+`.aiwf/UPDARCH-001-*` and are deleted with the ticket.
+
 PLAN_DOCT is PARKED, not closed (the draft r5 and `readiness/DOCT/` stay on disk, uncommitted);
 the compaction of the doctrine is a separate question for after the architecture.
 

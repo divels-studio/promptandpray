@@ -168,6 +168,11 @@ for the full model.
   sub-items, at most 3-5 per entry.
 - Grouping: `### Added`, `### Changed`, `### Fixed`, `### Removed`, `### Security` - one section per
   type per version block, newest first, no per-entry dates.
+- Every version block ends with one line `Retires local rules: <names>` (or `none`) naming the
+  consumer-local rules the payload now carries. `/pnp:update` prints the blocks between the installed
+  and the payload version, so that line is how a consumer learns what to delete from its own overrides
+  document - the deletion stays the consumer's act, on its operator's word (operator decision
+  2026-10-16, CANDIDATES § UPDATE ARCHITECTURE).
 
 ## This repository is the plugin
 
