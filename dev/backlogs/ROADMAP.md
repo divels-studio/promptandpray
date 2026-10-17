@@ -19,6 +19,6 @@ The COO writes the entries, one `##` per idea, in the format below; entries foll
 - Why: „не искам да гася пожара, а да го предотвратя"
 - Scope: in - the cycle, its gate, its skill, its docs, the measurement; out - the suites, the public README
 - Size: M
-- Plans: PLAN_RBA (done 2026-10-17, archived as `012_PLAN_RBA_2026-10-17/`); PLAN_RBB (done 2026-10-17, release 0.3.0, archived as `013_PLAN_RBB_2026-10-17/`); plan C not yet - it also takes the plan gate's byte cap counting a ticket's `Status:` line (status belongs to the index table; arbitration note 2026-10-17, CANDIDATES § Ruling ledger)
+- Plans: PLAN_RBA (done 2026-10-17, archived as `012_PLAN_RBA_2026-10-17/`); PLAN_RBB (done 2026-10-17, release 0.3.0, archived as `013_PLAN_RBB_2026-10-17/`); plan C not yet - it also takes the plan gate's byte cap counting a ticket's `Status:` line (status belongs to the index table; arbitration note 2026-10-17, CANDIDATES § Ruling ledger) and the self-check's provenance walk skipping a root `.git` gitfile as it skips the `.git` directory, with a negative control (a worktree plugin root turns `/pnp:update --apply`'s embedded self-check red on a correct install; arbitration ruling 2026-10-17 on RBB-003's finding A, CANDIDATES § Ruling ledger)
 - Status: in progress
 - Born: 2026-10-17, operator word „да"
