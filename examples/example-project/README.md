@@ -69,9 +69,9 @@ node <payload2>/scripts/update/aiwf-update.mjs --check --plugin-root <payload2> 
 
 exit 1 - one migration pending
 
-**4. Put your own text where an update meets it.** Append a project additions block to
-`<project>/.claude/agents/writer.md` - the one place in a rendered file whose text survives every
-update:
+**4. Put your own text where an update meets it.** Write a line into the empty project additions
+block at the end of `<project>/.claude/agents/writer.md` - the one place in a rendered file whose
+text survives every update (a second block beside it would be malformed and stop the update):
 
 ```
 <!-- project additions -->

@@ -6,7 +6,9 @@
        when the plugin updates.
      - ROLE-FREE: the same file reaches the review AND the QA runs, so nothing in it belongs to one
        role - no verdict words, no boundary checks, no block over a config list.
-     - The only placeholders are the project name and the project-relative overrides path. -->
+     - The only placeholders are the project name and the project-relative overrides path.
+     - The file ends with the empty project additions block: the engine carries whatever the project
+       writes between its two marker lines across every re-render (generate.mjs carryProjectAdditions). -->
 
 # AGENTS - {{config.project.name}}
 
@@ -24,3 +26,6 @@ The brief on stdin is the contract: it names the review checklist and the verdic
 - `.claude/aiwf-native/aiwf.config.json`
 - `.claude/aiwf-native/roles.json`
 - `CLAUDE.md`
+
+<!-- project additions -->
+<!-- /project additions -->

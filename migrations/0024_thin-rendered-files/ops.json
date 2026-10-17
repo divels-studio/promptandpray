@@ -1,0 +1,12 @@
+{
+  "migration": "0024_thin-rendered-files",
+  "targetPluginVersion": "0.2.20",
+  "operations": [
+    { "op": "rerender-managed-region", "file": "CLAUDE.md", "region": "aiwf-core", "template": "templates/CLAUDE.md.tmpl#aiwf-core" },
+    { "op": "rerender-managed-region", "file": ".claude/aiwf-native/ORCHESTRATOR.md", "region": null, "template": "templates/ORCHESTRATOR.md.tmpl" },
+    { "op": "rerender-managed-region", "file": ".claude/agents/writer.md", "region": null, "template": "templates/agents/writer.md.tmpl" },
+    { "op": "rerender-managed-region", "file": "AGENTS.md", "region": null, "template": "templates/AGENTS.md.tmpl" },
+    { "op": "rerender-managed-region", "file": ".claude/agents/reviewer.md", "region": null, "template": "templates/agents/reviewer.md.tmpl", "ifRecorded": true },
+    { "op": "rerender-managed-region", "file": ".claude/agents/qa.md", "region": null, "template": "templates/agents/qa.md.tmpl", "ifRecorded": true }
+  ]
+}

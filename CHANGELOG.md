@@ -4,6 +4,60 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.2.20] - 2026-10-17
+
+The update overwrites what it renders, and what it renders goes thin: the rules stay in the payload,
+and a rendered file carries the project's data, its role's contract and pointers.
+
+**Before you run `/pnp:update`:** a managed file you edited - or held through the old keep-mine
+resolution - is OVERWRITTEN by this update. Move the text you want to keep into that file's project
+additions block or into your overrides document FIRST.
+
+### Changed
+
+- **The update overwrites managed artifacts (UPDARCH-001)** - a re-render always writes the payload
+  render: an edited, a deleted and a never-recorded managed file alike, the `CLAUDE.md` region
+  spliced with every byte outside its markers kept. Nothing asks, nothing is held.
+  - Bookkeeping is one version per key, `_aiwf.managedRegions[<key>] = "<version>"`; an older shape
+    is normalized on load and written back by `--apply`, even on a current project.
+  - An interrupted update is simply run again: every operation is idempotent, and the version
+    stamps move together once per migration.
+- **The update prints the CHANGELOG between versions (UPDARCH-001)** - `--dry-run` and `--apply`
+  print every payload `CHANGELOG.md` block between the installed and the payload version before the
+  first operation, and `--check` adds a `behind:` line; that replaces the migration note and its
+  `supersedes` list as what a consumer reads. From this version on, each block ends with a
+  `Retires local rules:` line naming the consumer-local rules the payload now carries.
+- **The self-check checks presence and working hooks (UPDARCH-001)** - the payload-doctrine section
+  is gone, and the project layer is checked for presence, version and the roles/agent field
+  equality (`managed-regions-present`); a legacy record is a `[NOTE]`.
+- **Thin rendered files (UPDARCH-002)** - the managed `CLAUDE.md` region, `ORCHESTRATOR.md`, the
+  Writer, Reviewer and QA agents and `AGENTS.md` carry the project data, each role's behaviour
+  contract and one pointer per rule cluster to its section in the payload `docs/`; restated doctrine
+  is gone, so a rule fix reaches an installation with the plugin itself. Migration `0024` re-renders
+  the six once (Reviewer and QA only where the installation has them).
+  - The one dropped sentence that had no payload home - the behavior ledger's honest limit - moved
+    into `docs/WORKFLOW.md` § Plan readiness review.
+- **The Writer points at the project's test policy (UPDARCH-002)** - the Writer agent no longer
+  inlines a test routing of its own, which contradicted a project whose routing had moved on; it
+  points at `§ Test policy` of the overrides document.
+
+### Added
+
+- **The project additions block (UPDARCH-001, UPDARCH-002)** - one `<!-- project additions -->` ...
+  `<!-- /project additions -->` block per rendered Markdown file, carried byte for byte by setup,
+  update and `/pnp:roles`; a malformed block stops the run naming the file, nothing guessed. Every
+  whole-file Markdown template now ends with an empty one.
+
+### Removed
+
+- **Conflicts, holds, `--resolve`, `--adopt`, the journal and the CHANGES report (UPDARCH-001)** -
+  the two-hash conflict bookkeeping, keep-mine holds and `/pnp:update --resolve`,
+  `/pnp:setup --adopt`, the migration journal with its stage and recover, and the
+  `CHANGES_<from>-to-<to>.md` report are gone. `paths.changesDir` is still accepted and no longer
+  used.
+
+Retires local rules: none
+
 ## [0.2.19] - 2026-10-15
 
 The update engine: a configurable folder for the CHANGES reports, a `$schema` pointer that is kept

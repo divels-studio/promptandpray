@@ -576,6 +576,8 @@ for (const [name, permissions, needle] of [
 // ---------------------------------------------------------------------------
 section('6 - the project additions block: carried verbatim, appended or in place, and a malformed one is never guessed');
 const BLOCK_CRLF = `${PROJECT_ADDITIONS_BEGIN}\r\nMy own rule, line one.\r\nMy own rule, line two - CRLF on purpose.\r\n${PROJECT_ADDITIONS_END}`;
+// The empty block every whole-file Markdown template ends with (and so every fresh render).
+const EMPTY_ADDITIONS = `${PROJECT_ADDITIONS_BEGIN}\n${PROJECT_ADDITIONS_END}`;
 const countOf = (text, needle) => String(text).split(needle).length - 1;
 {
   // The production helper itself, on every shape it decides.
@@ -611,19 +613,23 @@ const countOf = (text, needle) => String(text).split(needle).length - 1;
   }
 }
 {
-  // (b1) the CLI: the render carries no block (the shipped templates do not), so the block is
-  // appended - and two migrations re-rendering the same file in one run still leave ONE block.
+  // (b1) the CLI: a render that carries NO block (the shipped templates carry an empty one, so the
+  // bumped payload drops it from the Writer template) - the block is appended, and two migrations
+  // re-rendering the same file in one run still leave ONE block.
   const twice = makePayload('additions-append', {
     version: '0.3.0',
     migrations: [
       { id: '0002_a', version: '0.2.0', ops: [WRITER_OP] },
       { id: '0003_b', version: '0.3.0', ops: [WRITER_OP] },
     ],
-    tweak: changeTemplates,
+    tweak: (dir) => { changeTemplates(dir); patch(at(dir, 'templates/agents/writer.md.tmpl'), `${EMPTY_ADDITIONS}\n`, ''); },
   });
   const p = project('additions-append');
   install(p);
-  fs.writeFileSync(at(p, WRITER_REL), `${read(at(p, WRITER_REL))}\nAn edit outside the block.\n\n${BLOCK_CRLF}\n`, 'utf8');
+  check('precondition: the installed Writer agent carries the template\'s empty block',
+    countOf(read(at(p, WRITER_REL)) || '', EMPTY_ADDITIONS) === 1);
+  // The project writes INTO the empty block; a second block beside it would be malformed.
+  fs.writeFileSync(at(p, WRITER_REL), (read(at(p, WRITER_REL)) || '').replace(EMPTY_ADDITIONS, `An edit outside the block.\n\n${BLOCK_CRLF}`), 'utf8');
   const r = update(p, ['--apply'], { payload: twice });
   check('an update over a file carrying a block exits 0', r.status === 0, why(r));
   const text = read(at(p, WRITER_REL)) || '';
@@ -638,12 +644,12 @@ const countOf = (text, needle) => String(text).split(needle).length - 1;
   const withSlot = makePayload('additions-slot', {
     version: '0.2.0',
     migrations: [{ id: '0002_slot', version: '0.2.0', ops: [WRITER_OP] }],
-    tweak: (dir) => fs.appendFileSync(at(dir, 'templates/agents/writer.md.tmpl'),
-      `\n${PROJECT_ADDITIONS_BEGIN}\n${SLOT_TEXT}\n${PROJECT_ADDITIONS_END}\n\n${PAYLOAD_LINE}\n`, 'utf8'),
+    tweak: (dir) => patch(at(dir, 'templates/agents/writer.md.tmpl'), EMPTY_ADDITIONS,
+      `${PROJECT_ADDITIONS_BEGIN}\n${SLOT_TEXT}\n${PROJECT_ADDITIONS_END}\n\n${PAYLOAD_LINE}`),
   });
   const p = project('additions-slot');
   install(p);
-  fs.writeFileSync(at(p, WRITER_REL), `${read(at(p, WRITER_REL))}\n${BLOCK_CRLF}\n`, 'utf8');
+  fs.writeFileSync(at(p, WRITER_REL), (read(at(p, WRITER_REL)) || '').replace(EMPTY_ADDITIONS, BLOCK_CRLF), 'utf8');
   const r = update(p, ['--apply'], { payload: withSlot });
   check('an update whose render carries a block exits 0', r.status === 0, why(r));
   const text = read(at(p, WRITER_REL)) || '';
@@ -1147,8 +1153,9 @@ section('13 - the audit table migration: three silent config keys, re-renders, a
 
   const payload = makePayload('audit', { version: '0.2.0', migrations: [{ id: '0002_audit', version: '0.2.0', ops: realOps.operations }] });
 
-  const REGION_NOW = 'Four countable tripwires';
-  const REGION_WAS = 'Three countable tripwires';
+  // A phrase the CURRENT region renders (its pointer line to the tripwires), aged to an older wording.
+  const REGION_NOW = 'the four tripwires';
+  const REGION_WAS = 'the three tripwires';
 
   /** A project as 0.1.2 left it: no review rows, no review block in roles.json, an older region. */
   function preTable(projectDir, { ageRegion = true } = {}) {

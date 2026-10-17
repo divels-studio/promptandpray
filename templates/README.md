@@ -22,6 +22,14 @@ edits the template (why the file is conditional, which placeholder is render-tim
 editor and has no reader in the rendered artifact. Placeholders inside it are never substituted,
 so the contract can name a placeholder literally.
 
+The rendered Markdown artifacts are **thin**: the project data, the role's own behaviour contract,
+and one pointer per rule cluster to the payload document that holds the rule - a rule is never
+copied into a template. Every whole-file Markdown template (`ORCHESTRATOR.md.tmpl`, `agents/*.tmpl`,
+`AGENTS.md.tmpl`) ends with an empty project additions block; the engine carries whatever the
+project writes between its two marker lines across every re-render (`generate.mjs`
+`carryProjectAdditions`). `CLAUDE.md.tmpl` carries none: everything outside its `aiwf-core` markers
+is already the project's.
+
 `{{wrappers.*}}` is the OS channel, COMPUTED from `config.os` by `wrapperContext()` (both engines
 import the same function): `dir`, `ext`, `shell`, and the payload-relative path of each wrapper -
 `roles`, `review`, `qa`, `qal`. A template names a wrapper by ROLE and never by OS, because the

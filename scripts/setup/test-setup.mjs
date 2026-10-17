@@ -1169,13 +1169,18 @@ const BLOCK_CRLF = `${ADD_BEGIN}\r\nMy own rule for the Writer.\r\nA second line
     r.out.includes('re-rendered') && !r.out.includes('overwrote:'), why(r, true).slice(0, 200));
 }
 
-// (d) the project additions block: carried verbatim (CRLF inside), appended after the render, and a
-// re-run - with a changed answer that really re-renders the file - still carries exactly one copy.
+// (d) the project additions block: carried verbatim (CRLF inside), in the render's own empty block at
+// the end of the file, and a re-run - with a changed answer that really re-renders the file - still
+// carries exactly one copy. Every whole-file Markdown template ends with that empty block, so the
+// project writes INTO it; an edit outside it is what the re-run overwrites.
 {
   const dir = project('additions-carry');
   install(dir, baseAnswers(), ['--no-seeds']);
   const writer = at(dir, '.claude/agents/writer.md');
-  fs.writeFileSync(writer, `${read(writer)}\nAn edit outside the block.\n\n${BLOCK_CRLF}\n`);
+  const emptyBlock = `${ADD_BEGIN}\n${ADD_END}`;
+  check('(d) precondition: the fresh render ends with the empty project additions block',
+    (read(writer) || '').endsWith(`\n\n${emptyBlock}\n`), JSON.stringify((read(writer) || '').slice(-80)));
+  fs.writeFileSync(writer, (read(writer) || '').replace(emptyBlock, `An edit outside the block.\n\n${BLOCK_CRLF}`));
   const changed = baseAnswers();
   changed.roles.writer.effort = 'medium';
   const r = install(dir, changed, ['--no-seeds']);
@@ -1183,7 +1188,7 @@ const BLOCK_CRLF = `${ADD_BEGIN}\r\nMy own rule for the Writer.\r\nA second line
   const text = read(writer) || '';
   check('(d) the block survived byte for byte, CRLF included, exactly once',
     text.split(BLOCK_CRLF).length - 1 === 1, `${text.split(BLOCK_CRLF).length - 1} copies`);
-  check('(d) appended after the render\'s last line behind one blank line', text.endsWith(`\n\n${BLOCK_CRLF}\n`) && !text.endsWith(`\n\n\n${BLOCK_CRLF}\n`),
+  check('(d) in the render\'s own slot at the end of the file, behind one blank line', text.endsWith(`\n\n${BLOCK_CRLF}\n`) && !text.endsWith(`\n\n\n${BLOCK_CRLF}\n`),
     JSON.stringify(text.slice(-160)));
   check('(d) the edit OUTSIDE the block was overwritten, and the render followed the answer',
     !text.includes('An edit outside the block.') && /effort: medium/.test(text), JSON.stringify(text.slice(0, 200)));
@@ -1441,7 +1446,8 @@ section('22 - the audit table: a fresh install gets it without being asked, and 
   {
     const writer = at(p22, '.claude/agents/writer.md');
     const block = '<!-- project additions -->\r\nMy rule, kept by /pnp:roles.\r\n<!-- /project additions -->';
-    fs.writeFileSync(writer, `${read(writer)}\n${block}\n`);
+    // Written INTO the render's own empty block - a second block beside it would be malformed.
+    fs.writeFileSync(writer, (read(writer) || '').replace('<!-- project additions -->\n<!-- /project additions -->', block));
     const d = roleCmd(['--set', 'writer.effort=medium']);
     const text = read(writer) || '';
     check('/pnp:roles: a re-render of the Writer carries its project additions block verbatim, once',

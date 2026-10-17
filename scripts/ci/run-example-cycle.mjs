@@ -549,8 +549,12 @@ try {
       const t = read(file);
       return t.indexOf(MY_EDIT) > t.indexOf(BEGIN) && t.indexOf(MY_EDIT) < t.indexOf(END);
     })());
+    // The render ends with an EMPTY project additions block; the operator writes into it (a second
+    // block beside it would be malformed and stop the update).
     const writer = path.join(PROJECT, ...WRITER_REL.split('/'));
-    fs.writeFileSync(writer, `${read(writer)}\n${ADDITIONS_BLOCK}\n`, 'utf8');
+    const EMPTY_BLOCK = '<!-- project additions -->\n<!-- /project additions -->';
+    check('the installed Writer agent carries the empty project additions block', (read(writer) || '').includes(EMPTY_BLOCK));
+    fs.writeFileSync(writer, (read(writer) || '').replace(EMPTY_BLOCK, ADDITIONS_BLOCK), 'utf8');
     check('the project additions block is in the Writer agent', (read(writer) || '').includes(ADDITIONS_BLOCK));
   }
 

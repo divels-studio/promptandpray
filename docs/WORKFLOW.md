@@ -447,7 +447,9 @@ is owed, and small R1 and non-durable R2 work owe nothing.
 
 **The COO's own pass comes before every counted pass, and it is not one of them.** The own pass reads the
 behavior ledger (`/pnp:review` Step 2a) - what each link does with the plan's input, read by a
-second context - not the pointers alone. It is the LAST act over the plan before an auditor is
+second context - not the pointers alone. The ledger's honest limit: it proves that a second context
+read the link, not that the COO acted on it - the plan lines that changed are where acting is
+visible. The own pass is the LAST act over the plan before an auditor is
 dispatched - after the consequence scan and the fact-check gate are closed - and the COO does it in
 a SEPARATE turn against the six readiness checks below: every pointer the Writer acts on opened - the
 worklist, the guards, the commands - while the pointers that only explain are the fact-check gate's (a
