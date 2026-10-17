@@ -51,7 +51,7 @@ catch share; the mechanical half of them is a script in both frameworks, the jud
 
 | stage | who | where | artifact | gate |
 |---|---|---|---|---|
-| **idea** | operator -> COO | chat | one line in `ROADMAP.md`: a title and the goal in a sentence. A goal too big for one plan is several lines. | - |
+| **idea** - APPROVED 2026-10-17 („аз казвам идеята на COO, той или агент я пише в роадмапа по строго зададен формат") | the operator says it in chat; the COO (or a scan agent) writes it | chat -> `dev/backlogs/ROADMAP.md` | one entry per idea, in the strict format below; a goal too big for one plan is one entry with several planned plans under it | - |
 | **research** | 1-2 `sonnet` scan agents, fresh context | subagent | `RESEARCH.md` in the plan folder: consumers and adjacent contracts of every touched surface, a Code Map (file -> role, no line numbers), what the code does today, open unknowns. Short; pointers, not prose. | - |
 | **analysis** | COO with the operator | chat -> file | `DECISIONS.md`: numbered decisions `D-NN` (the operator's words verbatim where they are the source), a Deferred list, and numbered **Open Questions** that STOP the stage until the operator answers - an unknown is never written down as an assumption. | operator answers the OQs |
 | **plan** | a planner subagent (`opus`, fresh context), briefed with RESEARCH + DECISIONS + the goal | subagent | `PLAN_<ABBR>.md` (index: goal, scope, ticket table with status) + `tickets/<ABBR>-NNN.md`, one file per ticket: Outcome, Scope, Acceptance, Risk threshold, Stop condition, Verify, Code Map slice, the `D-NN` it implements. Caps: **<= 3 tickets per plan, <= ~1,500 tokens per ticket**; over the cap = split or defer, the COO decides. The COO reads the result; it does not write the plan. | - |
@@ -60,6 +60,42 @@ catch share; the mechanical half of them is a script in both frameworks, the jud
 | **phase execution** | Writer, fresh context | subagent | brief = `Ticket: <REF>` + "read `tickets/<REF>.md` and the files its Code Map names" + the standing lines (no restating of goal, files or acceptance) -> diff + handoff | Gate 2 dispatch |
 | **phase audit** | the code pass (Codex, kept); the fact-check over the diff (one `sonnet` agent, kept - cheap); QA only for observable runtime behaviour | Codex / subagent | verdict + top findings in the handoff; the full text in a file, never in the COO's context | a word for every pass after the first |
 | **commit** | the Writer (code), the COO (`records/<REF>.md`, one file per ticket) | session | two commits: code, then record | native dialog each |
+
+**Roadmap entry format (strict; the COO writes it, the operator never edits the file by hand):**
+
+```markdown
+## <ABBR> - <title>
+- Goal: <one sentence - what is true when it is done>
+- Why: <one sentence; the operator's words verbatim when they are the source>
+- Scope: in - <...>; out - <...>
+- Size: S (one plan) | M (two or three plans) | L (a sequence; each plan listed below as it is born)
+- Plans: <PLAN_<ABBR> or none yet>
+- Status: idea | researching | planned | in progress | done <date>
+- Born: <date>, operator word „<quote>"
+```
+
+`ROADMAP.md` replaces the **Candidates** section of the transfer surface (CANDIDATES.md keeps its three
+ledgers: ruling, pass statistics, event); old candidates are not migrated - an old one enters ROADMAP
+the day it is taken up. The overrides' "roadmap = the open plans" becomes "ROADMAP.md + `active/`".
+The payload (WORKFLOW § The transfer surface, the CANDIDATES template) learns this with the cycle's
+ticket. (Operator question 2026-10-17: „няма ли да се сбие със съществуващите роадмап файлове".)
+
+**research** - APPROVED 2026-10-17 („Е2 - да"). **analysis** - APPROVED 2026-10-17 („да").
+**plan** - APPROVED 2026-10-17 („Е4 - да"), WITH MEASUREMENT: the least certain stage - whether a
+planner subagent beats the COO writing a <= 3-ticket plan is unmeasured; the first Silerax plan decides
+(§ Proposed answers 6). The operator's question of the day: are we copying GSD or fitting - the
+mechanisms are taken, the gates, the single Codex auditor, the word per pass and the one doctrine are
+ours; nothing here is proven until measured. **phases** - APPROVED 2026-10-17 („да").
+**plan review and approval** (a)-(d) - APPROVED 2026-10-17 („да"). **phase execution** - APPROVED
+2026-10-17 („да"). **phase audit** - APPROVED 2026-10-17 („да"). **commit + the session rule** -
+APPROVED 2026-10-17 („да, Е9 приемам"); the ~400k ticket boundary is a judgment on GSD's degradation
+scale (peak < 30%, good 30-50%, degrading 50-70% of the window; `gsd-core/references/context-budget.md`),
+not our measurement - the COO session size at the end of the first Silerax plan is the measurement.
+At >= 400k the COO finishes the current ticket (commit + record) and says "new ticket = new session";
+HARD-024's checkpoint at 950k stays as the safety net, not the plan.
+
+**ALL NINE STAGES APPROVED 2026-10-17.** Remaining: the six proposed answers below (confirm or correct),
+then the tickets.
 
 Dropped from today's cycle: the behavior ledger, the consequence scan, the own-pass file, the
 per-section fact-check agents over the plan, the plan gate's artifact requirement (its SHA stamp
