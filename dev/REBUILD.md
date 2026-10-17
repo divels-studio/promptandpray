@@ -190,7 +190,10 @@ doubt; "PASS, all fine" is not a handoff.
 - C3 the suites: fast or fewer (CANDIDATES § The suites cost an hour).
 
 Order: A -> B -> 0.3.0 -> Silerax plan measured -> C. Each ticket on its own word; A's code gets a
-Codex pass only if the operator asks.
+Codex pass only if the operator asks. COO routing (overrides § Loop shape, the four checks): A1, A2,
+A3 `COO: top (Fable) - because check 1` (a migration, Gate 2's lookup, the gate's enforcement code);
+B1, B2, B3 `COO: cheap (Opus) - all four no` (prose); C1, C2, C3 `COO: cheap (Opus) - all four no`.
+Nine tickets, six before 0.3.0.
 
 ## Inputs (data, not canon)
 
