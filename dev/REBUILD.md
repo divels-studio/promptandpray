@@ -61,6 +61,17 @@ catch share; the mechanical half of them is a script in both frameworks, the jud
 | **phase audit** | the code pass (Codex, kept); the fact-check over the diff (one `sonnet` agent, kept - cheap); QA only for observable runtime behaviour | Codex / subagent | verdict + top findings in the handoff; the full text in a file, never in the COO's context | a word for every pass after the first |
 | **commit** | the Writer (code), the COO (`records/<REF>.md`, one file per ticket) | session | two commits: code, then record | native dialog each |
 
+**Worked example - a module redesign of 5-6 tickets in a consumer (operator question 2026-10-17):**
+one ROADMAP entry (Size M). Research ONCE for the whole goal, analysis ONCE (`D-01..D-NN` for the
+redesign) - both live in the first plan's folder; later plans cite them by path and `D-NN` and add only a
+research DELTA (what the earlier plan changed) and new `D-NN` with continued numbering. The planner cuts
+independently shippable slices: plan A = tickets 1-3 (model + API), plan B = tickets 4-6 (UI). Plan B is
+only a line under the entry until A is committed; it is written then, against the real code after A.
+One Codex pass per plan over three tickets, each plan in its own session. Old: 1 plan x 6 tickets x 2-3
+passes x 2-3 sessions. New: 2 plans x 1 pass x 3 tickets. Integration between A and B is held by the
+shared `D-NN` and B's research delta, not by cross-consistency inside one 3,000-line file. The price:
+B waits for A.
+
 **Roadmap entry format (strict; the COO writes it, the operator never edits the file by hand):**
 
 ```markdown
@@ -94,8 +105,9 @@ not our measurement - the COO session size at the end of the first Silerax plan 
 At >= 400k the COO finishes the current ticket (commit + record) and says "new ticket = new session";
 HARD-024's checkpoint at 950k stays as the safety net, not the plan.
 
-**ALL NINE STAGES APPROVED 2026-10-17.** Remaining: the six proposed answers below (confirm or correct),
-then the tickets.
+**ALL NINE STAGES APPROVED 2026-10-17, AND THE SIX ANSWERS BELOW CONFIRMED („да и за двете" for 5 and 6;
+1-4 are settled by the approved stages).** The design is complete. Remaining: the tickets that build it
+into PnP.
 
 Dropped from today's cycle: the behavior ledger, the consequence scan, the own-pass file, the
 per-section fact-check agents over the plan, the plan gate's artifact requirement (its SHA stamp
