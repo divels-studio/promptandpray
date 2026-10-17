@@ -4,22 +4,109 @@
 > questions, the next step - lives HERE and nowhere else. Older names (PLAN_DOCT, PLAN_FOLD, the
 > "five steps", DEENG-001, "ticket 1 / ticket 2") are pointers into this file now, not separate
 > threads. A proposal made in chat is not made until it is written here. The candidates file is FROZEN
-> for new entries until this design is approved (operator 2026-10-17: „файла с кандидати е миш маш").
+> for new entries (ROADMAP.md took that role on 2026-10-17).
 > Rewritten WHOLE at every change; history is in git.
 
-## Status (2026-10-17, night)
+## Status (2026-10-17, late night - handover)
 
-- 0.2.20 released and proven in Silerax. Closed.
-- **The cycle is APPROVED** - all nine stages and the six answers, by the operator on 2026-10-17 (the
-  approvals are marked under the table). A second-opinion review (GPT, the same day, on this file)
-  raised four architectural points and one nit; all five are taken into the text below (marked
-  "review 2026-10-17").
-- Plans A and B done; 0.3.0 released and proven in Silerax (`--apply` exit 0, self-check
-  1300/1300, `--check` up to date, four expected files changed, the additions block kept - relayed by
-  the arbitration session, 2026-10-17). The start after 0.3.0: ~130k here with PLAN_HARD read
-  (number (b)); preflight-only 110k here, 120k in Silerax, the doctrine read ~71k of it (operator's
-  `/context`, 2026-10-17) - so C2 goes ahead of the first Silerax plan.
-- Next: plan C, `dev/backlogs/active/RBC/` (landed 2026-10-17), each ticket on the operator's word.
+- 0.2.20 and 0.3.0 released; both proven in Silerax (0.3.0: `--apply` exit 0, self-check 1300/1300,
+  only the four expected files changed, the additions block kept). PnP self-install at 0.3.0.
+- The cycle is APPROVED (nine stages + six answers, 2026-10-17); a second-opinion review's five
+  points are in the text. Plans A (`012_PLAN_RBA`) and B (`013_PLAN_RBB`) executed and archived;
+  PLAN_HARD archived (`014_PLAN_HARD`), its README ticket moved to ROADMAP § README.
+- Plan C landed as `dev/backlogs/active/RBC/` (`ea34683`): RBC-001 measurement instruments + the
+  chain-trace rule into REVIEW_CHECKLIST; RBC-002 doctrine compaction (WORKFLOW, LOOP,
+  REVIEW_CHECKLIST, the whole overrides) verified by a rule-homes table; RBC-003 the root gitfile in
+  the provenance walk + the header `Status:` line out of the byte cap. No readiness pass and no code
+  pass on the operator's word. **Nothing of plan C is executed yet - tomorrow.**
+- Measured today: preflight-only start = 110k (PnP) / 120k (Silerax); of that the four doctrine
+  documents = ~71k, the harness (built-in tools 23.8k, skills 6.1k, system 4k, memory 3.8k) = ~39k,
+  MCP = 0 (on demand). With a plan read: +10-20k. So C2 is the main lever on the start; the harness
+  part is not ours.
+
+## How to continue tomorrow (the order; nothing here starts without the operator's word)
+
+1. **Open two sessions in PnP**: the executing COO (Opus - plan C is prose, all four routing checks
+   "no"; `claude --plugin-dir D:\pnp-live`, `/pnp:mission`) and a fresh ARBITER (any model; see
+   § Arbitration below). The executing session asks for the word for RBC-001.
+2. **RBC-001 -> RBC-002 -> RBC-003**, each on its word, each closed with code commit / record
+   commit, pnp-live refreshed after every commit (Start-Process form, never `-C`). RBC-002 is the big
+   one: targets WORKFLOW <= 12k tokens, overrides <= 8k, LOOP <= 4k (guides, not gates - the gate is
+   "every rule has a home"; a result above ~40k total means the method failed and stops).
+3. **Measure the start again** (preflight-only prompt, § Measurement protocol) - expected ~65k if
+   RBC-002 hits its guides.
+4. **Push** (one word; the dev commits since `v0.3.0` are unpushed) - the consumers take the compacted
+   doctrine with `/plugin update`, no bump needed (prose). Then in Silerax and Furnissimo: `/pnp:update`
+   is a no-op (current), but the thinner docs are what every session there reads from now.
+5. **The first real plan in Silerax through `/pnp:plan`**, measured with RBC-001's instruments (the
+   four numbers + the two start numbers). This is the test of the whole redesign. Baseline: the last
+   Silerax plan under the old cycle, from its records.
+6. **Only then** judge: does the planner subagent pay (stage 4, the least certain)? does one Codex
+   pass suffice? is 194k per pass acceptable (lever: effort `high` on gpt-5.6-sol, measured once on
+   the same plan)? Decisions go into this file as D-lines; the next release (0.3.1, with the README
+   from ROADMAP § README) carries whatever changed.
+7. Furnissimo: after Silerax's first measured plan, the same `/plugin update` + one list-driven
+   cleanup of its local rules (the 0.3.0 `Retires` line, minus chain-trace and the checkpoint rule,
+   which STAY local - see § Corrections).
+
+What is NOT done and must not be assumed done: no measurement of the new cycle exists yet; the
+~400k session boundary, the <= 3-ticket cap, the planner-as-subagent and the one-pass default are
+JUDGMENTS from GSD/BMad and our own numbers, not proofs. The operator's own words at the handover:
+„хубаво преписахме, ама сме само на чернова, полирането тепърва предстои" - this document is a draft
+of a working system, and the first Silerax plan is where it is tested.
+
+## Measurement protocol (RBC-001 makes it a record row; until then by hand)
+
+- Start (a): a fresh session, the preflight-only prompt (below), then the statusline / `/context`.
+- Start (b): after `/pnp:mission` has read the active plan.
+- Per plan: tokens idea -> approved plan (every agent's usage as the harness reports it + the Codex
+  pass tokens); correction rounds after implementation; COO session size at the end; total spend.
+- The preflight-only prompt (operator-tested 2026-10-17):
+  "Измерване на стартовия контекст, нищо друго. Направи само doctrine preflight-а по CLAUDE.md: прочети
+  IN FULL payload docs/WORKFLOW.md, docs/LOOP.md, dev/PROJECT_OVERRIDES.md и
+  .claude/aiwf-native/ORCHESTRATOR.md под D:\pnp-live. НЕ отваряй планове, ROADMAP, CANDIDATES,
+  REBUILD, readiness папки; не пускай git или скриптове; не пиши нищо. Когда приключиш, отговори с един
+  ред „preflight готов" и спри."
+
+## Arbitration (how the arbiter session works)
+
+- The arbiter is a session that READS and never writes the tree: zero repo writes, zero paid passes.
+  The executing COO sends it a brief (SendMessage: the casus, the evidence `file:line`, which
+  escalation trigger fired, the options it sees); the arbiter opens the files, replies with ONE ruling
+  per casus as a message; the executing session writes the ruling-ledger row (CANDIDATES § Ruling
+  ledger). The operator is never a courier; when the operator pastes a consumer session's dialog, the
+  arbiter answers with the option number only.
+- **Reference for tomorrow's arbiter:** this document is the state; the full context of the day is the
+  transcript of the session that designed the cycle and arbitrated plans A-C:
+  session id `5ad48d54-8ab3-480e-931b-5fe2e373c50e`, transcript
+  `C:\Users\dyosi\.claude\projects\D--promptandpray\5ad48d54-8ab3-480e-931b-5fe2e373c50e.jsonl`
+  (machine-local, large - open it only for a specific question, by grep, never whole).
+- Rulings given 2026-10-17 (all in CANDIDATES § Ruling ledger, written by the executing session):
+  1. RBB casus 1 - the planner runs as `subagent_type: "writer"` with the planner brief, writes only
+     under `drafts/<ABBR>/`, returns a structured handoff; an implementation of stage 4, not a reversal.
+  2. RBB casus 2 - RBB-003 (migration 0025 + bump) on Fable by routing check 1, as RBA/D-14 read it.
+  3. RBB-002's stale `Step 2e` pointers -> RBB-003 item 6; re-stamp + the operator's word, no pass.
+  4. RBB-003 out-of-scope (A) the root gitfile in the provenance walk -> plan C; (B) no example-cycle
+     assertion on the seed-file line -> nowhere (test-update 15b proves it).
+  5. Suites: the row's suite runs ONCE, in the background at the Writer's handoff, parallel to the
+     COO's diff read; the Writer runs only its new tests - now RBA/D-15 and overrides § Test policy.
+- Audits of plans A and B by the arbiter (three sonnet agents per plan, read-only): design covered;
+  deviations recorded in the plan records; the loose ends went into plan C.
+
+## Corrections learned after 0.3.0 (facts the next session needs)
+
+- The 0.3.0 `Retires local rules:` line over-claimed **chain-trace**: the payload carried no equivalent
+  (grep over templates/briefs, review skill, REVIEW_CHECKLIST, WORKFLOW: nothing). Silerax keeps it
+  locally; RBC-001 puts the rule into REVIEW_CHECKLIST (one sentence) so the three projects share it.
+- The **checkpoint rule + its hook** (HARD-024's context-gate) stay in Silerax and here: the ~400k
+  session rule is a judgment, the 950k checkpoint is the safety net; only "the plan is read by
+  sections" was retired (the folder format covers it).
+- The Codex readiness pass over plan B (3 tickets, folder) cost 193,977 tokens - the same as the
+  6-ticket monolith DOCT (215,992). The pass reads the repo around the plan, not the plan: plan size
+  does not drive pass cost. Levers to test: effort/model (`high` on gpt-5.6-sol), the blocker contract
+  in the brief (B returned 13 BLOCKER / 0 INFO under the OLD brief), a named read scope in the brief.
+- The ticket byte cap (6144) counts the `Status:` line - RBB-002 hit 6180 on a status edit; RBC-003
+  moves status out of the measure.
 
 ## Goal
 
@@ -33,7 +120,8 @@ Kept by the operator's word: a Codex readiness pass during planning and the code
 execution - „това доказано работи в полза на качеството и дори открива пробойни".
 
 Measured from the first plan under the new cycle: tokens from idea to approved plan; correction
-rounds after implementation; COO session size at the end of a plan. Blocker counts are NOT the measure.
+rounds after implementation; COO session size at the end of a plan; total spend. Blocker counts are
+NOT the measure.
 
 ## The problem, in numbers we have
 
@@ -43,7 +131,7 @@ rounds after implementation; COO session size at the end of a plan. Blocker coun
   607-1,635 lines each, completion records 8.8-26.5% of them (PLAN REFACTOR PDF, size tables).
 - Pass 1 on five consecutive consumer plans: 10-13 blockers each AFTER the ledger and fact-check were
   applied - the pre-pass artifacts did not reduce what the pass finds.
-- Session start today: 120-130k tokens in all three projects before any work.
+- Session start: 110-120k preflight-only, ~71k of it the four doctrine documents (2026-10-17).
 
 Diagnosis, confirmed by the inputs: the cost sits in (1) WHERE the plan is written - the COO's long
 session, which then carries every revision (GSD and BMad both author in fresh contexts and keep the
@@ -53,30 +141,32 @@ a finding is a required property + evidence, the fix only a hint). The readiness
 consequence scan, own-pass file, per-section fact-check - are the author's homework with no measured
 catch share; the mechanical half of them is a script in both frameworks, the judgment half is the pass.
 
-## The cycle - COO DRAFT (approve, correct or strike per row)
+## The cycle - APPROVED 2026-10-17 (every row, see the approval marks below the table)
 
 | stage | who | where | artifact | gate |
 |---|---|---|---|---|
-| **idea** - APPROVED 2026-10-17 („аз казвам идеята на COO, той или агент я пише в роадмапа по строго зададен формат") | the operator says it in chat; the COO (or a scan agent) writes it | chat -> `dev/backlogs/ROADMAP.md` | one entry per idea, in the strict format below; a goal too big for one plan is one entry with several planned plans under it | - |
+| **idea** | the operator says it in chat; the COO (or a scan agent) writes it | chat -> `dev/backlogs/ROADMAP.md` | one entry per idea, in the strict format below; a goal too big for one plan is one entry with several planned plans under it | - |
 | **research** | 1-2 `sonnet` scan agents, fresh context | subagent | `RESEARCH.md` in the plan folder: consumers and adjacent contracts of every touched surface, a Code Map (file -> role, no line numbers), what the code does today, open unknowns. Short; pointers, not prose. | - |
 | **analysis** | COO with the operator | chat -> file | `DECISIONS.md`: numbered decisions `D-NN` (the operator's words verbatim where they are the source), a Deferred list, and numbered **Open Questions** that STOP the stage until the operator answers - an unknown is never written down as an assumption. | operator answers the OQs |
-| **plan** | a planner subagent (`opus`, fresh context), briefed with RESEARCH + DECISIONS + the goal | subagent | `PLAN_<ABBR>.md` (index: goal, scope, ticket table with status) + `tickets/<ABBR>-NNN.md`, one file per ticket: Outcome, Scope, Acceptance, Risk threshold, Stop condition, Verify, Code Map slice, the `D-NN` it implements. Caps: **<= 3 tickets per plan, <= ~1,500 tokens per ticket**; over the cap = split or defer, the COO decides. The COO reads the result; it does not write the plan. | - |
-| **phases** | - | - | A plan IS one phase. A bigger goal is a sequence of plans listed in `ROADMAP.md`; a later plan cites earlier `D-NN` by id, never restates them. | - |
-| **plan review and approval** | (a) a mechanical gate (script, seconds): caps, every ticket has its six fields, every `D-NN` **assigned to this plan** cited by some ticket (a decision carries `plan: A | B | deferred`; a decision of another plan is cited qualified, `<ABBR>/D-NN` - review 2026-10-17), no TBD, every path in the Code Map exists; the SHA stamp covers the FROZEN contract only - the index, `DECISIONS.md` and `tickets/` - never `records/` or the readiness history (review 2026-10-17); (b) **ONE Codex readiness pass** over the plan folder with the blocker contract: a BLOCKER names the property the plan must have + the evidence; INFO never triggers a revision; wording, formatting and `file:line` precision are out of scope; (c) COO triage per finding - fix / reject with a refutation / defer / ask the operator; the fix is written by the planner subagent (fresh), not by the COO; (d) cap: at most 2 revisions, and a revision that does not reduce the BLOCKER count stops and goes to the operator; a second Codex pass on the operator's word when pass 1 found a BLOCKER that reverses a `D-NN`, OR when the COO asks for it with a NAMED risk - security, tenancy, concurrency, transactions - after a substantive revision (review 2026-10-17); never automatic | Codex + COO + planner agent | `readiness/<ABBR>/round-N.md`: the findings with their disposition (fixed / rejected: why / deferred) | operator approval -> the plan folder lands in `active/` |
+| **plan** | a planner subagent (`opus`, fresh context; dispatched as `subagent_type: "writer"` with the planner brief - ruling 1), briefed with RESEARCH + DECISIONS + the goal | subagent | `PLAN_<ABBR>.md` (index: goal, scope, ticket table with status) + `tickets/<ABBR>-NNN.md`, one file per ticket: Outcome, Scope, Acceptance, Risk threshold, Stop condition, Verify, Code Map slice, the `D-NN` it implements. Caps: **<= 3 tickets per plan, <= 6144 bytes (~1,500 tokens) per ticket**; over the cap = split or defer, the COO decides. The COO reads the result; it does not write the plan. | - |
+| **phases** | - | - | A plan IS one phase. A bigger goal is a sequence of plans listed in `ROADMAP.md`; a later plan cites earlier `<ABBR>/D-NN` by id, never restates them. | - |
+| **plan review and approval** | (a) a mechanical gate (`plan-gate.js --check`, seconds): caps, the six fields, every `D-NN` assigned to this plan (`plan: <ABBR>`) cited by a ticket or the index, cross-plan refs resolve against `active/` and `archive/`, no TBD, every Code Map path exists; the SHA stamp covers the FROZEN contract only - index, `DECISIONS.md`, `tickets/` - plus the text hash of every cross-plan decision cited; (b) **ONE Codex readiness pass** over the plan folder with the blocker contract: a BLOCKER names the property the plan must have + the evidence; INFO never triggers a revision; wording, formatting and `file:line` precision are out of scope; (c) COO triage per finding - fix / reject with a refutation / defer / ask the operator; the fix is written by the planner subagent (fresh), not by the COO; (d) cap: at most 2 revisions, and a revision that does not reduce the BLOCKER count stops and goes to the operator; a second Codex pass on the operator's word when pass 1 found a BLOCKER that reverses a `D-NN`, OR when the COO asks for it with a NAMED risk - security, tenancy, concurrency, transactions; never automatic | Codex + COO + planner agent | `readiness/<ABBR>/round-N.md`: the findings with their disposition (fixed / rejected: why / deferred); `readiness/<ABBR>/stamp.json` | operator approval -> the plan folder lands in `active/` |
 | **phase execution** | Writer, fresh context | subagent | brief = `Ticket: <REF>` + "read `tickets/<REF>.md` and the files its Code Map names" + the standing lines (no restating of goal, files or acceptance) -> diff + handoff | Gate 2 dispatch |
-| **phase audit** | the code pass (Codex, kept); the fact-check over the diff (one `sonnet` agent, kept - cheap); QA only for observable runtime behaviour | Codex / subagent | verdict + top findings in the handoff; the full text in a file, never in the COO's context | a word for every pass after the first |
-| **commit** | the Writer (code), the COO (`records/<REF>.md`, one file per ticket) | session | two commits: code, then record | native dialog each |
+| **phase audit** | the code pass (Codex, kept, with the chain-trace per behaviour - RBC-001); the fact-check over the diff (one `sonnet` agent, cheap); QA only for observable runtime behaviour | Codex / subagent | verdict + top findings in the handoff; the full text in a file, never in the COO's context | a word for every pass after the first |
+| **commit** | the Writer (code), the COO (`records/<REF>.md`, one file per ticket) | session | two commits: code, then record; the row's suite ONCE in the background at the handoff (ruling 5) | native dialog each |
 
-**Worked example - a module redesign of 5-6 tickets in a consumer (operator question 2026-10-17):**
-one ROADMAP entry (Size M). Research ONCE for the whole goal, analysis ONCE (`D-01..D-NN` for the
-redesign) - both live in the first plan's folder; later plans cite them by path and `D-NN` and add only a
-research DELTA (what the earlier plan changed) and new `D-NN` with continued numbering. The planner cuts
-independently shippable slices: plan A = tickets 1-3 (model + API), plan B = tickets 4-6 (UI). Plan B is
-only a line under the entry until A is committed; it is written then, against the real code after A.
-One Codex pass per plan over three tickets, each plan in its own session. Old: 1 plan x 6 tickets x 2-3
-passes x 2-3 sessions. New: 2 plans x 1 pass x 3 tickets. Integration between A and B is held by the
-shared `D-NN` and B's research delta, not by cross-consistency inside one 3,000-line file. The price:
-B waits for A.
+Approvals: idea („аз казвам идеята на COO, той или агент я пише в роадмапа по строго зададен формат"),
+research („Е2 - да"), analysis („да"), plan („Е4 - да", WITH MEASUREMENT - the least certain stage),
+phases („да"), review (a)-(d) („да"), execution („да"), audit („да"), commit + session rule („да, Е9
+приемам"). Six answers confirmed („да и за двете" for 5 and 6; 1-4 settled by the stages).
+
+**Worked example - a module redesign of 5-6 tickets in a consumer:** one ROADMAP entry (Size M).
+Research ONCE for the whole goal, analysis ONCE (`D-01..D-NN`) - both live in the first plan's folder;
+later plans cite them by `<ABBR>/D-NN` and add only a research DELTA and new decisions with continued
+numbering. The planner cuts independently shippable slices: plan A = tickets 1-3, plan B = tickets 4-6;
+B is only a line under the entry until A is committed, then written against the real code. One Codex
+pass per plan, each plan in its own session. Old: 1 plan x 6 tickets x 2-3 passes x 2-3 sessions. New:
+2 plans x 1 pass x 3 tickets. The price: B waits for A.
 
 **Roadmap entry format (strict; the COO writes it, the operator never edits the file by hand):**
 
@@ -91,34 +181,13 @@ B waits for A.
 - Born: <date>, operator word „<quote>"
 ```
 
-`ROADMAP.md` replaces the **Candidates** section of the transfer surface (CANDIDATES.md keeps its three
-ledgers: ruling, pass statistics, event); old candidates are not migrated - an old one enters ROADMAP
-the day it is taken up. The overrides' "roadmap = the open plans" becomes "ROADMAP.md + `active/`".
-The payload (WORKFLOW § The transfer surface, the CANDIDATES template) learns this with the cycle's
-ticket. (Operator question 2026-10-17: „няма ли да се сбие със съществуващите роадмап файлове".)
+`ROADMAP.md` replaced the Candidates section of the transfer surface (CANDIDATES.md keeps its three
+ledgers); old candidates are not migrated - an old one enters ROADMAP the day it is taken up. Payload:
+`templates/ROADMAP.md.tmpl`, seeded once by setup and by migration 0025 (RBA-001, 0.3.0).
 
-**research** - APPROVED 2026-10-17 („Е2 - да"). **analysis** - APPROVED 2026-10-17 („да").
-**plan** - APPROVED 2026-10-17 („Е4 - да"), WITH MEASUREMENT: the least certain stage - whether a
-planner subagent beats the COO writing a <= 3-ticket plan is unmeasured; the first Silerax plan decides
-(§ Proposed answers 6). The operator's question of the day: are we copying GSD or fitting - the
-mechanisms are taken, the gates, the single Codex auditor, the word per pass and the one doctrine are
-ours; nothing here is proven until measured. **phases** - APPROVED 2026-10-17 („да").
-**plan review and approval** (a)-(d) - APPROVED 2026-10-17 („да"). **phase execution** - APPROVED
-2026-10-17 („да"). **phase audit** - APPROVED 2026-10-17 („да"). **commit + the session rule** -
-APPROVED 2026-10-17 („да, Е9 приемам"); the ~400k ticket boundary is a judgment on GSD's degradation
-scale (peak < 30%, good 30-50%, degrading 50-70% of the window; `gsd-core/references/context-budget.md`),
-not our measurement - the COO session size at the end of the first Silerax plan is the measurement.
-At >= 400k the COO finishes the current ticket (commit + record) and says "new ticket = new session";
-HARD-024's checkpoint at 950k stays as the safety net, not the plan.
-
-**ALL NINE STAGES APPROVED 2026-10-17, AND THE SIX ANSWERS BELOW CONFIRMED („да и за двете" for 5 and 6;
-1-4 are settled by the approved stages).** The design is complete. Remaining: the tickets that build it
-into PnP.
-
-Dropped from today's cycle: the behavior ledger, the consequence scan, the own-pass file, the
-per-section fact-check agents over the plan, the plan gate's artifact requirement (its SHA stamp
-stays as the mechanical gate's anchor). Replaced by: research BEFORE the draft (fresh context), the
-mechanical gate, the blocker contract and the COO triage.
+Dropped from the old cycle: the behavior ledger, the consequence scan, the own-pass file, the
+per-section fact-check agents over the plan, the plan gate's artifact requirement. Replaced by:
+research BEFORE the draft (fresh context), the mechanical gate, the blocker contract and the COO triage.
 
 Kept unchanged: the four operator gates as native dialogs; the Writer as the only repo writer;
 Reviewer/QA read-only; one doctrine for PnP and the consumers; no runtime, no daemon; English in the
@@ -126,108 +195,63 @@ tree, the operator's words verbatim in Bulgarian.
 
 Session rule: the COO session holds the plan index, the state and the verdicts; it reads the APPROVED
 tickets once (<= 3 x ~1,500 tokens) and never carries their revisions or a review body; a readiness
-cycle starts in a fresh session; ~400k is a ticket boundary. **Thin, not blind** (review 2026-10-17):
-the planner agent's handoff is structured - which `D-NN` lands in which ticket, which dependencies
-were checked, which risks remain, and pointers to the evidence - so the COO can open a proof on
-doubt; "PASS, all fine" is not a handoff.
+cycle starts in a fresh session; ~400k is a ticket boundary - a GUIDE, not a goal (GSD's degradation
+scale: peak < 30%, good 30-50%, degrading 50-70% of the window), cut only where a ticket ends anyway;
+HARD-024's checkpoint hook at 950k stays as the safety net. **Thin, not blind:** the planner's handoff
+is structured (which `D-NN` in which ticket, dependencies checked, risks, evidence pointers); "PASS,
+all fine" is not a handoff.
 
-## Proposed answers to the open questions (the operator confirms or corrects)
+## The six answers (confirmed 2026-10-17)
 
-1. Plan size: **<= 3 tickets, <= ~1,500 tokens per ticket; bigger goals = several plans in ROADMAP.md.**
-2. Who drafts: **a planner subagent in a fresh context; the COO reads, triages and decides.**
-3. Blocker classes in the Codex brief: **BLOCKER (required property + evidence) / INFO; wording,
-   formatting and line precision out of scope; the fix is a hint, never the finding.**
-4. Passes: **one by default; a second only on a BLOCKER that reverses a D-NN, on the operator's word;
-   at most 2 revisions; a revision that does not reduce BLOCKERs stops and asks.**
-5. Format: **the folder from the first new plan** (index, DECISIONS, RESEARCH, tickets/, records/;
-   `readiness/<ABBR>/` as today); old monolith plans stay readable, no migration.
-6. First measured plan: **the next real plan in Silerax**, measured on: tokens idea -> approved plan,
-   correction rounds after implementation, COO session size at the end, and (review 2026-10-17) the
-   TOTAL spend of the cycle - every agent's tokens as the harness reports them plus the Codex tokens -
-   so a saving in the COO's context is not a cost moved to the planner. The same numbers for the
-   last plan under the old cycle, from its records, as the baseline.
+1. Plan size: <= 3 tickets, <= 6144 bytes per ticket; bigger goals = several plans in ROADMAP.md.
+2. Who drafts: a planner subagent in a fresh context; the COO reads, triages and decides.
+3. Blocker classes in the Codex brief: BLOCKER (required property + evidence) / INFO; wording,
+   formatting and line precision out of scope; the fix is a hint, never the finding.
+4. Passes: one by default; a second on a reversed `D-NN` or a named risk, on the operator's word; at
+   most 2 revisions; a revision that does not reduce BLOCKERs stops and asks.
+5. Format: the folder from the first new plan; old monolith plans stay readable, no migration.
+6. First measured plan: the next real plan in Silerax; the four numbers + total spend; baseline = the
+   last plan under the old cycle, from its records.
 
-## Tickets that build the cycle into PnP (COO proposal 2026-10-17; the cycle applied to itself: one
-## roadmap entry, three plans of <= 3 tickets, written as folders by hand until A2 teaches the tools)
+## The plans that built it (A, B done; C landed, not executed)
 
-**Plan A - the structure (code; Writer; a Codex pass over the code only on the operator's word)**
-- A1 `ROADMAP.md`: seeded once per project from a payload template in the strict entry format
-  (like the transfer surface); the Candidates section of CANDIDATES retires; setup seeds it, a
-  migration seeds it on existing installations; this repo gets `dev/backlogs/ROADMAP.md` with the
-  REBUILD entry as its first row.
-- A2 the plan folder: `active/<ABBR>/PLAN_<ABBR>.md` + `DECISIONS.md` + `RESEARCH.md` + `tickets/<REF>.md`
-  + `records/<REF>.md`; every reader learns both formats - Gate 2's lookup, the self-check's plan-ref
-  section, `/pnp:mission` Step 2, `/pnp:brief`, archiving (`git mv` of the folder). Monolith plans
-  stay readable; no migration of old plans.
-- A3 the mechanical gate: `scripts/engine/plan-gate.js` rewritten to the new contract - caps (<= 3
-  tickets, ticket size), the six fields per ticket, every `D-NN` cited by a ticket, no TBD, every Code
-  Map path exists, SHA stamp of the folder; Gate 2's `Class: plan` branch and the Codex wrappers'
-  exit-2 check require THIS stamp and nothing else (ledger / scan / own-pass requirements deleted).
-  Self-check PLAN GATE section follows. Two implementation notes (review 2026-10-17): the stamp's
-  manifest also records the text hash of every decision cited ACROSS plans (`<ABBR>/D-NN`), so a change
-  in the source decision is detected by the gate; and the coverage check ships with negative tests for
-  (i) a current-plan decision no ticket cites, (ii) an invalid cross-plan reference, (iii) a
-  `deferred` decision wrongly demanded of the current tickets.
-
-**Plan B - the cycle as a skill and as doctrine (prose; the COO, R1)**
-- B1 `/pnp:plan` - a new skill that IS stages 1-6: the roadmap entry -> research agents (brief
-  template) -> DECISIONS with Open Questions that halt -> planner agent (brief template) -> the
-  mechanical gate -> ONE Codex readiness pass with the blocker contract -> COO triage table -> revision
-  by the planner agent -> `readiness/<ABBR>/round-N.md` -> cap 2 / stall rule -> operator approval ->
-  the folder lands. The brief templates live in the payload (`templates/briefs/`), one per agent
-  (research, planner, writer-dispatch pointer, readiness-codex), so the contracts are the same in
-  every project.
-- B2 `/pnp:review` readiness mode reduced to what B1 calls (the gate + the one pass + the round
-  ledger); Steps 2a-2e deleted; the verdict text goes to a file, only the summary enters the COO's
-  context (verify what the wrapper does today).
-- B3 the docs: `docs/WORKFLOW.md` § Plan readiness review, § Planning lock, § Durable development
-  history (folder, records, ROADMAP), § Loop shape, § The transfer surface; `docs/REVIEW_CHECKLIST.md`
-  § Plan readiness (the blocker contract); `docs/LOOP.md`; the session rule (400k boundary, fresh
-  session for readiness). Release **0.3.0**: bump + CHANGELOG block whose `Retires local rules:` line
-  NAMES every project-local rule the new cycle makes dead or absorbs (readiness mechanics, chain-trace
-  in the evidence pack, "the plan is read by sections", "blockers of the previous ticket enter the next
-  brief", readiness symmetry, the checkpoint rules the session rule replaces) + the one migration
-  (A1's seed). PnP's own overrides § Loop shape is cleaned in B3 itself; each consumer deletes its
-  named rules in one sitting on its operator's word (operator question 2026-10-17: „ще трябва ли
-  отново да ревизираме всичко по проектите" - no: one list-driven pass per project, mostly deletions;
-  old active plans finish in the old format). Then the first measured plan in Silerax.
-
-**Plan C - after the measurement (each on its own word)**
-- C1 the measurement instruments: the three numbers written into `records/<REF>.md` by the closing
-  COO (Codex tokens from the pass output, rounds, session size from the context hook) - a template
-  row, no tooling.
-- C2 the doctrine compaction (PLAN_DOCT's material): the rule stays, the story goes; one ticket per
-  document; prose, R1.
-- C3 the suites: fast or fewer (CANDIDATES § The suites cost an hour).
-
-**The session start cost (operator 2026-10-17: „нова сесия започва 140К COO контекст").** A fresh
-session pays the start every time, so the ~400k boundary is a guide, never a goal: a session is cut at
-a ticket boundary where it stops anyway, not for the number. The real saving is that the COO stops
-READING - research, planning, revisions and verdicts run in subagents that start from their brief and
-pay no doctrine preflight. The start itself is the next target: measure it right after 0.3.0 (thin
-files landed); if it is still above ~100k, C2 (the doctrine compaction) moves AHEAD of the first
-Silerax plan, because every new plan pays it.
-
-Order: A -> B -> 0.3.0 -> (start measured; C2 first if > ~100k) -> Silerax plan measured -> C. Each ticket on its own word; A's code gets a
-Codex pass only if the operator asks. COO routing (overrides § Loop shape, the four checks): A1, A2,
-A3 `COO: top (Fable) - because check 1` (a migration, Gate 2's lookup, the gate's enforcement code);
-B1, B2 `COO: cheap (Opus) - all four no` (prose); B3 `COO: top (Fable) - because check 1` (the
-release ticket writes migration 0025 - corrected by the arbitration ruling of 2026-10-17 on plan RBB's
-readiness pass 1, CANDIDATES § Ruling ledger; the earlier "B3 cheap" was an estimate made before the
-ticket's contract existed); C1, C2, C3 `COO: cheap (Opus) - all four no`.
-Nine tickets, six before 0.3.0.
+- **Plan A - the structure** (`archive/012_PLAN_RBA_2026-10-17/`, Fable, Writer, no Codex pass):
+  RBA-001 `ROADMAP.md` template + setup seed + the `seed-file` op + Gate 3 opens the roadmap;
+  RBA-002 the plan folder in every reader (one predicate in `aiwf-lib.js`; Gate 2 lookup index ->
+  tickets; self-check, mission, brief, archiving as a directory; monoliths still read); RBA-003 the
+  mechanical gate (`plan-gate.js --check/--stamp`, the negative tests, the cross-plan hashes).
+- **Plan B - the cycle as a skill and doctrine** (`archive/013_PLAN_RBB_2026-10-17/`; one Codex
+  readiness pass, 13 blockers, 193,977 tokens; B3 on Fable by ruling 2): RBB-001 `/pnp:plan` +
+  `templates/briefs/`; RBB-002 `/pnp:review` readiness mode reduced, Steps 2a-2e deleted, the docs
+  say the cycle once; RBB-003 release 0.3.0 - migration 0025, CHANGELOG with `Retires local rules:`,
+  the overrides' retired bullets, the five stale pointers.
+- **Plan C** (`active/RBC/`, Opus, no passes): RBC-001 the measurement instruments (record skeleton,
+  approval row, the two start numbers) + chain-trace into REVIEW_CHECKLIST; RBC-002 the doctrine
+  compaction (WORKFLOW, LOOP, REVIEW_CHECKLIST, the whole overrides; verified by a rule-homes table;
+  PLAN_DOCT's drafts and `readiness/DOCT/` are input, deleted on the word); RBC-003 the root gitfile
+  in the provenance walk + the header `Status:` line out of the byte cap.
+- Then ROADMAP § README (the public README, 0.3.1) - after RBC-002.
+- COO routing applied: A1-A3 Fable (check 1); B1, B2 Opus; B3 Fable (ruling 2); C1-C3 Opus.
 
 ## Inputs (data, not canon)
 
-1. `dev/PLAN REFACTOR/` - a GPT analysis the operator recorded (2026-10-15). **Input only**
-   (operator 2026-10-17: „не е нещо което трябва да приемем на 100%"). Its size tables are the only
-   part of the PDF that survived text extraction (Cyrillic lost to font encoding).
-2. `dev/backlogs/drafts/PLAN_FOLD.draft.md` - the COO's direction draft "plan as a folder"; its
-   folder shape is adopted in the cycle above; its ticket list is void.
+1. **`dev/PLAN REFACTOR/` - a GPT analysis the operator recorded (2026-10-15), input only** („не е
+   нещо което трябва да приемем на 100%"). Its three answers, in substance: (1) split the monolith
+   plan into files read by role - index, DECISIONS, STATE, phases, tickets, records; the measured
+   consumer plans were 607-6,561 lines with completion records 8.8-26.5% of them and phase 3
+   inheriting phase 2 inheriting phase 1 (the PDF's size tables survived extraction, its Cyrillic prose
+   did not); (2) no migration of old plans - legacy compatibility, new format forward, ONE doctrine for
+   both; (3) new plans in English, the operator's words verbatim in Bulgarian, the operator channel
+   stays Bulgarian; measure tokens on one translated ticket before deciding. Taken: the folder, no
+   migration, English. Not taken as such: STATE.yaml (the index table holds status), phases as files
+   (a plan IS a phase).
+2. `dev/backlogs/drafts/PLAN_FOLD.draft.md` - the COO's direction draft "plan as a folder" (0.3.0);
+   absorbed by plan A; its ticket list is void. May be deleted with RBC-002's cleanup, on the word.
 3. `dev/backlogs/drafts/PLAN_DOCT.draft.md` + `dev/backlogs/readiness/DOCT/` - the parked doctrine
-   compaction; input for the doctrine-size question (a room, after the cycle).
-4. **GSD / BMad v7 (+bmad-loop) / Gas Town scan (sonnet agent, 2026-10-17; clones under the session
-   scratchpad, read only).** Lessons taken into the cycle, with their source:
+   compaction (6 tickets, pass 1 = 12 blockers, 215,992 tokens); its analyses of docs/skills/templates
+   are RBC-002's input; deleted with RBC-002 on the word.
+4. **GSD / BMad v7 (+bmad-loop) / Gas Town scan (sonnet agent, 2026-10-17; clones were under the
+   session scratchpad, read only, now gone).** Lessons taken into the cycle, with their source:
    - revision loop with a hard cap and a stall rule; INFO never revises (GSD `references/revision-loop.md`,
      `agents/gsd-plan-checker.md`; BMad review loopback cap);
    - the blocker contract: required property + evidence + severity, the fix a non-binding hint
@@ -245,31 +269,41 @@ Nine tickets, six before 0.3.0.
      `customize.toml:85-91`, `step-03-implement.md:31`);
    - frozen intent block + Open Questions that halt (BMad `plan-template.md:23-52`);
    - decision ids cited by tickets, inherited by id not by prose (GSD `templates/context.md`; BMad
-     spine Inherited Invariants).
+     spine Inherited Invariants);
+   - GSD's degradation scale for context (peak < 30%, good 30-50%, degrading 50-70%) - the source of
+     the ~400k guide; GSD names the MCP schema tax as the biggest per-turn lever - here MCP is on
+     demand and costs 0 at start.
    Not transferable (conflicts with PnP's constraints): any runtime / daemon / state engine
    (gsd-tools, bmad-loop, Gas Town beads); unattended auto-advance or auto-commit; automatic
    convergence loops without the operator's word; multi-reviewer ensembles (quota x N, and a
    "findings floor"); same-model self-review in place of the Codex pass. The frameworks' own admitted
    failures: orchestrators cannot judge semantic correctness, verifiers false-pass non-inferable
    checks, plan checkers "go soft", the loop is ceremony for small tasks - the same risks apply here.
-   Unverified by the agent: token savings (ranking is judgment), BMad stable v6, whether `/pnp:review`
-   already returns a summary rather than the full verdict text.
-5. This session's evidence: CANDIDATES § UPDATE ARCHITECTURE (tickets 1 and 2), § The suites cost
-   an hour, § AFTER 0.2.20.
+   Unverified by the agent: token savings (ranking is judgment), BMad stable v6.
+5. The second-opinion review of this file (GPT, 2026-10-17): D-NN scoped per plan and qualified
+   across plans; the SHA stamp over the frozen contract only; a second pass on a named risk; thin not
+   blind (structured planner handoff; the COO reads the approved tickets); total spend as the fourth
+   number; cross-plan decision hashes and negative coverage tests in the gate - all in. Its closing
+   advice, kept: do not open a readiness cycle on this design itself; implement and measure.
+6. This session's evidence: CANDIDATES § UPDATE ARCHITECTURE (0.2.20's two tickets), § The suites
+   cost an hour, § AFTER 0.2.20 (the five steps, now superseded by the plans above), § Ruling ledger
+   (the five rulings of 2026-10-17).
 
-## Decisions already in force (operator, 2026-10-16/17; independent of the design)
+## Decisions in force (operator, 2026-10-16/17; independent of the design; in the overrides)
 
 - Prose in the payload is R1; code goes through the Writer; a Codex pass over code only on the word.
 - A migration only for structure; the update overwrites; the project additions block is the
   consumer's home inside a rendered file.
-- No suite for prose, skills, docs or templates; a `scripts/` change runs its row once; the Writer's
-  green run is the verification. No audit-pass question for prose.
-- The Codex readiness pass stays in the cycle.
+- No suite for prose, skills, docs or templates; a `scripts/` change runs its row once, in the
+  background at the Writer's handoff; the Writer runs only its new tests. No audit-pass question for prose.
+- The Codex readiness pass stays in the cycle; a Codex pass is never automatic beyond the first.
+- `git -C` and `cd` are forbidden to the COO; pnp-live refresh = `Start-Process git -ArgumentList
+  'checkout','--detach','main' -WorkingDirectory 'D:\pnp-live' -NoNewWindow -Wait`.
+- The operator decides with option numbers in dialogs; the COO states decisions, it does not ask them.
 
 ## Pointers that now resolve here
 
-- CANDIDATES § AFTER 0.2.20 (the five steps) -> superseded by § The cycle; the readiness cut, FOLD,
-  the doctrine compaction and the suites are rooms that follow the approved cycle.
-- CANDIDATES § UPDATE ARCHITECTURE, DEENG-001 -> superseded.
-- PLAN_DOCT (parked), PLAN_FOLD (direction draft) -> inputs 2 and 3.
+- CANDIDATES § AFTER 0.2.20 (the five steps), § UPDATE ARCHITECTURE DEENG-001 -> superseded by the
+  plans above.
+- PLAN_DOCT (parked), PLAN_FOLD (direction draft) -> inputs 2 and 3; both end with RBC-002.
 - Memory `promptandpray-mission-status` -> points here for "what next".
