@@ -135,6 +135,52 @@ a review body; a readiness cycle starts in a fresh session; ~400k is a ticket bo
    correction rounds after implementation, COO session size at the end. The same three numbers for
    the last plan under the old cycle, from its records, as the baseline.
 
+## Tickets that build the cycle into PnP (COO proposal 2026-10-17; the cycle applied to itself: one
+## roadmap entry, three plans of <= 3 tickets, written as folders by hand until A2 teaches the tools)
+
+**Plan A - the structure (code; Writer; a Codex pass over the code only on the operator's word)**
+- A1 `ROADMAP.md`: seeded once per project from a payload template in the strict entry format
+  (like the transfer surface); the Candidates section of CANDIDATES retires; setup seeds it, a
+  migration seeds it on existing installations; this repo gets `dev/backlogs/ROADMAP.md` with the
+  REBUILD entry as its first row.
+- A2 the plan folder: `active/<ABBR>/PLAN_<ABBR>.md` + `DECISIONS.md` + `RESEARCH.md` + `tickets/<REF>.md`
+  + `records/<REF>.md`; every reader learns both formats - Gate 2's lookup, the self-check's plan-ref
+  section, `/pnp:mission` Step 2, `/pnp:brief`, archiving (`git mv` of the folder). Monolith plans
+  stay readable; no migration of old plans.
+- A3 the mechanical gate: `scripts/engine/plan-gate.js` rewritten to the new contract - caps (<= 3
+  tickets, ticket size), the six fields per ticket, every `D-NN` cited by a ticket, no TBD, every Code
+  Map path exists, SHA stamp of the folder; Gate 2's `Class: plan` branch and the Codex wrappers'
+  exit-2 check require THIS stamp and nothing else (ledger / scan / own-pass requirements deleted).
+  Self-check PLAN GATE section follows.
+
+**Plan B - the cycle as a skill and as doctrine (prose; the COO, R1)**
+- B1 `/pnp:plan` - a new skill that IS stages 1-6: the roadmap entry -> research agents (brief
+  template) -> DECISIONS with Open Questions that halt -> planner agent (brief template) -> the
+  mechanical gate -> ONE Codex readiness pass with the blocker contract -> COO triage table -> revision
+  by the planner agent -> `readiness/<ABBR>/round-N.md` -> cap 2 / stall rule -> operator approval ->
+  the folder lands. The brief templates live in the payload (`templates/briefs/`), one per agent
+  (research, planner, writer-dispatch pointer, readiness-codex), so the contracts are the same in
+  every project.
+- B2 `/pnp:review` readiness mode reduced to what B1 calls (the gate + the one pass + the round
+  ledger); Steps 2a-2e deleted; the verdict text goes to a file, only the summary enters the COO's
+  context (verify what the wrapper does today).
+- B3 the docs: `docs/WORKFLOW.md` § Plan readiness review, § Planning lock, § Durable development
+  history (folder, records, ROADMAP), § Loop shape, § The transfer surface; `docs/REVIEW_CHECKLIST.md`
+  § Plan readiness (the blocker contract); `docs/LOOP.md`; the session rule (400k boundary, fresh
+  session for readiness). Release **0.3.0**: bump + CHANGELOG block with `Retires local rules:` +
+  the one migration (A1's seed). Then the first measured plan in Silerax.
+
+**Plan C - after the measurement (each on its own word)**
+- C1 the measurement instruments: the three numbers written into `records/<REF>.md` by the closing
+  COO (Codex tokens from the pass output, rounds, session size from the context hook) - a template
+  row, no tooling.
+- C2 the doctrine compaction (PLAN_DOCT's material): the rule stays, the story goes; one ticket per
+  document; prose, R1.
+- C3 the suites: fast or fewer (CANDIDATES § The suites cost an hour).
+
+Order: A -> B -> 0.3.0 -> Silerax plan measured -> C. Each ticket on its own word; A's code gets a
+Codex pass only if the operator asks.
+
 ## Inputs (data, not canon)
 
 1. `dev/PLAN REFACTOR/` - a GPT analysis the operator recorded (2026-10-15). **Input only**
