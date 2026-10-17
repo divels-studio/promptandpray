@@ -3,11 +3,13 @@
  * /pnp:update entrypoint - the CLI over the migration engine in migrate.mjs.
  *
  * MODES (exactly one per run)
- *   --check            the version interlock every /pnp:* skill runs in Step 0. Reads only.
- *   --dry-run          plan the whole update and write NOTHING - not one byte, not even a stage.
- *   --apply            run it: ordered application, write-ahead journal, resume after a crash.
- *   --resolve <key>    reopen the conflict dialog for ONE managed artifact, at any time. This is
- *                      the only way out of an `override`, and it needs no version bump.
+ *   --check            the version interlock every /pnp:* skill runs in Step 0. Reads only. A
+ *                      project that is behind also gets the line `behind: <installed> -> <payload>`.
+ *   --dry-run          plan the whole update and write NOTHING; print the CHANGELOG blocks between
+ *                      the installed and the payload version, then every planned operation.
+ *   --apply            run it: the CHANGELOG blocks, then the migrations in order. Every managed
+ *                      artifact is OVERWRITTEN from the render (a Markdown file keeps its project
+ *                      additions block); an interrupted migration simply runs again next time.
  *
  * COMMON FLAGS
  *   --project-root <dir>       default: `git rev-parse --show-toplevel` from the cwd
@@ -17,7 +19,7 @@
  *   --no-selfcheck             skip the integrated self-check step (it says so on one line)
  *
  * THE SELF-CHECK IS THE LAST STEP OF A WRITING RUN
- *   `--apply` that really applied migrations, and `--resolve`, finish by RUNNING
+ *   `--apply` that really applied migrations finishes by RUNNING
  *   scripts/selfcheck/aiwf-selfcheck.js against the project. `--check`, `--dry-run` and an
  *   "already current" run write nothing, so there is nothing for it to judge and it does not run -
  *   except an "already current" run that refreshed a stale `$schema`: the config changed on disk,
@@ -29,80 +31,50 @@
  *
  * EXIT CODES (the contract every caller may rely on)
  *   0  success: applied, already current, a clean dry-run, or `--check` on a current project
- *   1  blocked: an invariant violation, a payload/validation failure, or a stop at an unresolved
- *      conflict. `--check` also exits 1 when migrations are pending - that is what makes it an
- *      interlock a skill can branch on. A writing run whose integrated self-check came back red (or
- *      could not run at all) also exits 1: the writes stand, the verdict is that they are not
- *      consistent.
+ *   1  blocked: an invariant violation, a payload/validation failure, a malformed project additions
+ *      block, or an unanswered question. `--check` also exits 1 when migrations are pending - that is
+ *      what makes it an interlock a skill can branch on. A writing run whose integrated self-check
+ *      came back red (or could not run at all) also exits 1: the writes stand, the verdict is that
+ *      they are not consistent.
  *   2  the run could not start: no installation, an unreadable config, an unreadable payload, or a
  *      usage error.
  *
- * RESOLUTIONS - two adapters over ONE resolver
- *   The resolution FILE maps an address to a DISCRIMINATED record:
- *     address:  "<migration>/<opIndex>/<key>"   (bare "<key>" in --resolve mode)
- *     conflict: { "kind": "conflict", "resolution": "take-new" | "keep-mine" | "merge",
- *                 "mergedFile": "<path>" }      mergedFile exactly when resolution is "merge"
- *     answer:   { "kind": "answer", "value": <any json> }   for add-config-key with askOperator
- *   An unknown kind, an unknown field, a missing conditional field, a record of the wrong kind for
- *   the address, or NO record at all stops the run with exit 1 naming the address. Nothing is ever
- *   guessed: a guessed resolution is a silent overwrite with extra steps.
- *   Without a resolution file, an interactive run ASKS (the same records, typed by the operator) and
- *   a non-interactive one stops. A dry-run never prompts - a preview that asks questions is not a
- *   preview; pass --resolution-file to preview the resolved plan.
- *   A resolution is needed only where something of the operator's is at stake: a config key with
- *   `askOperator`, or an artifact the operator edited, deleted, or holds and edited. A payload change
- *   to an artifact nobody touched needs no decision, so a dry-run over it simply previews the line it
- *   would apply ("... the payload version applied (you had not edited it)") and keeps going.
+ * ANSWERS - the one question an update can ask
+ *   A migration's `add-config-key` with `askOperator` asks for a value. The resolution FILE maps its
+ *   address to an answer record:
+ *     address:  "<migration>/<opIndex>/<key>"
+ *     answer:   { "kind": "answer", "value": <any json> }
+ *   Every record is checked when the file is loaded: an unknown kind (a `conflict` record of an
+ *   older engine included), an unknown field or a missing value stops the run with exit 1. Without a
+ *   file, an interactive `--apply` ASKS and a non-interactive one stops at that address. A dry run
+ *   never prompts and never stops on it: the unanswered key is listed as `would ask: <address>`.
  *
  * This command NEVER commits. The diff it produces goes through the normal review + commit gate.
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { previewLines, promptSync } from '../setup/dialog.mjs';
+import { promptSync } from '../setup/dialog.mjs';
 import { resolveProjectRoot } from '../setup/generate.mjs';
 import { finishWithSelfCheck } from '../selfcheck/run-selfcheck.mjs';
 import { PayloadError } from './validate-payload.mjs';
 import {
   DEFAULT_PLUGIN_ROOT, UpdateError, UpdateStartError,
-  checkInterlock, checkResolutionRecord, resolutionFileAdapter, resolveArtifact, runUpdate, schemaRefreshLine, stopAdapter,
+  checkInterlock, checkResolutionRecord, resolutionFileAdapter, runUpdate, schemaRefreshLine, stopAdapter, wouldAskAdapter,
 } from './migrate.mjs';
 
-const MODES = ['--check', '--dry-run', '--apply', '--resolve'];
-
-// The conflict dialog's two primitives - the synchronous stdin read and the content preview - are
-// shared with the setup engine's adopt dialog (scripts/setup/dialog.mjs). Both dialogs describe the
-// same kind of file to the same operator, so they read from one implementation.
-const preview = (label, text) => previewLines(label, text);
+const MODES = ['--check', '--dry-run', '--apply'];
 
 function interactiveResolver() {
-  return (address, expectedKind, info) => {
-    if (expectedKind === 'answer') {
-      console.log(`\nA new setting needs your answer (${address}):`);
-      console.log(`  ${info.question}`);
-      console.log(`  default: ${JSON.stringify(info.fallback)}`);
-      const raw = promptSync('  your answer (JSON, or plain text; empty = the default): ');
-      if (raw === '') return checkResolutionRecord({ kind: 'answer', value: info.fallback }, 'answer', address);
-      let value = raw;
-      try { value = JSON.parse(raw); } catch { /* a plain string is a legitimate answer */ }
-      return checkResolutionRecord({ kind: 'answer', value }, 'answer', address);
-    }
-    console.log(`\nCONFLICT at ${address}`);
-    console.log(`  artifact : ${info.key}`);
-    console.log(`  why      : ${info.predicates.join('; ')}${info.held ? ' (you currently hold this artifact)' : ''}`);
-    for (const line of preview('yours', info.actual)) console.log(line);
-    for (const line of preview('payload', info.newRender)) console.log(line);
-    for (;;) {
-      const answer = promptSync('  take-new / keep-mine / merge: ');
-      if (answer === 'keep-mine' || answer === 'take-new') {
-        return checkResolutionRecord({ kind: 'conflict', resolution: answer }, 'conflict', address);
-      }
-      if (answer === 'merge') {
-        const file = promptSync('  path of the file you merged by hand: ');
-        return checkResolutionRecord({ kind: 'conflict', resolution: 'merge', mergedFile: file }, 'conflict', address);
-      }
-      console.log('  answer with one of: take-new, keep-mine, merge');
-    }
+  return (address, info) => {
+    console.log(`\nA new setting needs your answer (${address}):`);
+    console.log(`  ${info.question}`);
+    console.log(`  default: ${JSON.stringify(info.fallback)}`);
+    const raw = promptSync('  your answer (JSON, or plain text; empty = the default): ');
+    if (raw === '') return checkResolutionRecord({ kind: 'answer', value: info.fallback }, address);
+    let value = raw;
+    try { value = JSON.parse(raw); } catch { /* a plain string is a legitimate answer */ }
+    return checkResolutionRecord({ kind: 'answer', value }, address);
   };
 }
 
@@ -113,11 +85,10 @@ function makeResolver({ resolutionFile, dryRun }) {
     try { table = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) {
       throw new UpdateStartError(`--resolution-file "${file}" cannot be read (${e.message}).`);
     }
-    return resolutionFileAdapter(table, { label: `--resolution-file ${path.basename(file)}` });
+    // A dry run lists an address the file does not answer as `would ask`; an apply stops on it.
+    return resolutionFileAdapter(table, { label: `--resolution-file ${path.basename(file)}`, onMissing: dryRun ? wouldAskAdapter : null });
   }
-  if (dryRun) {
-    return stopAdapter('a dry-run never prompts - this is the decision the preview exists to show you. Answer it with --apply, or preview the resolved plan with --resolution-file.');
-  }
+  if (dryRun) return wouldAskAdapter;
   if (process.stdin.isTTY) return interactiveResolver();
   return stopAdapter('this run is not interactive and no --resolution-file was passed, so there is nobody to ask.');
 }
@@ -144,7 +115,7 @@ function main() {
 
   const chosen = MODES.filter((m) => has(m));
   if (chosen.length !== 1) {
-    console.error(`usage: node aiwf-update.mjs (${MODES.join(' | ')} <key>) [--project-root <dir>] [--plugin-root <dir>] [--resolution-file <json>] [--quiet] [--no-selfcheck]`);
+    console.error(`usage: node aiwf-update.mjs (${MODES.join(' | ')}) [--project-root <dir>] [--plugin-root <dir>] [--resolution-file <json>] [--quiet] [--no-selfcheck]`);
     console.error(chosen.length === 0 ? '  exactly one mode is required.' : `  these modes are mutually exclusive: ${chosen.join(', ')}`);
     return 2;
   }
@@ -156,8 +127,8 @@ function main() {
     return 2;
   }
 
-  // The integrated self-check, for the two modes that write. `wouldRun: true` at every call site
-  // below is deliberate: each one is reached only after a run that really wrote something.
+  // The integrated self-check, for the runs that write. `wouldRun: true` at every call site below is
+  // deliberate: each one is reached only after a run that really wrote something.
   const finish = (code, subject) => finishWithSelfCheck({
     pluginRoot, projectRoot, code, wouldRun: true, skipped: has('--no-selfcheck'), quiet, subject,
   });
@@ -169,40 +140,24 @@ function main() {
         say(`up to date: this project is at ${result.installedVersion} and the payload is ${result.payloadVersion}; no migrations are pending.`);
         return 0;
       }
-      if (result.journal) {
-        console.error(`pnp-update: an interrupted update is in flight (${result.journal.migration} operation ${result.journal.opIndex}). Run /pnp:update to resume it.`);
-        return 1;
-      }
       console.error(
         `pnp-update: ${result.pending.length} migration(s) pending - this project is at ${result.installedVersion}, ` +
         `the payload is ${result.payloadVersion}. Run /pnp:update before anything else.`,
       );
       for (const entry of result.pending) console.error(`  - ${entry.id} (-> ${entry.targetPluginVersion})`);
+      console.error(`behind: ${result.installedVersion} -> ${result.payloadVersion}; /pnp:update prints the CHANGELOG blocks in between`);
       return 1;
-    }
-
-    if (mode === '--resolve') {
-      const key = flag('--resolve');
-      if (!key || key.startsWith('--')) {
-        console.error('pnp-update: --resolve needs the managed key to reopen, e.g. --resolve "CLAUDE.md#aiwf-core".');
-        return 2;
-      }
-      const resolve = makeResolver({ resolutionFile: flag('--resolution-file'), dryRun: false });
-      const result = resolveArtifact({ pluginRoot, projectRoot, key, resolve, log: say });
-      say(`resolved "${result.key}" as ${result.resolution}.`);
-      // --resolve always writes: the artifact in take-new/merge, and the bookkeeping stamp in every
-      // branch including keep-mine. So it is a writing run and it is judged like one.
-      return finish(0, 'the resolved artifact');
     }
 
     const dryRun = mode === '--dry-run';
     const resolve = makeResolver({ resolutionFile: flag('--resolution-file'), dryRun });
     const report = runUpdate({ pluginRoot, projectRoot, resolve, dryRun, log: say });
     if (report.current) {
-      if (report.schemaRefreshed && !dryRun) {
+      if ((report.schemaRefreshed || report.bookkeepingNormalized) && !dryRun) {
         // The config changed on disk, so this is a writing run and it is judged like one.
         say(`already current: ${report.from} == the payload version, and no migrations are pending.`);
-        say(schemaRefreshLine(report.schemaRefreshed));
+        if (report.schemaRefreshed) say(schemaRefreshLine(report.schemaRefreshed));
+        if (report.bookkeepingNormalized) say('bookkeeping normalized to the current shape');
         say('nothing else was written');
         return finish(0, 'the refreshed config');
       }
@@ -213,11 +168,16 @@ function main() {
     if (dryRun) {
       say(`dry run: ${report.from} -> ${report.to}, ${report.preview.length} operation(s) planned. NOTHING was written.`);
       if (report.schemaRefreshed) say(`  a real run would first write: ${schemaRefreshLine(report.schemaRefreshed)}`);
-      for (const p of report.preview) say(`  ${p.migration}[${p.opIndex}] ${p.summary}`);
+      for (const p of report.preview) {
+        say(`  ${p.migration}[${p.opIndex}] ${p.summary}`);
+        for (const line of p.lines) say(`    ${line}`);
+      }
+      for (const line of report.foreign) say(line);
       return 0;
     }
     say(`updated: ${report.from} -> ${report.to}, ${report.applied.length} operation(s) applied.`);
-    say(`report:  ${path.relative(projectRoot, report.changesFile).split(path.sep).join('/')}`);
+    if (report.schemaRefreshed) say(schemaRefreshLine(report.schemaRefreshed));
+    for (const line of report.foreign) say(line);
     say('Nothing was committed - review the diff and commit it the usual way.');
     return finish(0, 'the updated project');
   } catch (e) {

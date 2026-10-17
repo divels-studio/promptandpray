@@ -121,16 +121,12 @@ export const OP_SPECS = {
   'rerender-managed-region': {
     // `ifRecorded: true` marks an artifact that exists on SOME installations only - the clearest
     // case being `.claude/agents/reviewer.md`, which is rendered for a claude-hosted host and does
-    // not exist at all on a codex-configured project. Without the field a re-render of an
-    // unrecorded artifact THROWS (that is the invariant: an update never adopts a file it did not
-    // write), which would break the apply of every installation that legitimately does not have it.
-    // With it, such an artifact is reported as skipped and the migration continues.
+    // not exist at all on a codex-configured project. The engine skips such an op when the key has
+    // no record; without the field a re-render always writes.
     //
-    // `createIfAbsent: true` is the OTHER answer to the same situation, for an artifact the payload
-    // has just started rendering: with no record AND no file the artifact is rendered and stamped,
-    // with no record but a file already standing there the migration REFUSES (an update never adopts
-    // a file it did not write - that stays /pnp:setup's business). The two fields are opposite
-    // behaviours for one state and may not travel together; see the mutual-exclusion check below.
+    // `createIfAbsent: true` is accepted and IGNORED by the engine (a render always creates what is
+    // missing). Frozen migrations carry it, so the field stays in the vocabulary, and the two rules
+    // below - whole files only, never together with `ifRecorded` - stay as they were written.
     required: ['op', 'file', 'region', 'template'],
     optional: ['ifRecorded', 'createIfAbsent'],
     conditional: () => [],
@@ -147,7 +143,7 @@ export const OP_SPECS = {
     // installation may still be carrying from an earlier version. The ids are generic by contract
     // (a consumer maps them onto whatever it calls those records locally), the field is optional
     // because most releases retire nothing, and it applies NOTHING: like the rest of a note, it is
-    // text in the CHANGES report telling the operator what to go and remove.
+    // text the update prints, telling the operator what to go and remove.
     required: ['op', 'id', 'text', 'docRefs'],
     optional: ['supersedes'],
     conditional: () => [],
@@ -404,7 +400,7 @@ export function validateOp(op, at, pluginRoot) {
       else if (op.docRefs.some((r) => typeof r !== 'string' || r.trim() === '')) errors.push(`${at} (note) every docRefs entry must be a non-empty string.`);
     }
     // Same shape rule as docRefs above, and for the same reason: a `supersedes` that is a bare string
-    // would be iterated character by character into the report, and an empty entry names nothing an
+    // would be iterated character by character into the output, and an empty entry names nothing an
     // operator can act on.
     if (has(op, 'supersedes')) {
       if (!Array.isArray(op.supersedes)) errors.push(`${at} (note) "supersedes" must be an array (omit it when the release retires nothing).`);

@@ -6,39 +6,42 @@
  *   Real entrypoints, throwaway directories under the system temp dir, nothing checked in and
  *   nothing left behind. Where a version bump is needed, the suite COPIES the whole payload into a
  *   temp directory, bumps its plugin.json and adds a fixture migration - so "upgrade 0.1.0 -> 0.2.0"
- *   is a real payload the real runner walks, not a mock. Crash recovery is proven by really killing
- *   the process (PNP_UPDATE_CRASH_AT makes it exit 86 at a named write boundary) and resuming in a
- *   FRESH process: a hand-written journal state would only prove the recovery code can parse a
- *   fixture.
+ *   is a real payload the real runner walks, not a mock.
  *
  * WHAT IT ASSERTS
  *   1. an already-current project is a zero-diff no-op, and the interlock says so;
- *   2. a real 0.1.0 -> 0.2.0 upgrade applies all four op types, and the self-check passes on the
- *      result; a FRESH install from that payload stamps its last manifest entry;
+ *   2. a real 0.1.0 -> 0.2.0 upgrade applies all four op types, prints the CHANGELOG blocks before
+ *      the first operation and the note's text, and stamps the payload version; a FRESH install
+ *      from that payload stamps its last manifest entry;
  *   3. the interlock stops a stale project, and every non-exception skill really runs it;
- *   4. the conflict matrix - {you edited it, the payload changed it, both} x {whole file, region},
- *      plus a missing file and a missing region. SIX of the eight stop WITHOUT mutating the target,
- *      keep the operations already applied, and resume; the two upstream-only cases - the payload
- *      moved, the operator never touched the artifact - are applied SILENTLY, with no resolution
- *      file in reach, which is what proves nobody was asked. All three resolutions work, merge
- *      included, and a held artifact is never re-applied;
+ *   4. an update OVERWRITES: an edited whole file, an edited `aiwf-core` region (every byte outside
+ *      the markers kept) and a deleted file all end as the payload render, with no question;
  *   5. ownership without takeover survives an update, and a settings shape the engine does not
  *      understand is never rewritten;
- *   6. --resolve leaves an override outside any version bump;
+ *   6. the project additions block: carried verbatim (CRLF content included) - appended when the
+ *      render has no block, in place when it has one - and a malformed block stops the run naming
+ *      the file, with nothing written to it;
  *   7. a malformed payload blocks BOTH the runner and a fresh setup, with zero bytes written;
- *   8. a crash at every write boundary recovers deterministically in a fresh process, including a
- *      config-target operation and a manual merge (whose staged answer is replayed, not re-asked);
- *   9. a dry run writes nothing at all;
- *  10. the self-check is the update's OWN last step: a real apply runs it and reports PASS,
- *      --no-selfcheck skips it out loud, a self-check that cannot be run at all makes the update
- *      exit 1, and a self-check that runs and comes back RED also makes it exit 1 - while the
- *      migrations it just applied stay applied, because a red verdict is a report about the result,
- *      not a rollback.
+ *   8. add-config-key: idempotent, answered, never guessed; a `conflict` record is an unknown kind;
+ *   9. legacy bookkeeping (two-hash objects, a journal key) is tolerated by --check and normalised
+ *      by --apply;
+ *  10. a dry run writes nothing and never stops on a question (it lists `would ask:`), and preflight
+ *      refuses an incoherent project;
+ *  11. the CHANGELOG blocks between the installed and the payload version are printed, exactly the
+ *      open-closed range, in file order - or one line saying there is none;
+ *  12. a migration interrupted after its first operations re-runs idempotently to the same end state;
+ *  13. the audit table migration, replayed from the shipped ops;
+ *  14. a note prints its text, docRefs and supersedes ids;
+ *  15. createIfAbsent is accepted and changes nothing (a render always creates), and the validator
+ *      rules on the field still hold;
+ *  16. the example bump is numbered against the payload it is built into;
+ *  17. a stale $schema is refreshed;
+ *  18. LAST: the self-check is the update's own last step (PASS, skipped, unrunnable, RED, crashed).
  *
  * WHY MOST CASES PASS --no-selfcheck
- *   Every install and every apply below would otherwise pay for a full self-check run (300+
- *   assertions and a fresh PowerShell host per run). The cases that are ABOUT the integration run
- *   it; the rest skip it through the same flag an operator has, never through a test-only bypass.
+ *   Every install and every apply below would otherwise pay for a full self-check run. The cases that
+ *   are ABOUT the integration run it (section 18, last); the rest skip it through the same flag an
+ *   operator has, never through a test-only bypass.
  *
  * Exit 0 = every assertion passed. Exit 1 = at least one failed. Exit 2 = the suite could not run.
  */
@@ -47,13 +50,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
-  UpdateError, assertNoForeignFileAtCreationTarget, extractRegion, resolveArtifact, runUpdate, writeCreatedTarget,
-} from './migrate.mjs';
+import { changelogLines, extractRegion } from './migrate.mjs';
 // The same module through its NAMESPACE, for helpers read in section 17: a helper this payload does
 // not export yet must fail the checks that need it, not abort the whole suite at load time.
 import * as engine from './migrate.mjs';
-import { sha256 } from '../setup/generate.mjs';
+import {
+  PROJECT_ADDITIONS_BEGIN, PROJECT_ADDITIONS_END, ProjectAdditionsError, carryProjectAdditions, normalizeBookkeeping,
+} from '../setup/generate.mjs';
+import { loadSchema, validate } from '../setup/validate-config.mjs';
 import { validatePayload } from './validate-payload.mjs';
 import { buildExampleBump } from '../ci/example-bump.mjs';
 
@@ -64,13 +68,9 @@ const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'pnp-update-test-'));
 let failures = 0;
 let checks = 0;
 /**
- * `detail` is either a STRING - printed as a suffix on both PASS and FAIL, as it always was - or a
- * FUNCTION, which is invoked only when the check FAILS and printed as an indented block below it.
- * The lazy form exists because the only detail worth reading is the one behind a failure, while an
- * eager one is paid for on every passing check and therefore had to stay short. `why()` below is the
- * lazy form, so a failing spawn now hands over its COMPLETE output instead of a summary of it.
- * Producing the detail is itself wrapped: a formatter that throws must not take the suite with it,
- * which is the same lesson the sc-crash case in section 12 asserts about the self-check.
+ * `detail` is either a STRING - printed as a suffix on both PASS and FAIL - or a FUNCTION, which is
+ * invoked only when the check FAILS and printed as an indented block below it. Producing the detail
+ * is itself wrapped: a formatter that throws must not take the suite with it.
  */
 function check(name, ok, detail) {
   checks += 1;
@@ -86,10 +86,6 @@ function check(name, ok, detail) {
 }
 function section(title) { console.log(`\n=== ${title} ===`); }
 // The whole output of the failing run, verbatim - exit code first, then every line of it.
-// It used to be the last three lines joined and cut at 260 characters, which is how a self-check
-// that crashed on a foreign platform reached the operator as three lines that explained nothing:
-// the stack was in `r.out` all along and the log threw it away. Nothing is sliced here any more;
-// the cost is paid only on a failure, because `check()` never calls this on a pass.
 const why = (r) => () => `exit ${r.status}\n${(r.out || '').replace(/\s+$/, '') || '(the run printed nothing)'}`;
 
 // ---- filesystem helpers ----------------------------------------------------
@@ -136,7 +132,7 @@ const CONFIG_REL = '.claude/aiwf-native/aiwf.config.json';
 const ROLES_REL = '.claude/aiwf-native/roles.json';
 const SETTINGS_REL = '.claude/settings.json';
 const WRITER_REL = '.claude/agents/writer.md';
-const STAGE_REL = '.claude/aiwf-native/update-stage';
+const ORCH_REL = '.claude/aiwf-native/ORCHESTRATOR.md';
 
 let seq = 0;
 function project(name) {
@@ -161,6 +157,14 @@ const baseAnswers = (overrides = {}) => ({
   paths: { scratchDir: '.aiwf', plansDir: 'docs/backlogs', overridesDoc: 'docs/ai/PROJECT_OVERRIDES.md' },
   review: { productBoundaryChecks: [] },
   ...overrides,
+});
+const codexAnswers = () => baseAnswers({
+  roles: {
+    writer: { model: 'claude-opus-5[1m]', effort: 'high' },
+    reviewer: { engine: 'codex', model: 'codex-atom-2', effort: 'high' },
+    qa: { engine: 'codex', model: 'codex-atom-2', effort: 'medium' },
+    qal: { enabled: false, engine: 'codex', model: 'unset', effort: 'high' },
+  },
 });
 
 // `selfcheck: true` lets the run perform its integrated self-check; everything else passes
@@ -187,11 +191,9 @@ function update(projectDir, args, { payload = BASE, env = null, selfcheck = fals
 
 const bookkeeping = (projectDir) => (readJson(at(projectDir, CONFIG_REL)) || {})._aiwf || {};
 const askRules = (projectDir) => ((readJson(at(projectDir, SETTINGS_REL)) || {}).permissions || {}).ask || [];
+const has = (obj, key) => Object.prototype.hasOwnProperty.call(obj || {}, key);
 
 // ---- payload builder -------------------------------------------------------
-// A real payload copy: the plugin as it ships, with plugin.json bumped and one or more migrations
-// added. The runner and setup are then executed FROM THE COPY, which is what a newer plugin release
-// really is.
 const FIXTURE_NOTE = { op: 'note', id: 'fixture-note', text: 'The fixture migration exercises every operation type.', docRefs: ['docs/LOOP.md#commit-gate'] };
 const ALL_OPS = [
   { op: 'add-config-key', path: 'enforcement.exampleToggle', default: true, askOperator: true, question: 'Keep the example toggle this fixture release introduces?' },
@@ -200,21 +202,18 @@ const ALL_OPS = [
   { op: 'reconcile-ask-ruleset', ruleset: 'templates/settings.ask-ruleset.json' },
   FIXTURE_NOTE,
 ];
+const WRITER_OP = { op: 'rerender-managed-region', file: WRITER_REL, region: null, template: 'templates/agents/writer.md.tmpl' };
+const ORCH_OP = { op: 'rerender-managed-region', file: ORCH_REL, region: null, template: 'templates/ORCHESTRATOR.md.tmpl' };
 const NEW_ASK_RULE = 'Bash(pnp-fixture-new:*)';
 // Any rule setup OWNS works here - this fixture is about the reconcile op, not about which rule
-// leaves - and it is deliberately NOT a git rule. The self-check runs over this very payload copy
-// (`--apply` invokes it) and holds the shipped git rules against Gate 4's accept-space form by form
-// in both directions, so dropping a git rule would leave a copy whose ruleset no longer backs a form
-// the hook still accepts: a real finding, and one this fixture has no business manufacturing.
+// leaves - and it is deliberately NOT a git rule (the self-check holds the shipped git rules against
+// Gate 4's accept-space form by form).
 const DROPPED_ASK_RULE = 'Bash(npm run seed:*)';
-// AND THE SAME RULE ON THE OTHER SHELL TOOL, for exactly the reason above. The ask list is a 1:1
-// `Bash(<X>)` / `PowerShell(<X>)` mirror and the self-check holds that invariant in both directions,
-// so a fixture that added or dropped one spelling alone would hand `--apply`'s self-check a payload
-// with a genuine defect - a rule gating one tool - and the suite would be reporting the fixture's
-// mistake rather than the engine's behaviour. The pair moves together; the ASSERTIONS below stay on
-// the Bash spelling, because which of the two the reconcile op carries is not what they are about.
+// AND THE SAME RULE ON THE OTHER SHELL TOOL: the ask list is a 1:1 `Bash(<X>)` / `PowerShell(<X>)`
+// mirror, so the pair moves together; the ASSERTIONS stay on the Bash spelling.
 const NEW_ASK_RULE_MIRROR = 'PowerShell(pnp-fixture-new:*)';
 const DROPPED_ASK_RULE_MIRROR = 'PowerShell(npm run seed:*)';
+const PAYLOAD_LINE = 'A line the next payload version added.';
 
 /** Adds the config key the fixture migration introduces, so the bumped payload's schema admits it. */
 function addExampleToggleToSchema(dir) {
@@ -222,19 +221,12 @@ function addExampleToggleToSchema(dir) {
     '"routeWriteGuard": {',
     '"exampleToggle": { "type": "boolean", "description": "fixture key added by a migration" },\n        "routeWriteGuard": {');
 }
-/**
- * Makes the payload RENDER differently. On its own that is no longer a conflict - an artifact the
- * operator never edited is re-rendered without a dialog - so this is what the silent path and the
- * "both" conflicts are built on, not a predicate by itself.
- */
+/** Makes the payload RENDER differently - the CLAUDE.md region and the Writer agent both move. */
 function changeTemplates(dir) {
   patch(at(dir, 'templates/CLAUDE.md.tmpl'), '## Your role', '## Your role (v2)');
-  fs.appendFileSync(at(dir, 'templates/agents/writer.md.tmpl'), '\nA line the next payload version added.\n', 'utf8');
+  fs.appendFileSync(at(dir, 'templates/agents/writer.md.tmpl'), `\n${PAYLOAD_LINE}\n`, 'utf8');
 }
-/**
- * Changes the desired ask set: one rule added, one rule (which setup owns) dropped - each on BOTH
- * shell tools, so the copy stays a ruleset the self-check will accept (see the constants above).
- */
+/** Changes the desired ask set: one rule added, one rule (which setup owns) dropped - on BOTH shell tools. */
 function changeRuleset(dir) {
   const file = at(dir, 'templates/settings.ask-ruleset.json');
   const json = readJson(file);
@@ -244,15 +236,10 @@ function changeRuleset(dir) {
   writeJson(file, json);
 }
 
-// THE BASELINE THIS SUITE LIVES ON, and why it is not simply "the payload as it ships".
-// Every payload built here starts from the shipped plugin with its manifest TRUNCATED to the first
-// entry (and the real migration directories above it removed, so no orphan directory fails
-// validation). The fixture migrations are then appended as `0002_*`, `0003_*` - which is what their
-// hardcoded ids and resolution addresses say throughout this file.
-// Without the truncation, every fixture id would have to be renumbered the day the payload ships
-// its own second migration, and the suite would be asserting the shipped migration COUNT instead of
-// the engine's behaviour. The engine is what is under test here; the shipped manifest is covered by
-// validate-payload and the self-check.
+// THE BASELINE THIS SUITE LIVES ON: the shipped plugin with its manifest TRUNCATED to the first
+// entry (and the real migration directories above it removed). The fixture migrations are then
+// appended as `0002_*`, `0003_*` - so the suite asserts the engine's behaviour, not the shipped
+// migration COUNT.
 const REAL_MANIFEST = readJson(path.join(PLUGIN_ROOT, 'migrations', 'index.json')) || [];
 const BASELINE = REAL_MANIFEST[0];
 if (!BASELINE) { console.error('the payload manifest is empty - the update suite has no baseline to build on'); process.exit(2); }
@@ -280,8 +267,6 @@ function makePayload(name, { version, migrations, tweak = null }) {
 }
 
 // The payload every project here is INSTALLED from: the shipped plugin at its baseline migration.
-// `install()` and `update()` default to it, so "an already-current project" means current against
-// this baseline - a stable statement that does not move when the payload ships a new migration.
 const BASE = makePayload('base', { version: BASELINE.targetPluginVersion, migrations: [] });
 
 // The payload every "real upgrade" case runs against: 0.2.0, one migration, all four op types, and
@@ -292,10 +277,7 @@ const P020 = makePayload('020', {
   tweak: (dir) => { addExampleToggleToSchema(dir); changeTemplates(dir); changeRuleset(dir); },
 });
 
-// ONE record for five operations. The two `rerender-managed-region` operations need no record at
-// all: the projects built here never edit those artifacts, so the payload change is applied without
-// a dialog. Keeping take-new records for them would have hidden exactly the regression this suite
-// now watches for - a run that asks about content that is not the operator's.
+// ONE record for five operations: the only question an update can ask is a config key's value.
 const FULL_RESOLUTIONS = {
   '0002_fixture/0/enforcement.exampleToggle': { kind: 'answer', value: false },
 };
@@ -303,6 +285,12 @@ function resolutionFile(name, table) {
   const p = path.join(tmpRoot, `resolutions-${name}.json`);
   writeJson(p, table);
   return p;
+}
+function patchOps(dir, id, mutate) {
+  const file = at(dir, `migrations/${id}/ops.json`);
+  const json = readJson(file);
+  mutate(json);
+  writeJson(file, json);
 }
 
 // ---------------------------------------------------------------------------
@@ -314,24 +302,30 @@ section('1 - an already-current project: the interlock says so and --apply is a 
   const c = update(p, ['--check']);
   check('--check exits 0 on a current project', c.status === 0, why(c));
   check('--check says it is up to date', c.out.includes('up to date'));
+  check('--check on a current project prints no behind line', !c.out.includes('behind:'), why(c));
   const a = update(p, ['--apply']);
   check('--apply exits 0', a.status === 0, why(a));
   check('--apply says "already current"', a.out.includes('already current'));
   check('--apply wrote nothing at all (byte for byte)', diffSnapshots(before, snapshot(p)).length === 0, diffSnapshots(before, snapshot(p)).join(', '));
-  check('no CHANGES report was invented', !exists(at(p, 'CHANGES_0.1.0-to-0.1.0.md')));
 }
 
 // ---------------------------------------------------------------------------
-section('2 - a real 0.1.0 -> 0.2.0 upgrade: all four op types, bookkeeping, CHANGES, self-check');
+section('2 - a real 0.1.0 -> 0.2.0 upgrade: all four op types, the CHANGELOG, the note, the stamps');
 const upgraded = project('upgrade');
 {
   check('install at 0.1.0 exits 0', install(upgraded).status === 0);
   const ownedBefore = bookkeeping(upgraded).ownedAskRules || [];
   check('the fixture precondition holds: setup owns the rule the new ruleset drops', ownedBefore.includes(DROPPED_ASK_RULE));
+  check('a fresh install records every artifact as the payload version, with no journal key',
+    Object.values(bookkeeping(upgraded).managedRegions || {}).every((v) => v === BASELINE.targetPluginVersion)
+    && Object.keys(bookkeeping(upgraded).managedRegions || {}).length > 0 && !has(bookkeeping(upgraded), 'migrationJournal'),
+    () => JSON.stringify(bookkeeping(upgraded)));
 
   const c = update(upgraded, ['--check'], { payload: P020 });
   check('--check against the newer payload exits 1', c.status === 1, why(c));
   check('--check names the pending migration', c.out.includes('0002_fixture'), why(c));
+  check('--check prints the behind line',
+    c.out.includes(`behind: ${BASELINE.targetPluginVersion} -> 0.2.0; /pnp:update prints the CHANGELOG blocks in between`), why(c));
 
   const r = update(upgraded, ['--apply', '--resolution-file', resolutionFile('full', FULL_RESOLUTIONS)], { payload: P020 });
   check('--apply exits 0', r.status === 0, why(r));
@@ -340,35 +334,32 @@ const upgraded = project('upgrade');
   const bk = cfg._aiwf || {};
   check('the version stamps moved together', bk.installedPluginVersion === '0.2.0' && bk.lastMigrationApplied === '0002_fixture',
     `${bk.installedPluginVersion} / ${bk.lastMigrationApplied}`);
-  check('the journal is cleared', bk.migrationJournal === null);
+  check('there is no journal key in the bookkeeping', !has(bk, 'migrationJournal'), () => JSON.stringify(bk));
   check('add-config-key wrote the OPERATOR answer, not the default', cfg.enforcement.exampleToggle === false, JSON.stringify(cfg.enforcement));
   check('the re-rendered region really changed in the project', (read(at(upgraded, 'CLAUDE.md')) || '').includes('## Your role (v2)'));
-  check('text OUTSIDE the markers was preserved', (read(at(upgraded, 'CLAUDE.md')) || '').includes('<!-- END aiwf-core -->'));
-  check('the whole-file artifact was re-rendered', (read(at(upgraded, WRITER_REL)) || '').includes('A line the next payload version added.'));
+  check('the whole-file artifact was re-rendered', (read(at(upgraded, WRITER_REL)) || '').includes(PAYLOAD_LINE));
   check('the new ask rule was added', askRules(upgraded).includes(NEW_ASK_RULE));
   check('the owned rule dropped from the desired set was removed', !askRules(upgraded).includes(DROPPED_ASK_RULE));
   check('and it left ownedAskRules too', !(bk.ownedAskRules || []).includes(DROPPED_ASK_RULE));
   check('the newly added rule became owned', (bk.ownedAskRules || []).includes(NEW_ASK_RULE));
+  check('the re-rendered artifacts are stamped with the payload version',
+    bk.managedRegions['CLAUDE.md#aiwf-core'] === '0.2.0' && bk.managedRegions[WRITER_REL] === '0.2.0', () => JSON.stringify(bk.managedRegions));
+  check('the stamped config validates against the payload schema',
+    validate(cfg, loadSchema(at(P020, 'schema/aiwf.config.schema.json'))).length === 0,
+    () => JSON.stringify(validate(cfg, loadSchema(at(P020, 'schema/aiwf.config.schema.json')))));
 
-  const region = bk.managedRegions['CLAUDE.md#aiwf-core'] || {};
-  check('take-new restamped upstream == local, override false', region.upstream === region.local && region.override === false,
-    `${String(region.upstream).slice(0, 8)} / ${String(region.local).slice(0, 8)} / ${region.override}`);
-
-  const changes = read(at(upgraded, 'CHANGES_0.1.0-to-0.2.0.md'));
-  check('the CHANGES report was written at the project root', changes !== null);
-  check('it carries the note text and its docRefs', !!changes && changes.includes('fixture-note') && changes.includes('docs/LOOP.md#commit-gate'));
-  check('it lists the applied operations per migration', !!changes && changes.includes('### 0002_fixture'));
-  check('nothing was staged and left behind', !exists(at(upgraded, STAGE_REL)));
-
-  const sc = spawnSync(process.execPath, [
-    path.join(P020, 'scripts', 'selfcheck', 'aiwf-selfcheck.js'), '--plugin-root', P020, '--project-fixture', upgraded,
-  ], { encoding: 'utf8' });
-  check('the self-check passes against the updated project (exit 0)', sc.status === 0,
-    sc.status === 0 ? '' : '\n' + (sc.stdout || '').trim().split('\n').slice(-14).join('\n'));
+  const header = r.out.indexOf(`CHANGELOG ${BASELINE.targetPluginVersion} -> 0.2.0:`);
+  const noBlock = r.out.indexOf(`CHANGELOG: no block between ${BASELINE.targetPluginVersion} and 0.2.0`);
+  const firstOp = r.out.indexOf('0002_fixture[0]');
+  check('the CHANGELOG line is printed BEFORE the first operation',
+    Math.max(header, noBlock) !== -1 && Math.max(header, noBlock) < firstOp, why(r));
+  check('the note prints its text and its docRefs',
+    r.out.includes(`note: ${FIXTURE_NOTE.text}`) && r.out.includes('- docs/LOOP.md#commit-gate'), why(r));
+  check('no CHANGES report is written and no report line is printed',
+    !exists(at(upgraded, 'CHANGES_0.1.0-to-0.2.0.md')) && !r.out.includes('report:'), why(r));
 }
 {
-  // Blocker-1: a FRESH install from the 0.2.0 payload must stamp the LAST manifest entry, not a
-  // constant. A hardcoded '0001_initial' here would break the very first update of that project.
+  // A FRESH install from the 0.2.0 payload must stamp the LAST manifest entry, not a constant.
   const fresh = project('fresh-020');
   const r = install(fresh, { payload: P020 });
   check('a fresh install from the 0.2.0 payload exits 0', r.status === 0, why(r));
@@ -401,273 +392,53 @@ section('3 - the version interlock is really wired into the skills');
 }
 
 // ---------------------------------------------------------------------------
-section('4 - the conflict matrix: no branch mutates the target, and every run resumes');
+section('4 - an update OVERWRITES: an edited file, an edited region and a deleted file end as the render, with no question');
 {
-  // A migration whose FIRST operation applies cleanly, so every conflict below can be checked for
-  // "the operations before it survived".
-  const conflictOps = (rerender) => [
-    { op: 'add-config-key', path: 'enforcement.exampleToggle', default: true, askOperator: false },
-    rerender,
-    FIXTURE_NOTE,
-  ];
-  const REGION_OP = { op: 'rerender-managed-region', file: 'CLAUDE.md', region: 'aiwf-core', template: 'templates/CLAUDE.md.tmpl#aiwf-core' };
-  const FILE_OP = { op: 'rerender-managed-region', file: WRITER_REL, region: null, template: 'templates/agents/writer.md.tmpl' };
+  // The donor: the same payload taken to completion on an untouched project. The CLAUDE.md region
+  // carries no project-root value, so its render is the expected value for every project here.
+  const donor = project('overwrite-donor');
+  install(donor);
+  const d = update(donor, ['--apply', '--resolution-file', resolutionFile('overwrite-donor', FULL_RESOLUTIONS)], { payload: P020 });
+  check('the donor run exits 0', d.status === 0, why(d));
+  const donorRegion = extractRegion(read(at(donor, 'CLAUDE.md')), 'aiwf-core');
 
-  // Two payloads: one whose templates CHANGED (upstream predicate) and one whose templates did not.
-  const upstreamPayload = (name, rerender) => makePayload(name, {
-    version: '0.2.0', migrations: [{ id: '0002_conflict', version: '0.2.0', ops: conflictOps(rerender) }],
-    tweak: (dir) => { addExampleToggleToSchema(dir); changeTemplates(dir); },
-  });
-  const samePayload = (name, rerender) => makePayload(name, {
-    version: '0.2.0', migrations: [{ id: '0002_conflict', version: '0.2.0', ops: conflictOps(rerender) }],
-    tweak: (dir) => { addExampleToggleToSchema(dir); },
-  });
+  const p = project('overwrite-edited');
+  install(p);
+  // A hand edit in the Writer agent, and one INSIDE the managed region - with operator text OUTSIDE
+  // the markers on both sides, in CRLF, so a whole-file normalisation would show.
+  fs.writeFileSync(at(p, WRITER_REL), `${read(at(p, WRITER_REL))}\nMy own note in the agent file.\n`, 'utf8');
+  const claude = read(at(p, 'CLAUDE.md'));
+  const begin = claude.indexOf('<!-- BEGIN aiwf-core -->');
+  const end = claude.indexOf('<!-- END aiwf-core -->') + '<!-- END aiwf-core -->'.length;
+  const BEFORE = '# My project\r\n\r\nMy own words, before the region.\r\n\r\n';
+  const AFTER = '\r\n\r\n## My section after the region\r\n\r\nStill mine.\r\n';
+  const edited = `${BEFORE}${claude.slice(begin, end).replace('## Your role', '## Your role (I edited this)')}${AFTER}`;
+  fs.writeFileSync(at(p, 'CLAUDE.md'), edited, 'utf8');
 
-  const editRegion = (dir) => patch(at(dir, 'CLAUDE.md'), 'You are the **Orchestrator / COO**', 'You are the **Orchestrator / COO** (I edited this)');
-  const editFile = (dir) => fs.appendFileSync(at(dir, WRITER_REL), '\nMy own note in the agent file.\n', 'utf8');
-
-  const cases = [
-    { name: 'edited-only, whole file', payload: samePayload('edit-file', FILE_OP), mutate: editFile, key: WRITER_REL, target: WRITER_REL },
-    { name: 'edited-only, region', payload: samePayload('edit-region', REGION_OP), mutate: editRegion, key: 'CLAUDE.md#aiwf-core', target: 'CLAUDE.md' },
-    // The two SILENT cases: the payload moved and the operator never touched the artifact. There is
-    // nothing of theirs to lose, so there is no question to ask - and no resolution file is passed,
-    // which is what makes "exit 0" a proof rather than a claim: a run that needed a decision here
-    // would have nobody to ask and would stop with exit 1 naming the address.
-    { name: 'upstream-only, whole file', payload: upstreamPayload('up-file', FILE_OP), mutate: null, key: WRITER_REL, target: WRITER_REL, silent: 'A line the next payload version added.' },
-    { name: 'upstream-only, region', payload: upstreamPayload('up-region', REGION_OP), mutate: null, key: 'CLAUDE.md#aiwf-core', target: 'CLAUDE.md', silent: '## Your role (v2)' },
-    { name: 'both, whole file', payload: upstreamPayload('both-file', FILE_OP), mutate: editFile, key: WRITER_REL, target: WRITER_REL },
-    { name: 'both, region', payload: upstreamPayload('both-region', REGION_OP), mutate: editRegion, key: 'CLAUDE.md#aiwf-core', target: 'CLAUDE.md' },
-    { name: 'the file is GONE', payload: upstreamPayload('gone-file', FILE_OP), mutate: (d) => fs.rmSync(at(d, WRITER_REL)), key: WRITER_REL, target: WRITER_REL, gone: true },
-    {
-      name: 'the region is GONE',
-      payload: upstreamPayload('gone-region', REGION_OP),
-      mutate: (d) => {
-        const text = read(at(d, 'CLAUDE.md'));
-        const from = text.indexOf('<!-- BEGIN aiwf-core -->');
-        const to = text.indexOf('<!-- END aiwf-core -->') + '<!-- END aiwf-core -->'.length;
-        fs.writeFileSync(at(d, 'CLAUDE.md'), text.slice(0, from) + '(the operator removed the managed region)' + text.slice(to), 'utf8');
-      },
-      key: 'CLAUDE.md#aiwf-core', target: 'CLAUDE.md', gone: true,
-    },
-  ];
-
-  for (const c of cases) {
-    const p = project(`conflict-${c.name.replace(/[^a-z]+/gi, '-')}`);
-    install(p);
-    if (c.mutate) c.mutate(p);
-    const targetBefore = read(at(p, c.target));
-    const before = snapshot(p);
-    const r = update(p, ['--apply'], { payload: c.payload });
-
-    if (c.silent) {
-      check(`${c.name}: COMPLETES with exit 0 - no dialog, no resolution file, nothing to lose`, r.status === 0, why(r));
-      check(`${c.name}: the run said why it did not ask`,
-        r.out.includes(`${c.key}: the payload version applied (you had not edited it)`), why(r));
-      check(`${c.name}: the payload render really landed in the project`,
-        (read(at(p, c.target)) || '').includes(c.silent) && read(at(p, c.target)) !== targetBefore);
-      const entry = bookkeeping(p).managedRegions[c.key] || {};
-      check(`${c.name}: bookkeeping is a plain take-new - upstream == local, override false`,
-        entry.override === false && typeof entry.local === 'string' && entry.local === entry.upstream,
-        JSON.stringify(entry).slice(0, 120));
-      check(`${c.name}: the journal is cleared and the version stamps moved`,
-        bookkeeping(p).migrationJournal === null && bookkeeping(p).installedPluginVersion === '0.2.0');
-      check(`${c.name}: nothing was left in the stage`, !exists(at(p, STAGE_REL)));
-      const changes = read(at(p, 'CHANGES_0.1.0-to-0.2.0.md')) || '';
-      check(`${c.name}: CHANGES labels it payload-current`,
-        changes.includes(`\`rerender-managed-region\` ${c.key} - payload-current`),
-        changes.split('\n').filter((l) => l.includes('rerender-managed-region')).join(' | '));
-      continue;
-    }
-
-    check(`${c.name}: STOPS with exit 1`, r.status === 1, why(r));
-    check(`${c.name}: the message names the address`, r.out.includes(`0002_conflict/1/${c.key}`), why(r));
-    check(`${c.name}: the conflicting target was NOT mutated`, read(at(p, c.target)) === targetBefore);
-    check(`${c.name}: the earlier operation survived (config key applied, journal says so)`,
-      (readJson(at(p, CONFIG_REL)) || {}).enforcement.exampleToggle === true
-      && (bookkeeping(p).migrationJournal || {}).opIndex === 0);
-    check(`${c.name}: only the config was touched by the operations that did apply`,
-      diffSnapshots(before, snapshot(p)).join(',') === CONFIG_REL, diffSnapshots(before, snapshot(p)).join(', '));
-
-    // ... and the run resumes from exactly where it stopped.
-    const table = c.gone
-      ? { [`0002_conflict/1/${c.key}`]: { kind: 'conflict', resolution: 'take-new' } }
-      : { [`0002_conflict/1/${c.key}`]: { kind: 'conflict', resolution: 'keep-mine' } };
-    const again = update(p, ['--apply', '--resolution-file', resolutionFile(`resume-${seq}`, table)], { payload: c.payload });
-    check(`${c.name}: resolving it lets the run finish`, again.status === 0, why(again));
-    check(`${c.name}: the version stamps moved`, bookkeeping(p).installedPluginVersion === '0.2.0');
-    check(`${c.name}: nothing was left in the stage`, !exists(at(p, STAGE_REL)));
-    if (!c.gone) {
-      check(`${c.name}: keep-mine applied NOTHING and set override`,
-        read(at(p, c.target)) === targetBefore && (bookkeeping(p).managedRegions[c.key] || {}).override === true);
-    } else {
-      check(`${c.name}: take-new put the payload version back`, read(at(p, c.target)) !== targetBefore
-        && (bookkeeping(p).managedRegions[c.key] || {}).override === false);
-    }
-  }
+  const r = update(p, ['--apply', '--resolution-file', resolutionFile('overwrite-edited', FULL_RESOLUTIONS)], { payload: P020 });
+  check('--apply over two hand edits exits 0, with no question beyond the config key', r.status === 0, why(r));
+  const writer = read(at(p, WRITER_REL)) || '';
+  check('the edited whole file is the payload render now (the hand edit is gone)',
+    !writer.includes('My own note in the agent file.') && writer.includes(PAYLOAD_LINE), `${writer.length} bytes`);
+  const after = read(at(p, 'CLAUDE.md')) || '';
+  const region = extractRegion(after, 'aiwf-core');
+  check('the edited region is the payload render now', region === donorRegion && !after.includes('(I edited this)'),
+    () => `${region}\n---\n${donorRegion}`);
+  check('every byte BEFORE the markers is unchanged (CRLF included)', after.startsWith(BEFORE), () => JSON.stringify(after.slice(0, 80)));
+  check('every byte AFTER the markers is unchanged (CRLF included)', after.endsWith(AFTER), () => JSON.stringify(after.slice(-80)));
+  check('the summaries say what was written', r.out.includes(`${WRITER_REL}: the payload render written`)
+    && r.out.includes('CLAUDE.md#aiwf-core: the payload render written'), why(r));
+  check('both are stamped with the payload version',
+    bookkeeping(p).managedRegions[WRITER_REL] === '0.2.0' && bookkeeping(p).managedRegions['CLAUDE.md#aiwf-core'] === '0.2.0');
 }
 {
-  // The third resolution, with a real hand-merged file. The artifact is edited first: merge is an
-  // answer to "your content and the payload's disagree", and without an edit of the operator's there
-  // is no disagreement and no dialog to answer.
-  const p = project('conflict-merge');
+  const p = project('overwrite-deleted');
   install(p);
-  fs.appendFileSync(at(p, WRITER_REL), '\nMy own note in the agent file.\n', 'utf8');
-  const payload = makePayload('merge', {
-    version: '0.2.0',
-    migrations: [{ id: '0002_conflict', version: '0.2.0', ops: [{ op: 'rerender-managed-region', file: WRITER_REL, region: null, template: 'templates/agents/writer.md.tmpl' }] }],
-    tweak: (dir) => { changeTemplates(dir); },
-  });
-  const merged = path.join(tmpRoot, 'merged-writer.md');
-  fs.writeFileSync(merged, (read(at(p, WRITER_REL)) || '') + '\nMerged by hand: both versions reconciled.\n', 'utf8');
-  const r = update(p, ['--apply', '--resolution-file', resolutionFile('merge', {
-    [`0002_conflict/0/${WRITER_REL}`]: { kind: 'conflict', resolution: 'merge', mergedFile: merged },
-  })], { payload });
-  check('merge: the run completes', r.status === 0, why(r));
-  check('merge: the merged content is what landed', (read(at(p, WRITER_REL)) || '').includes('Merged by hand: both versions reconciled.'));
-  const entry = bookkeeping(p).managedRegions[WRITER_REL] || {};
-  check('merge: local describes the merged content, upstream the payload render, override true',
-    entry.override === true && entry.local !== entry.upstream, JSON.stringify(entry).slice(0, 120));
-
-  // An override SURVIVES a later payload change: the artifact is untouched and CHANGES reports it.
-  const payload030 = makePayload('030', {
-    version: '0.3.0',
-    migrations: [
-      { id: '0002_conflict', version: '0.2.0', ops: [{ op: 'rerender-managed-region', file: WRITER_REL, region: null, template: 'templates/agents/writer.md.tmpl' }] },
-      { id: '0003_more', version: '0.3.0', ops: [{ op: 'rerender-managed-region', file: WRITER_REL, region: null, template: 'templates/agents/writer.md.tmpl' }] },
-    ],
-    tweak: (dir) => { changeTemplates(dir); fs.appendFileSync(at(dir, 'templates/agents/writer.md.tmpl'), '\nAnd one more line in 0.3.0.\n', 'utf8'); },
-  });
-  const held = read(at(p, WRITER_REL));
-  const r2 = update(p, ['--apply'], { payload: payload030 });
-  check('override survival: the later update needs NO dialog for the held artifact', r2.status === 0, why(r2));
-  check('override survival: and it says exactly what it did - recorded, not applied',
-    r2.out.includes(`${WRITER_REL} is held by you (override) - the new render was recorded as upstream, not applied`), why(r2));
-  check('override survival: the artifact is byte-identical', read(at(p, WRITER_REL)) === held);
-  const entry2 = bookkeeping(p).managedRegions[WRITER_REL] || {};
-  check('override survival: upstream moved, local did not, override still true',
-    entry2.override === true && entry2.local === entry.local && entry2.upstream !== entry.upstream);
-  const changes = read(at(p, 'CHANGES_0.2.0-to-0.3.0.md')) || '';
-  check('override survival: CHANGES reports the held artifact', changes.includes('Held by you') && changes.includes(WRITER_REL));
-  check('override survival: and labels the merged, held artifact `held (your version kept)`',
-    changes.includes(`\`rerender-managed-region\` ${WRITER_REL} - held (your version kept)`),
-    changes.split('\n').filter((l) => l.includes('rerender-managed-region')).join(' | '));
-
-  // (a) HELD AND EDITED AGAIN is the one held case that still asks. The operator's content is at
-  // stake twice over, so it is never applied over - and nothing is written while the run stops.
-  fs.appendFileSync(at(p, WRITER_REL), '\nAnd another line of mine, after the hold.\n', 'utf8');
-  const mineAgain = read(at(p, WRITER_REL));
-  const payload040 = makePayload('040', {
-    version: '0.4.0',
-    migrations: [
-      { id: '0002_conflict', version: '0.2.0', ops: [{ op: 'rerender-managed-region', file: WRITER_REL, region: null, template: 'templates/agents/writer.md.tmpl' }] },
-      { id: '0003_more', version: '0.3.0', ops: [{ op: 'rerender-managed-region', file: WRITER_REL, region: null, template: 'templates/agents/writer.md.tmpl' }] },
-      { id: '0004_yet-more', version: '0.4.0', ops: [{ op: 'rerender-managed-region', file: WRITER_REL, region: null, template: 'templates/agents/writer.md.tmpl' }] },
-    ],
-    tweak: (dir) => {
-      changeTemplates(dir);
-      fs.appendFileSync(at(dir, 'templates/agents/writer.md.tmpl'), '\nAnd one more line in 0.3.0.\n\nAnd another in 0.4.0.\n', 'utf8');
-    },
-  });
-  const r3 = update(p, ['--apply'], { payload: payload040 });
-  check('held AND edited again: the run STOPS and asks (exit 1)', r3.status === 1, why(r3));
-  check('held AND edited again: the message names the address', r3.out.includes(`0004_yet-more/0/${WRITER_REL}`), why(r3));
-  check('held AND edited again: the operator content is untouched', read(at(p, WRITER_REL)) === mineAgain);
-  check('held AND edited again: the artifact is still held, with the local hash it had',
-    (bookkeeping(p).managedRegions[WRITER_REL] || {}).override === true);
-}
-{
-  // (d) The report's two labels, on the four outcomes bookkeeping can tell apart. Operator take-new
-  // and "already current" both end at `override:false` and are therefore ONE label - that is the
-  // stated boundary of the report, not an oversight.
-  const p = project('changes-labels');
-  install(p);
-  // The region is edited by hand: a real conflict, resolved take-new by the operator. The whole-file
-  // artifact is left alone: applied without a dialog. Both must end up `payload-current`.
-  patch(at(p, 'CLAUDE.md'), 'You are the **Orchestrator / COO**', 'You are the **Orchestrator / COO** (mine)');
-  const r = update(p, ['--apply', '--resolution-file', resolutionFile('labels', {
-    ...FULL_RESOLUTIONS,
-    '0002_fixture/1/CLAUDE.md#aiwf-core': { kind: 'conflict', resolution: 'take-new' },
-  })], { payload: P020 });
-  check('labels: the run completes', r.status === 0, why(r));
-  const changes = read(at(p, 'CHANGES_0.1.0-to-0.2.0.md')) || '';
-  const lines = changes.split('\n').filter((l) => l.includes('rerender-managed-region')).join(' | ');
-  check('labels: an operator take-new is `payload-current`',
-    changes.includes('`rerender-managed-region` CLAUDE.md#aiwf-core - payload-current'), lines);
-  check('labels: a silent take-new is `payload-current` too - the report describes the END STATE, not who decided it',
-    changes.includes(`\`rerender-managed-region\` ${WRITER_REL} - payload-current`), lines);
-  check('labels: the header says in one sentence what was applied without a dialog and what was not',
-    changes.includes('An unheld artifact you had not edited, whose payload render changed, was applied without a dialog; edited ones were asked about; held ones were recorded, not applied.'),
-    changes.split('\n').slice(0, 8).join(' | '));
-
-  // An "already current" artifact - a later migration that re-renders an unchanged template - is the
-  // same label: nothing distinguishes it in the bookkeeping, and the report never invents what the
-  // bookkeeping does not know.
-  const payload030 = makePayload('labels-030', {
-    version: '0.3.0',
-    migrations: [
-      { id: '0002_fixture', version: '0.2.0', ops: ALL_OPS },
-      { id: '0003_current', version: '0.3.0', ops: [{ op: 'rerender-managed-region', file: WRITER_REL, region: null, template: 'templates/agents/writer.md.tmpl' }] },
-    ],
-    tweak: (dir) => { addExampleToggleToSchema(dir); changeTemplates(dir); changeRuleset(dir); },
-  });
-  const r2 = update(p, ['--apply'], { payload: payload030 });
-  check('labels: a re-render of an artifact nothing changed completes with no dialog', r2.status === 0, why(r2));
-  check('labels: and the engine calls it already current', r2.out.includes('already current (neither the project nor the payload changed it)'), why(r2));
-  const changes2 = read(at(p, 'CHANGES_0.2.0-to-0.3.0.md')) || '';
-  check('labels: an already-current artifact is `payload-current` as well',
-    changes2.includes(`\`rerender-managed-region\` ${WRITER_REL} - payload-current`),
-    changes2.split('\n').filter((l) => l.includes('rerender-managed-region')).join(' | '));
-}
-{
-  // ... and keep-mine, the other half of the label pair, on its own.
-  const p = project('changes-labels-held');
-  install(p);
-  patch(at(p, 'CLAUDE.md'), 'You are the **Orchestrator / COO**', 'You are the **Orchestrator / COO** (mine)');
-  const r = update(p, ['--apply', '--resolution-file', resolutionFile('labels-held', {
-    ...FULL_RESOLUTIONS,
-    '0002_fixture/1/CLAUDE.md#aiwf-core': { kind: 'conflict', resolution: 'keep-mine' },
-  })], { payload: P020 });
-  check('labels: the keep-mine run completes', r.status === 0, why(r));
-  const changes = read(at(p, 'CHANGES_0.1.0-to-0.2.0.md')) || '';
-  check('labels: keep-mine is `held (your version kept)`',
-    changes.includes('`rerender-managed-region` CLAUDE.md#aiwf-core - held (your version kept)'),
-    changes.split('\n').filter((l) => l.includes('rerender-managed-region')).join(' | '));
-  check('labels: the operator content is what is on disk', (read(at(p, 'CLAUDE.md')) || '').includes('(mine)'));
-}
-{
-  // (e) The dialog legend is CONDITIONAL on the run having rendered a managed artifact. It used to be
-  // printed unconditionally, so a note-only release told its reader that an artifact of theirs "was
-  // applied without a dialog" when the run had applied nothing of theirs at all - false in exactly
-  // the releases that touch nothing, which is when a consumer most needs to trust the sentence. Both
-  // directions are pinned here, side by side: a conditional with only its true branch asserted is
-  // indistinguishable from a constant.
-  const LEGEND = 'An unheld artifact you had not edited, whose payload render changed, was applied '
-    + 'without a dialog; edited ones were asked about; held ones were recorded, not applied.';
-  const noteOnly = makePayload('note-only', {
-    version: '0.2.0',
-    migrations: [{ id: '0002_fixture', version: '0.2.0', ops: [FIXTURE_NOTE] }],
-  });
-  const p = project('changes-note-only');
-  install(p);
-  const r = update(p, ['--apply'], { payload: noteOnly });
-  check('note-only: a migration whose only operation is a note applies cleanly', r.status === 0, why(r));
-  const changes = read(at(p, 'CHANGES_0.1.0-to-0.2.0.md')) || '';
-  check('note-only: the report still carries the note and the applied section',
-    changes.includes('fixture-note') && changes.includes('### 0002_fixture'),
-    changes.split('\n').slice(0, 12).join(' | '));
-  check('note-only: and it does NOT say an artifact was applied without a dialog - this run rendered none',
-    !changes.includes('without a dialog'),
-    changes.split('\n').filter((l) => l.includes('without a dialog')).join(' | ') || 'the sentence is absent, as it must be');
-
-  // The other direction on a payload that really does render, so the conditional is proven to have
-  // a true branch and the wording of it is unchanged.
-  const q = project('changes-renders-legend');
-  install(q);
-  const r2 = update(q, ['--apply', '--resolution-file', resolutionFile('renders-legend', FULL_RESOLUTIONS)], { payload: P020 });
-  check('renders: the run that DOES render a managed artifact completes', r2.status === 0, why(r2));
-  const changes2 = read(at(q, 'CHANGES_0.1.0-to-0.2.0.md')) || '';
-  check('renders: and its report still carries the sentence, word for word',
-    changes2.includes(LEGEND), changes2.split('\n').slice(0, 8).join(' | '));
+  fs.rmSync(at(p, WRITER_REL));
+  const r = update(p, ['--apply', '--resolution-file', resolutionFile('overwrite-deleted', FULL_RESOLUTIONS)], { payload: P020 });
+  check('a DELETED managed file does not stop the update (exit 0)', r.status === 0, why(r));
+  check('it is recreated from the render', (read(at(p, WRITER_REL)) || '').includes(PAYLOAD_LINE)
+    && r.out.includes(`${WRITER_REL}: created from the payload render`), why(r));
 }
 
 // ---------------------------------------------------------------------------
@@ -703,14 +474,10 @@ section('5 - settings: ownership without takeover, and a shape the engine will n
     return rr.status === 0 && !askRules(p).includes(victim);
   })());
 }
-// The claim these two cases exist to settle: "with `ownedAskRules: []` the reconcile adds nothing".
-// It is false, and the formula says why - `to-add = (desired - actual) - suppressed` has no
-// ownership term in it (generate.mjs `planAskRules`). What ownership really decides is the OTHER
-// half: what the engine may remove, and what it will report as none of its business. Both faces are
-// measured here on the real entrypoint, because a consumer whose ask rules were written by hand is
-// the project that will meet them.
+// "with `ownedAskRules: []` the reconcile adds nothing" is false: `to-add = (desired - actual) -
+// suppressed` has no ownership term. Ownership decides what the engine may remove, and what it
+// reports as none of its business. Both faces, on the real entrypoint.
 {
-  // FACE ONE - the add. Nothing is owned; one payload rule is missing from settings by hand.
   const p = project('settings-unowned-add');
   install(p);
   const cfg = readJson(at(p, CONFIG_REL));
@@ -724,10 +491,6 @@ section('5 - settings: ownership without takeover, and a shape the engine will n
   writeJson(at(p, SETTINGS_REL), settings);
 
   const askBefore = askRules(p);
-  // What the run must report as present-but-not-owned: every rule this project carries that the
-  // 0.2.0 payload still wants. The dropped pair is no longer desired and the hand-removed rule is
-  // not present, so neither is foreign. Derived from the settings file instead of hardcoded - the
-  // number then follows the shipped ruleset instead of pinning its size.
   const notDesired = new Set([DROPPED_ASK_RULE, DROPPED_ASK_RULE_MIRROR]);
   const expectedForeign = askBefore.filter((r) => !notDesired.has(r));
 
@@ -746,27 +509,15 @@ section('5 - settings: ownership without takeover, and a shape the engine will n
     (bk.suppressedAskRules || []).length === 0, () => JSON.stringify(bk.suppressedAskRules));
   check('unowned: the dropped payload rule is NOT removed - it was never owned here',
     ask.includes(DROPPED_ASK_RULE) && ask.includes(DROPPED_ASK_RULE_MIRROR));
-
   const foreignLine = `${expectedForeign.length} payload rule(s) present but not owned here - hand-edited, the engine will never touch them`;
-  // The count is printed on the PASS too: it is the measured size of the reported set, and a suite
-  // log that only says "the line was there" hides the number the operator will actually read.
-  check('unowned: the run says how many payload rules it found present but not owned',
+  check('unowned: the reconcile summary says how many payload rules it found present but not owned',
     r.out.includes(foreignLine), `measured ${expectedForeign.length} present but not owned`);
-  const changes = read(at(p, 'CHANGES_0.1.0-to-0.2.0.md')) || '';
-  check('unowned: the CHANGES report carries the same count', changes.includes(`  - ${foreignLine}:`),
-    () => changes.split('\n').filter((l) => l.includes('not owned')).join(' | ') || '(no such line)');
-  const named = changes.split('\n').map((l) => /^ {4}- `(.+)`$/.exec(l)).filter(Boolean).map((m) => m[1]);
-  check('unowned: and names every one of them, in payload order',
-    named.length === expectedForeign.length && named.every((rule, i) => rule === expectedForeign[i]),
-    () => `named ${named.length}, expected ${expectedForeign.length}`);
+  check('unowned: and the run NAMES every one of them, in payload order, on one line',
+    r.out.includes(`${expectedForeign.length} payload rule(s) present but not owned here: ${expectedForeign.join(', ')}`), why(r));
   check('unowned: the rule it added is not among them - it is owned now',
-    !named.includes(HAND_REMOVED) && !named.includes(NEW_ASK_RULE));
+    !(r.out.split('\n').find((l) => l.includes('present but not owned here:')) || '').includes(HAND_REMOVED));
 }
 {
-  // FACE TWO - the rule nothing happens to. A payload rule the project wrote by hand, in the
-  // payload's own spelling: not added (already there), not removed (not owned), not tombstoned
-  // (nobody removed it). The engine's entire behaviour towards it is to leave it alone, which is
-  // invisible in a diff with no lines - so the report is the only place that rule exists.
   const p = project('settings-present-foreign');
   install(p);
   const HAND_WRITTEN = ['Bash(git commit:*)', 'PowerShell(git commit:*)'];
@@ -786,32 +537,17 @@ section('5 - settings: ownership without takeover, and a shape the engine will n
     !HAND_WRITTEN.some((rule) => bk.ownedAskRules.includes(rule)), () => JSON.stringify(bk.ownedAskRules));
   check('present-foreign: and did not tombstone them either',
     !HAND_WRITTEN.some((rule) => (bk.suppressedAskRules || []).includes(rule)));
-  check('present-foreign: the run says so out loud, with the count',
-    r.out.includes('2 payload rule(s) present but not owned here - hand-edited, the engine will never touch them'), why(r));
-  const changes = (read(at(p, 'CHANGES_0.1.0-to-0.2.0.md')) || '').split('\n');
-  const at0 = changes.findIndex((l) => l.startsWith('- `reconcile-ask-ruleset`'));
-  check('present-foreign: the CHANGES report names them, directly under the reconcile entry',
-    at0 !== -1 && changes.slice(at0 + 1, at0 + 4).join('\n') === [
-      '  - 2 payload rule(s) present but not owned here - hand-edited, the engine will never touch them:',
-      '    - `Bash(git commit:*)`',
-      '    - `PowerShell(git commit:*)`',
-    ].join('\n'),
-    () => changes.slice(Math.max(at0, 0), at0 + 4).join('\n'));
+  check('present-foreign: the run says so out loud, with the count and the names',
+    r.out.includes('2 payload rule(s) present but not owned here - hand-edited, the engine will never touch them')
+    && r.out.includes('2 payload rule(s) present but not owned here: Bash(git commit:*), PowerShell(git commit:*)'), why(r));
 }
 {
-  // FLIPPING: the same payload, the same op, a project whose ownership bookkeeping is intact. The
-  // part is ABSENT, not a zero - a report that always prints a line teaches the operator to skip it.
+  // FLIPPING: the same payload, the same op, a project whose ownership bookkeeping is intact.
   const p = project('settings-no-foreign');
   install(p);
   const r = update(p, ['--apply', '--resolution-file', resolutionFile('no-foreign', FULL_RESOLUTIONS)], { payload: P020 });
   check('no-foreign: the update completes', r.status === 0, why(r));
   check('no-foreign: nothing is reported as present but not owned', !r.out.includes('present but not owned'), why(r));
-  const changes = read(at(p, 'CHANGES_0.1.0-to-0.2.0.md')) || '';
-  check('no-foreign: and the CHANGES report is silent about it too', !changes.includes('present but not owned'),
-    () => changes.split('\n').filter((l) => l.includes('not owned')).join(' | '));
-  check('no-foreign: its reconcile entry is the bare one',
-    changes.includes('- `reconcile-ask-ruleset` templates/settings.ask-ruleset.json\n'),
-    () => changes.split('\n').filter((l) => l.includes('reconcile-ask-ruleset')).join(' | '));
 }
 for (const [name, permissions, needle] of [
   ['permissions is a string', 'weird', 'not an object'],
@@ -829,53 +565,111 @@ for (const [name, permissions, needle] of [
   check(`update entrypoint: ${name} -> exit 1`, r.status === 1, why(r));
   check(`update entrypoint: ${name} -> the message says what it does not understand`, r.out.includes(needle), why(r));
   check(`update entrypoint: ${name} -> settings.json is byte-identical`, read(at(p, SETTINGS_REL)) === original);
-  check(`update entrypoint: ${name} -> the earlier operation survived and the run is resumable`,
-    (bookkeeping(p).migrationJournal || {}).opIndex === 0 && (bookkeeping(p).migrationJournal || {}).state === 'applied');
-  // Repair the shape and the very same run finishes.
+  check(`update entrypoint: ${name} -> the stamps did not move, so the migration simply runs again`,
+    bookkeeping(p).lastMigrationApplied === BASELINE.id && bookkeeping(p).installedPluginVersion === BASELINE.targetPluginVersion,
+    `${bookkeeping(p).lastMigrationApplied} / ${bookkeeping(p).installedPluginVersion}`);
   writeJson(at(p, SETTINGS_REL), { permissions: { ask: [] }, hooks: {} });
   const again = update(p, ['--apply'], { payload });
-  check(`update entrypoint: ${name} -> after repair the run resumes and completes`, again.status === 0, why(again));
+  check(`update entrypoint: ${name} -> after repair the same migration runs and completes`, again.status === 0, why(again));
 }
 
 // ---------------------------------------------------------------------------
-section('6 - --resolve reopens ONE artifact, outside any version bump');
+section('6 - the project additions block: carried verbatim, appended or in place, and a malformed one is never guessed');
+const BLOCK_CRLF = `${PROJECT_ADDITIONS_BEGIN}\r\nMy own rule, line one.\r\nMy own rule, line two - CRLF on purpose.\r\n${PROJECT_ADDITIONS_END}`;
+const countOf = (text, needle) => String(text).split(needle).length - 1;
 {
-  const p = project('resolve');
-  install(p);
-  const mine = (read(at(p, WRITER_REL)) || '') + '\nMy own note.\n';
-  fs.writeFileSync(at(p, WRITER_REL), mine, 'utf8');
-  const payload = makePayload('resolve-020', {
-    version: '0.2.0',
-    migrations: [{ id: '0002_hold', version: '0.2.0', ops: [{ op: 'rerender-managed-region', file: WRITER_REL, region: null, template: 'templates/agents/writer.md.tmpl' }] }],
+  // The production helper itself, on every shape it decides.
+  const RENDER = '# Rendered\n\nBody.\n';
+  const SLOT = `# Rendered\n\n${PROJECT_ADDITIONS_BEGIN}\n(the payload's empty slot)\n${PROJECT_ADDITIONS_END}\n\nTail.\n`;
+  const mine = `old text\n${BLOCK_CRLF}\nmore old text\n`;
+  const r0 = carryProjectAdditions(null, RENDER, 'x.md');
+  check('carry: no file -> the render unchanged, nothing carried', r0.text === RENDER && r0.carried === false);
+  const r1 = carryProjectAdditions('# old\nno block here\n', RENDER, 'x.md');
+  check('carry: a file without a block -> the render unchanged', r1.text === RENDER && r1.carried === false);
+  const r2 = carryProjectAdditions(mine, RENDER, 'x.md');
+  check('carry: a render without a block -> the block appended after one blank line, bytes verbatim',
+    r2.carried === true && r2.text === `${RENDER}\n${BLOCK_CRLF}\n`, () => JSON.stringify(r2.text));
+  const r3 = carryProjectAdditions(mine, SLOT, 'x.md');
+  check('carry: a render WITH a block -> the existing block replaces it in place',
+    r3.carried === true && r3.text === `# Rendered\n\n${BLOCK_CRLF}\n\nTail.\n`, () => JSON.stringify(r3.text));
+  const r4 = carryProjectAdditions(`a\r\n${PROJECT_ADDITIONS_BEGIN}\r\nx\r\n${PROJECT_ADDITIONS_END}\r\n`, RENDER, 'x.md');
+  check('carry: CRLF marker lines are marker lines', r4.carried === true && r4.text.includes(`${PROJECT_ADDITIONS_BEGIN}\r\nx\r\n${PROJECT_ADDITIONS_END}`));
+  const r5 = carryProjectAdditions(`a\n  ${PROJECT_ADDITIONS_BEGIN}\nx\n${PROJECT_ADDITIONS_END} \n`, RENDER, 'x.md');
+  check('carry: a marker that is not alone on its line is not a marker (exact bytes) -> nothing carried',
+    r5.carried === false && r5.text === RENDER);
+  for (const [label, text] of [
+    ['begin only', `a\n${PROJECT_ADDITIONS_BEGIN}\nx\n`],
+    ['end only', `a\nx\n${PROJECT_ADDITIONS_END}\n`],
+    ['two blocks', `${BLOCK_CRLF}\n${BLOCK_CRLF}\n`],
+    ['end before begin', `${PROJECT_ADDITIONS_END}\nx\n${PROJECT_ADDITIONS_BEGIN}\n`],
+  ]) {
+    let thrown = null;
+    try { carryProjectAdditions(text, RENDER, 'agents/x.md'); } catch (e) { thrown = e; }
+    check(`carry: malformed (${label}) -> ProjectAdditionsError naming the file`,
+      thrown instanceof ProjectAdditionsError && thrown.message.includes('agents/x.md') && thrown.message.includes('malformed'),
+      thrown ? thrown.message : 'nothing thrown');
+  }
+}
+{
+  // (b1) the CLI: the render carries no block (the shipped templates do not), so the block is
+  // appended - and two migrations re-rendering the same file in one run still leave ONE block.
+  const twice = makePayload('additions-append', {
+    version: '0.3.0',
+    migrations: [
+      { id: '0002_a', version: '0.2.0', ops: [WRITER_OP] },
+      { id: '0003_b', version: '0.3.0', ops: [WRITER_OP] },
+    ],
+    tweak: changeTemplates,
   });
-  const held = update(p, ['--apply', '--resolution-file', resolutionFile('hold', {
-    [`0002_hold/0/${WRITER_REL}`]: { kind: 'conflict', resolution: 'keep-mine' },
-  })], { payload });
-  check('keep-mine created the override', held.status === 0 && (bookkeeping(p).managedRegions[WRITER_REL] || {}).override === true, why(held));
-  check('and the operator content is intact', read(at(p, WRITER_REL)) === mine);
-
-  // A "keep" resolution changes nothing at all...
-  const beforeKeep = snapshot(p);
-  const keep = update(p, ['--resolve', WRITER_REL, '--resolution-file', resolutionFile('resolve-keep', {
-    [WRITER_REL]: { kind: 'conflict', resolution: 'keep-mine' },
-  })], { payload });
-  check('--resolve with keep-mine exits 0', keep.status === 0, why(keep));
-  check('--resolve with keep-mine applied nothing and left the bookkeeping alone',
-    diffSnapshots(beforeKeep, snapshot(p)).length === 0, diffSnapshots(beforeKeep, snapshot(p)).join(', '));
-
-  // ... and take-new is the way OUT of the override, with no version bump involved.
-  const out = update(p, ['--resolve', WRITER_REL, '--resolution-file', resolutionFile('resolve-take', {
-    [WRITER_REL]: { kind: 'conflict', resolution: 'take-new' },
-  })], { payload });
-  check('--resolve with take-new exits 0', out.status === 0, why(out));
-  check('--resolve with take-new applied the payload render', !(read(at(p, WRITER_REL)) || '').includes('My own note.'));
-  const entry = bookkeeping(p).managedRegions[WRITER_REL] || {};
-  check('--resolve with take-new leaves local == upstream == hash(render), override false',
-    entry.local === entry.upstream && entry.override === false, JSON.stringify(entry).slice(0, 120));
-  check('--resolve did not move the version stamps', bookkeeping(p).installedPluginVersion === '0.2.0');
-
-  const unknown = update(p, ['--resolve', 'docs/not-managed.md', '--resolution-file', resolutionFile('resolve-unknown', {})], { payload });
-  check('--resolve on a key that is not a managed artifact stops with exit 1', unknown.status === 1, why(unknown));
+  const p = project('additions-append');
+  install(p);
+  fs.writeFileSync(at(p, WRITER_REL), `${read(at(p, WRITER_REL))}\nAn edit outside the block.\n\n${BLOCK_CRLF}\n`, 'utf8');
+  const r = update(p, ['--apply'], { payload: twice });
+  check('an update over a file carrying a block exits 0', r.status === 0, why(r));
+  const text = read(at(p, WRITER_REL)) || '';
+  check('the block survived byte for byte, CRLF inside included, exactly once', countOf(text, BLOCK_CRLF) === 1, `${countOf(text, BLOCK_CRLF)} copies`);
+  check('it sits after the render\'s last line, behind one blank line', text.endsWith(`${PAYLOAD_LINE}\n\n${BLOCK_CRLF}\n`), () => JSON.stringify(text.slice(-200)));
+  check('the edit OUTSIDE the block was overwritten', !text.includes('An edit outside the block.'));
+  check('the summary says the block was carried', r.out.includes('(project additions carried)'), why(r));
+}
+{
+  // (b2) a render that carries its own block: the project's block takes its place.
+  const SLOT_TEXT = 'The payload slot text that the project block replaces.';
+  const withSlot = makePayload('additions-slot', {
+    version: '0.2.0',
+    migrations: [{ id: '0002_slot', version: '0.2.0', ops: [WRITER_OP] }],
+    tweak: (dir) => fs.appendFileSync(at(dir, 'templates/agents/writer.md.tmpl'),
+      `\n${PROJECT_ADDITIONS_BEGIN}\n${SLOT_TEXT}\n${PROJECT_ADDITIONS_END}\n\n${PAYLOAD_LINE}\n`, 'utf8'),
+  });
+  const p = project('additions-slot');
+  install(p);
+  fs.writeFileSync(at(p, WRITER_REL), `${read(at(p, WRITER_REL))}\n${BLOCK_CRLF}\n`, 'utf8');
+  const r = update(p, ['--apply'], { payload: withSlot });
+  check('an update whose render carries a block exits 0', r.status === 0, why(r));
+  const text = read(at(p, WRITER_REL)) || '';
+  check('the project block replaced the render\'s block in place (the payload line still follows it)',
+    countOf(text, BLOCK_CRLF) === 1 && !text.includes(SLOT_TEXT) && text.indexOf(BLOCK_CRLF) < text.lastIndexOf(PAYLOAD_LINE)
+    && countOf(text, PROJECT_ADDITIONS_BEGIN) === 1, () => JSON.stringify(text.slice(-300)));
+}
+{
+  // (c) malformed: the run stops naming the file, and that file is not written.
+  const payload = makePayload('additions-malformed', {
+    version: '0.2.0', migrations: [{ id: '0002_bad', version: '0.2.0', ops: [WRITER_OP] }], tweak: changeTemplates,
+  });
+  for (const [label, tail] of [
+    ['a begin marker without its end', `\n${PROJECT_ADDITIONS_BEGIN}\nhalf a block\n`],
+    ['two blocks', `\n${BLOCK_CRLF}\n\n${BLOCK_CRLF}\n`],
+  ]) {
+    const p = project('additions-malformed');
+    install(p);
+    const original = `${read(at(p, WRITER_REL))}${tail}`;
+    fs.writeFileSync(at(p, WRITER_REL), original, 'utf8');
+    const r = update(p, ['--apply'], { payload });
+    check(`malformed block (${label}) -> exit 1, naming the file`,
+      r.status === 1 && r.out.includes(WRITER_REL) && r.out.includes('malformed'), why(r));
+    check(`malformed block (${label}) -> the file is byte-identical and the stamps did not move`,
+      read(at(p, WRITER_REL)) === original && bookkeeping(p).installedPluginVersion === BASELINE.targetPluginVersion);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -888,9 +682,7 @@ section('7 - a malformed payload blocks the runner AND a fresh setup, with zero 
     ['the last entry not matching the payload version', (dir) => { const m = readJson(at(dir, 'migrations/index.json')); m[1].targetPluginVersion = '0.1.5'; writeJson(at(dir, 'migrations/index.json'), m); patchOps(dir, '0002_fixture', (o) => { o.targetPluginVersion = '0.1.5'; }); }],
     ['an unknown op type', (dir) => patchOps(dir, '0002_fixture', (o) => { o.operations = [{ op: 'delete-everything', file: 'x' }]; })],
     ['an unknown op FIELD', (dir) => patchOps(dir, '0002_fixture', (o) => { o.operations = [{ ...FIXTURE_NOTE, extra: true }]; })],
-    // `supersedes` is a LIST of ids. A bare string is legal JSON and would be printed into the
-    // CHANGES report one character per line, which is exactly the kind of defect that only shows up
-    // on the consumer's screen - so the validator refuses the shape rather than the rendering.
+    // `supersedes` is a LIST of ids; a bare string would be printed one character per line.
     ['a supersedes that is not an array', (dir) => patchOps(dir, '0002_fixture', (o) => { o.operations = [{ ...FIXTURE_NOTE, supersedes: 'one-id' }]; })],
     ['a supersedes entry that is an empty string', (dir) => patchOps(dir, '0002_fixture', (o) => { o.operations = [{ ...FIXTURE_NOTE, supersedes: ['fine', '  '] }]; })],
     ['an orphan migration directory', (dir) => { fs.mkdirSync(at(dir, 'migrations/0009_orphan'), { recursive: true }); writeJson(at(dir, 'migrations/0009_orphan/ops.json'), { migration: '0009_orphan', targetPluginVersion: '0.9.0', operations: [] }); fs.writeFileSync(at(dir, 'migrations/0009_orphan/NOTES.md'), '# orphan\n'); }],
@@ -900,8 +692,6 @@ section('7 - a malformed payload blocks the runner AND a fresh setup, with zero 
     ['a template reference that does not exist', (dir) => patchOps(dir, '0002_fixture', (o) => { o.operations = [{ op: 'rerender-managed-region', file: 'CLAUDE.md', region: 'aiwf-core', template: 'templates/nowhere.tmpl' }]; })],
     ['an add-config-key aimed at the bookkeeping', (dir) => patchOps(dir, '0002_fixture', (o) => { o.operations = [{ op: 'add-config-key', path: '_aiwf.installedPluginVersion', default: '9.9.9', askOperator: false }]; })],
     ['a missing NOTES.md', (dir) => fs.rmSync(at(dir, 'migrations/0002_fixture/NOTES.md'))],
-    // The template FILE exists; the region inside it does not. Without checking the marker pair this
-    // reference resolves to nothing - halfway through a migration.
     ['a template region reference the template does not carry', (dir) => patchOps(dir, '0002_fixture', (o) => {
       o.operations = [{ op: 'rerender-managed-region', file: 'CLAUDE.md', region: 'aiwf-core', template: 'templates/CLAUDE.md.tmpl#definitely-not-a-region' }];
     })],
@@ -931,12 +721,6 @@ section('7 - a malformed payload blocks the runner AND a fresh setup, with zero 
     check(`fresh setup refuses ${name} (exit 1)`, setup.status === 1, why(setup));
     check(`fresh setup refuses ${name}: the project is still empty`, Object.keys(snapshot(fresh)).length === 0);
   }
-}
-function patchOps(dir, id, mutate) {
-  const file = at(dir, `migrations/${id}/ops.json`);
-  const json = readJson(file);
-  mutate(json);
-  writeJson(file, json);
 }
 
 // ---------------------------------------------------------------------------
@@ -970,13 +754,26 @@ section('8 - add-config-key: idempotent, answered, and never guessed');
   check('an existing key needs no answer at all (idempotent no-op)', r.status === 0, why(r));
   check('and its value is untouched', (readJson(at(p2, CONFIG_REL)) || {}).enforcement.exampleToggle === true);
 
-  // A wrong-kind record is refused rather than coerced.
+  // (f) A `conflict` record - the vocabulary of the engine this one replaced - is an UNKNOWN KIND,
+  // wherever it sits in the file: at the answer's own address, and at a re-render address nothing
+  // asks about any more. Both are refused before the first operation.
   const p3 = project('config-key-wrongkind');
   install(p3);
   const wrong = update(p3, ['--apply', '--resolution-file', resolutionFile('wrongkind', {
     '0002_key/0/enforcement.exampleToggle': { kind: 'conflict', resolution: 'take-new' },
   })], { payload });
-  check('a conflict record where an answer is due stops with exit 1', wrong.status === 1, why(wrong));
+  check('(f) a conflict record where an answer is due stops with exit 1 as an unknown kind',
+    wrong.status === 1 && wrong.out.includes('unknown kind "conflict"'), why(wrong));
+  const p3b = project('config-key-conflict-elsewhere');
+  install(p3b);
+  const before3b = snapshot(p3b);
+  const elsewhere = update(p3b, ['--apply', '--resolution-file', resolutionFile('conflict-elsewhere', {
+    '0002_key/0/enforcement.exampleToggle': { kind: 'answer', value: false },
+    [`0002_key/1/${WRITER_REL}`]: { kind: 'conflict', resolution: 'keep-mine' },
+  })], { payload });
+  check('(f) a conflict record at an address nothing asks about is refused too (exit 1, unknown kind)',
+    elsewhere.status === 1 && elsewhere.out.includes('unknown kind "conflict"'), why(elsewhere));
+  check('(f) and that refusal wrote nothing', diffSnapshots(before3b, snapshot(p3b)).length === 0, diffSnapshots(before3b, snapshot(p3b)).join(', '));
   const p4 = project('config-key-unknownfield');
   install(p4);
   const unknownField = update(p4, ['--apply', '--resolution-file', resolutionFile('unknownfield', {
@@ -1007,7 +804,7 @@ section('8 - add-config-key: idempotent, answered, and never guessed');
   const rejected = update(p7, ['--apply'], { payload: badSchema });
   check('a key the payload schema does not admit is refused (exit 1)', rejected.status === 1, why(rejected));
   // The project was installed from another payload root, so the run refreshed `$schema` before its
-  // first operation (outside the journal) - that one write stands; the refused operation wrote nothing.
+  // first operation - that one write stands; the refused operation wrote nothing.
   const after = snapshot(p7);
   const strip = (text) => { try { const c = JSON.parse(text); delete c.$schema; return JSON.stringify(c); } catch { return null; } };
   const changed = diffSnapshots(before, after);
@@ -1020,128 +817,100 @@ section('8 - add-config-key: idempotent, answered, and never guessed');
 }
 
 // ---------------------------------------------------------------------------
-section('9 - crash at every write boundary, resumed by a FRESH process');
-{
-  const BOUNDARIES = ['after-journal-prepared', 'after-target-apply', 'after-applied-flip'];
-  const ADDRESS_OF = ['0002_fixture/0/enforcement.exampleToggle', '0002_fixture/1/CLAUDE.md#aiwf-core', `0002_fixture/2/${WRITER_REL}`];
-  // opIndex 0 is a CONFIG-target operation (the projection hashing), 1 a region, 2 a whole file.
-  for (const opIndex of [0, 1, 2]) {
-    for (const boundary of BOUNDARIES) {
-      const p = project(`crash-${opIndex}-${boundary}`);
-      install(p);
-      const table = resolutionFile(`crash-${seq}`, FULL_RESOLUTIONS);
-      const crashed = update(p, ['--apply', '--resolution-file', table], {
-        payload: P020, env: { PNP_UPDATE_CRASH_AT: `0002_fixture/${opIndex}/${boundary}` },
-      });
-      check(`op ${opIndex} @ ${boundary}: the child really died with exit 86`, crashed.status === 86, why(crashed));
-      const journal = bookkeeping(p).migrationJournal || {};
-      check(`op ${opIndex} @ ${boundary}: the journal describes exactly that operation`,
-        journal.migration === '0002_fixture' && journal.opIndex === opIndex, JSON.stringify(journal).slice(0, 120));
-
-      // The resume gets a resolution file with the CRASHED operation's address REMOVED: asking THIS
-      // one again would stop the run with exit 1 naming exactly the address that is missing. For
-      // opIndex 1 and 2 the removal is a no-op, because those two artifacts are unedited here and
-      // are re-rendered without any dialog at all - which makes their resume a stronger statement,
-      // not a weaker one: there is no record for them anywhere.
-      const rest = { ...FULL_RESOLUTIONS };
-      delete rest[ADDRESS_OF[opIndex]];
-      const resumed = update(p, ['--apply', '--resolution-file', resolutionFile(`resume-crash-${seq}-${opIndex}-${boundary}`, rest)], { payload: P020 });
-      check(`op ${opIndex} @ ${boundary}: a fresh process resumes to the end without re-asking`, resumed.status === 0, why(resumed));
-      const bk = bookkeeping(p);
-      check(`op ${opIndex} @ ${boundary}: the end state is correct`,
-        bk.installedPluginVersion === '0.2.0' && bk.lastMigrationApplied === '0002_fixture' && bk.migrationJournal === null);
-      check(`op ${opIndex} @ ${boundary}: the operator's answer survived the crash`,
-        (readJson(at(p, CONFIG_REL)) || {}).enforcement.exampleToggle === false);
-      check(`op ${opIndex} @ ${boundary}: the re-rendered artifacts are in place`,
-        (read(at(p, 'CLAUDE.md')) || '').includes('## Your role (v2)') && (read(at(p, WRITER_REL)) || '').includes('A line the next payload version added.'));
-      check(`op ${opIndex} @ ${boundary}: no stage material is left behind`, !exists(at(p, STAGE_REL)));
-    }
+section('9 - legacy bookkeeping: tolerated by --check, normalised by --apply');
+// The legacy shape on disk, exactly as the two-hash engine left it - a journal key included.
+function toLegacy(p) {
+  const cfg = readJson(at(p, CONFIG_REL));
+  for (const key of Object.keys(cfg._aiwf.managedRegions)) {
+    cfg._aiwf.managedRegions[key] = { upstream: 'a'.repeat(64), local: 'b'.repeat(64), override: key === WRITER_REL };
   }
+  cfg._aiwf = { installedPluginVersion: cfg._aiwf.installedPluginVersion, lastMigrationApplied: cfg._aiwf.lastMigrationApplied, migrationJournal: null, managedRegions: cfg._aiwf.managedRegions, ownedAskRules: cfg._aiwf.ownedAskRules, suppressedAskRules: cfg._aiwf.suppressedAskRules };
+  writeJson(at(p, CONFIG_REL), cfg);
 }
 {
-  // The SILENT branch, crashed at its own write boundary. No resolution file exists anywhere in this
-  // case - not in the crashing run, not in the resume - so a run that had to ask about anything
-  // would stop with exit 1. And the report a resumed run writes must be the report a single-process
-  // run would have written: it is assembled from the pending operations and the FINAL bookkeeping,
-  // never from what this particular process happened to apply.
-  const p = project('crash-silent');
+  // The production primitive itself.
+  const legacy = {
+    _aiwf: {
+      installedPluginVersion: '0.1.0', lastMigrationApplied: '0001_initial',
+      migrationJournal: null,
+      managedRegions: { 'a.md': { upstream: 'x', local: 'y', override: true }, 'b.md': '0.1.0' },
+    },
+  };
+  const changed = normalizeBookkeeping(legacy);
+  check('normalizeBookkeeping: objects become installedPluginVersion, the journal key goes, and it says it changed something',
+    changed === true && !has(legacy._aiwf, 'migrationJournal')
+    && legacy._aiwf.managedRegions['a.md'] === '0.1.0' && legacy._aiwf.managedRegions['b.md'] === '0.1.0', () => JSON.stringify(legacy));
+  check('normalizeBookkeeping: a current shape is left alone and reported unchanged', normalizeBookkeeping(legacy) === false);
+  check('normalizeBookkeeping: a config without _aiwf is left alone', normalizeBookkeeping({ project: {} }) === false);
+
+  const p = project('legacy');
   install(p);
-  const payload = makePayload('crash-silent-payload', {
-    version: '0.2.0',
-    migrations: [{
-      id: '0002_silent',
-      version: '0.2.0',
-      ops: [{ op: 'rerender-managed-region', file: WRITER_REL, region: null, template: 'templates/agents/writer.md.tmpl' }, FIXTURE_NOTE],
-    }],
-    tweak: changeTemplates,
-  });
-  const crashed = update(p, ['--apply'], { payload, env: { PNP_UPDATE_CRASH_AT: '0002_silent/0/after-target-apply' } });
-  check('silent branch: the child died with exit 86 at the target write', crashed.status === 86, why(crashed));
-  const journal = bookkeeping(p).migrationJournal || {};
-  check('silent branch: the journal is prepared on exactly that operation',
-    journal.migration === '0002_silent' && journal.opIndex === 0 && journal.state === 'prepared', JSON.stringify(journal).slice(0, 140));
-  const resumed = update(p, ['--apply'], { payload });
-  check('silent branch: a fresh process resumes to the end with no resolution file at all', resumed.status === 0, why(resumed));
-  check('silent branch: nothing was asked - the dialog address never appears in the output',
-    !resumed.out.includes(`0002_silent/0/${WRITER_REL}`) && !resumed.out.includes('CONFLICT'), why(resumed));
-  const entry = bookkeeping(p).managedRegions[WRITER_REL] || {};
-  check('silent branch: the end bookkeeping is a plain take-new',
-    entry.override === false && entry.local === entry.upstream, JSON.stringify(entry).slice(0, 120));
-  check('silent branch: the payload render is what is on disk',
-    (read(at(p, WRITER_REL)) || '').includes('A line the next payload version added.'));
-  const changes = read(at(p, 'CHANGES_0.1.0-to-0.2.0.md')) || '';
-  check('silent branch: the report written after a RESUME carries the same payload-current label a one-process run writes',
-    changes.includes(`\`rerender-managed-region\` ${WRITER_REL} - payload-current`),
-    changes.split('\n').filter((l) => l.includes('rerender-managed-region')).join(' | '));
-  check('silent branch: and the report says in one sentence why nothing was asked',
-    changes.includes('An unheld artifact you had not edited, whose payload render changed, was applied without a dialog; edited ones were asked about; held ones were recorded, not applied.'));
+  toLegacy(p);
+  const before = snapshot(p);
+  const current = update(p, ['--check']);
+  check('(d) --check on a legacy config of a CURRENT project exits 0 (up to date)', current.status === 0 && current.out.includes('up to date'), why(current));
+  const behind = update(p, ['--check'], { payload: P020 });
+  check('(d) --check on a legacy config of a project that is behind exits 1 naming the migration - not an invariant refusal',
+    behind.status === 1 && behind.out.includes('0002_fixture') && !behind.out.includes('invariant'), why(behind));
+  const dry = update(p, ['--dry-run', '--resolution-file', resolutionFile('legacy-dry', FULL_RESOLUTIONS)], { payload: P020 });
+  check('(d) --dry-run on a legacy config exits 0', dry.status === 0, why(dry));
+  check('(d) none of them wrote a byte - the legacy shape stays on disk until a run writes the config',
+    diffSnapshots(before, snapshot(p)).length === 0, diffSnapshots(before, snapshot(p)).join(', '));
+
+  const a = update(p, ['--apply', '--resolution-file', resolutionFile('legacy-apply', FULL_RESOLUTIONS)], { payload: P020 });
+  check('(d) --apply on a legacy config exits 0', a.status === 0, why(a));
+  const cfg = readJson(at(p, CONFIG_REL)) || {};
+  const regions = (cfg._aiwf || {}).managedRegions || {};
+  check('(d) the written config carries no journal key and only version strings',
+    !has(cfg._aiwf, 'migrationJournal') && Object.values(regions).every((v) => typeof v === 'string')
+    && regions[WRITER_REL] === '0.2.0' && regions[ROLES_REL] === BASELINE.targetPluginVersion, () => JSON.stringify(cfg._aiwf));
+  check('(d) and it validates against the payload schema',
+    validate(cfg, loadSchema(at(P020, 'schema/aiwf.config.schema.json'))).length === 0,
+    () => JSON.stringify(validate(cfg, loadSchema(at(P020, 'schema/aiwf.config.schema.json')))));
+  check('(d) the artifact a legacy hold covered was overwritten like any other', (read(at(p, WRITER_REL)) || '').includes(PAYLOAD_LINE));
 }
 {
-  // A manual merge, crashed after the journal was prepared: the resume must replay the STAGED merged
-  // content - it cannot ask again, because the resume gets no resolution file at all.
-  const p = project('crash-merge');
+  // An ALREADY-CURRENT project carrying the legacy shape: --check and --dry-run write nothing, and
+  // --apply writes the normalised config back (the self-check validates the config against the
+  // schema, so it must not wait for the next version bump to be rewritten).
+  const p = project('legacy-current');
   install(p);
-  // Edited first, for the same reason as the merge case above: a merge resolves a real disagreement.
-  fs.appendFileSync(at(p, WRITER_REL), '\nMy own line in the agent file.\n', 'utf8');
-  const payload = makePayload('crash-merge-payload', {
-    version: '0.2.0',
-    migrations: [{ id: '0002_merge', version: '0.2.0', ops: [{ op: 'rerender-managed-region', file: WRITER_REL, region: null, template: 'templates/agents/writer.md.tmpl' }] }],
-    tweak: changeTemplates,
-  });
-  const merged = path.join(tmpRoot, 'merged-crash.md');
-  fs.writeFileSync(merged, (read(at(p, WRITER_REL)) || '') + '\nHand-merged content that must survive a crash.\n', 'utf8');
-  const table = resolutionFile('crash-merge', { [`0002_merge/0/${WRITER_REL}`]: { kind: 'conflict', resolution: 'merge', mergedFile: merged } });
-  const crashed = update(p, ['--apply', '--resolution-file', table], { payload, env: { PNP_UPDATE_CRASH_AT: '0002_merge/0/after-journal-prepared' } });
-  check('manual merge: the child died with exit 86 before the target was written', crashed.status === 86, why(crashed));
-  check('manual merge: the target is still the pre-merge content', !(read(at(p, WRITER_REL)) || '').includes('Hand-merged content'));
-  fs.rmSync(merged); // even the merged file is gone - only the STAGE can carry the answer now
-  const resumed = update(p, ['--apply'], { payload });
-  check('manual merge: a fresh process replays the staged merge without asking again', resumed.status === 0, why(resumed));
-  check('manual merge: the hand-merged content is what landed', (read(at(p, WRITER_REL)) || '').includes('Hand-merged content that must survive a crash.'));
-  const entry = bookkeeping(p).managedRegions[WRITER_REL] || {};
-  check('manual merge: the bookkeeping records a held merge', entry.override === true && entry.local !== entry.upstream);
-  check('manual merge: no stage material is left behind', !exists(at(p, STAGE_REL)));
+  toLegacy(p);
+  const before = snapshot(p);
+  const c = update(p, ['--check']);
+  const d = update(p, ['--dry-run']);
+  check('(d) on a CURRENT legacy project --check and --dry-run exit 0 and write nothing',
+    c.status === 0 && d.status === 0 && diffSnapshots(before, snapshot(p)).length === 0, why(c.status === 0 ? d : c));
+  const a = update(p, ['--apply']);
+  check('(d) --apply on a CURRENT legacy project exits 0 and says it normalized the bookkeeping',
+    a.status === 0 && a.out.includes('bookkeeping normalized to the current shape'), why(a));
+  const cfg = readJson(at(p, CONFIG_REL)) || {};
+  check('(d) the config is written back in the current shape and validates against the schema',
+    !has(cfg._aiwf, 'migrationJournal') && Object.values(cfg._aiwf.managedRegions || {}).every((v) => v === BASELINE.targetPluginVersion)
+    && validate(cfg, loadSchema(at(BASE, 'schema/aiwf.config.schema.json'))).length === 0,
+    () => JSON.stringify(validate(cfg, loadSchema(at(BASE, 'schema/aiwf.config.schema.json')))));
+  check('(d) and it changed only the config', JSON.stringify(diffSnapshots(before, snapshot(p))) === JSON.stringify([CONFIG_REL]),
+    diffSnapshots(before, snapshot(p)).join(', '));
+  const after = snapshot(p);
+  const again = update(p, ['--apply']);
+  check('(d) a second --apply prints nothing of the kind and writes nothing',
+    again.status === 0 && !again.out.includes('bookkeeping normalized') && diffSnapshots(after, snapshot(p)).length === 0, why(again));
 }
 {
-  // The last boundary of the last operation: the applied-flip landed, the final version write did not.
-  const p = project('crash-final');
+  // A journal the old engine left IN FLIGHT is not a state any more: the run starts from
+  // lastMigrationApplied and simply runs the migration.
+  const p = project('legacy-journal');
   install(p);
-  const payload = makePayload('crash-final-payload', {
-    version: '0.2.0', migrations: [{ id: '0002_final', version: '0.2.0', ops: [FIXTURE_NOTE] }],
-  });
-  const crashed = update(p, ['--apply'], { payload, env: { PNP_UPDATE_CRASH_AT: '0002_final/0/after-applied-flip' } });
-  check('final flip: the child died with exit 86', crashed.status === 86, why(crashed));
-  const bk = bookkeeping(p);
-  check('final flip: the version stamps had NOT moved yet', bk.installedPluginVersion === '0.1.0' && (bk.migrationJournal || {}).state === 'applied');
-  const resumed = update(p, ['--apply'], { payload });
-  check('final flip: a fresh process finishes the version write', resumed.status === 0, why(resumed));
-  const bk2 = bookkeeping(p);
-  check('final flip: the end state is correct', bk2.installedPluginVersion === '0.2.0' && bk2.lastMigrationApplied === '0002_final' && bk2.migrationJournal === null);
-  check('final flip: the CHANGES report is there', exists(at(p, 'CHANGES_0.1.0-to-0.2.0.md')));
+  const cfg = readJson(at(p, CONFIG_REL));
+  cfg._aiwf.migrationJournal = { migration: '0002_fixture', opIndex: 1, state: 'prepared', target: 'CLAUDE.md', preHash: null, postHash: null, resolution: null };
+  writeJson(at(p, CONFIG_REL), cfg);
+  const a = update(p, ['--apply', '--resolution-file', resolutionFile('legacy-journal', FULL_RESOLUTIONS)], { payload: P020 });
+  check('(d) a stale in-flight journal does not block --apply (exit 0) and is gone afterwards',
+    a.status === 0 && !has(bookkeeping(p), 'migrationJournal') && bookkeeping(p).installedPluginVersion === '0.2.0', why(a));
 }
 
 // ---------------------------------------------------------------------------
-section('10 - a dry run writes nothing, and preflight refuses an incoherent project');
+section('10 - a dry run writes nothing and never stops on a question, and preflight refuses an incoherent project');
 {
   const p = project('dryrun');
   install(p);
@@ -1151,34 +920,23 @@ section('10 - a dry run writes nothing, and preflight refuses an incoherent proj
   check('--dry-run lists every planned operation', (clean.out.match(/0002_fixture\[\d\]/g) || []).length === ALL_OPS.length, why(clean));
   check('--dry-run wrote NOTHING (byte for byte)', diffSnapshots(before, snapshot(p)).length === 0, diffSnapshots(before, snapshot(p)).join(', '));
 
-  // The first DECISION of this fixture is operation 0 - the config key that asks a question
-  // (`askOperator: true`). It is not "the first rerender": the two rerender operations here need no
-  // decision at all, and a dry run walks straight past them.
-  const stopped = update(p, ['--dry-run'], { payload: P020 });
-  check('--dry-run without resolutions stops at the first decision - the config key that asks (exit 1)', stopped.status === 1, why(stopped));
-  check('and it names that address, not a rerender', stopped.out.includes('0002_fixture/0/enforcement.exampleToggle'), why(stopped));
-  check('--dry-run never prompts, and says so', stopped.out.includes('never prompts'), why(stopped));
+  const open = update(p, ['--dry-run'], { payload: P020 });
+  check('--dry-run without resolutions exits 0 - there is nothing left to stop on', open.status === 0, why(open));
+  check('and it lists the unanswered question as "would ask: <address>"',
+    open.out.includes('would ask: 0002_fixture/0/enforcement.exampleToggle'), why(open));
+  check('and still previews every operation after it', (open.out.match(/0002_fixture\[\d\]/g) || []).length === ALL_OPS.length, why(open));
   check('--dry-run still wrote nothing', diffSnapshots(before, snapshot(p)).length === 0, diffSnapshots(before, snapshot(p)).join(', '));
 }
 {
-  // A migration with nothing to ask about: no answer op, no edited artifact. A dry run over it needs
-  // no resolution file, exits 0, and previews the line it would apply - saying WHY it will not ask.
   const p = project('dryrun-clean');
   install(p);
   const payload = makePayload('dryrun-clean-payload', {
-    version: '0.2.0',
-    migrations: [{
-      id: '0002_clean',
-      version: '0.2.0',
-      ops: [{ op: 'rerender-managed-region', file: WRITER_REL, region: null, template: 'templates/agents/writer.md.tmpl' }],
-    }],
-    tweak: changeTemplates,
+    version: '0.2.0', migrations: [{ id: '0002_clean', version: '0.2.0', ops: [WRITER_OP] }], tweak: changeTemplates,
   });
   const before = snapshot(p);
   const r = update(p, ['--dry-run'], { payload });
-  check('a dry run over an unedited artifact needs no resolution file and exits 0', r.status === 0, why(r));
-  check('and it previews the apply, saying why it will not ask',
-    r.out.includes(`${WRITER_REL}: the payload version applied (you had not edited it)`), why(r));
+  check('a dry run over a re-render needs no resolution file and exits 0', r.status === 0, why(r));
+  check('and it previews the write', r.out.includes(`${WRITER_REL}: the payload render written`), why(r));
   check('a clean dry run still wrote nothing (byte for byte)',
     diffSnapshots(before, snapshot(p)).length === 0, diffSnapshots(before, snapshot(p)).join(', '));
 }
@@ -1195,10 +953,7 @@ section('10 - a dry run writes nothing, and preflight refuses an incoherent proj
   check('nothing was written', diffSnapshots(before, snapshot(p)).length === 0);
 }
 {
-  // The Claude pin rule, in the update engine's preflight: a Claude review row shares the ONE
-  // reviewer agent file, so an exact id there must be that file's pin. A config carrying a foreign
-  // one (a hand edit - every writer refuses it) is refused BEFORE the first mutation, whatever the
-  // pending operations are, and the config is left byte for byte as it was.
+  // The Claude pin rule, in the update engine's preflight.
   const p = project('preflight-pin');
   install(p);
   const cfg = readJson(at(p, CONFIG_REL));
@@ -1211,7 +966,6 @@ section('10 - a dry run writes nothing, and preflight refuses an incoherent proj
     && r.out.includes('cannot run on the model it records'), why(r));
   check('the config is unchanged and nothing else was written', diffSnapshots(before, snapshot(p)).length === 0,
     diffSnapshots(before, snapshot(p)).join(', '));
-  // The pair: the same project with the row on a tier alias is not refused by this rule.
   cfg.review.docs = { passes: 1, engine: 'claude', model: 'sonnet' };
   writeJson(at(p, CONFIG_REL), cfg);
   const ok = update(p, ['--check'], { payload: P020 });
@@ -1226,14 +980,11 @@ section('10 - a dry run writes nothing, and preflight refuses an incoherent proj
   writeJson(at(p, CONFIG_REL), cfg);
   const r = update(p, ['--apply'], { payload: P020 });
   check('a version stamp disagreeing with the manifest stops with exit 1', r.status === 1, why(r));
-  check('the message names both stamps', r.out.includes('0.1.4') && r.out.includes('0001_initial'), why(r));
+  check('the message names both stamps', r.out.includes('0.1.4') && r.out.includes(BASELINE.id), why(r));
 }
 {
   const p = project('downgrade');
   install(p, { payload: P020 });
-  // BASE is not "the shipped 0.1.0 payload": it is the CURRENT payload tree truncated to the
-  // baseline migration and stamped with that migration's target version. Offering it to a 0.2.0
-  // project is the downgrade under test.
   const r = update(p, ['--apply']);
   check('a downgrade is refused with exit 1', r.status === 1, why(r));
   check('the message says downgrade', r.out.toLowerCase().includes('downgrade'), why(r));
@@ -1261,444 +1012,134 @@ section('10 - a dry run writes nothing, and preflight refuses an incoherent proj
   check('no mode at all is a usage error (exit 2)', none.status === 2, why(none));
   const two = update(p, ['--check', '--apply']);
   check('two modes at once is a usage error (exit 2)', two.status === 2, why(two));
+  const resolve = update(p, ['--resolve', WRITER_REL]);
+  check('--resolve is no mode any more: a usage error (exit 2)', resolve.status === 2, why(resolve));
 }
 
 // ---------------------------------------------------------------------------
-section('11 - the recovery state machine has no dead ends, and no decision is applied to a state it never saw');
+section('11 - the CHANGELOG blocks between the installed and the payload version are printed, in file order');
 {
-  // BLOCKER 1: an interrupted operation whose target MOVED while the process was down is a conflict,
-  // and it is resolved through the same dialog every other conflict goes through.
-  const REGION_ADDRESS = '0002_fixture/1/CLAUDE.md#aiwf-core';
-  const scenario = (name) => {
-    const p = project(`moved-${name}`);
-    install(p);
-    const crashed = update(p, ['--apply', '--resolution-file', resolutionFile(`moved-${seq}`, FULL_RESOLUTIONS)], {
-      payload: P020, env: { PNP_UPDATE_CRASH_AT: '0002_fixture/1/after-journal-prepared' },
-    });
-    check(`${name}: the child died at the region operation (exit 86)`, crashed.status === 86, why(crashed));
-    // Somebody edits the interrupted target while the update is down.
-    patch(at(p, 'CLAUDE.md'), 'You are the **Orchestrator / COO**', 'You are the **Orchestrator / COO** (edited while the update was down)');
-    return p;
-  };
-  {
-    const p = scenario('no-record');
-    const rest = { ...FULL_RESOLUTIONS };
-    delete rest[REGION_ADDRESS];
-    const before = snapshot(p);
-    const r = update(p, ['--apply', '--resolution-file', resolutionFile(`moved-none-${seq}`, rest)], { payload: P020 });
-    check('a moved target with no resolution STOPS naming the journal address', r.status === 1 && r.out.includes(REGION_ADDRESS), why(r));
-    check('and nothing was written', diffSnapshots(before, snapshot(p)).length === 0, diffSnapshots(before, snapshot(p)).join(', '));
-  }
-  {
-    const p = scenario('take-new');
-    const r = update(p, ['--apply', '--resolution-file', resolutionFile(`moved-take-${seq}`, {
-      ...FULL_RESOLUTIONS, [REGION_ADDRESS]: { kind: 'conflict', resolution: 'take-new' },
-    })], { payload: P020 });
-    check('resolving the moved target with take-new completes the run', r.status === 0, why(r));
-    check('the payload version is what landed', (read(at(p, 'CLAUDE.md')) || '').includes('## Your role (v2)'));
-    check('the operator edit outside the decision is gone (take-new is what was asked for)',
-      !(read(at(p, 'CLAUDE.md')) || '').includes('edited while the update was down'));
-    const entry = bookkeeping(p).managedRegions['CLAUDE.md#aiwf-core'] || {};
-    check('the bookkeeping describes the applied content', entry.local === entry.upstream && entry.override === false, JSON.stringify(entry).slice(0, 110));
-    check('the end state is complete', bookkeeping(p).installedPluginVersion === '0.2.0' && bookkeeping(p).migrationJournal === null);
-    check('no stage material is left behind', !exists(at(p, STAGE_REL)));
-  }
-  {
-    const p = scenario('keep-mine');
-    const mine = read(at(p, 'CLAUDE.md'));
-    const r = update(p, ['--apply', '--resolution-file', resolutionFile(`moved-keep-${seq}`, {
-      ...FULL_RESOLUTIONS, [REGION_ADDRESS]: { kind: 'conflict', resolution: 'keep-mine' },
-    })], { payload: P020 });
-    check('resolving the moved target with keep-mine completes the run', r.status === 0, why(r));
-    check('the file the operator changed while the update was down is untouched', read(at(p, 'CLAUDE.md')) === mine);
-    const entry = bookkeeping(p).managedRegions['CLAUDE.md#aiwf-core'] || {};
-    check('keep-mine on a moved target records local == what is on disk, override true',
-      entry.override === true && entry.local !== entry.upstream, JSON.stringify(entry).slice(0, 110));
-  }
-}
-{
-  // BLOCKER 2: an operation that applies NOTHING still journals the artifact it makes an assertion
-  // about, so a resume cannot stamp a hash for a file that changed in the meantime.
-  const p = project('none-mode-identity');
-  install(p);
-  // Edited, so keep-mine is a real choice: an unedited artifact is applied without a dialog and
-  // there would be no "applies NOTHING" operation left to journal.
-  fs.appendFileSync(at(p, WRITER_REL), '\nMine, and I intend to keep it.\n', 'utf8');
-  const payload = makePayload('keepmine-crash', {
-    version: '0.2.0',
-    migrations: [{ id: '0002_hold', version: '0.2.0', ops: [{ op: 'rerender-managed-region', file: WRITER_REL, region: null, template: 'templates/agents/writer.md.tmpl' }] }],
-    tweak: changeTemplates,
+  const FIXTURE_CHANGELOG = [
+    '# Changelog', '', 'Intro text that is not a block.', '',
+    '## [0.3.0] - 2026-01-03', '', '### Added', '- **Third (T-3)** - three.', '',
+    '## [0.2.0] - 2026-01-02', '', '### Fixed', '- **Second (T-2)** - two.', '  - a sub-item.', '',
+    '## [0.1.0] - 2026-01-01', '', '- **First (T-1)** - one.', '',
+  ].join('\n');
+  const EXPECTED = [
+    `CHANGELOG ${BASELINE.targetPluginVersion} -> 0.3.0:`,
+    '## [0.3.0] - 2026-01-03', '', '### Added', '- **Third (T-3)** - three.', '',
+    '## [0.2.0] - 2026-01-02', '', '### Fixed', '- **Second (T-2)** - two.', '  - a sub-item.',
+  ];
+  const payload = makePayload('changelog', {
+    version: '0.3.0',
+    migrations: [
+      { id: '0002_two', version: '0.2.0', ops: [{ ...FIXTURE_NOTE, id: 'two' }] },
+      { id: '0003_three', version: '0.3.0', ops: [{ ...FIXTURE_NOTE, id: 'three' }] },
+    ],
+    tweak: (dir) => fs.writeFileSync(at(dir, 'CHANGELOG.md'), FIXTURE_CHANGELOG, 'utf8'),
   });
-  const ADDRESS = `0002_hold/0/${WRITER_REL}`;
-  const before = bookkeeping(p).managedRegions[WRITER_REL];
-  const crashed = update(p, ['--apply', '--resolution-file', resolutionFile('keepmine-crash', { [ADDRESS]: { kind: 'conflict', resolution: 'keep-mine' } })], {
-    payload, env: { PNP_UPDATE_CRASH_AT: '0002_hold/0/after-journal-prepared' },
-  });
-  check('keep-mine: the child died right after the journal was prepared (exit 86)', crashed.status === 86, why(crashed));
-  const journal = bookkeeping(p).migrationJournal || {};
-  check('keep-mine: the journal records the artifact it is about to make an assertion about',
-    journal.target === WRITER_REL && journal.preHash === journal.postHash && journal.preHash !== null, JSON.stringify(journal).slice(0, 140));
-  fs.appendFileSync(at(p, WRITER_REL), '\nEdited while the update was down.\n', 'utf8');
-  const resumed = update(p, ['--apply'], { payload });
-  check('keep-mine: a resume onto a CHANGED artifact stops instead of stamping', resumed.status === 1, why(resumed));
-  check('keep-mine: it names the address', resumed.out.includes(ADDRESS), why(resumed));
-  const after = bookkeeping(p).managedRegions[WRITER_REL];
-  check('keep-mine: the bookkeeping was NOT stamped (no override, no new local)',
-    JSON.stringify(after) === JSON.stringify(before), `${JSON.stringify(before).slice(0, 80)} -> ${JSON.stringify(after).slice(0, 80)}`);
-}
-{
-  // BLOCKER 3: the resolver may take any amount of time, so the state is re-checked in the last
-  // instruction before the first write. The gap is exercised in-process, through the real engine
-  // entrypoint with a resolver that edits the file before answering - which is exactly what an
-  // operator staring at an open dialog can do.
-  const p = project('toctou');
+  const lines = changelogLines(payload, BASELINE.targetPluginVersion, '0.3.0');
+  check('(e) the production helper returns exactly the open-closed range, in file order, under one header',
+    JSON.stringify(lines) === JSON.stringify(EXPECTED), () => lines.join('\n'));
+  const p = project('changelog');
   install(p);
-  const target = at(p, 'CLAUDE.md');
-  // The region is edited FIRST, so this operation really is a conflict and really opens a dialog.
-  // Without the edit there would be no dialog at all to sit open (an untouched artifact is applied
-  // without asking), and the gap this case is about could not exist.
-  patch(target, 'You are the **Orchestrator / COO**', 'You are the **Orchestrator / COO** (mine)');
-  let thrown = null;
-  try {
-    runUpdate({
-      pluginRoot: P020,
-      projectRoot: p,
-      resolve: (address, kind) => {
-        if (kind === 'answer') return { kind: 'answer', value: false };
-        // The operator edits the artifact while the dialog is open, then answers.
-        fs.writeFileSync(target, (read(target) || '').replace('You are the **Orchestrator / COO** (mine)', 'You are the **Orchestrator / COO** (edited mid-dialog)'), 'utf8');
-        return { kind: 'conflict', resolution: 'take-new' };
-      },
-    });
-  } catch (e) { thrown = e; }
-  check('a decision taken against a state that no longer exists is REFUSED', thrown instanceof UpdateError, thrown ? thrown.message.slice(0, 120) : 'no error thrown');
-  check('the message says the artifact changed while the update was deciding',
-    !!thrown && thrown.message.includes('changed while the update was deciding'), thrown ? thrown.message.slice(0, 140) : '');
-  check('the target still carries the operator\'s mid-dialog edit, untouched by the engine',
-    (read(target) || '').includes('(edited mid-dialog)') && !(read(target) || '').includes('## Your role (v2)'));
-  check('the operation before it stayed applied', (readJson(at(p, CONFIG_REL)) || {}).enforcement.exampleToggle === false);
-}
-{
-  // --resolve carries the same open-dialog gap, so it carries the same re-check.
-  const p = project('toctou-resolve');
-  install(p);
-  const target = at(p, WRITER_REL);
-  let thrown = null;
-  try {
-    resolveArtifact({
-      pluginRoot: PLUGIN_ROOT,
-      projectRoot: p,
-      key: WRITER_REL,
-      resolve: () => {
-        fs.appendFileSync(target, '\nEdited while the resolve dialog was open.\n', 'utf8');
-        return { kind: 'conflict', resolution: 'take-new' };
-      },
-    });
-  } catch (e) { thrown = e; }
-  check('--resolve refuses a decision taken against a state that no longer exists', thrown instanceof UpdateError,
-    thrown ? thrown.message.slice(0, 120) : 'no error thrown');
-  check('--resolve left the operator\'s mid-dialog edit alone', (read(target) || '').includes('Edited while the resolve dialog was open.'));
-}
-{
-  // ROUND 2, BLOCKER 1: an interrupted add-config-key whose CONFIG moved while the update was down
-  // is re-planned against the state that is really there - but the operator's answer travels with
-  // the resume, so the question is never asked twice. Both resumes below run WITHOUT a resolution
-  // file: anything that had to ask would stop with exit 1.
-  const ADDRESS = '0002_key/0/enforcement.exampleToggle';
-  const payload = makePayload('replan-answer', {
-    version: '0.2.0',
-    migrations: [{ id: '0002_key', version: '0.2.0', ops: [{ op: 'add-config-key', path: 'enforcement.exampleToggle', default: true, askOperator: true, question: 'Keep the dialog?' }] }],
-    tweak: addExampleToggleToSchema,
-  });
-  const crashAndMove = (name, move) => {
-    const p = project(`replan-${name}`);
-    install(p);
-    const crashed = update(p, ['--apply', '--resolution-file', resolutionFile(`replan-${seq}`, { [ADDRESS]: { kind: 'answer', value: false } })], {
-      payload, env: { PNP_UPDATE_CRASH_AT: '0002_key/0/after-journal-prepared' },
-    });
-    check(`${name}: the child died with the answer already staged (exit 86)`, crashed.status === 86, why(crashed));
-    const cfg = readJson(at(p, CONFIG_REL));
-    move(cfg);
-    writeJson(at(p, CONFIG_REL), cfg); // the config now matches NEITHER journal hash
-    return p;
-  };
-  {
-    const p = crashAndMove('answer-replayed', (cfg) => { cfg.project.description = 'edited while the update was down'; });
-    const resumed = update(p, ['--apply'], { payload });
-    check('a moved config re-plans WITHOUT asking the staged question again', resumed.status === 0, why(resumed));
-    check('and it says the answer was replayed', resumed.out.includes('replayed from the stage'), why(resumed));
-    const cfg = readJson(at(p, CONFIG_REL)) || {};
-    check('the staged answer is what landed (false, not the default true)', cfg.enforcement.exampleToggle === false);
-    check('the external edit was preserved', cfg.project.description === 'edited while the update was down');
-    check('the end state is complete', (cfg._aiwf || {}).installedPluginVersion === '0.2.0' && (cfg._aiwf || {}).migrationJournal === null);
-  }
-  {
-    const p = crashAndMove('key-now-present', (cfg) => { cfg.enforcement.exampleToggle = true; });
-    const resumed = update(p, ['--apply'], { payload });
-    check('a key that is present by the time of the resume is a no-op, with no question', resumed.status === 0, why(resumed));
-    check('the value already there is left exactly as it is', (readJson(at(p, CONFIG_REL)) || {}).enforcement.exampleToggle === true);
-    check('the run still completed', bookkeeping(p).installedPluginVersion === '0.2.0' && bookkeeping(p).migrationJournal === null);
-  }
-}
-{
-  // ROUND 2, BLOCKER 2: the mid-journal --resolve refusal must name the address the operator has to
-  // write a record for - including the `#region` half a region operation's journal target omits.
-  const p = project('resolve-names-address');
-  install(p);
-  const crashed = update(p, ['--apply', '--resolution-file', resolutionFile(`resolve-addr-${seq}`, FULL_RESOLUTIONS)], {
-    payload: P020, env: { PNP_UPDATE_CRASH_AT: '0002_fixture/1/after-journal-prepared' },
-  });
-  check('the child died inside a REGION operation (exit 86)', crashed.status === 86, why(crashed));
-  const refused = update(p, ['--resolve', ROLES_REL, '--resolution-file', resolutionFile('resolve-addr-table', {
-    [ROLES_REL]: { kind: 'conflict', resolution: 'take-new' },
-  })], { payload: P020 });
-  check('--resolve on another key is refused while an update is in flight (exit 1)', refused.status === 1, why(refused));
-  check('the refusal names the EXACT full address of the interrupted operation',
-    refused.out.includes('0002_fixture/1/CLAUDE.md#aiwf-core'), why(refused));
-  check('and it hands over a ready-to-paste record skeleton', refused.out.includes('"kind": "conflict"'), why(refused));
-  check('nothing was applied to the key that was asked about', !(read(at(p, ROLES_REL)) || '').includes('<<<'));
-}
-{
-  // ROUND 3: a record is promised ONLY for the operation that actually consumes one. A reconcile or
-  // a note resumes with no resolver involved at all, and telling the operator to write a record
-  // there would send them to author a file the resume ignores.
-  const NO_RECORD = 'No record is needed - just re-run /pnp:update and this operation resumes on its own.';
-  for (const [name, ops, boundary] of [
-    ['a reconcile operation', [FIXTURE_NOTE, { op: 'reconcile-ask-ruleset', ruleset: 'templates/settings.ask-ruleset.json' }], '0002_plain/1/after-journal-prepared'],
-    ['a note operation', [{ op: 'reconcile-ask-ruleset', ruleset: 'templates/settings.ask-ruleset.json' }, FIXTURE_NOTE], '0002_plain/1/after-journal-prepared'],
-  ]) {
-    const p = project(`refusal-${name.replace(/[^a-z]+/gi, '-')}`);
-    install(p);
-    const payload = makePayload(`plain-${seq}`, {
-      version: '0.2.0', migrations: [{ id: '0002_plain', version: '0.2.0', ops }], tweak: changeRuleset,
-    });
-    const crashed = update(p, ['--apply'], { payload, env: { PNP_UPDATE_CRASH_AT: boundary } });
-    check(`${name}: the child died inside it (exit 86)`, crashed.status === 86, why(crashed));
-    const refused = update(p, ['--resolve', ROLES_REL], { payload });
-    check(`${name}: --resolve is still refused (exit 1)`, refused.status === 1, why(refused));
-    check(`${name}: the refusal does NOT claim a record is needed`, !refused.out.includes('"kind"'), why(refused));
-    check(`${name}: it says the operation resumes on its own`, refused.out.includes(NO_RECORD), why(refused));
-    // ... and it really does: the same run finishes with no resolution file anywhere.
-    const resumed = update(p, ['--apply'], { payload });
-    check(`${name}: and the update then resumes with no record at all`, resumed.status === 0, why(resumed));
-  }
-}
-{
-  // BLOCKER 6: a migration that touches the same artifact twice. The preview must plan the second
-  // operation against what the first one would have written - and on an artifact the operator never
-  // edited that now means ZERO resolutions: the first operation applies silently, the second finds
-  // the artifact already current.
-  //
-  // The resolution file is deliberately NOT empty. It carries a `keep-mine` record for the first
-  // operation - a record that, if the engine consulted it, would produce a visibly different result
-  // (the old content kept, `override: true`). The assertions below are written against the silent
-  // take-new outcome, so a regression that starts asking again cannot pass this case by accident.
-  const p = project('same-artifact-twice');
-  install(p);
-  const twice = { op: 'rerender-managed-region', file: WRITER_REL, region: null, template: 'templates/agents/writer.md.tmpl' };
-  const payload = makePayload('twice', {
-    version: '0.2.0',
-    migrations: [{ id: '0002_twice', version: '0.2.0', ops: [twice, twice] }],
-    tweak: changeTemplates,
-  });
-  const table = resolutionFile('twice', { [`0002_twice/0/${WRITER_REL}`]: { kind: 'conflict', resolution: 'keep-mine' } });
-  const before = snapshot(p);
-  const dry = update(p, ['--dry-run', '--resolution-file', table], { payload });
-  check('dry-run of two operations on one artifact needs NO resolution at all', dry.status === 0, why(dry));
-  check('the first is previewed as a silent apply, not as a conflict',
-    dry.out.includes(`${WRITER_REL}: the payload version applied (you had not edited it)`), why(dry));
-  check('and the second is previewed as already current', dry.out.includes('already current'), why(dry));
-  check('the dry run still wrote nothing', diffSnapshots(before, snapshot(p)).length === 0, diffSnapshots(before, snapshot(p)).join(', '));
-  const applied = update(p, ['--apply', '--resolution-file', table], { payload });
-  check('and the apply needs none either', applied.status === 0, why(applied));
-  check('the artifact carries the payload render', (read(at(p, WRITER_REL)) || '').includes('A line the next payload version added.'));
-  const entry = bookkeeping(p).managedRegions[WRITER_REL] || {};
-  check('the surplus keep-mine record was never consulted: override is false and local == upstream',
-    entry.override === false && entry.local === entry.upstream, JSON.stringify(entry).slice(0, 120));
-  // The same proof once more, in-process and by counting: the engine entrypoint is handed a resolver
-  // that records every call. "The dialog address never appeared in the output" is evidence; a
-  // resolver that was never called is the fact itself.
-  const p2 = project('same-artifact-twice-counted');
+  const a = update(p, ['--apply'], { payload });
+  check('(e) --apply exits 0', a.status === 0, why(a));
+  const out = a.out.replace(/\r\n/g, '\n');
+  const at0 = out.indexOf(EXPECTED[0]);
+  check('(e) --apply prints those lines verbatim, as one run, before the first operation',
+    at0 !== -1 && out.slice(at0).startsWith(EXPECTED.join('\n') + '\n') && at0 < out.indexOf('0002_two[0]'), why(a));
+  check('(e) the block AT the installed version is not printed', !out.includes('First (T-1)'), why(a));
+  const p2 = project('changelog-dry');
   install(p2);
-  let asked = 0;
-  runUpdate({
-    pluginRoot: payload,
-    projectRoot: p2,
-    resolve: (address, kind) => { asked += 1; return kind === 'answer' ? { kind: 'answer', value: false } : { kind: 'conflict', resolution: 'keep-mine' }; },
+  const d = update(p2, ['--dry-run'], { payload });
+  check('(e) --dry-run prints the same lines', d.status === 0 && d.out.replace(/\r\n/g, '\n').includes(EXPECTED.join('\n')), why(d));
+
+  const noFile = makePayload('changelog-none', {
+    version: '0.2.0', migrations: [{ id: '0002_two', version: '0.2.0', ops: [FIXTURE_NOTE] }],
+    tweak: (dir) => fs.rmSync(at(dir, 'CHANGELOG.md'), { force: true }),
   });
-  check('in-process: the resolver was called ZERO times for two rerenders of an untouched artifact', asked === 0, `called ${asked} time(s)`);
+  const noneLine = `CHANGELOG: no block between ${BASELINE.targetPluginVersion} and 0.2.0`;
+  check('(e) no CHANGELOG file -> the one no-block line',
+    JSON.stringify(changelogLines(noFile, BASELINE.targetPluginVersion, '0.2.0')) === JSON.stringify([noneLine]),
+    () => JSON.stringify(changelogLines(noFile, BASELINE.targetPluginVersion, '0.2.0')));
+  check('(e) a CHANGELOG with no block in the range -> the same line',
+    JSON.stringify(changelogLines(payload, '0.3.0', '0.3.0')) === JSON.stringify(['CHANGELOG: no block between 0.3.0 and 0.3.0']));
+  const p3 = project('changelog-none');
+  install(p3);
+  const n = update(p3, ['--apply'], { payload: noFile });
+  check('(e) and --apply prints it', n.status === 0 && n.out.includes(noneLine), why(n));
 }
+
+// ---------------------------------------------------------------------------
+section('12 - a migration interrupted after its first operations re-runs idempotently to the same end state');
 {
-  // BLOCKER 7: stage debris from a run that died between its final write and its cleanup must not
-  // outlive the next run - including the run that has nothing to do.
-  const p = project('stage-debris');
+  // The stop is a malformed additions block in the LAST operation's file: the config key, the
+  // reconcile and the Writer re-render have already run. The re-run (after the file is fixed) must
+  // reach exactly the state an uninterrupted run reaches - compared on a second project, with the
+  // project root normalised out of the bytes (the ask rules and the Writer agent carry it).
+  const OPS = [
+    { op: 'add-config-key', path: 'enforcement.exampleToggle', default: true, askOperator: false },
+    { op: 'reconcile-ask-ruleset', ruleset: 'templates/settings.ask-ruleset.json' },
+    WRITER_OP,
+    ORCH_OP,
+  ];
+  const payload = makePayload('interrupted', {
+    version: '0.2.0', migrations: [{ id: '0002_interrupted', version: '0.2.0', ops: OPS }],
+    tweak: (dir) => { addExampleToggleToSchema(dir); changeTemplates(dir); changeRuleset(dir); },
+  });
+  const p = project('interrupted');
+  const control = project('interrupted-control');
   install(p);
-  const done = update(p, ['--apply', '--resolution-file', resolutionFile('debris', FULL_RESOLUTIONS)], { payload: P020 });
-  check('the update completes', done.status === 0, why(done));
-  fs.mkdirSync(at(p, `${STAGE_REL}/0002_fixture-3`), { recursive: true });
-  fs.writeFileSync(at(p, `${STAGE_REL}/0002_fixture-3/stage.json`), '{"left":"behind"}', 'utf8');
-  const again = update(p, ['--apply'], { payload: P020 });
-  check('the next run says "already current"', again.status === 0 && again.out.includes('already current'), why(again));
-  check('and the stage root is gone with it', !exists(at(p, STAGE_REL)));
+  install(control);
+  const orchOriginal = read(at(p, ORCH_REL));
+  const broken = `${orchOriginal}\n${PROJECT_ADDITIONS_BEGIN}\nhalf a block\n`;
+  fs.writeFileSync(at(p, ORCH_REL), broken, 'utf8');
+
+  const first = update(p, ['--apply'], { payload });
+  check('(g) the run stops at the last operation (exit 1, naming the file)', first.status === 1 && first.out.includes(ORCH_REL), why(first));
+  check('(g) the operations before it ran: the Writer agent is the new render, the new ask rule is in',
+    (read(at(p, WRITER_REL)) || '').includes(PAYLOAD_LINE) && askRules(p).includes(NEW_ASK_RULE));
+  check('(g) the stamps did not move: the migration is still pending',
+    bookkeeping(p).lastMigrationApplied === BASELINE.id && bookkeeping(p).installedPluginVersion === BASELINE.targetPluginVersion);
+  check('(g) the file it stopped on is byte-identical', read(at(p, ORCH_REL)) === broken);
+
+  fs.writeFileSync(at(p, ORCH_REL), orchOriginal, 'utf8');
+  const second = update(p, ['--apply'], { payload });
+  check('(g) the re-run of the SAME migration completes (exit 0)', second.status === 0, why(second));
+  const once = update(control, ['--apply'], { payload });
+  check('(g) the control run, uninterrupted, completes (exit 0)', once.status === 0, why(once));
+
+  const normalise = (snap, root) => {
+    const forms = [root, root.split(path.sep).join('/'), root.split(path.sep).join('\\'), root.split(path.sep).join('\\\\')];
+    const out = {};
+    for (const [k, v] of Object.entries(snap)) {
+      let t = v;
+      for (const f of forms.sort((a, b) => b.length - a.length)) t = t.split(f).join('<root>');
+      out[k] = t;
+    }
+    return out;
+  };
+  const a = normalise(snapshot(p), p);
+  const b = normalise(snapshot(control), control);
+  const differ = diffSnapshots(a, b);
+  check('(g) the end state is identical to the uninterrupted run, file for file (root normalised)',
+    differ.length === 0, () => differ.map((k) => `${k}\n--- interrupted\n${a[k]}\n--- control\n${b[k]}`).join('\n').slice(0, 4000));
+  const bk = bookkeeping(p);
+  check('(g) the re-run did not tombstone the rule the payload dropped, and owns the rule it added',
+    !(bk.suppressedAskRules || []).includes(DROPPED_ASK_RULE) && (bk.ownedAskRules || []).includes(NEW_ASK_RULE), () => JSON.stringify(bk));
 }
 
 // ---------------------------------------------------------------------------
-section('12 - the self-check is the update\'s own last step, and a red one is never exit 0');
-{
-  const p = project('sc-pass');
-  check('install exits 0', install(p).status === 0);
-  const r = update(p, ['--apply', '--resolution-file', resolutionFile('sc-pass', FULL_RESOLUTIONS)], { payload: P020, selfcheck: true });
-  check('--apply exits 0', r.status === 0, why(r));
-  check('the update RAN the self-check itself and reported PASS', r.out.includes('self-check: PASS'), why(r));
-  check('and the PASS line quotes the self-check\'s own summary line verbatim',
-    /self-check: PASS - .*assertions passed/.test(r.out),
-    (r.out.split('\n').find((l) => l.startsWith('self-check:')) || '(no self-check line)').slice(0, 120));
-}
-{
-  const p = project('sc-skipped');
-  check('install exits 0', install(p).status === 0);
-  // The flag is passed EXPLICITLY here rather than left to the helper's default: this case is about
-  // the flag, and a case that depends on a default is not testing what it says it tests.
-  const r = update(p, ['--apply', '--resolution-file', resolutionFile('sc-skip', FULL_RESOLUTIONS), '--no-selfcheck'],
-    { payload: P020, selfcheck: true });
-  check('--no-selfcheck still exits 0', r.status === 0, why(r));
-  check('and it says so on one line - a skipped gate that prints nothing reads exactly like a gate that passed',
-    r.out.includes('self-check: SKIPPED'), why(r));
-  check('no PASS line is printed for a run that never checked anything', !r.out.includes('self-check: PASS'));
-}
-{
-  // FAIL-CLOSED: the payload's self-check script is not there at all. The migrations still applied;
-  // what must not happen is exit 0, because nothing verified the result.
-  const payload = path.join(tmpRoot, 'payload-020-without-selfcheck');
-  copyTree(P020, payload);
-  fs.rmSync(at(payload, 'scripts/selfcheck/aiwf-selfcheck.js'));
-  const p = project('sc-unrunnable');
-  check('install exits 0', install(p).status === 0);
-  const r = update(p, ['--apply', '--resolution-file', resolutionFile('sc-unrunnable', FULL_RESOLUTIONS)], { payload, selfcheck: true });
-  check('an unrunnable self-check makes the update exit 1, not 0', r.status === 1, why(r));
-  check('the message names exactly what could not run', r.out.includes('scripts/selfcheck/aiwf-selfcheck.js'), why(r));
-  check('and says plainly that the files WERE written and nothing was rolled back',
-    r.out.includes('WERE written') && r.out.includes('nothing was rolled back'), why(r));
-  const bk = bookkeeping(p);
-  check('which is true: the migrations really applied and the journal is clear',
-    bk.installedPluginVersion === '0.2.0' && bk.lastMigrationApplied === '0002_fixture' && bk.migrationJournal === null,
-    `${bk.installedPluginVersion} / ${bk.lastMigrationApplied}`);
-}
-{
-  // The self-check RUNS and comes back RED, after an apply that succeeded. A managed artifact edited
-  // by hand is enough on its own: the self-check hashes every managed artifact against the `local`
-  // stamp its bookkeeping records, and this migration never touches roles.json - so the apply has no
-  // reason to stop, and the result is nevertheless an inconsistent project.
-  const notePayload = makePayload('note-only-020', {
-    version: '0.2.0',
-    migrations: [{ id: '0002_noteonly', version: '0.2.0', ops: [FIXTURE_NOTE] }],
-  });
-  const p = project('sc-red');
-  check('install exits 0', install(p).status === 0);
-  patch(at(p, ROLES_REL), '"effort": "high"', '"effort": "low"');
-  const r = update(p, ['--apply'], { payload: notePayload, selfcheck: true });
-  check('a RED self-check after a successful apply makes the update exit 1', r.status === 1, why(r));
-  check('the self-check\'s own output reached the operator verbatim',
-    r.out.includes('roles.json') && r.out.includes('FAILURES:'), why(r));
-  check('the verdict says the files WERE written and nothing was rolled back',
-    r.out.includes('WERE written') && r.out.includes('nothing was rolled back'), why(r));
-  const bk = bookkeeping(p);
-  check('which is true: the migration applied, the stamps moved and the journal is clear',
-    bk.installedPluginVersion === '0.2.0' && bk.lastMigrationApplied === '0002_noteonly' && bk.migrationJournal === null,
-    `${bk.installedPluginVersion} / ${bk.lastMigrationApplied}`);
-  check('and the CHANGES report is on disk too', exists(at(p, 'CHANGES_0.1.0-to-0.2.0.md')));
-  check('the operator\'s hand edit was never overwritten', (read(at(p, ROLES_REL)) || '').includes('"effort": "low"'));
-}
-{
-  // The self-check CRASHES - a section throws rather than returning a red assertion. That used to
-  // escape main() as an uncaught exception: the tally, the FAILURES block and the exit code never
-  // ran, and the operator got output that simply stopped. The contract now is that a crash is
-  // reported like any other failure, with the stack, and that everything asserted BEFORE it
-  // survives. The sabotage is applied to a payload COPY - one of the real section calls is replaced
-  // by a throw - so this exercises the shipped reporting path end to end through the update engine,
-  // not a hand-built fixture of what a crash looks like.
-  const crashPayload = makePayload('crash-selfcheck-020', {
-    version: '0.2.0',
-    migrations: [{ id: '0002_noteonly', version: '0.2.0', ops: [FIXTURE_NOTE] }],
-    tweak: (dir) => patch(at(dir, 'scripts/selfcheck/aiwf-selfcheck.js'),
-      '    sectionGate2(tmpRoot);',
-      '    (() => { throw new Error(\'sc-crash injected\'); })();'),
-  });
-  const p = project('sc-crash');
-  check('install exits 0', install(p).status === 0);
-  const r = update(p, ['--apply'], { payload: crashPayload, selfcheck: true });
-  check('a self-check that CRASHES makes the update exit 1, not 0', r.status === 1, why(r));
-  check('the crash reached the operator with its own message', r.out.includes('sc-crash injected'), why(r));
-  check('and with a stack, not just a message',
-    /at [^\n]*aiwf-selfcheck\.js/.test(r.out), why(r));
-  check('the report still ran: the tally line was printed',
-    /==== \d+\/\d+ assertions passed ====/.test(r.out), why(r));
-  check('the crash is named in the FAILURES block, under its own section',
-    r.out.includes('FAILURES:') && r.out.includes('[(uncaught)]'), why(r));
-  check('and the run says out loud that it is incomplete', r.out.includes('INCOMPLETE RUN'), why(r));
-  // The assertions that ran before the throw are the evidence the crash did NOT destroy: the tally
-  // must still count them as passed, and must count at least one failure on top of them.
-  const tally = r.out.match(/==== (\d+)\/(\d+) assertions passed ====/);
-  const passed = tally ? Number(tally[1]) : 0;
-  const total = tally ? Number(tally[2]) : 0;
-  check('the assertions that ran before the crash were not lost, and the crash is counted against them',
-    passed > 0 && total > passed, tally ? tally[0] : '(no tally line was printed at all)');
-  check('the verdict still says the files WERE written and nothing was rolled back',
-    r.out.includes('WERE written') && r.out.includes('nothing was rolled back'), why(r));
-  const bk = bookkeeping(p);
-  check('which is true: the migration applied, the stamps moved and the journal is clear',
-    bk.installedPluginVersion === '0.2.0' && bk.lastMigrationApplied === '0002_noteonly' && bk.migrationJournal === null,
-    `${bk.installedPluginVersion} / ${bk.lastMigrationApplied}`);
-}
-{
-  // The SAME contract, for a throwable that is not an Error. `throw` takes any value, and the
-  // handler's own rendering is where that bites: `String(Object.create(null))` throws a TypeError of
-  // its own, and a plain object renders as "[object Object]" with every field hidden. Either one
-  // inside the crash handler is the original defect again - a secondary exception escaping past the
-  // tally, the FAILURES block and the exit code - so it gets its own injected variant rather than a
-  // note saying the Error case is representative. The thrown value carries no message and no stack,
-  // only a recognisable field, which is exactly what must still reach the operator.
-  const crashPayloadNoMessage = makePayload('crash-selfcheck-nullproto-020', {
-    version: '0.2.0',
-    migrations: [{ id: '0002_noteonly', version: '0.2.0', ops: [FIXTURE_NOTE] }],
-    tweak: (dir) => patch(at(dir, 'scripts/selfcheck/aiwf-selfcheck.js'),
-      '    sectionGate2(tmpRoot);',
-      '    (() => { throw Object.assign(Object.create(null), { code: \'sc-crash-null-proto\' }); })();'),
-  });
-  const p = project('sc-crash-null-proto');
-  check('install exits 0', install(p).status === 0);
-  const r = update(p, ['--apply'], { payload: crashPayloadNoMessage, selfcheck: true });
-  check('a throwable with no message and no stack still makes the update exit 1', r.status === 1, why(r));
-  check('its field reached the operator, and it was NOT flattened to [object Object]',
-    r.out.includes('sc-crash-null-proto') && !r.out.includes('[object Object]'), why(r));
-  check('the report still ran for it too: the tally line was printed, with the crash counted against it',
-    (() => {
-      const t = r.out.match(/==== (\d+)\/(\d+) assertions passed ====/);
-      return !!t && Number(t[1]) > 0 && Number(t[2]) > Number(t[1]);
-    })(), why(r));
-  check('and the crash is named in the FAILURES block, under its own section',
-    r.out.includes('FAILURES:') && r.out.includes('[(uncaught)]'), why(r));
-  check('and the run says out loud that it is incomplete', r.out.includes('INCOMPLETE RUN'), why(r));
-  const bk = bookkeeping(p);
-  check('which is true: the migration applied, the stamps moved and the journal is clear',
-    bk.installedPluginVersion === '0.2.0' && bk.lastMigrationApplied === '0002_noteonly' && bk.migrationJournal === null,
-    `${bk.installedPluginVersion} / ${bk.lastMigrationApplied}`);
-}
-
-// ---------------------------------------------------------------------------
-section('13 - the audit table migration: three silent config keys, two quiet re-renders, and an artifact that is not on this installation');
+section('13 - the audit table migration: three silent config keys, re-renders, and an artifact that is not on this installation');
 {
   // The REAL operations of the shipped 0004, replayed as a fixture migration so this suite keeps
-  // its own manifest numbering. Reading them from the payload rather than restating them is the
-  // point: a migration whose ops drift from what this asserts would pass a copy of itself.
+  // its own manifest numbering.
   const realOps = readJson(path.join(PLUGIN_ROOT, 'migrations', '0004_audit-table', 'ops.json'));
   check('the shipped 0004 is readable and carries seven operations',
     !!realOps && Array.isArray(realOps.operations) && realOps.operations.length === 7,
     realOps ? `${(realOps.operations || []).length} ops` : 'unreadable');
-  // Op 5, the sixth, re-renders the managed CLAUDE.md region, which carries doctrine sentences the
-  // audit table replaced. It is asserted by SHAPE here, because the whole point of replaying the
-  // real ops below is that this suite must not restate them.
-  check('and op 5 (the sixth) is the managed CLAUDE.md region, not a whole-file rerender',
+  check('and one of them is the managed CLAUDE.md region, not a whole-file rerender',
     !!realOps && (realOps.operations || []).some((o) => o.op === 'rerender-managed-region'
       && o.file === 'CLAUDE.md' && o.region === 'aiwf-core'
       && o.template === 'templates/CLAUDE.md.tmpl#aiwf-core'),
@@ -1706,43 +1147,25 @@ section('13 - the audit table migration: three silent config keys, two quiet re-
 
   const payload = makePayload('audit', { version: '0.2.0', migrations: [{ id: '0002_audit', version: '0.2.0', ops: realOps.operations }] });
 
-  // The sentence op 5 exists to replace. The fixture installs from the CURRENT payload, so its
-  // CLAUDE.md region starts out identical to the new render and the operation would report
-  // "already current" - which proves nothing about the path a real consumer takes. Ageing the
-  // region back to its previous wording is what makes the replay honest: RECORDED and byte-equal
-  // to its own stamp (so the operator has NOT edited it), yet different from the payload render.
   const REGION_NOW = 'Four countable tripwires';
   const REGION_WAS = 'Three countable tripwires';
 
-  /**
-   * A project as 0.1.2 left it: no review rows in the config, no review block in roles.json, and
-   * - unless `ageRegion` is false - a managed CLAUDE.md region carrying the previous payload text.
-   */
+  /** A project as 0.1.2 left it: no review rows, no review block in roles.json, an older region. */
   function preTable(projectDir, { ageRegion = true } = {}) {
     const cfgFile = at(projectDir, CONFIG_REL);
     const cfg = readJson(cfgFile);
     delete cfg.review.plan; delete cfg.review.code; delete cfg.review.docs;
     const roles = readJson(at(projectDir, ROLES_REL));
     delete roles.review;
-    const rolesText = JSON.stringify(roles, null, 2) + '\n';
-    fs.writeFileSync(at(projectDir, ROLES_REL), rolesText, 'utf8');
-    const hash = sha256(rolesText);
-    cfg._aiwf.managedRegions['.claude/aiwf-native/roles.json'] = { upstream: hash, local: hash, override: false };
+    fs.writeFileSync(at(projectDir, ROLES_REL), JSON.stringify(roles, null, 2) + '\n', 'utf8');
     if (ageRegion) {
       const claudeFile = at(projectDir, 'CLAUDE.md');
       const now = read(claudeFile);
-      // Fail LOUDLY rather than degrade into the already-current case: if the template stops
-      // carrying this sentence, the fixture ages nothing and the assertions below would pass
-      // while proving the opposite of what they claim.
+      // Fail LOUDLY rather than degrade into the already-current case.
       if (now === null || !now.includes(REGION_NOW)) {
         throw new Error('preTable: the rendered CLAUDE.md carries no "' + REGION_NOW + '" to age back');
       }
-      const aged = now.split(REGION_NOW).join(REGION_WAS);
-      fs.writeFileSync(claudeFile, aged, 'utf8');
-      // The stamp is sha256 of the EXTRACTED REGION (markers included) - the same projection the
-      // engine hashes, taken from the engine's own helper so the two cannot drift apart.
-      const regionHash = sha256(extractRegion(aged, 'aiwf-core'));
-      cfg._aiwf.managedRegions['CLAUDE.md#aiwf-core'] = { upstream: regionHash, local: regionHash, override: false };
+      fs.writeFileSync(claudeFile, now.split(REGION_NOW).join(REGION_WAS), 'utf8');
     }
     writeJson(cfgFile, cfg);
   }
@@ -1750,59 +1173,32 @@ section('13 - the audit table migration: three silent config keys, two quiet re-
   // --- a codex-hosted installation: reviewer.md does not exist here at all ---
   {
     const p = project('audit-codex');
-    check('install exits 0', install(p, {
-      answers: baseAnswers({
-        roles: {
-          writer: { model: 'claude-opus-5[1m]', effort: 'high' },
-          reviewer: { engine: 'codex', model: 'codex-atom-2', effort: 'high' },
-          qa: { engine: 'codex', model: 'codex-atom-2', effort: 'medium' },
-          qal: { enabled: false, engine: 'codex', model: 'unset', effort: 'high' },
-        },
-      }),
-    }).status === 0);
+    check('install exits 0', install(p, { answers: codexAnswers() }).status === 0);
     check('precondition: there is no reviewer agent file on a codex-configured project',
       !exists(at(p, '.claude/agents/reviewer.md')));
     preTable(p);
     const staleRegion = extractRegion(read(at(p, 'CLAUDE.md')), 'aiwf-core');
-    const staleStamp = (bookkeeping(p).managedRegions['CLAUDE.md#aiwf-core'] || {}).local;
-    check('precondition: the managed CLAUDE.md region is STALE but RECORDED - the operator never touched it, the PAYLOAD moved',
-      !!staleRegion && staleRegion.includes(REGION_WAS) && !staleRegion.includes(REGION_NOW)
-      && staleStamp === sha256(staleRegion),
-      'region ' + (staleRegion ? sha256(staleRegion).slice(0, 12) : 'missing') + ' / stamp ' + String(staleStamp).slice(0, 12));
+    check('precondition: the managed CLAUDE.md region carries the previous payload text',
+      !!staleRegion && staleRegion.includes(REGION_WAS) && !staleRegion.includes(REGION_NOW));
 
     const dry = update(p, ['--dry-run'], { payload });
     check('--dry-run exits 0 and needs no resolution file (nothing here asks a question)', dry.status === 0, why(dry));
     check('it previews the three config keys', ['review.plan', 'review.code', 'review.docs']
-      .every((k) => dry.out.includes(`config key ${k} =`)), dry.out.trim().split('\n').slice(-8).join(' | ').slice(0, 300));
-    check('it previews the QUIET re-render of roles.json (the operator never edited it)',
-      dry.out.includes('.claude/aiwf-native/roles.json: the payload version applied (you had not edited it)'),
-      dry.out.trim().split('\n').slice(-6).join(' | ').slice(0, 300));
-    check('it previews the reviewer agent as NOT ON THIS INSTALLATION rather than aborting',
-      dry.out.includes('.claude/agents/reviewer.md: not on this installation (no record) - skipped'),
-      dry.out.trim().split('\n').slice(-6).join(' | ').slice(0, 300));
-    check('and it previews the note about the overrides document',
-      dry.out.includes('note overrides-loop-shape'), dry.out.trim().split('\n').slice(-4).join(' | ').slice(0, 200));
-    // The sixth op, on a project that never touched its own managed region while the payload moved
-    // under it: silent, like the roles.json one. A dialog here would be the update engine asking
-    // the operator about content the engine itself wrote.
-    check('it previews the CHANGED managed CLAUDE.md region as a quiet take-new, with no question',
-      dry.out.includes('CLAUDE.md#aiwf-core: the payload version applied (you had not edited it)')
-      && !/CONFLICT at/.test(dry.out),
-      dry.out.trim().split('\n').filter((l) => l.includes('CLAUDE.md')).join(' | ').slice(0, 300));
+      .every((k) => dry.out.includes(`config key ${k} =`)), why(dry));
+    check('it previews the re-render of roles.json',
+      dry.out.includes('.claude/aiwf-native/roles.json: the payload render written'), why(dry));
+    check('it previews the reviewer agent as NOT ON THIS INSTALLATION rather than creating it',
+      dry.out.includes('.claude/agents/reviewer.md: not on this installation (no record) - skipped'), why(dry));
+    check('and it previews the note about the overrides document', dry.out.includes('note overrides-loop-shape'), why(dry));
+    check('it previews the CHANGED managed CLAUDE.md region as a write, with no question',
+      dry.out.includes('CLAUDE.md#aiwf-core: the payload render written'), why(dry));
 
     const a = update(p, ['--apply'], { payload });
     check('--apply exits 0 with NO dialog and no resolution file at all', a.status === 0, why(a));
     const newRegion = extractRegion(read(at(p, 'CLAUDE.md')), 'aiwf-core');
     check('the region CONTENT is the payload version afterwards, not the aged one',
-      !!newRegion && newRegion.includes(REGION_NOW) && !newRegion.includes(REGION_WAS)
-      && newRegion !== staleRegion,
-      newRegion ? newRegion.length + ' bytes, changed=' + (newRegion !== staleRegion) : 'no region');
-    const bkRegion = bookkeeping(p).managedRegions['CLAUDE.md#aiwf-core'] || {};
-    check('and its bookkeeping hashes exactly what is on disk (upstream == local == sha(region))',
-      !!newRegion && bkRegion.upstream === sha256(newRegion) && bkRegion.local === sha256(newRegion)
-      && bkRegion.override === false,
-      String(bkRegion.upstream).slice(0, 12) + ' / ' + String(bkRegion.local).slice(0, 12)
-      + ' / disk ' + (newRegion ? sha256(newRegion).slice(0, 12) : '-'));
+      !!newRegion && newRegion.includes(REGION_NOW) && !newRegion.includes(REGION_WAS));
+    check('and it is stamped with the payload version', bookkeeping(p).managedRegions['CLAUDE.md#aiwf-core'] === '0.2.0');
     const cfg = readJson(at(p, CONFIG_REL));
     check('the three rows are in the config with the factory 2 / 1 / 1',
       JSON.stringify(cfg.review.plan) === '{"passes":2}' && JSON.stringify(cfg.review.code) === '{"passes":1}'
@@ -1814,12 +1210,8 @@ section('13 - the audit table migration: three silent config keys, two quiet re-
       JSON.stringify(roles.review));
     check('no reviewer agent file was invented for an installation that has none',
       !exists(at(p, '.claude/agents/reviewer.md'))
-      && !Object.prototype.hasOwnProperty.call(bookkeeping(p).managedRegions, '.claude/agents/reviewer.md'));
-    const changes = read(at(p, 'CHANGES_0.1.0-to-0.2.0.md')) || '';
-    check('the CHANGES report says the skipped artifact is not on this installation',
-      changes.includes('.claude/agents/reviewer.md - not on this installation - skipped'),
-      changes.split('\n').filter((l) => l.includes('reviewer.md')).join(' | ').slice(0, 200));
-    check('and it carries the note about the overrides document', changes.includes('overrides-loop-shape'));
+      && !has(bookkeeping(p).managedRegions, '.claude/agents/reviewer.md'));
+    check('the run printed the note text', a.out.includes('note: '), why(a));
   }
 
   // --- a claude-hosted installation: the same migration re-renders the agent -
@@ -1827,20 +1219,18 @@ section('13 - the audit table migration: three silent config keys, two quiet re-
     const p = project('audit-claude');
     check('install exits 0 (claude-hosted Reviewer)', install(p).status === 0);
     check('precondition: the reviewer agent file IS here', exists(at(p, '.claude/agents/reviewer.md')));
-    // The OTHER legitimate region case, kept on purpose: this fixture does NOT age its region, so
-    // op 5 meets a region that is already the payload version. That must pass without a dialog too.
     preTable(p, { ageRegion: false });
     const untouchedRegion = extractRegion(read(at(p, 'CLAUDE.md')), 'aiwf-core');
     const a = update(p, ['--apply'], { payload });
-    check('--apply exits 0 with no dialog here either', a.status === 0, why(a));
-    check('an ALREADY-CURRENT region is left byte-identical, with no dialog',
+    check('--apply exits 0 here too', a.status === 0, why(a));
+    check('an ALREADY-CURRENT region is left byte-identical',
       extractRegion(read(at(p, 'CLAUDE.md')), 'aiwf-core') === untouchedRegion
-      && !/CONFLICT at/.test(a.out), why(a));
+      && a.out.includes('CLAUDE.md#aiwf-core: already current'), why(a));
     check('and the reviewer agent was re-rendered rather than skipped',
-      a.out.includes('.claude/agents/reviewer.md: the payload version applied (you had not edited it)')
-      || a.out.includes('.claude/agents/reviewer.md is already current'), why(a));
-    check('the agent file is still there and still stamped', exists(at(p, '.claude/agents/reviewer.md'))
-      && !!bookkeeping(p).managedRegions['.claude/agents/reviewer.md']);
+      a.out.includes('.claude/agents/reviewer.md: the payload render written')
+      || a.out.includes('.claude/agents/reviewer.md: already current'), why(a));
+    check('the agent file is still there and stamped', exists(at(p, '.claude/agents/reviewer.md'))
+      && bookkeeping(p).managedRegions['.claude/agents/reviewer.md'] === '0.2.0');
   }
 
   // --- the ifRecorded pair, the smallest possible statement of the rule ------
@@ -1849,88 +1239,29 @@ section('13 - the audit table migration: three silent config keys, two quiet re-
       op: 'rerender-managed-region', file: '.claude/agents/reviewer.md', region: null,
       template: 'templates/agents/reviewer.md.tmpl', ...extra,
     }];
-    const answers = baseAnswers({
-      roles: {
-        writer: { model: 'claude-opus-5[1m]', effort: 'high' },
-        reviewer: { engine: 'codex', model: 'codex-atom-2', effort: 'high' },
-        qa: { engine: 'codex', model: 'codex-atom-2', effort: 'medium' },
-        qal: { enabled: false, engine: 'codex', model: 'unset', effort: 'high' },
-      },
-    });
     const withField = makePayload('ifrec-yes', { version: '0.2.0', migrations: [{ id: '0002_ifrec', version: '0.2.0', ops: opFor({ ifRecorded: true }) }] });
     const withoutField = makePayload('ifrec-no', { version: '0.2.0', migrations: [{ id: '0002_ifrec', version: '0.2.0', ops: opFor({}) }] });
 
     const p1 = project('ifrec-yes');
-    install(p1, { answers });
+    install(p1, { answers: codexAnswers() });
     const a1 = update(p1, ['--apply'], { payload: withField });
-    check('ifRecorded:true over an unrecorded artifact -> skipped, exit 0',
-      a1.status === 0 && a1.out.includes('not on this installation (no record) - skipped'), why(a1));
+    check('ifRecorded:true over an unrecorded artifact -> skipped, exit 0, nothing written',
+      a1.status === 0 && a1.out.includes('not on this installation (no record) - skipped')
+      && !exists(at(p1, '.claude/agents/reviewer.md')), why(a1));
 
     const p2 = project('ifrec-no');
-    install(p2, { answers });
+    install(p2, { answers: codexAnswers() });
     const a2 = update(p2, ['--apply'], { payload: withoutField });
-    check('the SAME operation without the field -> the invariant still throws, exit 1',
-      a2.status === 1 && a2.out.includes('is not recorded in _aiwf.managedRegions'), why(a2));
-    check('and that refusal wrote nothing: the project is still at the baseline version',
-      bookkeeping(p2).installedPluginVersion === BASELINE.targetPluginVersion,
-      String(bookkeeping(p2).installedPluginVersion));
-
-    // RECOVERY, and the trap in it: the operation was SKIPPED, so it journalled a null target and
-    // staged nothing of substance. If its stage is then lost AND somebody's file turns up at the
-    // optional path, the resume must NOT hash that file into a fresh local/upstream pair - that
-    // would be this engine adopting a file it never wrote, and the next payload change would then
-    // overwrite it without a dialog. "No record" is the whole answer, whatever is on disk.
-    const p3 = project('ifrec-foreign');
-    install(p3, { answers });
-    const crashed = update(p3, ['--apply'], { payload: withField, env: { PNP_UPDATE_CRASH_AT: '0002_ifrec/0/after-journal-prepared' } });
-    check('crash injection: killed with the skipped operation journalled as prepared -> exit 86',
-      crashed.status === 86 && bookkeeping(p3).migrationJournal
-      && bookkeeping(p3).migrationJournal.state === 'prepared' && bookkeeping(p3).migrationJournal.target === null,
-      `exit ${crashed.status}: journal=${JSON.stringify(bookkeeping(p3).migrationJournal)}`);
-    // The stage is destroyed and a FOREIGN file is planted at the optional path.
-    fs.rmSync(at(p3, STAGE_REL), { recursive: true, force: true });
-    const FOREIGN = '---\nname: reviewer\n---\nSomebody else put this here. It is not ours.\n';
-    fs.mkdirSync(path.dirname(at(p3, '.claude/agents/reviewer.md')), { recursive: true });
-    fs.writeFileSync(at(p3, '.claude/agents/reviewer.md'), FOREIGN, 'utf8');
-    const resumed = update(p3, ['--apply'], { payload: withField });
-    check('the resume completes with the stage gone AND a foreign file at the optional path, exit 0',
-      resumed.status === 0 && bookkeeping(p3).installedPluginVersion === '0.2.0'
-      && bookkeeping(p3).migrationJournal === null, why(resumed));
-    check('the foreign file was NOT touched (byte for byte)',
-      read(at(p3, '.claude/agents/reviewer.md')) === FOREIGN,
-      JSON.stringify(String(read(at(p3, '.claude/agents/reviewer.md'))).slice(0, 60)));
-    check('and NO bookkeeping entry was created for it - the update never adopts a file it did not write',
-      !Object.prototype.hasOwnProperty.call(bookkeeping(p3).managedRegions, '.claude/agents/reviewer.md'),
-      JSON.stringify(Object.keys(bookkeeping(p3).managedRegions)));
-  }
-
-  // --- --resolve after a row changes ----------------------------------------
-  {
-    const p = project('audit-resolve');
-    install(p, { answers: baseAnswers() });
-    // A hand edit inside roles.json is a conflict, and --resolve is the door: take-new brings the
-    // artifact back to what the config (audit table included) really says.
-    fs.writeFileSync(at(p, ROLES_REL), (read(at(p, ROLES_REL)) || '').replace('"passes": 1', '"passes": 7'), 'utf8');
-    const resolutions = resolutionFile('audit-row', { '.claude/aiwf-native/roles.json': { kind: 'conflict', resolution: 'take-new' } });
-    const r = update(p, ['--resolve', '.claude/aiwf-native/roles.json', '--resolution-file', resolutions]);
-    check('--resolve take-new re-renders roles.json from the config, exit 0', r.status === 0, why(r));
-    const roles = readJson(at(p, ROLES_REL));
-    check('and the rows are back to what the config says',
-      roles.review.code.passes === 1 && roles.review.docs.passes === 1, JSON.stringify(roles.review));
-    check('with the bookkeeping clean again',
-      bookkeeping(p).managedRegions['.claude/aiwf-native/roles.json'].override === false);
+    check('the SAME operation without the field -> a render always creates: exit 0, the file is there and stamped',
+      a2.status === 0 && exists(at(p2, '.claude/agents/reviewer.md'))
+      && bookkeeping(p2).managedRegions['.claude/agents/reviewer.md'] === '0.2.0', why(a2));
   }
 }
 
 // ---------------------------------------------------------------------------
-section('14 - supersedes: the ids a release retires reach the CHANGES report, and the word-gate line with them');
+section('14 - a note prints its text, its docRefs and the ids it supersedes');
 {
-  // The REAL note operation of the shipped 0011, replayed as a fixture migration - the same move
-  // section 13 makes with 0004, and for the same reason: a suite that restated the note would be
-  // asserting its own copy. The word-gate sentence below is the authority's wording; this file is
-  // where the SHIPPED text is held to it.
-  const WORD_GATE_LINE = 'If this release introduces a word-gate: check your local rules for '
-    + 'self-initiated dispatch or remediation - a rule written before this gate may contradict it.';
+  // The REAL note of the shipped 0011, replayed: the ids are printed under the note, one per line.
   const RETIRED = [
     'orchestrator-regulation-v2-seed',
     'local-multisession-invariant',
@@ -1940,21 +1271,9 @@ section('14 - supersedes: the ids a release retires reach the CHANGES report, an
   ];
   const shipped = readJson(path.join(PLUGIN_ROOT, 'migrations', '0011_transfer-surface', 'ops.json'));
   const shippedNote = shipped && (shipped.operations || []).find((o) => o.op === 'note');
-  check('the shipped 0011 is readable and carries a note operation', !!shippedNote,
-    shipped ? `${(shipped.operations || []).length} ops` : 'unreadable');
-  check('and that note declares exactly the five generic ids this release retires',
-    !!shippedNote && Array.isArray(shippedNote.supersedes)
-    && JSON.stringify(shippedNote.supersedes) === JSON.stringify(RETIRED),
-    JSON.stringify(shippedNote && shippedNote.supersedes));
-  // The line is asserted on the SHIPPED op here and on the GENERATED file below. Both are needed:
-  // this one catches a payload that never carried it, the one below catches an assembler that
-  // carries it nowhere.
-  check('and its text carries the word-gate line verbatim',
-    !!shippedNote && typeof shippedNote.text === 'string' && shippedNote.text.includes(WORD_GATE_LINE),
-    shippedNote ? `${String(shippedNote.text).length} chars` : 'no note');
-
+  check('the shipped 0011 carries a note operation declaring the five retired ids',
+    !!shippedNote && JSON.stringify(shippedNote.supersedes) === JSON.stringify(RETIRED), JSON.stringify(shippedNote && shippedNote.supersedes));
   if (shippedNote) {
-    // --- declared: every id is printed, under its own note ------------------
     const withIds = makePayload('supersedes-yes', {
       version: '0.2.0', migrations: [{ id: '0002_supersedes', version: '0.2.0', ops: [shippedNote] }],
     });
@@ -1963,134 +1282,57 @@ section('14 - supersedes: the ids a release retires reach the CHANGES report, an
     const artifactsBefore = Object.keys(bookkeeping(p).managedRegions).sort().join(',');
     const a = update(p, ['--apply'], { payload: withIds });
     check('--apply of a note-only migration exits 0', a.status === 0, why(a));
-    const changes = read(at(p, 'CHANGES_0.1.0-to-0.2.0.md')) || '';
-    check('the CHANGES report was written', changes.length > 0);
-    const missing = RETIRED.filter((id) => !changes.includes(`  - Supersedes: ${id}`));
-    check('it prints one "Supersedes: <id>" line per declared id, indented under the note',
-      missing.length === 0, missing.length ? `missing ${JSON.stringify(missing)}` : `${RETIRED.length} ids`);
-    check('the lines sit under the note that carries them, in the "Review these sections" block',
-      changes.indexOf('## Review these sections') !== -1
-      && changes.indexOf('## Review these sections') < changes.indexOf('Supersedes: ' + RETIRED[0])
-      && changes.indexOf(shippedNote.id) < changes.indexOf('Supersedes: ' + RETIRED[0]),
-      `block@${changes.indexOf('## Review these sections')} note@${changes.indexOf(shippedNote.id)} first-id@${changes.indexOf('Supersedes: ' + RETIRED[0])}`);
-    // The word-gate line, asserted against the file the engine really generated - not against the
-    // op it was assembled from. This is the only surface a consumer reads it on.
-    check('and the GENERATED report carries the word-gate line verbatim',
-      changes.includes(WORD_GATE_LINE),
-      changes.split('\n').filter((l) => l.includes('word-gate')).join(' | ').slice(0, 160) || 'not present');
+    check('the note text is printed', a.out.includes(`note: ${shippedNote.text.split('\n')[0]}`), why(a));
+    const missing = RETIRED.filter((id) => !a.out.includes(`supersedes: ${id}`));
+    check('one "supersedes: <id>" line per declared id', missing.length === 0, missing.length ? `missing ${JSON.stringify(missing)}` : `${RETIRED.length} ids`);
     check('the note applied nothing: the managed set is untouched, only the version stamps moved',
       Object.keys(bookkeeping(p).managedRegions).sort().join(',') === artifactsBefore
-      && bookkeeping(p).installedPluginVersion === '0.2.0',
-      `${Object.keys(bookkeeping(p).managedRegions).sort().join(',')} / ${bookkeeping(p).installedPluginVersion}`);
-
-    // --- NOT declared: the flip. The same note without the field prints no line at all ----------
-    const bare = { ...shippedNote };
-    delete bare.supersedes;
-    const withoutIds = makePayload('supersedes-no', {
-      version: '0.2.0', migrations: [{ id: '0002_supersedes', version: '0.2.0', ops: [bare] }],
-    });
-    const p2 = project('supersedes-no');
-    check('install exits 0 (flip side)', install(p2).status === 0);
-    const a2 = update(p2, ['--apply'], { payload: withoutIds });
-    check('--apply exits 0 without the field', a2.status === 0, why(a2));
-    const changes2 = read(at(p2, 'CHANGES_0.1.0-to-0.2.0.md')) || '';
-    check('the same note without supersedes still reaches the report', changes2.includes(bare.id));
-    // The LINE form, not the substring: the note's own text explains what a `Supersedes:` line is,
-    // so a bare `includes` would match the prose that describes the feature and this flip would fail
-    // for the one reason that proves nothing.
-    const supersedesLines = (text) => text.split('\n').filter((l) => /^\s*- Supersedes: /.test(l));
-    check('and prints NO Supersedes line at all (the field is optional, not defaulted)',
-      supersedesLines(changes2).length === 0, supersedesLines(changes2).join(' | ').slice(0, 160) || 'none');
-    check('the control on that predicate: the declared run DID produce exactly five such lines',
-      supersedesLines(changes).length === RETIRED.length, `${supersedesLines(changes).length} lines`);
+      && bookkeeping(p).installedPluginVersion === '0.2.0');
   }
 }
 
 // ---------------------------------------------------------------------------
-section('15 - createIfAbsent: an unrecorded artifact is CREATED on empty ground, REFUSED over a foreign file, and the field is invisible where a record exists');
+section('15 - createIfAbsent: accepted, and nothing it would change - a render always creates and always overwrites');
 {
-  // The subject is `.claude/agents/reviewer.md` for exactly the reason section 13 uses it: it is the
-  // one shipped artifact whose ABSENCE is a legitimate configuration, so a codex-hosted install is a
-  // project with no record and no file, and a claude-hosted one is a project with both. Building the
-  // two faces out of the same artifact keeps this section from inventing a managed surface of its
-  // own - and the field under test is about the RECORD, not about which artifact carries it.
   const opFor = (extra) => [{
     op: 'rerender-managed-region', file: '.claude/agents/reviewer.md', region: null,
     template: 'templates/agents/reviewer.md.tmpl', ...extra,
   }];
-  const codexAnswers = baseAnswers({
-    roles: {
-      writer: { model: 'claude-opus-5[1m]', effort: 'high' },
-      reviewer: { engine: 'codex', model: 'codex-atom-2', effort: 'high' },
-      qa: { engine: 'codex', model: 'codex-atom-2', effort: 'medium' },
-      qal: { enabled: false, engine: 'codex', model: 'unset', effort: 'high' },
-    },
-  });
-  // The payload's reviewer template really moves, so the face-3 comparison is about a re-render that
-  // APPLIED something rather than about an artifact that was already current - a pair of no-ops is
-  // byte-identical for a reason that has nothing to do with the field under test.
-  const moveReviewerTemplate = (dir) => fs.appendFileSync(
-    at(dir, 'templates/agents/reviewer.md.tmpl'), '\nA line the next payload version added.\n', 'utf8');
+  const moveReviewerTemplate = (dir) => fs.appendFileSync(at(dir, 'templates/agents/reviewer.md.tmpl'), `\n${PAYLOAD_LINE}\n`, 'utf8');
   const withCreate = makePayload('create-yes', {
-    version: '0.2.0', migrations: [{ id: '0002_create', version: '0.2.0', ops: opFor({ createIfAbsent: true }) }],
-    tweak: moveReviewerTemplate,
+    version: '0.2.0', migrations: [{ id: '0002_create', version: '0.2.0', ops: opFor({ createIfAbsent: true }) }], tweak: moveReviewerTemplate,
   });
   const withoutField = makePayload('create-plain', {
-    version: '0.2.0', migrations: [{ id: '0002_create', version: '0.2.0', ops: opFor({}) }],
-    tweak: moveReviewerTemplate,
+    version: '0.2.0', migrations: [{ id: '0002_create', version: '0.2.0', ops: opFor({}) }], tweak: moveReviewerTemplate,
   });
   const bothFields = makePayload('create-both', {
-    version: '0.2.0',
-    migrations: [{ id: '0002_create', version: '0.2.0', ops: opFor({ ifRecorded: true, createIfAbsent: true }) }],
+    version: '0.2.0', migrations: [{ id: '0002_create', version: '0.2.0', ops: opFor({ ifRecorded: true, createIfAbsent: true }) }],
   });
-  // THE refusal sentence, held here in one constant and asserted wherever it can be raised. It names
-  // the only door that exists: `/pnp:setup --adopt` refuses a project that already has an
-  // installation, so a hint to adopt would point at a locked one.
-  const REFUSAL = 'this installation has no record of it but a file is standing at that path - an update never '
-    + 'adopts a file it did not write; move it aside or remove it, then run the update again';
-  const FOREIGN = '---\nname: reviewer\n---\nSomebody else put this here. It is not ours.\n';
+  const FOREIGN = '---\nname: reviewer\n---\nSomebody else put this here.\n';
 
-  // --- face 1: no record, no file -> rendered, stamped, and named in CHANGES ------------------
+  // --- face 1: no record, no file -> created and stamped ------------------------------------
   {
     const p = project('create-empty');
-    check('install exits 0 (codex-hosted: no reviewer agent, no record)', install(p, { answers: codexAnswers }).status === 0);
-    check('precondition: neither the file nor a record for it is there',
-      !exists(at(p, '.claude/agents/reviewer.md'))
-      && !Object.prototype.hasOwnProperty.call(bookkeeping(p).managedRegions, '.claude/agents/reviewer.md'),
-      JSON.stringify(Object.keys(bookkeeping(p).managedRegions)));
+    check('install exits 0 (codex-hosted: no reviewer agent, no record)', install(p, { answers: codexAnswers() }).status === 0);
     const a = update(p, ['--apply'], { payload: withCreate });
-    check('createIfAbsent over empty ground: exit 0 and the summary says it was created',
-      a.status === 0 && a.out.includes('.claude/agents/reviewer.md: created (no record, no file) - rendered and recorded'), why(a));
-    check('the file really exists afterwards', exists(at(p, '.claude/agents/reviewer.md')));
-    const rec = bookkeeping(p).managedRegions['.claude/agents/reviewer.md'] || {};
-    const onDisk = read(at(p, '.claude/agents/reviewer.md'));
-    check('and its bookkeeping stamps what is on disk: upstream == local == sha(file), override false',
-      !!onDisk && rec.upstream === sha256(onDisk) && rec.local === sha256(onDisk) && rec.override === false,
-      `${String(rec.upstream).slice(0, 12)} / ${String(rec.local).slice(0, 12)} / disk ${onDisk ? sha256(onDisk).slice(0, 12) : '-'}`);
-    const changes = read(at(p, 'CHANGES_0.1.0-to-0.2.0.md')) || '';
-    check('the CHANGES report labels it with the face it took, not with "payload-current"',
-      changes.includes('`rerender-managed-region` .claude/agents/reviewer.md - created (no record, no file)'),
-      changes.split('\n').filter((l) => l.includes('reviewer.md')).join(' | ').slice(0, 200) || 'no line about it');
+    check('createIfAbsent over empty ground: exit 0, created',
+      a.status === 0 && a.out.includes('.claude/agents/reviewer.md: created from the payload render'), why(a));
+    check('the file exists and is stamped with the payload version',
+      exists(at(p, '.claude/agents/reviewer.md')) && bookkeeping(p).managedRegions['.claude/agents/reviewer.md'] === '0.2.0');
   }
-
-  // --- face 2: no record, but a FOREIGN file is standing there -> refused, nothing touched ----
+  // --- face 2: no record, a FOREIGN file -> overwritten, named, no question ------------------
   {
     const p = project('create-foreign');
-    check('install exits 0 (codex-hosted again)', install(p, { answers: codexAnswers }).status === 0);
+    check('install exits 0 (codex-hosted again)', install(p, { answers: codexAnswers() }).status === 0);
     fs.mkdirSync(path.dirname(at(p, '.claude/agents/reviewer.md')), { recursive: true });
     fs.writeFileSync(at(p, '.claude/agents/reviewer.md'), FOREIGN, 'utf8');
     const a = update(p, ['--apply'], { payload: withCreate });
-    check('createIfAbsent over a foreign file REFUSES (exit 1), naming the only door that exists',
-      a.status === 1 && a.out.includes(REFUSAL), why(a));
-    check('and the foreign file was not touched, byte for byte',
-      read(at(p, '.claude/agents/reviewer.md')) === FOREIGN,
-      JSON.stringify(String(read(at(p, '.claude/agents/reviewer.md'))).slice(0, 60)));
-    check('the refusal wrote nothing: no record for it, and the project is still at the baseline version',
-      !Object.prototype.hasOwnProperty.call(bookkeeping(p).managedRegions, '.claude/agents/reviewer.md')
-      && bookkeeping(p).installedPluginVersion === BASELINE.targetPluginVersion,
-      `${String(bookkeeping(p).installedPluginVersion)} / ${JSON.stringify(Object.keys(bookkeeping(p).managedRegions))}`);
+    check('a foreign file at the target is OVERWRITTEN (exit 0), and the summary says it had no record',
+      a.status === 0 && a.out.includes('.claude/agents/reviewer.md: overwritten with the payload render (this installation had no record of it)'), why(a));
+    const text = read(at(p, '.claude/agents/reviewer.md')) || '';
+    check('the file is the render now, and it is stamped', !text.includes('Somebody else') && text.includes(PAYLOAD_LINE)
+      && bookkeeping(p).managedRegions['.claude/agents/reviewer.md'] === '0.2.0');
   }
-
   // --- face 3: a record exists -> the field is invisible --------------------------------------
   {
     const withIt = project('create-recorded-yes');
@@ -2102,78 +1344,47 @@ section('15 - createIfAbsent: an unrecorded artifact is CREATED on empty ground,
     check('both runs exit 0', a1.status === 0 && a2.status === 0, why(a1.status === 0 ? a2 : a1));
     const f1 = read(at(withIt, '.claude/agents/reviewer.md'));
     const f2 = read(at(without, '.claude/agents/reviewer.md'));
-    check('precondition: the re-render really applied something (the payload template moved)',
-      !!f1 && f1.includes('A line the next payload version added.'), f1 ? `${f1.length} bytes` : 'no file');
-    check('with the field and without it, the artifact is byte-identical', f1 !== null && f1 === f2,
-      `${f1 ? sha256(f1).slice(0, 12) : '-'} vs ${f2 ? sha256(f2).slice(0, 12) : '-'}`);
-    const r1 = bookkeeping(withIt).managedRegions['.claude/agents/reviewer.md'];
-    const r2 = bookkeeping(without).managedRegions['.claude/agents/reviewer.md'];
-    check('and so is its bookkeeping record', JSON.stringify(r1) === JSON.stringify(r2), `${JSON.stringify(r1)} vs ${JSON.stringify(r2)}`);
+    check('with the field and without it, the artifact is the same render (root normalised)',
+      f1 !== null && f2 !== null && f1.includes(PAYLOAD_LINE)
+      && f1.split(withIt).join('<r>').split(withIt.split(path.sep).join('\\')).join('<r>')
+        === f2.split(without).join('<r>').split(without.split(path.sep).join('\\')).join('<r>'));
+    check('and so is its bookkeeping record',
+      bookkeeping(withIt).managedRegions['.claude/agents/reviewer.md'] === bookkeeping(without).managedRegions['.claude/agents/reviewer.md']);
     check('the summary is the ordinary re-render, with no line about the field at all',
-      a1.out.includes('.claude/agents/reviewer.md: the payload version applied (you had not edited it)')
-      && !/createIfAbsent/i.test(a1.out) && !a1.out.includes('created (no record, no file)'), why(a1));
-    // The discriminating control for face 1's label: the same op over a RECORDED artifact reaches
-    // CHANGES as `payload-current`, so "created (no record, no file)" up there is the face and not
-    // the op type printing a constant.
-    const changes = read(at(withIt, 'CHANGES_0.1.0-to-0.2.0.md')) || '';
-    check('and CHANGES labels it payload-current, not created',
-      changes.includes('`rerender-managed-region` .claude/agents/reviewer.md - payload-current')
-      && !changes.includes('created (no record, no file)'),
-      changes.split('\n').filter((l) => l.includes('reviewer.md')).join(' | ').slice(0, 200) || 'no line about it');
+      a1.out.includes('.claude/agents/reviewer.md: the payload render written') && !/createIfAbsent/i.test(a1.out), why(a1));
   }
-
-  // --- face 4: the two fields together are a VALIDATOR refusal --------------------------------
+  // --- face 4: the two fields together are still a VALIDATOR refusal ---------------------------
   {
     const MUTUAL = 'rerender-managed-region: ifRecorded and createIfAbsent are mutually exclusive '
       + '(skip versus create/refuse for an unrecorded artifact) - carry one of them';
     const p = project('create-both');
-    check('install exits 0', install(p, { answers: codexAnswers }).status === 0);
+    check('install exits 0', install(p, { answers: codexAnswers() }).status === 0);
     const before = snapshot(p);
     const a = update(p, ['--apply'], { payload: bothFields });
     check('an op carrying BOTH fields is refused by the payload validator (exit 1), with the literal message',
       a.status === 1 && a.out.includes(MUTUAL), why(a));
-    check('and that refusal wrote nothing at all', diffSnapshots(before, snapshot(p)).length === 0,
-      diffSnapshots(before, snapshot(p)).join(', '));
-
-    // PRESENCE, not value. Each of these behaves identically to carrying one field, which is
-    // exactly why it must not pass: the op still states both answers, and the edit that flips a
-    // false to a true would turn a legal payload into an undefined one with nobody reviewing the
-    // combination.
+    check('and that refusal wrote nothing at all', diffSnapshots(before, snapshot(p)).length === 0, diffSnapshots(before, snapshot(p)).join(', '));
     for (const [label, extra] of [
       ['ifRecorded:false + createIfAbsent:true', { ifRecorded: false, createIfAbsent: true }],
       ['ifRecorded:true + createIfAbsent:false', { ifRecorded: true, createIfAbsent: false }],
     ]) {
-      const payload = makePayload(`create-both-${seq}`, {
-        version: '0.2.0', migrations: [{ id: '0002_create', version: '0.2.0', ops: opFor(extra) }],
-      });
+      const payload = makePayload(`create-both-${seq}`, { version: '0.2.0', migrations: [{ id: '0002_create', version: '0.2.0', ops: opFor(extra) }] });
       const p2 = project(`create-both-${seq}`);
-      check(`install exits 0 (${label})`, install(p2, { answers: codexAnswers }).status === 0);
+      check(`install exits 0 (${label})`, install(p2, { answers: codexAnswers() }).status === 0);
       const before2 = snapshot(p2);
       const r = update(p2, ['--apply'], { payload });
       check(`BOTH fields PRESENT is refused whatever the values: ${label} (exit 1, the literal message)`,
         r.status === 1 && r.out.includes(MUTUAL), why(r));
-      check(`and ${label} wrote nothing at all`, diffSnapshots(before2, snapshot(p2)).length === 0,
-        diffSnapshots(before2, snapshot(p2)).join(', '));
+      check(`and ${label} wrote nothing at all`, diffSnapshots(before2, snapshot(p2)).length === 0, diffSnapshots(before2, snapshot(p2)).join(', '));
     }
   }
-
-  // --- face 5: the field is defined for WHOLE FILES only --------------------------------------
+  // --- face 5: the field on a REGION op is still a validator refusal ---------------------------
   {
-    // A region-scoped creation has no subject: the whole point of the field is that no file is
-    // there, and a region is a span INSIDE a file. There is no defined splice for "insert these
-    // markers into a file that does not exist", so the payload is refused rather than left to
-    // whatever the writer would have done with it.
     const WHOLE_FILE_ONLY = 'rerender-managed-region: createIfAbsent applies to whole-file artifacts only '
       + '(region must be null) - a region cannot be created into a file that does not exist.';
     const regionCreate = makePayload('create-region', {
       version: '0.2.0',
-      migrations: [{
-        id: '0002_create', version: '0.2.0',
-        ops: [{
-          op: 'rerender-managed-region', file: 'CLAUDE.md', region: 'aiwf-core',
-          template: 'templates/CLAUDE.md.tmpl#aiwf-core', createIfAbsent: true,
-        }],
-      }],
+      migrations: [{ id: '0002_create', version: '0.2.0', ops: [{ op: 'rerender-managed-region', file: 'CLAUDE.md', region: 'aiwf-core', template: 'templates/CLAUDE.md.tmpl#aiwf-core', createIfAbsent: true }] }],
     });
     const p = project('create-region');
     check('install exits 0', install(p).status === 0);
@@ -2181,369 +1392,62 @@ section('15 - createIfAbsent: an unrecorded artifact is CREATED on empty ground,
     const a = update(p, ['--apply'], { payload: regionCreate });
     check('createIfAbsent on a REGION op is refused by the payload validator (exit 1), with the literal message',
       a.status === 1 && a.out.includes(WHOLE_FILE_ONLY), why(a));
-    check('and that refusal wrote nothing at all either', diffSnapshots(before, snapshot(p)).length === 0,
-      diffSnapshots(before, snapshot(p)).join(', '));
+    check('and that refusal wrote nothing at all either', diffSnapshots(before, snapshot(p)).length === 0, diffSnapshots(before, snapshot(p)).join(', '));
   }
-
-  // --- face 6: THE MATRIX OF AN INTERRUPTED CREATION. A creation is journalled before it is
-  // written, so the resume has to decide what the path holds now. The ruling that decides it: the
-  // artifact lives in the PLUGIN'S OWN FOLDER, so content that IS the render is this engine's own
-  // write - there is nothing of anybody else's to lose - while content that DIFFERS was never
-  // written by us and is refused rather than adopted or overwritten. All three rows start from the
-  // same real crash, at the same injection point.
-  {
-    const crashAt = { PNP_UPDATE_CRASH_AT: '0002_create/0/after-journal-prepared' };
-    const crashed = (p) => {
-      const r = update(p, ['--apply'], { payload: withCreate, env: crashAt });
-      const j = bookkeeping(p).migrationJournal;
-      return { r, j, staged: read(at(p, `${STAGE_REL}/0002_create-0/content`)) };
-    };
-
-    // (a) nothing at the path: the ordinary resume, whose write is the no-clobber publish.
-    {
-      const p = project('create-crash-absent');
-      check('install exits 0 (codex-hosted)', install(p, { answers: codexAnswers }).status === 0);
-      const { r, j, staged } = crashed(p);
-      check('crash injection: journalled as PREPARED with nothing written, and the stage holds the render',
-        r.status === 86 && j && j.state === 'prepared' && j.preHash === null
-        && !exists(at(p, '.claude/agents/reviewer.md')) && staged !== null && staged.length > 0,
-        `exit ${r.status}: journal=${JSON.stringify(j)}`);
-      const resumed = update(p, ['--apply'], { payload: withCreate });
-      check('an ABSENT target resumes and completes (exit 0)',
-        resumed.status === 0 && bookkeeping(p).installedPluginVersion === '0.2.0'
-        && bookkeeping(p).migrationJournal === null, why(resumed));
-      const onDisk = read(at(p, '.claude/agents/reviewer.md'));
-      const rec = bookkeeping(p).managedRegions['.claude/agents/reviewer.md'] || {};
-      check('the file is there, is the render, and is stamped for what is on disk',
-        onDisk === staged && rec.local === sha256(String(onDisk))
-        && rec.upstream === sha256(String(onDisk)) && rec.override === false,
-        JSON.stringify(rec).slice(0, 120));
-      check('and the replay left no publish temporary behind',
-        fs.readdirSync(path.dirname(at(p, '.claude/agents/reviewer.md'))).filter((n) => n.includes('.pnp-new-')).length === 0,
-        fs.readdirSync(path.dirname(at(p, '.claude/agents/reviewer.md'))).join(', ').slice(0, 120));
-    }
-
-    // (b) bytes EQUAL to the render, taken from the stage the interrupted run left - so they are the
-    // real render rather than a copy this suite composed. Ours by the ruling: stamped, not refused.
-    {
-      const p = project('create-crash-equal');
-      check('install exits 0 (codex-hosted)', install(p, { answers: codexAnswers }).status === 0);
-      const { staged } = crashed(p);
-      fs.mkdirSync(path.dirname(at(p, '.claude/agents/reviewer.md')), { recursive: true });
-      fs.writeFileSync(at(p, '.claude/agents/reviewer.md'), String(staged), 'utf8');
-      const resumed = update(p, ['--apply'], { payload: withCreate });
-      check('EQUAL bytes are OURS: the resume completes (exit 0), with no refusal',
-        resumed.status === 0 && !resumed.out.includes(REFUSAL)
-        && bookkeeping(p).installedPluginVersion === '0.2.0'
-        && bookkeeping(p).migrationJournal === null, why(resumed));
-      check('the file was not rewritten, byte for byte',
-        read(at(p, '.claude/agents/reviewer.md')) === String(staged),
-        `${String(staged).length} bytes`);
-      const rec = bookkeeping(p).managedRegions['.claude/agents/reviewer.md'] || {};
-      check('and it is stamped for what is on disk', rec.local === sha256(String(staged))
-        && rec.upstream === sha256(String(staged)) && rec.override === false, JSON.stringify(rec).slice(0, 120));
-    }
-
-    // (c) a DIFFERING file: never ours, so neither adopted nor overwritten.
-    {
-      const p = project('create-crash-foreign');
-      check('install exits 0 (codex-hosted)', install(p, { answers: codexAnswers }).status === 0);
-      crashed(p);
-      fs.mkdirSync(path.dirname(at(p, '.claude/agents/reviewer.md')), { recursive: true });
-      fs.writeFileSync(at(p, '.claude/agents/reviewer.md'), FOREIGN, 'utf8');
-      const resumed = update(p, ['--apply'], { payload: withCreate });
-      check('a DIFFERING file is REFUSED on resume (exit 1)',
-        resumed.status === 1 && resumed.out.includes(REFUSAL), why(resumed));
-      check('the foreign file was not touched, byte for byte',
-        read(at(p, '.claude/agents/reviewer.md')) === FOREIGN,
-        JSON.stringify(String(read(at(p, '.claude/agents/reviewer.md'))).slice(0, 60)));
-      check('no record was created for it, and the project is still at the baseline version',
-        !Object.prototype.hasOwnProperty.call(bookkeeping(p).managedRegions, '.claude/agents/reviewer.md')
-        && bookkeeping(p).installedPluginVersion === BASELINE.targetPluginVersion,
-        `${String(bookkeeping(p).installedPluginVersion)} / ${JSON.stringify(Object.keys(bookkeeping(p).managedRegions))}`);
-      check('and no dialog was raised: the resume never reached the conflict vocabulary',
-        !/CONFLICT at/.test(resumed.out), why(resumed));
-    }
-  }
-
-  // --- face 7: THE PLANNING ARM of the same rule, without any crash. A file that IS the render at
-  // a path this installation has no record of is ours; the operation is planned, nothing is
-  // written, and the artifact ends recorded. (The differing half of this arm is face 2.)
-  {
-    const p = project('create-plan-equal');
-    check('install exits 0 (codex-hosted)', install(p, { answers: codexAnswers }).status === 0);
-    // The render, obtained from a real run rather than composed here: a second project takes the
-    // same migration to completion and its artifact is the payload's own bytes.
-    const donor = project('create-plan-equal-donor');
-    install(donor, { answers: codexAnswers });
-    update(donor, ['--apply'], { payload: withCreate });
-    const render = read(at(donor, '.claude/agents/reviewer.md'));
-    check('precondition: the donor run produced the render', render !== null && render.length > 0,
-      render ? `${render.length} bytes` : 'no file');
-    fs.mkdirSync(path.dirname(at(p, '.claude/agents/reviewer.md')), { recursive: true });
-    fs.writeFileSync(at(p, '.claude/agents/reviewer.md'), String(render), 'utf8');
-    const a = update(p, ['--apply'], { payload: withCreate });
-    check('a file that IS the render is planned as a creation and the run completes (exit 0)',
-      a.status === 0 && !a.out.includes(REFUSAL)
-      && bookkeeping(p).installedPluginVersion === '0.2.0', why(a));
-    check('nothing was written over it - byte for byte what was planted',
-      read(at(p, '.claude/agents/reviewer.md')) === String(render), `${String(render).length} bytes`);
-    const rec = bookkeeping(p).managedRegions['.claude/agents/reviewer.md'] || {};
-    check('and it is recorded, clean', rec.local === sha256(String(render))
-      && rec.upstream === sha256(String(render)) && rec.override === false, JSON.stringify(rec).slice(0, 120));
-  }
-
-  // --- face 8: the write primitives at their own entrypoints, and the flag that has to reach them.
-  // There is no crash point between the guard and the write, so the primitive is exercised directly
-  // rather than through a race nobody can schedule.
-  {
-    const dir = project('create-writeguard');
-    const content = 'the render we are about to write\n';
-
-    // The early guard: the message, on the two contents it has to tell apart.
-    const differing = at(dir, 'guard-differs.md');
-    fs.writeFileSync(differing, 'somebody else was here first\n', 'utf8');
-    let thrown = null;
-    try { assertNoForeignFileAtCreationTarget(differing, content, 'artifact.md'); } catch (e) { thrown = e; }
-    check('the early guard REFUSES a DIFFERING file',
-      thrown instanceof UpdateError && thrown.message.includes(REFUSAL),
-      thrown ? String(thrown.message).slice(0, 120) : 'nothing was thrown');
-    const same = at(dir, 'guard-same.md');
-    fs.writeFileSync(same, content, 'utf8');
-    let passed = null;
-    try { assertNoForeignFileAtCreationTarget(same, content, 'artifact.md'); } catch (e) { passed = e; }
-    check('and PASSES a file that is the render (the folder is the plugin\'s - those bytes are ours)',
-      passed === null, passed ? String(passed.message).slice(0, 120) : 'no throw');
-
-    // The publish: the guarantee. It is only ever called on an absent target, so an EEXIST here is
-    // the race - and `link` cannot tell identical from differing, which is why the caller decides
-    // equality first.
-    let published = null;
-    try { writeCreatedTarget(differing, content, 'artifact.md'); } catch (e) { published = e; }
-    check('the no-clobber publish REFUSES at the syscall when anything is already there',
-      published instanceof UpdateError && published.message.includes(REFUSAL),
-      published ? String(published.message).slice(0, 120) : 'nothing was thrown');
-    check('with the pre-placed bytes intact', read(differing) === 'somebody else was here first\n',
-      JSON.stringify(String(read(differing)).slice(0, 60)));
-    check('and no publish temporary left behind',
-      fs.readdirSync(dir).filter((n) => n.includes('.pnp-new-')).length === 0,
-      fs.readdirSync(dir).join(', ').slice(0, 120));
-    const fresh = at(dir, 'fresh.md');
-    writeCreatedTarget(fresh, content, 'artifact.md');
-    check('and it writes the render whole on empty ground', read(fresh) === content,
-      JSON.stringify(String(read(fresh)).slice(0, 60)));
-
-    // ITEM 1, structurally: `created` has to survive the crash that makes a replay necessary. The
-    // stage metadata is read back from the fixture project of the matrix above and the flag is
-    // asserted there - a stage written without it would rebuild a plan that takes the clobbering
-    // write path, and no injection point sits between the recovery check and the write to prove it
-    // any other way.
-    const p = project('create-stage-meta');
-    install(p, { answers: codexAnswers });
-    update(p, ['--apply'], { payload: withCreate, env: { PNP_UPDATE_CRASH_AT: '0002_create/0/after-journal-prepared' } });
-    const meta = readJson(at(p, `${STAGE_REL}/0002_create-0/stage.json`));
-    check('the stage of an interrupted creation records created: true, so the replay can route the write',
-      !!meta && meta.created === true, JSON.stringify(meta).slice(0, 160));
-    check('and it is the creation\'s own stage (null preHash, the artifact as target)',
-      !!meta && meta.preHash === null && meta.target === '.claude/agents/reviewer.md',
-      JSON.stringify(meta).slice(0, 160));
-  }
-
-  // --- face 9b: THE PRODUCTION DISPATCH. Every other face here proves a PROPERTY that survives
-  // the dispatch being deleted: an absent target looks the same whichever write puts the render
-  // there, an equal target is untouched either way, a differing one is refused by the guard before
-  // any write, and face 8 calls the primitive itself. So this one proves the WIRING - that
-  // `applyTarget` really routes a creation to `writeCreatedTarget` - and it proves it by standing
-  // in the one place only that path reaches.
-  //
-  // `fs.linkSync` is patched on the default export of `node:fs`, which is exactly the binding
-  // production calls: `scripts/update/migrate.mjs:81` is `import fs from 'node:fs'` and the
-  // primitive calls `fs.linkSync(tmp, absFile)` - a property lookup on that same module object at
-  // call time, so a property replaced here is the function that runs there. The wrapper plants a
-  // DIFFERING file at the target at the instant of publishing - the race no crash point can
-  // schedule - and then calls the original, so the refusal comes from the syscall rather than from
-  // any check this suite arranged.
-  //
-  // `runUpdate` is invoked with the shape the CLI uses (`aiwf-update.mjs:198`): pluginRoot,
-  // projectRoot, resolve, log. The resolver THROWS if it is ever consulted - nothing in a creation
-  // may raise a dialog, so a resolver that answered would be hiding exactly that defect.
-  {
-    const p = project('create-dispatch');
-    check('install exits 0 (codex-hosted: no reviewer agent, no record)',
-      install(p, { answers: codexAnswers }).status === 0);
-    const target = at(p, '.claude/agents/reviewer.md');
-    const PLANTED = 'a file that appeared between the guard and the link\n';
-    const realLinkSync = fs.linkSync;
-    let reachedFor = null;
-    let asked = null;
-    let thrown = null;
-    try {
-      fs.linkSync = function patchedLinkSync(src, dest) {
-        if (reachedFor === null && path.resolve(String(dest)) === path.resolve(target)) {
-          reachedFor = String(dest);
-          fs.mkdirSync(path.dirname(target), { recursive: true });
-          fs.writeFileSync(target, PLANTED, 'utf8');
-        }
-        return realLinkSync.call(fs, src, dest);
-      };
-      runUpdate({
-        pluginRoot: withCreate,
-        projectRoot: p,
-        resolve: (address, kind) => { asked = `${kind} at ${address}`; throw new Error(`the resolver was consulted: ${asked}`); },
-        log: () => {},
-      });
-    } catch (e) {
-      thrown = e;
-    } finally {
-      fs.linkSync = realLinkSync;
-    }
-    check('production reached the no-clobber publish for the creation target (the dispatch is wired)',
-      reachedFor !== null, reachedFor === null ? 'fs.linkSync was never called for it' : reachedFor);
-    check('and nothing asked a question on the way (no dialog in a creation)', asked === null, String(asked));
-    check('the run FAILED with the standard refusal, raised by the syscall',
-      thrown instanceof UpdateError && String(thrown.message).includes(REFUSAL),
-      thrown ? String(thrown.message).slice(0, 140) : 'nothing was thrown');
-    check('the file that appeared is unchanged, byte for byte', read(target) === PLANTED,
-      JSON.stringify(String(read(target)).slice(0, 60)));
-    check('no publish temporary was left beside it',
-      fs.readdirSync(path.dirname(target)).filter((n) => n.includes('.pnp-new-')).length === 0,
-      fs.readdirSync(path.dirname(target)).join(', ').slice(0, 120));
-    check('no bookkeeping record was created for the key',
-      !Object.prototype.hasOwnProperty.call(bookkeeping(p).managedRegions, '.claude/agents/reviewer.md'),
-      JSON.stringify(Object.keys(bookkeeping(p).managedRegions)));
-    // The journal is left at `prepared`, and that is the right place to leave it: the operation was
-    // journalled before the write and the write never happened, so the run is resumable exactly
-    // where it stopped. The operator moves the file aside and re-runs; recovery then finds nothing
-    // at the path, replays the stage, and the publish writes the render.
-    const j = bookkeeping(p).migrationJournal;
-    check('and the journal is left at "prepared" - resumable once the file is moved aside',
-      !!j && j.state === 'prepared' && j.preHash === null && j.target === '.claude/agents/reviewer.md',
-      JSON.stringify(j));
-    check('the project is still at the baseline version',
-      bookkeeping(p).installedPluginVersion === BASELINE.targetPluginVersion,
-      String(bookkeeping(p).installedPluginVersion));
-  }
-
-  // --- face 10: the SHIPPED note of 0012, held to what it may tell an operator to do. A note is
-  // the only text of a migration that reaches the operator's CHANGES report, so a door named wrongly
-  // there is named wrongly in the one place it is read. `/pnp:setup --adopt` bootstraps a project
-  // with NO installation and is REFUSED on one that has (generate.mjs), so a project running
-  // /pnp:update cannot take it - the note must say what that operator can actually do.
+  // --- face 10: the SHIPPED note of 0012 recommends no --adopt ---------------------------------
   {
     const shipped = readJson(path.join(PLUGIN_ROOT, 'migrations', '0012_orchestrator-role', 'ops.json'));
     const note = shipped && (shipped.operations || []).find((o) => o.op === 'note');
-    check('the shipped 0012 carries a note operation', !!note,
-      shipped ? `${(shipped.operations || []).length} ops` : 'unreadable');
-    check('and its text recommends no --adopt to an installed project',
-      !!note && !String(note.text).includes('--adopt'),
-      note ? (String(note.text).split('--adopt')[1] || '').slice(0, 80) || 'clean' : 'no note');
-    check('and it tells the operator what they CAN do instead',
-      !!note && String(note.text).includes('move it aside or remove it'),
-      note ? `${String(note.text).length} chars` : 'no note');
+    check('the shipped 0012 carries a note operation, and its text recommends no --adopt',
+      !!note && !String(note.text).includes('--adopt'), note ? `${String(note.text).length} chars` : 'no note');
   }
-
-  // --- face 9: the created LABEL belongs to the operation that created the artifact, not to the
-  // key. Two migrations in ONE run: the first creates, the second re-renders what is now recorded.
-  {
-    const twoStep = makePayload('create-two-step', {
-      version: '0.3.0',
-      migrations: [
-        { id: '0002_create', version: '0.2.0', ops: opFor({ createIfAbsent: true }) },
-        { id: '0003_again', version: '0.3.0', ops: opFor({}) },
-      ],
-      tweak: moveReviewerTemplate,
-    });
-    const p = project('create-two-step');
-    check('install exits 0 (codex-hosted)', install(p, { answers: codexAnswers }).status === 0);
-    const a = update(p, ['--apply'], { payload: twoStep });
-    check('both migrations apply in one run, exit 0', a.status === 0
-      && bookkeeping(p).installedPluginVersion === '0.3.0', why(a));
-    const changes = read(at(p, 'CHANGES_0.1.0-to-0.3.0.md')) || '';
-    const created = changes.split('\n').filter((l) => l.includes('created (no record, no file)'));
-    check('CHANGES says "created" exactly ONCE across the whole run', created.length === 1,
-      created.join(' | ').slice(0, 200) || 'not present at all');
-    const section = (id) => changes.slice(changes.indexOf(`### ${id}`), changes.indexOf(`### ${id}`) + 400);
-    check('and it is on the 0002 line, the operation that really created it',
-      section('0002_create').includes('.claude/agents/reviewer.md - created (no record, no file)'),
-      section('0002_create').split('\n').filter((l) => l.includes('reviewer.md')).join(' | ').slice(0, 160));
-    check('while the LATER migration re-rendering the same artifact says payload-current',
-      section('0003_again').includes('.claude/agents/reviewer.md - payload-current')
-      && !section('0003_again').includes('created (no record, no file)'),
-      section('0003_again').split('\n').filter((l) => l.includes('reviewer.md')).join(' | ').slice(0, 160));
-  }
-
   // --- faces 11 and 12: the SHIPPED AGENTS.md operation of 0023, run as it ships ----------------
-  // The op is read out of the real migration rather than restated here, so these two faces prove the
-  // operation a consumer receives. It is the LAST op of 0023 on purpose: a refusal over a foreign file
-  // leaves the config key and the note applied and journalled, and the re-run after the file is moved
-  // aside resumes from there.
   {
     const shipped0023 = readJson(path.join(PLUGIN_ROOT, 'migrations', '0023_changes-dir-and-agents', 'ops.json'));
     const ops0023 = (shipped0023 && shipped0023.operations) || [];
     const agentsOp = ops0023.find((o) => o.op === 'rerender-managed-region' && o.file === 'AGENTS.md');
-    check('[update-agents-0] 0023 ships the AGENTS.md op as its LAST operation: whole file, the template, createIfAbsent',
-      !!agentsOp && ops0023[ops0023.length - 1] === agentsOp && agentsOp.region === null
-      && agentsOp.template === 'templates/AGENTS.md.tmpl' && agentsOp.createIfAbsent === true && !('ifRecorded' in agentsOp),
+    check('[update-agents-0] 0023 ships the AGENTS.md op: whole file, the template, createIfAbsent',
+      !!agentsOp && agentsOp.region === null && agentsOp.template === 'templates/AGENTS.md.tmpl' && agentsOp.createIfAbsent === true,
       JSON.stringify(agentsOp || ops0023.map((o) => o.op)));
     const agentsPayload = makePayload('agents-op', {
       version: '0.2.0',
       migrations: [{ id: '0002_agents', version: '0.2.0', ops: [agentsOp || { op: 'note', id: 'agents-op-missing', text: 'the shipped op is missing', docRefs: [] }] }],
     });
-    // Takes the artifact setup wrote back OUT of the installation - the file and its record both -
-    // so the project is an installation older than the artifact: no record, and (face 11) no file.
     const forgetAgents = (p) => {
       const cfg = readJson(at(p, CONFIG_REL));
       delete cfg._aiwf.managedRegions['AGENTS.md'];
       writeJson(at(p, CONFIG_REL), cfg);
       fs.rmSync(at(p, 'AGENTS.md'), { force: true });
     };
-
-    // face 11: empty ground -> created, stamped, and byte-identical to what setup renders
     {
       const p = project('agents-empty');
       check('install exits 0', install(p).status === 0);
       const setupRender = read(at(p, 'AGENTS.md'));
       forgetAgents(p);
-      check('precondition: neither AGENTS.md nor a record for it is there',
-        !exists(at(p, 'AGENTS.md')) && !Object.prototype.hasOwnProperty.call(bookkeeping(p).managedRegions, 'AGENTS.md'));
       const a = update(p, ['--apply'], { payload: agentsPayload });
       check('[update-agents-1] the shipped op over empty ground: exit 0, AGENTS.md created',
-        a.status === 0 && a.out.includes('AGENTS.md: created (no record, no file) - rendered and recorded'), why(a));
-      const onDisk = read(at(p, 'AGENTS.md'));
-      const rec = bookkeeping(p).managedRegions['AGENTS.md'] || {};
-      check('[update-agents-2] and it is stamped clean: upstream == local == sha(file), override false',
-        onDisk !== null && rec.upstream === sha256(onDisk) && rec.local === sha256(onDisk) && rec.override === false,
-        JSON.stringify(rec));
+        a.status === 0 && a.out.includes('AGENTS.md: created from the payload render'), why(a));
+      check('[update-agents-2] it is stamped with the payload version', bookkeeping(p).managedRegions['AGENTS.md'] === '0.2.0');
       check('[update-agents-3] and the update render is byte-identical to the setup render',
-        setupRender !== null && onDisk === setupRender,
-        `${setupRender === null ? 'setup wrote none' : sha256(setupRender).slice(0, 12)} vs ${onDisk === null ? 'none' : sha256(onDisk).slice(0, 12)}`);
+        setupRender !== null && read(at(p, 'AGENTS.md')) === setupRender);
     }
-
-    // face 12: a hand-written AGENTS.md and no record -> refused, the file untouched
     {
       const p = project('agents-foreign');
       check('install exits 0', install(p).status === 0);
+      const setupRender = read(at(p, 'AGENTS.md'));
       forgetAgents(p);
-      const MINE = '# My own auditor notes\n\nHand-written, pinned to a plugin path of my choosing.\n';
-      fs.writeFileSync(at(p, 'AGENTS.md'), MINE, 'utf8');
+      fs.writeFileSync(at(p, 'AGENTS.md'), '# My own auditor notes\n\nHand-written.\n', 'utf8');
       const a = update(p, ['--apply'], { payload: agentsPayload });
-      check('[update-agents-4] the shipped op over a hand-written AGENTS.md REFUSES (exit 1) with the move-it-aside sentence',
-        a.status === 1 && a.out.includes(`AGENTS.md: ${REFUSAL}`), why(a));
-      check('[update-agents-5] and the hand-written file is byte-untouched, with no record and the version unmoved',
-        read(at(p, 'AGENTS.md')) === MINE
-        && !Object.prototype.hasOwnProperty.call(bookkeeping(p).managedRegions, 'AGENTS.md')
-        && bookkeeping(p).installedPluginVersion === BASELINE.targetPluginVersion,
-        `${String(bookkeeping(p).installedPluginVersion)} / ${JSON.stringify(Object.keys(bookkeeping(p).managedRegions))}`);
+      check('[update-agents-4] a hand-written AGENTS.md with no record is OVERWRITTEN (exit 0), named as such',
+        a.status === 0 && a.out.includes('AGENTS.md: overwritten with the payload render (this installation had no record of it)'), why(a));
+      check('[update-agents-5] and it is the setup render now, stamped',
+        read(at(p, 'AGENTS.md')) === setupRender && bookkeeping(p).managedRegions['AGENTS.md'] === '0.2.0');
     }
   }
 }
 
 // ---------------------------------------------------------------------------
 section('16 - a release never touches examples/: the example bump is numbered when it is built, against the payload it lands in');
-// The committed example bump carries no number and no version. Here it is built into a payload that
-// has just shipped a release of its own (a full fake migration on top of the baseline), and the
-// result must be the NEXT release of THAT payload - a coherent one the validator accepts - while the
-// example template it was built from stays byte for byte what it was.
 {
   const NOTE_ONLY = [{ op: 'note', id: 'fake-release', text: 'A release the example bump has to follow.', docRefs: ['docs/LOOP.md'] }];
   const sim = makePayload('release-sim', {
@@ -2569,36 +1473,26 @@ section('16 - a release never touches examples/: the example bump is numbered wh
       && exists(at(sim, 'migrations/0003_example-bump/NOTES.md')),
     `${JSON.stringify(manifest[manifest.length - 1])} / ops ${ops.migration} -> ${ops.targetPluginVersion}`);
   const v = validatePayload(sim);
-  check('validate-payload accepts the built payload with ZERO errors (numbering, directories, monotonic versions, last entry == payload version)',
+  check('validate-payload accepts the built payload with ZERO errors',
     v.errors.length === 0, () => v.errors.join('\n'));
   check('the example template it was built from is byte-identical afterwards',
     diffSnapshots(templateBefore, snapshot(at(exampleDir, 'bump'))).length === 0,
     diffSnapshots(templateBefore, snapshot(at(exampleDir, 'bump'))).join(', '));
 }
-
 // An UNUSABLE template is refused before the payload is touched, and the payload stays buildable.
-// The unreadable entry is a DANGLING link inside the template directory: a junction on Windows (no
-// privilege needed) and a plain symlink on POSIX (Node ignores the 'junction' type there), so the
-// same case runs on every OS this payload supports. It is the case a copy-as-you-go builder gets
-// wrong: ops.json reads fine, the target directory is created, and the copy then dies on the link -
-// a partial migration directory, and a retry refused because that directory now exists.
 {
   const NOTE_ONLY = [{ op: 'note', id: 'fake-release', text: 'A release the example bump has to follow.', docRefs: ['docs/LOOP.md'] }];
   const sim = makePayload('release-sim-broken-template', {
     version: '0.2.0',
     migrations: [{ id: '0002_fake-release', version: '0.2.0', ops: NOTE_ONLY }],
   });
-  // The broken template lives OUTSIDE the payload copy, so the payload tree can be compared whole.
   const exampleDir = path.join(tmpRoot, 'example-broken-template');
   copyTree(at(PLUGIN_ROOT, 'examples/example-project/bump'), path.join(exampleDir, 'bump'));
   const link = path.join(exampleDir, 'bump', 'example-bump', 'AAA-dangling');
   let linkError = null;
   try { fs.symlinkSync(path.join(tmpRoot, 'no-such-target'), link, 'junction'); } catch (e) { linkError = e; }
-  // A link that cannot be made is a FAILED check, never a skip: on every supported OS it can be.
   check('a dangling link can be planted in the template (a junction on Windows, a symlink on POSIX)',
     linkError === null, linkError ? `${linkError.code || ''} ${linkError.message}` : '');
-  // Directories are part of the state: a failed build that left an EMPTY migration directory behind
-  // changes no file, and would still refuse the retry.
   const treeState = (dir, base = dir, acc = {}) => {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
       const p = path.join(dir, e.name);
@@ -2626,215 +1520,175 @@ section('16 - a release never touches examples/: the example bump is numbered wh
 }
 
 // ---------------------------------------------------------------------------
-section('17 - paths.changesDir places the CHANGES report; a stale $schema is refreshed outside the journal');
-// Each test below is ONE check named by its label; every sub-assertion that fails is listed in its
-// detail. "A" is the root a project was installed from, "B" another payload root.
+section('17 - a stale $schema is refreshed');
+const schemaRefOf = (root) => (typeof engine.schemaRef === 'function' ? engine.schemaRef(root) : '(migrate.mjs exports no schemaRef)');
+const schemaOf = (p) => (readJson(at(p, CONFIG_REL)) || {}).$schema;
+// Another root at the BASELINE version: nothing is pending from it, so a run from it is a no-op
+// whose only possible write is the $schema refresh.
+const BASE_B = makePayload('schema-b', { version: BASELINE.targetPluginVersion, migrations: [] });
 {
-  const CHANGES_NAME = `CHANGES_${BASELINE.targetPluginVersion}-to-0.2.0.md`;
-  const PNOTE = makePayload('changes-dir', {
-    version: '0.2.0', migrations: [{ id: '0002_note', version: '0.2.0', ops: [FIXTURE_NOTE] }],
-  });
-  // Another root at the BASELINE version: nothing is pending from it, so a run from it is a no-op
-  // whose only possible write is the $schema refresh.
-  const BASE_B = makePayload('schema-b', { version: BASELINE.targetPluginVersion, migrations: [] });
-  const SCHEMA_OPS = [{ op: 'add-config-key', path: 'enforcement.exampleToggle', default: true, askOperator: false }, FIXTURE_NOTE];
-  const schemaRefOf = (root) => (typeof engine.schemaRef === 'function' ? engine.schemaRef(root) : '(migrate.mjs exports no schemaRef)');
-  const schemaOf = (p) => (readJson(at(p, CONFIG_REL)) || {}).$schema;
-  const setChangesDir = (p, value) => {
-    const cfg = readJson(at(p, CONFIG_REL));
-    cfg.paths.changesDir = value;
-    writeJson(at(p, CONFIG_REL), cfg);
-  };
-  const expect = (problems, ok, what, r = null) => { if (!ok) problems.push(r ? `${what}\n${why(r)()}` : what); };
-  // Drive-letter literals are composed, never written out: the self-check's provenance section reads
-  // a written-out letter-colon-slash in this file as an absolute path (see PROV_ABS_RE there).
-  const DRIVE = 'C:';
-  const verdict = (label, problems) => check(label, problems.length === 0, () => problems.join('\n'));
+  const PNOTE = makePayload('schema-note', { version: '0.2.0', migrations: [{ id: '0002_note', version: '0.2.0', ops: [FIXTURE_NOTE] }] });
+  const p = project('schema-apply');
+  install(p);
+  const from = schemaOf(p);
+  check('setup and the engine agree on the install root\'s value', from === schemaRefOf(BASE), `${from} vs ${schemaRefOf(BASE)}`);
+  const r = update(p, ['--apply'], { payload: PNOTE });
+  check('--apply exits 0', r.status === 0, why(r));
+  check('$schema is rewritten to the update root', schemaOf(p) === schemaRefOf(PNOTE), String(schemaOf(p)));
+  check('and the run says so', r.out.includes(`refreshed $schema: ${from} -> ${schemaRefOf(PNOTE)}`), why(r));
+}
+{
+  const p = project('schema-noop');
+  install(p);
+  const stale = schemaOf(p);
+  const cfgBefore = readJson(at(p, CONFIG_REL)) || {};
+  const before = snapshot(p);
+  const r1 = update(p, ['--apply'], { payload: BASE_B });
+  check('a no-op run from another root exits 0 as already current', r1.status === 0 && r1.out.includes('already current'), why(r1));
+  check('and rewrites the stale $schema', schemaOf(p) === schemaRefOf(BASE_B) && schemaOf(p) !== stale, String(schemaOf(p)));
+  const changed = diffSnapshots(before, snapshot(p));
+  check('it changed nothing but the config', changed.length === 1 && changed[0] === CONFIG_REL, changed.join(', '));
+  const strip = (c) => { const x = { ...c }; delete x.$schema; return JSON.stringify(x); };
+  check('and nothing in the config beyond $schema', strip(cfgBefore) === strip(readJson(at(p, CONFIG_REL)) || {}));
+  const fresh = snapshot(p);
+  const r2 = update(p, ['--apply'], { payload: BASE_B });
+  check('a second run from the same root refreshes nothing and writes nothing',
+    r2.status === 0 && !r2.out.includes('refreshed $schema') && diffSnapshots(fresh, snapshot(p)).length === 0, why(r2));
+}
 
-  {
-    const problems = [];
-    const p = project('changes-dir-configured');
-    const i = install(p, { answers: baseAnswers({ paths: { ...baseAnswers().paths, changesDir: 'reports' } }) });
-    expect(problems, i.status === 0, 'setup accepts paths.changesDir "reports" (exit 0)', i);
-    const r = update(p, ['--apply'], { payload: PNOTE });
-    expect(problems, r.status === 0, '--apply exits 0', r);
-    expect(problems, exists(at(p, `reports/${CHANGES_NAME}`)), `reports/${CHANGES_NAME} was not written`);
-    expect(problems, !exists(at(p, CHANGES_NAME)), `${CHANGES_NAME} was written at the project root`);
-    expect(problems, r.out.includes(`report:  reports/${CHANGES_NAME}`), 'the CLI does not name the report under reports/', r);
-    verdict('changesDir: report lands in the configured folder, none at the root', problems);
-  }
-  {
-    const problems = [];
-    const p = project('changes-dir-default');
-    expect(problems, install(p).status === 0, 'install exits 0');
-    expect(problems, ((readJson(at(p, CONFIG_REL)) || {}).paths || {}).changesDir === '.',
-      `a fresh config does not carry the schema default "." (paths: ${JSON.stringify((readJson(at(p, CONFIG_REL)) || {}).paths)})`);
-    const r = update(p, ['--apply'], { payload: PNOTE });
-    expect(problems, r.status === 0 && exists(at(p, CHANGES_NAME)), `the default "." did not put ${CHANGES_NAME} at the root`, r);
-    expect(problems, r.out.includes(`report:  ${CHANGES_NAME}`), 'the CLI does not name the report at the root', r);
-    // An installation that predates the key: ABSENT reads as ".".
-    const old = project('changes-dir-absent');
-    install(old);
-    const cfg = readJson(at(old, CONFIG_REL));
-    if (cfg && cfg.paths) delete cfg.paths.changesDir;
-    writeJson(at(old, CONFIG_REL), cfg);
-    const r2 = update(old, ['--apply'], { payload: PNOTE });
-    expect(problems, r2.status === 0 && exists(at(old, CHANGES_NAME)), `an ABSENT key did not put ${CHANGES_NAME} at the root`, r2);
-    verdict('changesDir: default keeps the report at the root', problems);
-  }
-  {
-    const problems = [];
-    for (const value of ['../x', 'a/../../x', '/x', `${DRIVE}/x`, `${DRIVE}\\x`, 'C:x']) {
-      const p = project('changes-dir-refused');
-      install(p);
-      setChangesDir(p, value);
-      const before = snapshot(p);
-      const r = update(p, ['--apply'], { payload: PNOTE });
-      expect(problems, r.status === 1 && r.out.includes('paths.changesDir'), `${JSON.stringify(value)}: not refused with exit 1 naming paths.changesDir`, r);
-      const changed = diffSnapshots(before, snapshot(p));
-      expect(problems, changed.length === 0, `${JSON.stringify(value)}: the refused run wrote ${changed.join(', ')}`);
-      expect(problems, bookkeeping(p).installedPluginVersion === BASELINE.targetPluginVersion, `${JSON.stringify(value)}: the version stamp moved`);
-      expect(problems, !exists(path.resolve(p, '..', 'x', CHANGES_NAME)), `${JSON.stringify(value)}: a report was written outside the project`);
-    }
-    const ok = project('changes-dir-normalised');
-    install(ok);
-    setChangesDir(ok, 'a/../reports');
-    const r = update(ok, ['--apply'], { payload: PNOTE });
-    expect(problems, r.status === 0 && exists(at(ok, `reports/${CHANGES_NAME}`)), '"a/../reports" was not accepted into reports/', r);
-    const file = project('changes-dir-file');
-    install(file);
-    fs.writeFileSync(at(file, 'reports.txt'), 'a file, not a folder\n', 'utf8');
-    setChangesDir(file, 'reports.txt');
-    const before = snapshot(file);
-    const f = update(file, ['--apply'], { payload: PNOTE });
-    expect(problems, f.status === 1 && f.out.includes('paths.changesDir'), 'a changesDir that is an existing FILE was not refused with exit 1', f);
-    expect(problems, diffSnapshots(before, snapshot(file)).length === 0, `the FILE refusal wrote ${diffSnapshots(before, snapshot(file)).join(', ')}`);
-    verdict(`changesDir: ../x, ${DRIVE}/x, C:x and /x are refused before any op runs, on every platform; a/../reports is accepted; a changesDir that is an existing FILE is refused`, problems);
-  }
-  {
-    const problems = [];
-    const p = project('changes-dir-check-resolve');
-    install(p);
-    setChangesDir(p, '../x');
-    const c = update(p, ['--check']);
-    expect(problems, c.status === 0 && c.out.includes('up to date'), '--check on a current project was refused', c);
-    const c2 = update(p, ['--check'], { payload: PNOTE });
-    expect(problems, c2.status === 1 && c2.out.includes('migration(s) pending') && !c2.out.includes('changesDir'),
-      '--check with a migration pending did not answer the interlock question alone', c2);
-    const res = update(p, ['--resolve', WRITER_REL, '--resolution-file', resolutionFile('changes-dir-resolve', {
-      [WRITER_REL]: { kind: 'conflict', resolution: 'take-new' },
-    })]);
-    expect(problems, res.status === 0 && !res.out.includes('changesDir'), '--resolve was refused', res);
-    // The control: the same value IS refused where it is used.
-    const a = update(p, ['--apply'], { payload: PNOTE });
-    expect(problems, a.status === 1 && a.out.includes('paths.changesDir'), 'the same value was NOT refused by --apply', a);
-    verdict('changesDir: --check and --resolve are not refused by a bad value', problems);
-  }
-  {
-    const problems = [];
-    const p = project('schema-apply');
-    install(p);
-    const from = schemaOf(p);
-    expect(problems, from === schemaRefOf(BASE), `setup and the engine disagree on the install root's value: ${from} vs ${schemaRefOf(BASE)}`);
-    const r = update(p, ['--apply'], { payload: PNOTE });
-    expect(problems, r.status === 0, '--apply exits 0', r);
-    expect(problems, schemaOf(p) === schemaRefOf(PNOTE), `$schema is ${schemaOf(p)}, not the update root's ${schemaRefOf(PNOTE)}`);
-    const changes = read(at(p, CHANGES_NAME)) || '';
-    expect(problems, changes.includes(`refreshed $schema: ${from} -> ${schemaRefOf(PNOTE)}`), `the report does not carry the refresh line:\n${changes}`);
-    verdict('$schema: rewritten on apply when the update root differs from the install root', problems);
-  }
-  {
-    const problems = [];
-    const p = project('schema-noop');
-    install(p);
-    const stale = schemaOf(p);
-    const cfgBefore = readJson(at(p, CONFIG_REL)) || {};
-    const before = snapshot(p);
-    const r1 = update(p, ['--apply'], { payload: BASE_B });
-    expect(problems, r1.status === 0 && r1.out.includes('already current'), 'the no-op run did not exit 0 as already current', r1);
-    expect(problems, schemaOf(p) === schemaRefOf(BASE_B) && schemaOf(p) !== stale, `the stale $schema ${stale} was not rewritten to ${schemaRefOf(BASE_B)} (now ${schemaOf(p)})`);
-    const changed = diffSnapshots(before, snapshot(p));
-    expect(problems, changed.length === 1 && changed[0] === CONFIG_REL, `the no-op run changed more than the config: ${changed.join(', ')}`);
-    const strip = (c) => { const x = { ...c }; delete x.$schema; return JSON.stringify(x); };
-    expect(problems, strip(cfgBefore) === strip(readJson(at(p, CONFIG_REL)) || {}), 'the config changed beyond $schema');
-    const fresh = snapshot(p);
-    const r2 = update(p, ['--apply'], { payload: BASE_B });
-    expect(problems, r2.status === 0 && !r2.out.includes('refreshed $schema'), 'the second run from the same root refreshed again', r2);
-    const again = diffSnapshots(fresh, snapshot(p));
-    expect(problems, again.length === 0, `a fresh $schema was not left byte-identical: ${again.join(', ')}`);
-    verdict('$schema: no-op run rewrites a stale value and leaves a fresh one byte-identical', problems);
-  }
-  {
-    const problems = [];
-    const p = project('schema-noop-selfcheck');
-    install(p);
-    const from = schemaOf(p);
-    const r = update(p, ['--apply'], { payload: BASE_B, selfcheck: true });
-    expect(problems, r.status === 0, 'the run exits 0', r);
-    const line = `refreshed $schema: ${from} -> ${schemaRefOf(BASE_B)}`;
-    const at1 = r.out.indexOf(line);
-    const at2 = r.out.indexOf('nothing else was written');
-    expect(problems, at1 !== -1 && at2 > at1, `the two lines ("${line}", then "nothing else was written") were not printed in order`, r);
-    expect(problems, !r.out.includes('Nothing was written'), 'the plain "Nothing was written" line was printed for a run that wrote', r);
-    expect(problems, r.out.includes('self-check: PASS'), 'the integrated self-check did not run and pass', r);
-    verdict('$schema: stale value on an already-current project is refreshed, the two lines print, the self-check runs', problems);
-  }
-  {
-    const problems = [];
-    // B is installed from AND updated from: the project is installed at the baseline from this root,
-    // and the SAME directory is then rebuilt as the next release, so both runs share one root.
-    const CRASH_B = makePayload('schema-crash', { version: BASELINE.targetPluginVersion, migrations: [] });
-    const p = project('schema-crash');
-    expect(problems, install(p, { payload: CRASH_B }).status === 0, 'install from B exits 0');
-    makePayload('schema-crash', {
-      version: '0.2.0', migrations: [{ id: '0002_schema', version: '0.2.0', ops: SCHEMA_OPS }], tweak: addExampleToggleToSchema,
-    });
-    const schemaBefore = schemaOf(p);
-    expect(problems, schemaBefore === schemaRefOf(CRASH_B), `precondition: $schema is B's (${schemaBefore})`);
-    const crashed = update(p, ['--apply'], { payload: CRASH_B, env: { PNP_UPDATE_CRASH_AT: '0002_schema/0/after-journal-prepared' } });
-    expect(problems, crashed.status === 86, 'the child did not die with exit 86 after the first journal write', crashed);
-    expect(problems, (bookkeeping(p).migrationJournal || {}).opIndex === 0, 'no journal on operation 0 was left behind');
-    expect(problems, schemaOf(p) === schemaBefore, `the crashed run changed $schema to ${schemaOf(p)}`);
-    const resumed = update(p, ['--apply'], { payload: CRASH_B });
-    expect(problems, resumed.status === 0, 'the resume did not complete', resumed);
-    const bk = bookkeeping(p);
-    expect(problems, bk.installedPluginVersion === '0.2.0' && bk.migrationJournal === null, `end state ${bk.installedPluginVersion} / ${JSON.stringify(bk.migrationJournal)}`);
-    expect(problems, schemaOf(p) === schemaBefore, `the resume changed $schema to ${schemaOf(p)}`);
-    expect(problems, !resumed.out.includes('refreshed $schema') && !(read(at(p, CHANGES_NAME)) || '').includes('refreshed $schema'),
-      'a refresh was reported for a run that had nothing to refresh', resumed);
-    verdict('$schema: crash after the first journal write, resume completes without touching $schema', problems);
-  }
-  {
-    const problems = [];
-    const JB = makePayload('schema-journal', {
-      version: '0.2.0', migrations: [{ id: '0002_schema', version: '0.2.0', ops: SCHEMA_OPS }], tweak: addExampleToggleToSchema,
-    });
-    const p = project('schema-journal');
-    install(p);
-    // The journal exactly as the engine leaves it when it dies after the first operation reached its
-    // target: the key is in the config, the journal is still `prepared`, and both hashes are over A's
-    // config - computed by the engine's own projection hash.
-    const cfg = readJson(at(p, CONFIG_REL));
-    const aSchema = cfg.$schema;
-    const preHash = typeof engine.configHash === 'function' ? engine.configHash(cfg) : null;
-    const next = JSON.parse(JSON.stringify(cfg));
-    next.enforcement.exampleToggle = true;
-    const postHash = typeof engine.configHash === 'function' ? engine.configHash(next) : null;
-    next._aiwf.migrationJournal = { migration: '0002_schema', opIndex: 0, state: 'prepared', target: CONFIG_REL, preHash, postHash, resolution: null };
-    writeJson(at(p, CONFIG_REL), next);
-    const resumed = update(p, ['--apply'], { payload: JB });
-    expect(problems, resumed.status === 0, 'the resume from B did not complete', resumed);
-    expect(problems, resumed.out.includes('resuming: 0002_schema operation 0 had already reached its target'),
-      'the journal hashes did not match on resume (a refresh moved the config under the journal)', resumed);
-    expect(problems, !resumed.out.includes('refreshed $schema') && schemaOf(p) === aSchema, `the resumed run refreshed $schema (now ${schemaOf(p)})`, resumed);
-    const bk = bookkeeping(p);
-    expect(problems, bk.installedPluginVersion === '0.2.0' && bk.migrationJournal === null, `end state ${bk.installedPluginVersion} / ${JSON.stringify(bk.migrationJournal)}`);
-    const clean = update(p, ['--apply'], { payload: JB });
-    expect(problems, clean.status === 0 && clean.out.includes(`refreshed $schema: ${aSchema} -> ${schemaRefOf(JB)}`),
-      'the next clean run from B did not refresh and say so', clean);
-    expect(problems, schemaOf(p) === schemaRefOf(JB), `after the clean run $schema is ${schemaOf(p)}, not B's`);
-    verdict('$schema: a journal written under another root is resumed without a refresh, and the next clean run refreshes', problems);
-  }
+// ---------------------------------------------------------------------------
+// LAST: every case below RUNS the self-check, whose own assertions change on their own schedule.
+section('18 - the self-check is the update\'s own last step, and a red one is never exit 0');
+{
+  const sc = spawnSync(process.execPath, [
+    path.join(P020, 'scripts', 'selfcheck', 'aiwf-selfcheck.js'), '--plugin-root', P020, '--project-fixture', upgraded,
+  ], { encoding: 'utf8' });
+  check('the self-check passes against the project section 2 updated (exit 0)', sc.status === 0,
+    sc.status === 0 ? '' : '\n' + (sc.stdout || '').trim().split('\n').slice(-14).join('\n'));
+}
+{
+  const p = project('sc-pass');
+  check('install exits 0', install(p).status === 0);
+  const r = update(p, ['--apply', '--resolution-file', resolutionFile('sc-pass', FULL_RESOLUTIONS)], { payload: P020, selfcheck: true });
+  check('--apply exits 0', r.status === 0, why(r));
+  check('the update RAN the self-check itself and reported PASS', r.out.includes('self-check: PASS'), why(r));
+  check('and the PASS line quotes the self-check\'s own summary line verbatim',
+    /self-check: PASS - .*assertions passed/.test(r.out),
+    (r.out.split('\n').find((l) => l.startsWith('self-check:')) || '(no self-check line)').slice(0, 120));
+}
+{
+  const p = project('sc-skipped');
+  check('install exits 0', install(p).status === 0);
+  const r = update(p, ['--apply', '--resolution-file', resolutionFile('sc-skip', FULL_RESOLUTIONS), '--no-selfcheck'],
+    { payload: P020, selfcheck: true });
+  check('--no-selfcheck still exits 0', r.status === 0, why(r));
+  check('and it says so on one line', r.out.includes('self-check: SKIPPED'), why(r));
+  check('no PASS line is printed for a run that never checked anything', !r.out.includes('self-check: PASS'));
+}
+{
+  // FAIL-CLOSED: the payload's self-check script is not there at all.
+  const payload = path.join(tmpRoot, 'payload-020-without-selfcheck');
+  copyTree(P020, payload);
+  fs.rmSync(at(payload, 'scripts/selfcheck/aiwf-selfcheck.js'));
+  const p = project('sc-unrunnable');
+  check('install exits 0', install(p).status === 0);
+  const r = update(p, ['--apply', '--resolution-file', resolutionFile('sc-unrunnable', FULL_RESOLUTIONS)], { payload, selfcheck: true });
+  check('an unrunnable self-check makes the update exit 1, not 0', r.status === 1, why(r));
+  check('the message names exactly what could not run', r.out.includes('scripts/selfcheck/aiwf-selfcheck.js'), why(r));
+  check('and says plainly that the files WERE written and nothing was rolled back',
+    r.out.includes('WERE written') && r.out.includes('nothing was rolled back'), why(r));
+  const bk = bookkeeping(p);
+  check('which is true: the migrations really applied',
+    bk.installedPluginVersion === '0.2.0' && bk.lastMigrationApplied === '0002_fixture', `${bk.installedPluginVersion} / ${bk.lastMigrationApplied}`);
+}
+{
+  // The self-check RUNS and comes back RED after an apply that succeeded: a managed artifact the
+  // note-only migration does not touch is MISSING from the project - the self-check checks that
+  // every managed artifact is present.
+  const notePayload = makePayload('note-only-020', {
+    version: '0.2.0',
+    migrations: [{ id: '0002_noteonly', version: '0.2.0', ops: [FIXTURE_NOTE] }],
+  });
+  const p = project('sc-red');
+  check('install exits 0', install(p).status === 0);
+  fs.rmSync(at(p, WRITER_REL));
+  const r = update(p, ['--apply'], { payload: notePayload, selfcheck: true });
+  check('a RED self-check after a successful apply makes the update exit 1', r.status === 1, why(r));
+  check('the self-check\'s own output reached the operator verbatim',
+    r.out.includes('writer.md') && r.out.includes('FAILURES:'), why(r));
+  check('the verdict says the files WERE written and nothing was rolled back',
+    r.out.includes('WERE written') && r.out.includes('nothing was rolled back'), why(r));
+  const bk = bookkeeping(p);
+  check('which is true: the migration applied and the stamps moved',
+    bk.installedPluginVersion === '0.2.0' && bk.lastMigrationApplied === '0002_noteonly', `${bk.installedPluginVersion} / ${bk.lastMigrationApplied}`);
+}
+{
+  // The self-check CRASHES - a section throws rather than returning a red assertion.
+  const crashPayload = makePayload('crash-selfcheck-020', {
+    version: '0.2.0',
+    migrations: [{ id: '0002_noteonly', version: '0.2.0', ops: [FIXTURE_NOTE] }],
+    tweak: (dir) => patch(at(dir, 'scripts/selfcheck/aiwf-selfcheck.js'),
+      '    sectionGate2(tmpRoot);',
+      '    (() => { throw new Error(\'sc-crash injected\'); })();'),
+  });
+  const p = project('sc-crash');
+  check('install exits 0', install(p).status === 0);
+  const r = update(p, ['--apply'], { payload: crashPayload, selfcheck: true });
+  check('a self-check that CRASHES makes the update exit 1, not 0', r.status === 1, why(r));
+  check('the crash reached the operator with its own message', r.out.includes('sc-crash injected'), why(r));
+  check('and with a stack, not just a message', /at [^\n]*aiwf-selfcheck\.js/.test(r.out), why(r));
+  check('the report still ran: the tally line was printed', /==== \d+\/\d+ assertions passed ====/.test(r.out), why(r));
+  check('the crash is named in the FAILURES block, under its own section',
+    r.out.includes('FAILURES:') && r.out.includes('[(uncaught)]'), why(r));
+  check('and the run says out loud that it is incomplete', r.out.includes('INCOMPLETE RUN'), why(r));
+  const tally = r.out.match(/==== (\d+)\/(\d+) assertions passed ====/);
+  const passed = tally ? Number(tally[1]) : 0;
+  const total = tally ? Number(tally[2]) : 0;
+  check('the assertions that ran before the crash were not lost, and the crash is counted against them',
+    passed > 0 && total > passed, tally ? tally[0] : '(no tally line was printed at all)');
+  check('the verdict still says the files WERE written and nothing was rolled back',
+    r.out.includes('WERE written') && r.out.includes('nothing was rolled back'), why(r));
+  const bk = bookkeeping(p);
+  check('which is true: the migration applied and the stamps moved',
+    bk.installedPluginVersion === '0.2.0' && bk.lastMigrationApplied === '0002_noteonly', `${bk.installedPluginVersion} / ${bk.lastMigrationApplied}`);
+}
+{
+  // The SAME contract, for a throwable that is not an Error (no message, no stack, null prototype).
+  const crashPayloadNoMessage = makePayload('crash-selfcheck-nullproto-020', {
+    version: '0.2.0',
+    migrations: [{ id: '0002_noteonly', version: '0.2.0', ops: [FIXTURE_NOTE] }],
+    tweak: (dir) => patch(at(dir, 'scripts/selfcheck/aiwf-selfcheck.js'),
+      '    sectionGate2(tmpRoot);',
+      '    (() => { throw Object.assign(Object.create(null), { code: \'sc-crash-null-proto\' }); })();'),
+  });
+  const p = project('sc-crash-null-proto');
+  check('install exits 0', install(p).status === 0);
+  const r = update(p, ['--apply'], { payload: crashPayloadNoMessage, selfcheck: true });
+  check('a throwable with no message and no stack still makes the update exit 1', r.status === 1, why(r));
+  check('its field reached the operator, and it was NOT flattened to [object Object]',
+    r.out.includes('sc-crash-null-proto') && !r.out.includes('[object Object]'), why(r));
+  check('the report still ran for it too: the tally line was printed, with the crash counted against it',
+    (() => {
+      const t = r.out.match(/==== (\d+)\/(\d+) assertions passed ====/);
+      return !!t && Number(t[1]) > 0 && Number(t[2]) > Number(t[1]);
+    })(), why(r));
+  check('and the crash is named in the FAILURES block, under its own section',
+    r.out.includes('FAILURES:') && r.out.includes('[(uncaught)]'), why(r));
+  check('and the run says out loud that it is incomplete', r.out.includes('INCOMPLETE RUN'), why(r));
+}
+{
+  // A stale `$schema` on an already-current project: the refresh is a write, so the self-check runs.
+  const p = project('schema-noop-selfcheck');
+  install(p);
+  const from = schemaOf(p);
+  const r = update(p, ['--apply'], { payload: BASE_B, selfcheck: true });
+  check('the run exits 0', r.status === 0, why(r));
+  const line = `refreshed $schema: ${from} -> ${schemaRefOf(BASE_B)}`;
+  const at1 = r.out.indexOf(line);
+  const at2 = r.out.indexOf('nothing else was written');
+  check('the two lines print in order', at1 !== -1 && at2 > at1, why(r));
+  check('the plain "Nothing was written" line was NOT printed for a run that wrote', !r.out.includes('Nothing was written'), why(r));
+  check('the integrated self-check ran and passed', r.out.includes('self-check: PASS'), why(r));
 }
 
 // ---------------------------------------------------------------------------

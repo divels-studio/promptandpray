@@ -106,9 +106,9 @@ The same command changes it, with no re-interview: `/pnp:roles --set docs.engine
 documentation diffs their own Claude host, `/pnp:roles --set plan.passes=3` raises the CEILING of
 readiness passes a plan may get (the first runs on your word for the ticket, each further one on a
 word of its own - one word per pass), `/pnp:roles --reset docs` puts a class back on the Reviewer.
-It refuses rather than guesses - a result your schema rejects, an artifact you edited by hand or
-hold through an override, a stale agent file without `--confirm-remove-stale` - and a refusal
-leaves the project exactly as it was.
+It refuses rather than guesses - a result your schema rejects, a malformed project additions block, a
+stale agent file without `--confirm-remove-stale` - and a refusal leaves the project exactly as it
+was. What it re-renders it overwrites; a rendered agent file keeps its project additions block.
 
 Nothing here is a gate: changing the table is your configuration, not one of the four approvals
 above. What the table cannot do is remove a gate - a pass beyond `review.plan.passes` still needs

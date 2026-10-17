@@ -1,8 +1,9 @@
 # migrations/
 
 One directory per migration (`<NNNN>_<slug>/` with `ops.json` + `NOTES.md`), ordered by an explicit
-`index.json` manifest. This is how a new plugin version reaches an already-installed project without
-overwriting the project's own voice.
+`index.json` manifest. This is how a STRUCTURAL change of a new plugin version (a new rendered file, a
+new config key) reaches an already-installed project; the project's own voice lives in its overrides
+document and in the project additions block of each rendered Markdown file, which an update keeps.
 
 ## The manifest
 
@@ -44,53 +45,34 @@ form and no `..`; `template`/`ruleset` references are payload-relative under `te
 exist. Everything above is enforced by `scripts/update/validate-payload.mjs`, which BOTH the runner
 and setup call before their first write.
 
-**`ifRecorded: true`** is for an artifact that exists on SOME installations only - the clear case
-being `.claude/agents/reviewer.md`, which is rendered for a claude-hosted host and does not exist at
-all on a codex-configured project. Without the field, re-rendering an artifact that carries no
-bookkeeping entry THROWS, and that is the invariant, not a bug: an update never adopts a file it did
-not write. With the field, such an artifact is reported as
-`<key>: not on this installation (no record) - skipped` and the migration continues - no adoption,
-no write, no new bookkeeping entry. Use it only where the artifact's absence is a legitimate
-configuration, never to paper over a missing record you did not expect.
+**What `rerender-managed-region` does.** It ALWAYS writes the fresh render: a marked region is
+spliced into its file (every byte outside the markers kept; a missing region appended; a missing
+file recreated), a whole file is written from the render - an edited, deleted or never-recorded one
+alike - and a whole Markdown file carries its project additions block (`<!-- project additions -->`
+... `<!-- /project additions -->`) over byte for byte. The artifact is then recorded as
+`_aiwf.managedRegions[<key>] = "<payload version>"`. Nothing asks; a malformed additions block stops
+the run naming the file.
 
-**`createIfAbsent: true`** is the other answer to the same state, for an artifact the payload has
-only just STARTED rendering - an installation older than it has no record, and the migration is what
-puts the artifact there. It has two faces and relaxes nothing about adoption:
+**`ifRecorded: true`** - skip when unrecorded. It is for an artifact that exists on SOME
+installations only - the clear case being `.claude/agents/reviewer.md`, which is rendered for a
+claude-hosted host and does not exist at all on a codex-configured project. An artifact whose key is
+not in `_aiwf.managedRegions` is then reported as `<key>: not on this installation (no record) -
+skipped` - no write, no new bookkeeping entry. Without the field the render is written whatever the
+record says.
 
-- no record and **no file** - the artifact is rendered, written and stamped
-  (`<key>: created (no record, no file) - rendered and recorded`, and `created (no record, no file)`
-  in the `CHANGES` report);
-- no record but a **file already standing** at that path, whose content **is** the render - the
-  artifact lives in the plugin's own folder, so those bytes came from a run of this engine; nothing
-  is written over them and the artifact is simply recorded;
-- no record but a file already standing there that **differs** - the migration STOPS with
-  `<key>: this installation has no record of it but a file is standing at that path - an update
-  never adopts a file it did not write; move it aside or remove it, then run the update again`.
-  That refusal holds at planning, at the last read before the write, at the write itself (a
-  creation publishes NO-CLOBBER at the syscall, so a file that appears in between fails with EEXIST
-  and gets the same sentence), and in the recovery of an interrupted creation. The refusal names
-  moving the file rather than adopting it because setup's adopt mode bootstraps a project that has
-  NO installation - a project running `/pnp:update` already has one;
-- a record already there - the normal re-render path, and the field is invisible.
-
-**It applies to whole-file artifacts only** (`region` must be `null`): a region is a span INSIDE a
-file and the field's premise is that no file is there, so "create this region" has no subject and no
-defined splice - the validator refuses the combination rather than leaving it to the engine.
-
-**The two fields may not travel in one operation.** `ifRecorded` and `createIfAbsent` answer the
-same question - what happens to an artifact this installation has no record of - in opposite
-directions (skip versus create/refuse), so an op carrying both is a payload the validator REFUSES
-rather than resolves. No precedence is defined on purpose: a precedence rule would make the
-migration's intent depend on which field the reader remembers first, and an author who wrote both
-has not decided yet.
+**`createIfAbsent: true`** - accepted, ignored. A render always creates what is missing, so the
+field changes nothing in the engine; the validator still accepts it (frozen migrations carry it),
+still refuses it on a region operation (`region` must be `null`), and still refuses an operation
+that carries both fields - `ifRecorded` and `createIfAbsent` may not travel in one operation, on
+presence, whatever their values.
 
 **`supersedes`** on a `note` is the list of ids this release RETIRES - rules, seeds or earlier notes
-an installation may still be carrying. Each entry is printed in `CHANGES_<from>-to-<to>.md` (under
-`paths.changesDir`, the project root by default) as a
-`Supersedes: <id>` line under the note that carries it, and it applies **nothing**: a `note` never
-writes a file of the operator's, so the ids are a list to read and act on. Keep them generic - a
-consumer maps them onto whatever it calls those records locally - and validate the same way
-`docRefs` is validated: an array of non-empty strings, omitted when the release retires nothing.
+an installation may still be carrying. It is accepted and printed: the run prints the note as
+`note: <text>`, each `docRefs` entry under it, and one `supersedes: <id>` line per id. It applies
+**nothing** - a `note` never writes a file of the operator's - so the ids are a list to read and act
+on. Keep them generic - a consumer maps them onto whatever it calls those records locally - and
+validate the same way `docRefs` is validated: an array of non-empty strings, omitted when the
+release retires nothing.
 
 **The supersede duty of a re-render.** A migration that RE-renders an existing region with new
 sentences owes its `supersedes` list a search, not a recollection: before it lands, grep the
@@ -106,10 +88,17 @@ in its note TEXT, verbatim:
 > If this release introduces a word-gate: check your local rules for self-initiated dispatch or
 > remediation - a rule written before this gate may contradict it.
 
-The note text is the only thing that reaches the operator's `CHANGES` report, so a warning written
-anywhere else in the payload is a warning the operator never sees at the moment it matters. A local
-rule written before a gate existed does not contradict it loudly - it reads as a habit, and the
+The note text is what the update prints to the operator at the moment of the update, so a warning
+written anywhere else in the payload is a warning the operator never sees at the moment it matters. A
+local rule written before a gate existed does not contradict it loudly - it reads as a habit, and the
 operator is the only one who can see both.
 
-Operations apply in array order and stop on the first unresolved conflict; the write-ahead journal
-in `_aiwf.migrationJournal` makes the run resumable from exactly where it stopped.
+**How a run moves.** Migrations run in manifest order and each operation applies directly. After the
+LAST operation of a migration the config is written once - `lastMigrationApplied` and
+`installedPluginVersion` move to that migration, together with the bookkeeping its operations made
+(the one write inside a migration is `reconcile-ask-ruleset`'s, which persists the ask-rule ownership
+right after it rewrites `settings.json`). A run that stops inside a migration leaves the stamps at the
+previous one, and the next run runs that migration again: every operation is idempotent - a re-render
+overwrites, `add-config-key` skips a key that is present, the ask ruleset reconciles. Before the
+first operation, `--dry-run` and `--apply` print the payload `CHANGELOG.md` blocks between the
+installed and the payload version.

@@ -21,7 +21,7 @@
     "$schema": {
       "type": "string",
       "minLength": 1,
-      "description": "Informational pointer at this file inside the installed plugin payload, written by /pnp:setup as an absolute path so an editor can resolve it, and refreshed by /pnp:update whenever it runs from a different plugin root (before any migration is journalled, never during a resumed run). Nothing in the loop READS it: the authority for which payload version produced this config is _aiwf.installedPluginVersion. The path is machine-local; between a move of the plugin root and the next update it is stale, and that is harmless."
+      "description": "Informational pointer at this file inside the installed plugin payload, written by /pnp:setup as an absolute path so an editor can resolve it, and refreshed by /pnp:update whenever it runs from a different plugin root (before the first operation). Nothing in the loop READS it: the authority for which payload version produced this config is _aiwf.installedPluginVersion. The path is machine-local; between a move of the plugin root and the next update it is stale, and that is harmless."
     },
 
     "_aiwf": {
@@ -31,7 +31,6 @@
       "required": [
         "installedPluginVersion",
         "lastMigrationApplied",
-        "migrationJournal",
         "managedRegions",
         "ownedAskRules",
         "suppressedAskRules"
@@ -45,29 +44,16 @@
         "lastMigrationApplied": {
           "type": "string",
           "minLength": 1,
-          "description": "Id of the last migration whose operations are reflected in this project. A fresh install applies nothing and stamps the last entry of the payload migration manifest."
-        },
-        "migrationJournal": {
-          "type": ["null", "object"],
-          "description": "null when no migration is in flight. Otherwise the write-ahead record of the operation being applied ({migration, opIndex, state, target, preHash, postHash, resolution}). Its exact shape is owned by the migration runner (P3) and is deliberately NOT constrained here in v1 - a schema that guesses at it would reject the runner's own journal."
+          "description": "Id of the last migration whose operations are reflected in this project. A fresh install applies nothing and stamps the last entry of the payload migration manifest. An update advances it after the last operation of each migration, so an interrupted migration is simply run again."
         },
         "managedRegions": {
           "type": "object",
-          "description": "One entry per managed artifact. The key is <file>#<region> for a marker region and <file> for a whole-file artifact (paths are project-relative, with forward slashes). upstream = sha256 of the content last RENDERED from the payload; local = sha256 of the content last ACCEPTED. Clean state: actual == local == upstream and override false.",
+          "description": "One entry per managed artifact. The key is <file>#<region> for a marker region and <file> for a whole-file artifact (paths are project-relative, with forward slashes); the value is the payload version that last rendered it. Setup and /pnp:update overwrite what they render; the consumer's own text lives in the overrides document and in the one project additions block of each rendered Markdown file. A legacy {upstream, local, override} object is normalised to installedPluginVersion on load.",
           "additionalProperties": false,
           "patternProperties": {
             "^[^\\s].*$": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["upstream", "local", "override"],
-              "properties": {
-                "upstream": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
-                "local": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
-                "override": {
-                  "type": "boolean",
-                  "description": "true once the operator kept their own version through a conflict dialog; updates then only record the new upstream, they never apply it."
-                }
-              }
+              "type": "string",
+              "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)*$"
             }
           }
         },
@@ -329,9 +315,8 @@
         "changesDir": {
           "type": "string",
           "minLength": 1,
-          "default": ".",
-          "$comment": "NOT in `required`, deliberately: an installation that predates the key reads an ABSENT value as \".\", the project root, so the report stays where it always was until a migration adds the key. Containment is one rule, containedRelativePath in scripts/setup/validate-config.mjs, called by setup and by the update run before any operation.",
-          "description": "Project-relative folder /pnp:update writes its CHANGES_<from>-to-<to>.md reports into; \".\" (the default) is the project root. It must stay inside the project - no absolute path, no drive letter, no climbing out with .. - and an update refuses before any operation when it does not, or when it names something that exists and is not a folder."
+          "$comment": "Kept optional, without a default, so a config an earlier version wrote still validates; a fresh install does not write it.",
+          "description": "Unused since the update stopped writing CHANGES reports; ignored."
         }
       }
     },

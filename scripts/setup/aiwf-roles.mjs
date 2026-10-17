@@ -15,28 +15,26 @@
  *
  * TWO PHASES, AND WHAT THE GUARANTEE ACTUALLY IS
  *   Phase 1 decides everything and writes NOTHING: the new config is built, validated against the
- *   payload schema, every artifact is rendered and classified against the two-hash bookkeeping. Any
- *   refusal there ends the run with ZERO writes - so a rejected `--set` leaves the project exactly
- *   as it was, and a run with two `--set` pairs where the second is bad applies neither.
+ *   payload schema, every artifact is rendered - a Markdown agent file through the project
+ *   additions carry (generate.mjs carryProjectAdditions). Any refusal there ends the run with ZERO
+ *   writes - so a rejected `--set` leaves the project exactly as it was, and a run with two `--set`
+ *   pairs where the second is bad applies neither. A re-render OVERWRITES: an edited, deleted or
+ *   unrecorded artifact is simply written from the render and stamped with the payload version.
  *
  *   Phase 2 is PLAN-BEFORE-WRITE, NOT A TRANSACTION. This is the same honest guarantee /pnp:setup
  *   gives (scripts/setup/generate.mjs applies its plan as a sequence of writeFileSync/rmSync calls):
  *   there is no journal here and no rollback. The write order is fixed - every agent-file operation
  *   (writes AND removes), then roles.json, then aiwf.config.json (the config and its bookkeeping in
  *   ONE file, LAST) - so a crash between two writes leaves an artifact whose stamp is not yet
- *   updated. That state is
- *   visible (`/pnp:selfcheck` reports it as a drifted managed artifact) and recoverable by simply
- *   running the SAME command again: phase 1 then finds `sha(actual) == sha(the render I want)`,
- *   takes the already-applied branch, and finishes by stamping the file it does not need to write.
- *   A journal would buy exactly that, at the price of a second recovery state machine.
+ *   updated. That state is recoverable by simply running the SAME command again: phase 1 then
+ *   finds the file already equal to the render it wants, writes nothing there, and finishes the
+ *   stamp.
  *
  * WHAT IT REFUSES (exit 1, nothing written)
  *   - a resulting config the payload schema rejects (including `passes` outside its range);
- *   - an artifact HELD by the operator (`override: true`) - `/pnp:update --resolve <key>` is that
- *     door, and it is the operator's to open;
- *   - an artifact EDITED by hand that does not already equal the render this run wants;
- *   - a file at an artifact's path that this engine never wrote and that differs from the render;
- *   - a STALE agent file (the role is no longer claude-hosted) without --confirm-remove-stale;
+ *   - a malformed project additions block in an agent file it re-renders (named; nothing guessed);
+ *   - a RECORDED stale agent file (the role is no longer claude-hosted) without
+ *     --confirm-remove-stale (an unrecorded one is left alone and named, never a refusal);
  *   - `<row>.effort=` on a Claude row: every Claude-hosted review pass runs through the ONE
  *     rendered reviewer agent, whose effort is roles.reviewer.effort, because the Agent tool has no
  *     per-invocation effort. A value nothing reads is not a setting;
@@ -68,11 +66,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  CONFIG_REL, ROLES_REL, DEFAULT_PLUGIN_ROOT, REVIEW_CLASSES,
-  effectiveReviewRow, jsonText, lf, orderConfig, renderTemplate, resolveProjectRoot,
-  reviewerAgentRendered, sha256, templateContext,
+  CONFIG_REL, ROLES_REL, DEFAULT_PLUGIN_ROOT, ProjectAdditionsError, REVIEW_CLASSES,
+  carryProjectAdditions, effectiveReviewRow, jsonText, lf, normalizeBookkeeping, orderConfig, renderTemplate,
+  resolveProjectRoot, reviewerAgentRendered, templateContext,
 } from './generate.mjs';
 import { formatErrors, loadSchema, validate } from './validate-config.mjs';
+import { payloadVersion } from '../update/validate-payload.mjs';
 import { TOP_TIER, claudePinErrors, isTierAlias } from './role-rules.mjs';
 import { finishWithSelfCheck } from '../selfcheck/run-selfcheck.mjs';
 
@@ -354,46 +353,26 @@ function renderArtifacts(pluginRoot, projectRoot, config) {
 }
 
 /**
- * Classifies one artifact against the two-hash bookkeeping and the render this run wants.
- * Returns { action, entry, why } or throws a RolesRefusal. `action` is 'write' | 'stamp' | 'none'.
+ * Decides one artifact: the render this run wants OVERWRITES whatever is there, and a Markdown file
+ * carries its project additions block over (a malformed block is a RolesRefusal). Returns
+ * { action, content, raw, why } with `action` 'write' | 'none'; `raw` = write the bytes as they are
+ * (a carried block keeps its own line endings). `recorded` only shapes the wording.
  */
-export function classifyArtifact({ key, actual, previous, render }) {
-  const renderHash = sha256(render);
-  const entry = { upstream: renderHash, local: renderHash, override: false };
-
-  if (!isPlainObject(previous)) {
-    if (actual === null) return { action: 'write', entry, why: 'created' };
-    // A file this engine never wrote. Identical to the render is not a takeover, it is a fact;
-    // anything else is somebody's file at an address this command is about to write.
-    if (sha256(actual) === renderHash) return { action: 'stamp', entry, why: 'already exactly the render - adopted into the bookkeeping' };
-    throw new RolesRefusal(
-      `${key}: a file I did not write is in the way - move it aside, or run /pnp:setup --adopt to take ownership of it deliberately.`,
-    );
+export function classifyArtifact({ key, actual, render, recorded = true }) {
+  let content = render;
+  let carried = false;
+  if (key.endsWith('.md')) {
+    try {
+      ({ text: content, carried } = carryProjectAdditions(actual, render, key));
+    } catch (e) {
+      if (e instanceof ProjectAdditionsError) throw new RolesRefusal(e.message);
+      throw e;
+    }
   }
-  if (previous.override === true) {
-    throw new RolesRefusal(
-      `${key} is held by you (override) - use \`/pnp:update --resolve ${key}\`, which is the door out of a hold. Nothing was written.`,
-    );
-  }
-  if (actual === null) {
-    throw new RolesRefusal(
-      `${key} is recorded in _aiwf.managedRegions but is GONE from disk. A deletion is a manual edit, and this command `
-      + `never silently recreates a managed artifact - resolve it with \`/pnp:update --resolve ${key}\`.`,
-    );
-  }
-  const actualHash = sha256(actual);
-  if (actualHash !== previous.local) {
-    // ALREADY-APPLIED comes first, and it is the whole recovery story of a crash between the two
-    // phase-2 writes: the file on disk already IS the render this run wants, so nothing is at risk
-    // and nothing is asked - only the stamp is completed.
-    if (actualHash === renderHash) return { action: 'stamp', entry, why: 'already applied - the stamp was completed' };
-    throw new RolesRefusal(
-      `${key} was edited by hand (its content no longer matches the recorded local hash). Nothing was overwritten - `
-      + `resolve it first with \`/pnp:update --resolve ${key}\`.`,
-    );
-  }
-  if (actualHash === renderHash) return { action: 'none', entry, why: 'unchanged' };
-  return { action: 'write', entry, why: 're-rendered from the config' };
+  if (actual !== null && lf(actual) === lf(content)) return { action: 'none', content, raw: carried, why: 'unchanged' };
+  let why = actual === null ? 'created' : (recorded ? 're-rendered from the config' : 'overwrote a file this installation had no record of');
+  if (carried) why += ' (project additions carried)';
+  return { action: 'write', content, raw: carried, why };
 }
 
 /**
@@ -406,6 +385,10 @@ export function planRoles({ pluginRoot, projectRoot, config, schema, sets = [], 
   if (!isPlainObject(bk) || !isPlainObject(bk.managedRegions)) {
     throw new RolesUsageError(`${toPosix(CONFIG_REL)} carries no _aiwf.managedRegions bookkeeping - this is not a project /pnp:setup installed.`);
   }
+  // A legacy bookkeeping shape is brought to the current one before anything is judged against it.
+  normalizeBookkeeping(config);
+  const version = payloadVersion(pluginRoot);
+  const isRecorded = (key) => Object.prototype.hasOwnProperty.call(bk.managedRegions, key);
   const applied = applyChanges(config, { sets, resets });
   const nextConfig = orderConfig(applied.config);
 
@@ -425,41 +408,25 @@ export function planRoles({ pluginRoot, projectRoot, config, schema, sets = [], 
     const decision = classifyArtifact({
       key: artifact.key,
       actual: readText(abs),
-      previous: bk.managedRegions[artifact.key],
       render: artifact.content,
+      recorded: isRecorded(artifact.key),
     });
-    regions[artifact.key] = decision.entry;
-    if (decision.action === 'write') writes.push({ key: artifact.key, rel: artifact.rel, file: abs, content: artifact.content, why: decision.why });
-    else if (decision.action === 'stamp') notes.push(`${artifact.key}: ${decision.why}`);
+    regions[artifact.key] = version;
+    if (decision.action === 'write') {
+      writes.push({ key: artifact.key, rel: artifact.rel, file: abs, content: decision.content, raw: decision.raw, why: decision.why });
+    }
   }
 
   // A STALE agent file: the role is no longer claude-hosted, so this configuration renders nothing
-  // at that path. FOUR conditions before it is deleted: it is not HELD by the operator, it is
-  // recorded as ours, it still hashes to what we recorded, and the operator passed the flag - which
-  // confirms removing THAT file, not whatever happens to sit there.
+  // at that path. TWO conditions before it is deleted: its key is recorded as ours, and the operator
+  // passed the flag. A file this installation never recorded is not a render of ours: it is LEFT
+  // ALONE and named (`left alone:`) - nothing about a file stops the run.
+  const leftAlone = [];
   for (const { key, rel, role } of stale) {
     const abs = path.join(projectRoot, rel);
     const actual = readText(abs);
-    const previous = bk.managedRegions[key];
     if (actual === null) { delete regions[key]; continue; }
-    if (!isPlainObject(previous)) {
-      throw new RolesRefusal(`${key} exists but is not recorded in _aiwf.managedRegions, and the ${role} host is not Claude any more - this command will not delete a file it did not write. Move it aside and re-run.`);
-    }
-    // HELD FIRST - before the hash check and before the flag, and that ORDER is the whole point.
-    // `override: true` means the operator went through a conflict dialog and kept this file, so its
-    // content MATCHES `local` by construction: a hash check alone waves a held artifact straight
-    // through to deletion, and --confirm-remove-stale then silently answers a question the operator
-    // already answered the other way. Leaving a hold is `/pnp:update --resolve`, and nothing else.
-    if (previous.override === true) {
-      throw new RolesRefusal(
-        `${key} is HELD by you (override), so it is not a stale render this command may delete - not even with `
-        + `--confirm-remove-stale, and not even though the ${role} host is no longer Claude. Leaving a hold is a `
-        + `decision of yours: reopen it with \`/pnp:update --resolve ${key}\`. Nothing was written.`,
-      );
-    }
-    if (sha256(actual) !== previous.local) {
-      throw new RolesRefusal(`${key} is a stale render that was ALSO edited by hand, so it is not the file the removal flag confirms. Nothing was deleted - resolve it with \`/pnp:update --resolve ${key}\`.`);
-    }
+    if (!isRecorded(key)) { leftAlone.push(key); continue; }
     if (!confirmRemoveStale) {
       throw new RolesRefusal(`${key} is now a STALE render (the ${role} host is not Claude any more) and must not stay behind - the self-check fails on it. Nothing was deleted: re-run with --confirm-remove-stale to remove it.`);
     }
@@ -478,6 +445,7 @@ export function planRoles({ pluginRoot, projectRoot, config, schema, sets = [], 
     writes,
     removes,
     notes,
+    leftAlone,
     changed: writes.length > 0 || removes.length > 0 || configChanged,
   };
 }
@@ -511,7 +479,7 @@ export function applyRoles({ projectRoot, plan }) {
   const rolesWrites = plan.writes.filter((w) => w.key === toPosix(ROLES_REL));
   const write = (w, why) => {
     fs.mkdirSync(path.dirname(w.file), { recursive: true });
-    fs.writeFileSync(w.file, lf(w.content), 'utf8');
+    fs.writeFileSync(w.file, w.raw ? w.content : lf(w.content), 'utf8');
     applied.push(`write  ${w.key}  (${why || w.why})`);
     crashPoint(w.key);
   };
@@ -718,6 +686,7 @@ if (isMain()) {
     try { config = JSON.parse(raw); } catch (e) {
       throw new RolesUsageError(`${toPosix(CONFIG_REL)} is not valid JSON (${e.message}) - nothing is written over a config that cannot be read.`);
     }
+    normalizeBookkeeping(config);
 
     // `--show` RETURNS its status like the write path below, for the same drained-output reason;
     // the write path therefore sits in the `else` - a bare `exitCode` here would fall through into
@@ -734,6 +703,7 @@ if (isMain()) {
       const applied = applyRoles({ projectRoot, plan });
       if (!opts.quiet) {
         for (const n of plan.notes) console.log(`  note   ${n}`);
+        for (const key of plan.leftAlone) console.log(`left alone: ${key} (not rendered by this configuration)`);
         if (applied.length === 0) console.log('no changes - the project layer already matches the config.');
         else for (const line of applied) console.log(`  ${line}`);
         console.log('');

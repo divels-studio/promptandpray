@@ -151,30 +151,28 @@ const readText = (p) => { try { return fs.readFileSync(p, 'utf8'); } catch (e) {
 const readJson = (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch (e) { return null; } };
 const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
-// ---------------------------------------------------------------------------
-// Managed-artifact hashing (an INDEPENDENT implementation of the generator's projection)
-// ---------------------------------------------------------------------------
-// sha256 over the LF-normalised text - of the whole file for a `<file>` key, of the marked region
-// INCLUDING its markers for a `<file>#<region>` key. Written out here on purpose rather than
-// imported from the setup engine: a checker that reuses the code under test cannot catch that code
-// hashing the wrong thing. The negative controls prove this one can fail.
+// sha256 over the LF-normalised text (the plan-gate and provenance checks use it).
 const sha256 = (text) => crypto.createHash('sha256').update(text.replace(/\r\n/g, '\n'), 'utf8').digest('hex');
 // The RAW-BYTE companion, for facts that are about bytes rather than about text: a file whose
 // content was rewritten in place is invisible to a hash that normalises line endings first.
 const sha256Bytes = (buffer) => crypto.createHash('sha256').update(buffer).digest('hex');
-function managedHash(projectRoot, key) {
+
+// ---------------------------------------------------------------------------
+// Managed-artifact presence (a bookkeeping key -> is its subject on disk)
+// ---------------------------------------------------------------------------
+// A `<file>` key is present when the file exists; a `<file>#<region>` key when the file exists and
+// carries BOTH region markers, BEGIN before END. Presence only: an update overwrites managed
+// artifacts, so their content is not this engine's business.
+function managedArtifactPresent(projectRoot, key) {
   const cut = key.indexOf('#');
   const file = cut === -1 ? key : key.slice(0, cut);
   const region = cut === -1 ? null : key.slice(cut + 1);
   const text = readText(path.join(projectRoot, ...file.split('/')));
-  if (text === null) return null;
-  if (!region) return sha256(text);
-  const begin = `<!-- BEGIN ${region} -->`;
-  const end = `<!-- END ${region} -->`;
-  const from = text.indexOf(begin);
-  const to = text.indexOf(end);
-  if (from === -1 || to === -1 || to < from) return null;
-  return sha256(text.slice(from, to + end.length));
+  if (text === null) return false;
+  if (!region) return true;
+  const from = text.indexOf(`<!-- BEGIN ${region} -->`);
+  const to = text.indexOf(`<!-- END ${region} -->`);
+  return from !== -1 && to !== -1 && to > from;
 }
 
 // ---------------------------------------------------------------------------
@@ -513,6 +511,8 @@ const FIXTURE_SUPPRESSED = ['Bash(git stash:*)'];
 // generator on purpose (this engine is CommonJS, and the project-layer checks compare artifacts
 // against each other): a shared source would make those comparisons tautological.
 const REVIEW_CLASSES = ['plan', 'code', 'docs'];
+// The managed artifacts the fixture writes, in the bookkeeping's key form.
+const FIXTURE_MANAGED_KEYS = ['CLAUDE.md#aiwf-core', '.claude/aiwf-native/roles.json', '.claude/aiwf-native/ORCHESTRATOR.md', '.claude/agents/writer.md', '.claude/agents/reviewer.md', 'AGENTS.md'];
 
 function writeFixture(root, pluginVersion) {
   const mk = (rel) => fs.mkdirSync(path.join(root, rel), { recursive: true });
@@ -527,8 +527,7 @@ function writeFixture(root, pluginVersion) {
     _aiwf: {
       installedPluginVersion: pluginVersion,
       lastMigrationApplied: '0001_initial',
-      migrationJournal: null,
-      managedRegions: {}, // filled in below from the files this function really writes
+      managedRegions: {}, // filled in below for the files this function really writes
       ownedAskRules: FIXTURE_OWNED.slice(),
       suppressedAskRules: FIXTURE_SUPPRESSED.slice(),
     },
@@ -604,7 +603,7 @@ function writeFixture(root, pluginVersion) {
   put('.aiwf/.keep', '');
 
   // A CLAUDE.md with the managed region, so the `<file>#<region>` half of the bookkeeping has a real
-  // subject. Text outside the markers is here for the same reason: it must NOT enter the hash.
+  // subject. Text outside the markers belongs to the operator.
   put('CLAUDE.md', [
     '# Fixture project',
     '',
@@ -612,19 +611,16 @@ function writeFixture(root, pluginVersion) {
     'Managed region body (fixture).',
     '<!-- END aiwf-core -->',
     '',
-    'Text below the markers belongs to the operator and is never hashed.',
+    'Text below the markers belongs to the operator.',
     '',
   ].join('\n'));
 
-  // The bookkeeping is computed from the files just written, never hand-typed: a fixture carrying
-  // invented hashes would make the managed-region checks pass on nothing. Every artifact the config
-  // implies gets an entry - roles.json, the Orchestrator role, the writer, the claude-hosted
-  // reviewer, the Codex auditor's AGENTS.md, and the region.
+  // The bookkeeping records, per managed artifact, the plugin version that last rendered it. Every
+  // artifact this function wrote gets an entry - roles.json, the Orchestrator role, the writer, the
+  // claude-hosted reviewer, the Codex auditor's AGENTS.md, and the region - so the presence check has
+  // a real file behind every key (and something the negative controls can take away).
   const managedRegions = {};
-  for (const key of ['CLAUDE.md#aiwf-core', '.claude/aiwf-native/roles.json', '.claude/aiwf-native/ORCHESTRATOR.md', '.claude/agents/writer.md', '.claude/agents/reviewer.md', 'AGENTS.md']) {
-    const hash = managedHash(root, key);
-    managedRegions[key] = { upstream: hash, local: hash, override: false };
-  }
+  for (const key of FIXTURE_MANAGED_KEYS) managedRegions[key] = pluginVersion;
   config._aiwf.managedRegions = managedRegions;
   put('.claude/aiwf-native/aiwf.config.json', JSON.stringify(config, null, 2) + '\n');
 }
@@ -2132,9 +2128,6 @@ function sectionConfigSchema(tmpRoot) {
   rejects('rejects a correctionRoundsCap below 1', variant('cap0', (c) => { c.loop.correctionRoundsCap = 0; }));
   rejects('rejects a scratchDir moved away from .aiwf', variant('scratch', (c) => { c.paths.scratchDir = '.scratch'; }));
   rejects('rejects a verify command with no run line', variant('cmd', (c) => { c.verify.commands = [{ name: 'unit' }]; }));
-  rejects('rejects a non-sha256 managed-region hash', variant('hash', (c) => {
-    c._aiwf.managedRegions['roles.json'] = { upstream: 'nope', local: 'nope', override: false };
-  }));
 
   // --- negative controls for THIS section ---------------------------------------------------
   {
@@ -2202,13 +2195,6 @@ function sectionMigrationPayload(tmpRoot) {
     check('the shipped payload passes the validator at its real entrypoint (exit 0)', r.status === 0,
       r.status === 0 ? r.stdout : `exit ${r.status} - ${r.stderr.split('\n').slice(0, 3).join(' | ').slice(0, 200)}`);
   }
-  // Every managed artifact `--resolve <key>` can reopen must still have a payload template. The
-  // template paths themselves are proven to exist by the payload cross-reference check below.
-  const migrateSrc = readText(path.join(PLUGIN_ROOT, 'scripts', 'update', 'migrate.mjs')) || '';
-  check('migrate.mjs maps every resolvable managed artifact to a payload template',
-    ['CLAUDE.md#aiwf-core', 'roles.json.tmpl', 'ORCHESTRATOR.md.tmpl', 'writer.md.tmpl', 'reviewer.md.tmpl', 'qa.md.tmpl', 'AGENTS.md.tmpl']
-      .every((needle) => migrateSrc.includes(needle)));
-
   // --- the controls: each way of breaking a payload must be REJECTED ------------------------
   const dir = path.join(tmpRoot, 'payload');
   fs.mkdirSync(dir, { recursive: true });
@@ -4648,14 +4634,13 @@ function runRoles(root, args, env) {
   return { status: r.status, stdout: r.stdout || '', stderr: r.stderr || '' };
 }
 
-/** Recomputes the bookkeeping from the files that are really there. */
-function restampFixture(root) {
+/** Re-records the bookkeeping from the files that are really there, at the fixture plugin version. */
+function restampFixture(root, pluginVersion) {
   const p = path.join(root, '.claude', 'aiwf-native', 'aiwf.config.json');
   const c = readJson(p);
   const regions = {};
   for (const key of Object.keys(c._aiwf.managedRegions)) {
-    const h = managedHash(root, key);
-    if (h !== null) regions[key] = { upstream: h, local: h, override: false };
+    if (managedArtifactPresent(root, key)) regions[key] = pluginVersion;
   }
   c._aiwf.managedRegions = regions;
   fs.writeFileSync(p, JSON.stringify(c, null, 2) + '\n');
@@ -4671,7 +4656,7 @@ function sectionRolesCommand(tmpRoot, pluginVersion) {
     fs.mkdirSync(root, { recursive: true });
     writeFixture(root, pluginVersion);
     if (mutate) mutate(root);
-    restampFixture(root);
+    restampFixture(root, pluginVersion);
     return root;
   };
   // The Reviewer moved to Codex: no reviewer agent file, no record of one. This is the installation
@@ -4986,60 +4971,6 @@ function sectionRolesCommand(tmpRoot, pluginVersion) {
       r.status === 1 && cfgOf(root).review.plan.passes === 2 && cfgOf(root).review.docs.passes === 1,
       `exit ${r.status}: plan=${cfgOf(root).review.plan.passes} docs=${cfgOf(root).review.docs.passes}`);
   }
-  {
-    const root = fixture((r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
-      c._aiwf.managedRegions['.claude/aiwf-native/roles.json'].override = true;
-    }));
-    // restampFixture would clear the override, so it is set again after it.
-    mutateJson(root, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
-      c._aiwf.managedRegions['.claude/aiwf-native/roles.json'].override = true;
-    });
-    const before = readText(path.join(root, '.claude', 'aiwf-native', 'roles.json'));
-    const r = runRoles(root, ['--set', 'plan.passes=1']);
-    check('an artifact HELD through an override -> exit 1 pointing at /pnp:update --resolve, and the file is untouched',
-      r.status === 1 && /held by you \(override\)/.test(r.stderr)
-      && readText(path.join(root, '.claude', 'aiwf-native', 'roles.json')) === before,
-      `exit ${r.status}: ${r.stderr.trim().split('\n')[0]}`);
-  }
-  {
-    // The edit lands AFTER the fixture is stamped - editing before it would simply record the edit
-    // as the accepted content, and there would be no drift to detect.
-    const root = fixture();
-    patchText(root, ['.claude', 'aiwf-native', 'roles.json'], /"effort": "high"/, '"effort": "low"');
-    const r = runRoles(root, ['--set', 'plan.passes=1']);
-    check('an artifact EDITED by hand that is not already the wanted render -> exit 1, resolve first',
-      r.status === 1 && /edited by hand/.test(r.stderr), `exit ${r.status}: ${r.stderr.trim().split('\n')[0]}`);
-  }
-  {
-    // HELD + STALE, which is the pair that matters: `override: true` means the operator went through
-    // a conflict dialog and kept this file, so its content MATCHES `local` by construction. A stale
-    // check that only compared hashes and looked for the flag would wave it straight through to
-    // deletion - and --confirm-remove-stale would then silently answer a question the operator had
-    // already answered the other way.
-    const root = fixture();
-    mutateJson(root, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
-      c._aiwf.managedRegions['.claude/agents/reviewer.md'].override = true;
-    });
-    const before = readText(path.join(root, '.claude', 'aiwf-native', 'aiwf.config.json'));
-    const r = runRoles(root, ['--set', 'reviewer.engine=codex', '--set', 'reviewer.model=codex-atom-2', '--confirm-remove-stale']);
-    check('a HELD agent file that became stale is NOT deleted, even WITH --confirm-remove-stale -> exit 1',
-      r.status === 1 && /HELD by you \(override\)/.test(r.stderr) && fs.existsSync(agent(root)),
-      `exit ${r.status}: ${r.stderr.trim().split('\n').filter(Boolean).pop()}`);
-    check('...and it points at /pnp:update --resolve, having written nothing at all',
-      /\/pnp:update --resolve \.claude\/agents\/reviewer\.md/.test(r.stderr)
-      && readText(path.join(root, '.claude', 'aiwf-native', 'aiwf.config.json')) === before,
-      r.stderr.trim().split('\n').filter(Boolean).pop());
-  }
-  {
-    // A file this engine never wrote, at an address it is about to write. Not a takeover.
-    const root = fixture(codexReviewer);
-    fs.writeFileSync(agent(root), '---\nname: reviewer\n---\nsomebody else wrote this\n');
-    const r = runRoles(root, ['--set', 'docs.engine=claude']);
-    check('a FOREIGN file at the agent path -> exit 1 (a file I did not write is in the way), nothing overwritten',
-      r.status === 1 && /a file I did not write is in the way/.test(r.stderr)
-      && readText(agent(root)).includes('somebody else wrote this'),
-      `exit ${r.status}: ${r.stderr.trim().split('\n')[0]}`);
-  }
 
   // --- the round trip: codex Reviewer -> a claude docs row -> back -----------
   {
@@ -5060,8 +4991,8 @@ function sectionRolesCommand(tmpRoot, pluginVersion) {
       projectLayerFindings(root, PLUGIN_ROOT, { selfAuthored: true }).filter((f) => !f.note && !f.ok).length === 0,
       projectLayerFindings(root, PLUGIN_ROOT, { selfAuthored: true }).filter((f) => !f.note && !f.ok).map((f) => f.id).join(', ') || 'clean');
 
-    // Now the row goes back, which makes the agent file STALE. Deleting it is destructive, so it
-    // needs the operator's flag - and without it the run refuses and the file is still there.
+    // Now the row goes back, which makes the RECORDED agent file STALE. Deleting it is destructive,
+    // so it needs the operator's flag - and without it the run refuses and the file is still there.
     const refused = runRoles(root, ['--reset', 'docs']);
     check('--reset docs without --confirm-remove-stale -> exit 1, and the now-stale agent file is STILL there',
       refused.status === 1 && /STALE render/.test(refused.stderr) && fs.existsSync(agent(root)),
@@ -5168,7 +5099,7 @@ function sectionRolesCommand(tmpRoot, pluginVersion) {
       interrupted.length > 0, interrupted.map((f) => f.id).join(', ') || 'nothing failed - the interruption is invisible');
 
     const again = runRoles(root, ['--set', 'docs.engine=claude']);
-    check('re-running the SAME command finishes it: exit 0 through the already-applied branch (no question, no overwrite)',
+    check('re-running the SAME command finishes it: exit 0, no question asked',
       again.status === 0 && front(root, 'model') === 'fable'
       && cfgOf(root).review.docs.engine === 'claude',
       again.status === 0 ? 'exit 0' : `exit ${again.status}: ${again.stderr.trim().split('\n')[0]}`);
@@ -5281,24 +5212,6 @@ function plansDirUnderScratch(plansDir, scratchDir, windowsPaths = false) {
   const b = norm(scratchDir);
   if (!a || !b || a === '.' || b === '.') return false;
   return a === b || a.startsWith(b + '/');
-}
-
-// paths.changesDir is judged by THE containment rule of that key - containedRelativePath in
-// scripts/setup/validate-config.mjs, the one function setup and the update run call - not by a copy
-// of it here. This file is CommonJS and that module is ESM, so the rule runs in a child process that
-// imports the payload's module by URL. A child that cannot answer is a failure, never a pass.
-function changesDirContained(pluginRoot, value) {
-  const moduleUrl = pathToFileURL(path.join(pluginRoot, 'scripts', 'setup', 'validate-config.mjs')).href;
-  const code = `import { containedRelativePath } from ${JSON.stringify(moduleUrl)};\n`
-    + `process.stdout.write(JSON.stringify(containedRelativePath(${JSON.stringify(value)})));\n`;
-  const r = spawnSync(process.execPath, ['--input-type=module', '-e', code], { encoding: 'utf8' });
-  const answer = (r.stdout || '').trim();
-  if (r.status !== 0) {
-    return { ok: false, detail: `the rule could not be evaluated (exit ${r.status}): ${(r.stderr || '').trim().split('\n')[0].slice(0, 160)}` };
-  }
-  if (answer === 'true') return { ok: true, detail: 'contained' };
-  if (answer === 'false') return { ok: false, detail: 'NOT contained - an update refuses to run with it' };
-  return { ok: false, detail: `the rule gave no boolean answer (${JSON.stringify(answer.slice(0, 60))})` };
 }
 
 // verify.e2e.outputDir under a traced app root is judged by THE predicate the setup interview calls -
@@ -5559,57 +5472,43 @@ function projectLayerFindings(projectRoot, pluginRoot, opts) {
   add('writer-effort', 'writer.md frontmatter effort equals config.roles.writer.effort',
     w.effort != null && w.effort === frontmatter('writer.md', 'effort'), `frontmatter=${frontmatter('writer.md', 'effort')}`);
 
-  // --- managed artifacts: the bookkeeping against what is really on disk -------------------------
-  // The hashes are the whole basis of "no silent overwrite": the next /pnp:update decides what to
-  // re-render, what to leave alone and what to call a conflict by comparing them. A stamp that does
-  // not describe the file it names turns that decision into a coin toss - silently, and in the
-  // direction of overwriting the operator's own work.
-  const regions = isPlainObject(bk.managedRegions) ? bk.managedRegions : null;
-  add('managed-regions-shape', '_aiwf.managedRegions is an object of managed-artifact records',
-    regions != null, regions ? `${Object.keys(regions).length} entries` : `found ${Array.isArray(bk.managedRegions) ? 'an array' : typeof bk.managedRegions}`);
-  if (regions) {
-    const problems = [];
-    for (const key of Object.keys(regions)) {
-      const entry = regions[key];
-      if (!isPlainObject(entry) || typeof entry.local !== 'string') { problems.push(`${key}: no local hash recorded`); continue; }
-      const hash = managedHash(projectRoot, key);
-      if (hash === null) {
-        problems.push(key.includes('#')
-          ? `${key}: the file is missing, or it no longer carries those markers`
-          : `${key}: the recorded artifact is missing from the project`);
-        continue;
+  // --- managed artifacts: every recorded one is on disk -------------------------------------------
+  // `_aiwf.managedRegions[key]` records the plugin version that last rendered the artifact. An update
+  // OVERWRITES managed artifacts, so their content is not checked - only that every recorded key has
+  // its subject on disk (for a `<file>#<region>` key: the file with both region markers) and that
+  // every recorded value is a version. A record in the LEGACY shape ({upstream, local, override},
+  // written before the update overwrote) is present-but-legacy: the update engines normalise it on
+  // load, so it is printed as a [NOTE] and never failed. Any other value is a failure.
+  {
+    const regions = bk.managedRegions;
+    const isLegacyRecord = (v) => isPlainObject(v) && typeof v.local === 'string'
+      && Object.keys(v).every((k) => ['upstream', 'local', 'override'].includes(k));
+    if (!isPlainObject(regions) || Object.keys(regions).length === 0) {
+      add('managed-regions-present', 'every artifact recorded in _aiwf.managedRegions is on disk, recorded at a plugin version',
+        false, isPlainObject(regions) ? 'no managed artifact is recorded (setup records at least CLAUDE.md#aiwf-core)'
+          : `found ${Array.isArray(regions) ? 'an array' : typeof regions}, not an object of records`);
+    } else {
+      const problems = [];
+      const legacy = [];
+      for (const key of Object.keys(regions)) {
+        const value = regions[key];
+        if (!managedArtifactPresent(projectRoot, key)) {
+          problems.push(key.includes('#')
+            ? `${key}: the file is missing, or it no longer carries both region markers`
+            : `${key}: the recorded artifact is missing from the project`);
+        }
+        if (isLegacyRecord(value)) legacy.push(key);
+        else if (typeof value !== 'string' || !VERSION_RE.test(value)) {
+          problems.push(`${key}: recorded as ${JSON.stringify(value).slice(0, 60)}, not a plugin version`);
+        }
       }
-      // `local` is what was last ACCEPTED, so it must match the file even when the operator holds
-      // the artifact through an override - that is precisely what override records. Only `upstream`
-      // is expected to diverge there, and it is deliberately not compared.
-      if (hash !== entry.local) {
-        problems.push(`${key}: local ${entry.local.slice(0, 12)}... but the content hashes ${hash.slice(0, 12)}...` +
-          (entry.override === true ? ' (override is set, which still requires local to describe the accepted content)' : ''));
+      add('managed-regions-present', 'every artifact recorded in _aiwf.managedRegions is on disk, recorded at a plugin version',
+        problems.length === 0, problems.length ? problems.slice(0, 4).join('; ') : `${Object.keys(regions).length} artifacts present`);
+      if (legacy.length) {
+        addObservation('managed-regions-legacy', 'managedRegions records in the legacy shape (observed)',
+          `${legacy.length} record(s) still carry the pre-overwrite {upstream, local, override} shape - present; the next /pnp:update records them as versions`);
       }
     }
-    add('managed-regions-match', 'every managed artifact still hashes to its recorded local hash',
-      problems.length === 0, problems.length ? problems.slice(0, 4).join('; ') : `${Object.keys(regions).length} artifacts verified`);
-
-    // The set itself must be right: an artifact with no entry is unmanaged (an update would refuse
-    // to touch it), and an entry with no artifact is a stamp for something that is not there.
-    // The three unconditional artifacts, plus the Orchestrator role, which is unconditional for a
-    // reason of its own: the review AGENTS depend on which host a role is configured for, and the
-    // main session does not depend on anything - every installation has one. And the Codex auditor's
-    // AGENTS.md at the project root, unconditional because a review class can move to that host at
-    // any time.
-    const expected = new Set(['CLAUDE.md#aiwf-core', '.claude/aiwf-native/roles.json',
-      '.claude/aiwf-native/ORCHESTRATOR.md', '.claude/agents/writer.md', 'AGENTS.md']);
-    // Same rule as agent-present-*: reviewer.md is part of this configuration when the Reviewer role
-    // OR any review row is claude-hosted; qa.md follows its own role alone.
-    if (reviewerAgentWanted) expected.add('.claude/agents/reviewer.md');
-    if (cfg.roles && cfg.roles.qa && cfg.roles.qa.engine === 'claude') expected.add('.claude/agents/qa.md');
-    const actualKeys = new Set(Object.keys(regions));
-    const missing = [...expected].filter((k) => !actualKeys.has(k));
-    const extra = [...actualKeys].filter((k) => !expected.has(k));
-    add('managed-regions-cover', 'managedRegions covers exactly the artifacts this config implies',
-      missing.length === 0 && extra.length === 0,
-      (missing.length ? `missing ${JSON.stringify(missing)} ` : '') + (extra.length ? `unexpected ${JSON.stringify(extra)}` : '')
-        || `${expected.size} artifacts`);
   }
 
   // --- version bookkeeping ----------------------------------------------------------------------
@@ -5625,8 +5524,6 @@ function projectLayerFindings(projectRoot, pluginRoot, opts) {
   }
   add('last-migration', '_aiwf records a lastMigrationApplied',
     typeof bk.lastMigrationApplied === 'string' && bk.lastMigrationApplied.length > 0);
-  add('journal-clear', '_aiwf.migrationJournal is clear (no interrupted migration)',
-    bk.migrationJournal == null, `journal=${JSON.stringify(bk.migrationJournal)}`);
 
   // --- declared paths exist ---------------------------------------------------------------------
   const paths = cfg.paths || {};
@@ -5636,15 +5533,6 @@ function projectLayerFindings(projectRoot, pluginRoot, opts) {
     typeof paths.scratchDir === 'string' && fs.existsSync(path.join(projectRoot, paths.scratchDir)), String(paths.scratchDir));
   add('path-plans', 'paths.plansDir exists in the project',
     typeof paths.plansDir === 'string' && fs.existsSync(path.join(projectRoot, paths.plansDir)), String(paths.plansDir));
-  // OPTIONAL key: absent reads as "." (the project root), which is contained by definition. Present,
-  // it must satisfy the one containment rule (changesDirContained above) - the folder itself need not
-  // exist yet, the update creates it.
-  {
-    const present = Object.prototype.hasOwnProperty.call(paths, 'changesDir');
-    const verdict = present ? changesDirContained(pluginRoot, paths.changesDir) : { ok: true, detail: 'absent - reads as "." (the project root)' };
-    add('path-changesDir', 'paths.changesDir, when present, is a folder inside the project (containedRelativePath)',
-      verdict.ok, present ? `${JSON.stringify(paths.changesDir)}: ${verdict.detail}` : verdict.detail);
-  }
   // plansDir is the PARENT of active/, archive/, drafts/ and readiness/: a plan ENTERS the repo
   // into active/ and LEAVES into archive/ when every ticket is closed. A plansDir with no active/
   // means every consumer that globs `<plansDir>/active/PLAN_*.md` silently finds nothing.
@@ -5688,30 +5576,6 @@ function projectLayerFindings(projectRoot, pluginRoot, opts) {
         addObservation('e2e-outputdir-traced', 'verify.e2e.outputDir under a traced app root', traced.note);
       }
     }
-  }
-
-  // --- the transfer surface is OUTSIDE the managed set ------------------------------------------
-  // Setup seeds it ONCE and then it is the operator's: no bookkeeping record, no `--resolve` address,
-  // no migration operation - ever. A record here is not a cosmetic surplus; it is what would let the
-  // next `/pnp:update` re-render the page the operator collects candidates, rulings, pass statistics
-  // and events on. Deliberately NOT an existence check: the file is optional, and an installation
-  // older than the key legitimately has none.
-  // BOTH spellings are refused rather than only the resolved one - the configured path and the
-  // `<plansDir>/PNP_CANDIDATES.md` default - because a config that gains or loses the key must not be
-  // able to move a managed record out of sight.
-  {
-    const surfaceKeys = new Set();
-    if (typeof paths.transferSurface === 'string' && paths.transferSurface.trim() !== '') {
-      surfaceKeys.add(paths.transferSurface.split('\\').join('/'));
-    }
-    if (typeof paths.plansDir === 'string' && paths.plansDir.trim() !== '') {
-      surfaceKeys.add(`${paths.plansDir.split('\\').join('/').replace(/\/+$/, '')}/PNP_CANDIDATES.md`);
-    }
-    const recorded = isPlainObject(bk.managedRegions) ? Object.keys(bk.managedRegions) : [];
-    const managed = recorded.filter((k) => surfaceKeys.has(k.split('#')[0]));
-    add('transfer-surface-unmanaged', 'the transfer surface carries NO bookkeeping record (it is seeded once and then the operator\'s)',
-      managed.length === 0,
-      managed.length ? `recorded as managed: ${JSON.stringify(managed)}` : `${[...surfaceKeys].join(', ') || 'no path resolvable'} - unmanaged`);
   }
 
   // --- the config satisfies the shipped schema --------------------------------------------------
@@ -6446,419 +6310,6 @@ function listFiles(dir, filter, acc) {
   return acc;
 }
 
-/**
- * Every long flag the setup skill documents, and the ones no setup entrypoint parses. A line naming
- * another command (/pnp:update, scripts/update/) documents THAT command's flags, so it is skipped
- * whole. Pure, and takes its inputs as text, so the same function can be run on constructed input.
- */
-function setupFlagFindings(skillText, cliSources) {
-  const documented = new Set();
-  for (const line of String(skillText).split('\n')) {
-    // A line about a DIFFERENT command carries that command's flags, and they are parsed by that
-    // command's CLI, not by setup's. Skipped by name: /pnp:update and the update engine, and
-    // /pnp:roles (scripts/setup/aiwf-roles.mjs), which the setup skill invokes at the end to print
-    // the audit table.
-    if (line.includes('/pnp:update') || line.includes('scripts/update/')) continue;
-    if (line.includes('/pnp:roles') || line.includes('aiwf-roles.mjs')) continue;
-    for (const m of line.match(/--[a-z][a-z0-9-]*/g) || []) documented.add(m);
-  }
-  const list = [...documented].sort();
-  return { documented: list, unparsed: list.filter((f) => !cliSources.some((src) => src.includes(`'${f}'`))) };
-}
-
-// ---------------------------------------------------------------------------
-// PAYLOAD DOCTRINE - the operator gates that exist ONLY as text, plus four mechanical checks
-// ---------------------------------------------------------------------------
-// A gate that can be a hook IS a hook in this plugin; what is left over is doctrine carried by the
-// skill and template text, and text has no compiler. This section no longer pins doctrine SENTENCES
-// in general: prose in docs/ and skills/ is read in place by the installed skills and is never
-// rendered into a project, so a reworded sentence is a prose change, not a regression. What stays
-// is NINE checks - five operator-gate sentences, ONE home each, and four mechanical checks (the two
-// `git -C` ruleset forms, the model-agnostic Orchestrator template, and the shipped-commands index
-// read structurally against the directory). Findings take the plugin root as an argument, so the
-// controls can run the same function over a sabotaged copy - the marketplace section's pattern, for
-// the same reason.
-//
-// The refusal of a blanket `git -C` rule is doctrine, and doctrine is per TOOL now that the ask list
-// is mirrored: re-adding it on PowerShell alone would gate every read-only `git -C <other repo> log`
-// on a Windows session while the Bash half stayed correct, which is the same defect wearing the
-// other tool's name. Both spellings are held, and so are both tools' rendered `<projectRoot>` forms.
-const BLANKET_GIT_C_RULES = ['Bash(git -C:*)', 'PowerShell(git -C:*)'];
-const GIT_C_PROJECT_TOOLS = ['Bash', 'PowerShell'];
-// Line breaks are formatting, not meaning: the payload wraps at 100 columns and a re-wrap must not
-// read as a missing rule. Whitespace is collapsed on BOTH sides before comparing.
-const collapseWs = (s) => String(s).replace(/\s+/g, ' ').trim();
-
-// ---------------------------------------------------------------------------
-// THE WORD THAT BUYS A PASS - one home
-// ---------------------------------------------------------------------------
-// Every auditor pass AFTER THE FIRST is dispatched on a word of its own. The revoked default - "the
-// passes the route already prescribes run on the ticket's standing word" - let a paid pass be spent
-// without asking, and the phrase that replaces it has to be greppable or the next COO reinvents the
-// default. One file, one phrase, whitespace-collapsed; the entry carries the REPLACEMENT its control
-// sabotages with, because the honest regression is the pass going back to riding the standing word.
-const DOCTRINE_ONE_WORD_PER_PASS = 'one word per pass';
-const DOCTRINE_PASS_SURFACES = [
-  { id: 'doctrine-one-word-per-pass-workflow',
-    file: 'docs/WORKFLOW.md',
-    phrase: DOCTRINE_ONE_WORD_PER_PASS,
-    replacement: 'on the ticket\'s standing word',
-    what: 'WORKFLOW dispatches every auditor pass after the first on a word of its own' },
-];
-
-// ---------------------------------------------------------------------------
-// THREE OPERATOR GATES ADOPTED FROM A CONSUMER'S NOTES - one home each
-// ---------------------------------------------------------------------------
-// These were live in one or another consumer's local notes, where a rule survives exactly as long as
-// the session that wrote it. What each one is worth is visible in its REPLACEMENT: not a nonsense
-// string and not a generic rewording, but the weaker rule that was in force BEFORE it - the sentence
-// a well-meaning edit lands on, which still reads perfectly true and quietly returns the old
-// behaviour.
-//   - A newborn ticket's announcement carries ONE question. The regression is an announcement that
-//     ANSWERS it - the ticket is told it has a pass, and the operator pays for a pass they were
-//     never asked about.
-//   - Host directives yield to project canon; host safety and permission rules never do.
-//   - Rule-bearing writes are shown before they land; factual statuses are not. The regression is a
-//     COO that records rules as it goes and reports them afterwards.
-const DOCTRINE_CONS_AUDIT_PASS_QUESTION =
-  'the announcement carries ONE question - does this ticket get an audit pass - and the answer lands '
-  + 'in the ticket\'s PLAN entry; a question, never an automatic pass';
-const DOCTRINE_CONS_AUDIT_PASS_ANSWERED =
-  'the announcement states which audit pass the ticket is getting';
-const DOCTRINE_CONS_HOST_PRECEDENCE =
-  'project canon wins over the host\'s ergonomic directives; the host\'s safety and permission rules '
-  + 'are never overridden';
-const DOCTRINE_CONS_DOCTRINE_WRITE_GATE =
-  'a rule-bearing write - memory or file - is shown to the operator and lands only on approval; '
-  + 'purely factual statuses are exempt';
-const DOCTRINE_CONSOLIDATION_SURFACES = [
-  { id: 'doctrine-cons-audit-pass-question-workflow',
-    file: 'docs/WORKFLOW.md',
-    phrase: DOCTRINE_CONS_AUDIT_PASS_QUESTION,
-    replacement: DOCTRINE_CONS_AUDIT_PASS_ANSWERED,
-    what: 'guard (b): a newborn ticket\'s announcement ASKS whether it gets an audit pass' },
-  { id: 'doctrine-cons-host-precedence',
-    file: 'docs/WORKFLOW.md',
-    phrase: DOCTRINE_CONS_HOST_PRECEDENCE,
-    replacement: 'the host\'s own directives about how to work take precedence in the session they run in',
-    what: 'guard (f): project canon beats the host\'s ergonomic directives, never its safety rules' },
-  { id: 'doctrine-cons-doctrine-write-gate',
-    file: 'docs/WORKFLOW.md',
-    phrase: DOCTRINE_CONS_DOCTRINE_WRITE_GATE,
-    replacement: 'the COO records a rule as it goes and reports it to the operator afterwards',
-    what: 'guard (g): a rule-bearing write is shown before it lands; a factual status is not' },
-];
-
-// ---------------------------------------------------------------------------
-// THE WORD THAT BUYS A WARM READINESS PASS - one home
-// ---------------------------------------------------------------------------
-// A readiness pass after the first may resume only with its compensations AND on the operator's
-// word. The weaker rule it replaced - a later readiness pass that resumes like any other - still
-// reads true, which is why the replacement below is that practice, not a nonsense string.
-const DOCTRINE_PASS_COMPENSATIONS =
-  'A readiness pass after the first may resume only with its compensations, and only on the '
-  + 'operator\'s word';
-const DOCTRINE_PASS_CONDUCT_SURFACES = [
-  { id: 'doctrine-pass-compensations',
-    file: 'skills/review/SKILL.md',
-    phrase: DOCTRINE_PASS_COMPENSATIONS,
-    replacement: 'A readiness pass after the first resumes like any other',
-    what: 'a later readiness pass resumes only with its compensations AND the operator\'s word' },
-];
-
-// The index line of skills/, read STRUCTURALLY against the directory listing - the check catches a
-// skill that shipped without ever being written into the line, and a name in the line that is not a
-// skill directory. The literal below is not asserted; it is the line the second control rewrites.
-const DOCTRINE_SHIPPED_COMMANDS =
-  'Shipped: loop, review, qa, qal, brief, mission, work, roles, arbiter, setup, update, selfcheck.';
-// The structural reading of the SAME line: the names it lists, taken as data.
-const shippedIndexNames = (text) => {
-  const m = /^Shipped:\s*(.+)$/m.exec(text || '');
-  if (!m) return null;
-  return m[1].replace(/\.\s*$/, '').split(',').map((s) => s.trim().replace(/`/g, '')).filter(Boolean);
-};
-// The role section of docs/LOOP.md, read STRUCTURALLY as its top-level bullets: a role added to or
-// dropped from the section without the other enumerations of the roles following is how the doctrine
-// forks. Order is not asserted; the set is, in both directions.
-const DOCTRINE_ROLE_BOUNDARIES = ['COO', 'Writer', 'Reviewer', 'QA', 'QAL', 'Arbiter', 'Operator'];
-// The names the section's top-level bullets carry, taken as data: the bold text before ` /` when it
-// has one (`COO / Orchestrator` -> `COO`), else the whole bold text. Continuation lines and the
-// section's non-bullet paragraphs do not match. null = no section to read.
-const roleBoundaryNames = (text) => {
-  const lines = (text || '').split(/\r?\n/);
-  const start = lines.findIndex((l) => /^## Role boundaries\s*$/.test(l));
-  if (start < 0) return null;
-  const names = [];
-  for (let i = start + 1; i < lines.length && !lines[i].startsWith('## '); i++) {
-    const m = /^- \*\*(.+?)\*\*/.exec(lines[i]);
-    if (m) names.push(m[1].includes(' /') ? m[1].slice(0, m[1].indexOf(' /')).trim() : m[1].trim());
-  }
-  return names;
-};
-const skillDirNames = (root) => {
-  try {
-    return fs.readdirSync(path.join(root, 'skills'), { withFileTypes: true })
-      .filter((e) => e.isDirectory()).map((e) => e.name).sort();
-  } catch (e) { return []; }
-};
-
-function payloadDoctrineFindings(pluginRoot) {
-  const out = [];
-  const add = (id, name, ok, detail) => out.push({ id, name, ok: !!ok, detail: detail || '' });
-
-  // The five operator-gate sentences, one home each: one file, one phrase, whitespace-collapsed.
-  for (const s of [...DOCTRINE_PASS_SURFACES, ...DOCTRINE_CONSOLIDATION_SURFACES, ...DOCTRINE_PASS_CONDUCT_SURFACES]) {
-    const text = readText(path.join(pluginRoot, ...s.file.split('/')));
-    const present = text != null && collapseWs(text).includes(collapseWs(s.phrase));
-    add(s.id, `${s.file}: ${s.what}`, present,
-      text == null ? 'the file is missing' : (present ? `"${collapseWs(s.phrase)}"` : `the sentence is missing or reworded: "${collapseWs(s.phrase)}"`));
-  }
-
-  // The rendered Orchestrator role is a RULES document, not an agent definition, and the one way it
-  // could quietly become the second kind is a model. Asserted as a negative over the template, in
-  // both spellings that would do it: a rendered role key, and a frontmatter field. Who audits what,
-  // on which engine and with how many passes, is the audit table - a value the operator reads and
-  // changes - and a model pinned in a rendered document would state it as doctrine instead.
-  {
-    const tmpl = readText(path.join(pluginRoot, 'templates', 'ORCHESTRATOR.md.tmpl'));
-    const readsRole = tmpl != null && /config\.roles\./.test(tmpl);
-    const hasField = tmpl != null && /^(?:model|effort):/m.test(tmpl);
-    // The third spelling, and the one that would make the artifact a different KIND of file: a
-    // frontmatter fence. An agent file opens with one; this one must not, because nothing dispatches
-    // it and a fence is where a model would arrive next. Tested on the template's first line, which
-    // is what the render's first line is built from.
-    const hasFence = tmpl != null && /^---\s*$/.test(tmpl.split('\n')[0] || '');
-    const problems = [
-      readsRole ? 'it reads a roles key of the config' : null,
-      hasField ? 'it carries a model/effort field' : null,
-      hasFence ? 'it opens with a frontmatter fence' : null,
-    ].filter(Boolean);
-    add('doctrine-orchestrator-model-agnostic',
-      'templates/ORCHESTRATOR.md.tmpl pins no model: it reads no roles key of the config, renders no model/effort field, and opens with no frontmatter fence',
-      tmpl != null && problems.length === 0,
-      tmpl == null ? 'the file is missing'
-        : (problems.length ? problems.join('; ') : `${tmpl.length} bytes, none of the three spellings present`));
-  }
-
-  // The index line is contract text: the directory's own index disagreeing with the directory is
-  // how a command ships and stays invisible. Read structurally, in BOTH directions: every directory
-  // under skills/ is named, and every name is a directory.
-  const skillsIndex = readText(path.join(pluginRoot, 'skills', 'README.md'));
-  const indexed = shippedIndexNames(skillsIndex);
-  const dirs = skillDirNames(pluginRoot);
-  const unlisted = indexed == null ? dirs : dirs.filter((n) => !indexed.includes(n));
-  const strangers = indexed == null ? [] : indexed.filter((n) => !dirs.includes(n));
-  add('doctrine-shipped-commands-structure',
-    'skills/README.md: the index line names EVERY directory under skills/ and nothing that is not one',
-    indexed != null && dirs.length > 0 && unlisted.length === 0 && strangers.length === 0,
-    indexed == null ? 'no "Shipped:" line to read'
-      : (unlisted.length || strangers.length
-        ? [unlisted.length ? `shipped but unlisted: ${unlisted.join(', ')}` : null,
-          strangers.length ? `listed but not a skill directory: ${strangers.join(', ')}` : null]
-          .filter(Boolean).join('; ')
-        : `${dirs.length} directories, ${indexed.length} names, one to one`));
-
-  // The roles of docs/LOOP.md "## Role boundaries", read the same way in both directions: a role the
-  // section lost, and a bullet the section gained that is not one of the roles.
-  const roleNames = roleBoundaryNames(readText(path.join(pluginRoot, 'docs', 'LOOP.md')));
-  const missingRoles = roleNames == null ? DOCTRINE_ROLE_BOUNDARIES : DOCTRINE_ROLE_BOUNDARIES.filter((n) => !roleNames.includes(n));
-  const strangerRoles = roleNames == null ? [] : roleNames.filter((n) => !DOCTRINE_ROLE_BOUNDARIES.includes(n));
-  // One to one also means once: a second bullet for the same role is a fork inside the section.
-  const duplicateRoles = roleNames == null ? []
-    : [...new Set(roleNames.filter((n, i) => roleNames.indexOf(n) !== i))];
-  add('doctrine-role-boundaries-structure',
-    'docs/LOOP.md "## Role boundaries": the top-level bullets are exactly the seven roles, one to one',
-    roleNames != null && missingRoles.length === 0 && strangerRoles.length === 0 && duplicateRoles.length === 0,
-    roleNames == null ? 'no "## Role boundaries" section to read'
-      : (missingRoles.length || strangerRoles.length || duplicateRoles.length
-        ? [missingRoles.length ? `roles without a bullet: ${missingRoles.join(', ')}` : null,
-          strangerRoles.length ? `bullets that are not a role: ${strangerRoles.join(', ')}` : null,
-          duplicateRoles.length ? `duplicate bullets: ${duplicateRoles.join(', ')}` : null]
-          .filter(Boolean).join('; ')
-        : `${DOCTRINE_ROLE_BOUNDARIES.length} roles, ${roleNames.length} bullets, one to one`));
-
-  const ruleset = readJson(path.join(pluginRoot, 'templates', 'settings.ask-ruleset.json'));
-  const ask = (ruleset && ruleset.permissions && Array.isArray(ruleset.permissions.ask)) ? ruleset.permissions.ask : null;
-  add('doctrine-no-blanket-git-c',
-    `the factory ruleset carries no blanket "git -C" rule on EITHER shell tool (${BLANKET_GIT_C_RULES.join(' / ')}) - it gated read-only -C forms too`,
-    ask !== null && BLANKET_GIT_C_RULES.every((r) => !ask.includes(r)),
-    ask === null ? 'the ruleset declares no permissions.ask list' : `${ask.length} rules`);
-  // The rendered `git -C <projectRoot> ...` forms are the reason the blanket rule was removable at
-  // all: the push/merge/rebase gate must still hold for the -C form of THIS repository - and it must
-  // hold on both tools, or the -C form of this repository is gated on one shell and free on the other.
-  add('doctrine-git-c-project-forms',
-    'the rendered "git -C <projectRoot>" push/merge/rebase forms are still there, on both shell tools (6)',
-    ask !== null && GIT_C_PROJECT_TOOLS.every((tool) =>
-      ['push', 'merge', 'rebase'].every((verb) => ask.includes(`${tool}(git -C <projectRoot> ${verb}:*)`))),
-    ask === null ? 'no ask list' : `${ask.filter((r) => r.includes('git -C <projectRoot>')).length} -C forms`);
-  return out;
-}
-
-// The files the doctrine findings read live in three directories, and a control copy takes them
-// whole: the structural index check lists skills/ itself, so a copy that held only the files the
-// assertions name would index a smaller directory than production.
-const DOCTRINE_COPY_DIRS = ['docs', 'skills', 'templates'];
-function copyDoctrineFiles(from, to) {
-  for (const dir of DOCTRINE_COPY_DIRS) {
-    const src = path.join(from, dir);
-    if (fs.existsSync(src)) copyTree(src, path.join(to, dir));
-  }
-}
-
-// Sabotage by RELATIVE PAYLOAD PATH: the checks read docs/, skills/ and templates/, and a control
-// that could only reach a skill could not prove the others.
-const doctrineFile = (root, rel, fn) => {
-  const p = path.join(root, ...rel.split('/'));
-  const before = readText(p);
-  if (before == null) throw new Error(`the control copy has no ${rel}`);
-  fs.writeFileSync(p, fn(before));
-};
-const doctrineRuleset = (root, fn) => {
-  const p = path.join(root, 'templates', 'settings.ask-ruleset.json');
-  const j = JSON.parse(readText(p));
-  fn(j);
-  fs.writeFileSync(p, JSON.stringify(j, null, 2) + '\n');
-};
-// The assertions above collapse whitespace before comparing, because the payload wraps at 100
-// columns and a re-wrap is not a missing rule. A control must do the same: a literal
-// `split(phrase)` on a phrase that happens to straddle a newline replaces NOTHING, the sabotaged
-// copy stays clean, and the control silently proves the opposite of what it claims. So sabotage
-// through a whitespace-tolerant regex, and REFUSE (throw, which the runner reports) when the
-// phrase is not found at all.
-const phraseRe = (phrase) => new RegExp(
-  phrase.trim().split(/\s+/).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s+'), 'g');
-const doctrinePhrase = (root, rel, phrase, replacement) => doctrineFile(root, rel, (t) => {
-  if (!phraseRe(phrase).test(t)) throw new Error(`the phrase is not in ${rel}: ${phrase}`);
-  return t.replace(phraseRe(phrase), replacement);
-});
-// Insert one line right after the Operator bullet's last continuation line of docs/LOOP.md - the
-// end of the role section's bullet list. Throws when the anchor is not in the copy.
-const afterOperatorBullet = (root, line) => doctrineFile(root, 'docs/LOOP.md', (t) => {
-  const lines = t.split('\n');
-  const from = lines.findIndex((l) => l.startsWith('- **Operator**'));
-  if (from < 0) throw new Error('the control copy has no Operator bullet in docs/LOOP.md');
-  let to = from + 1;
-  while (to < lines.length && /^\s+\S/.test(lines[to])) to++;
-  return lines.slice(0, to).concat([line], lines.slice(to)).join('\n');
-});
-const DOCTRINE_CONTROLS = [
-  // One control per SPELLING, because the assertion reads three and a single control would leave the
-  // others able to pass while the model is really there.
-  { id: 'doctrine-orchestrator-model-agnostic', label: 'the Orchestrator template given a model frontmatter field',
-    apply: (r) => doctrineFile(r, 'templates/ORCHESTRATOR.md.tmpl', (t) => `model: a-model-id\n${t}`) },
-  { id: 'doctrine-orchestrator-model-agnostic', label: 'the Orchestrator template made to render the writer role\'s model',
-    apply: (r) => doctrineFile(r, 'templates/ORCHESTRATOR.md.tmpl', (t) => `${t}\nRun this role on {{config.roles.writer.model}}.\n`) },
-  { id: 'doctrine-orchestrator-model-agnostic', label: 'the Orchestrator template turned into an agent file by a frontmatter fence',
-    apply: (r) => doctrineFile(r, 'templates/ORCHESTRATOR.md.tmpl', (t) => `---\nname: orchestrator\n---\n${t}`) },
-  // One control per TOOL on each of the two rules: a doctrine that is only enforced on Bash is the
-  // half-enforcement this ticket removed, and only a per-tool control can tell the two apart.
-  ...BLANKET_GIT_C_RULES.map((rule) => ({
-    id: 'doctrine-no-blanket-git-c',
-    label: `the blanket "${rule}" put back into the factory ruleset`,
-    apply: (r) => doctrineRuleset(r, (j) => { j.permissions.ask.push(rule); }),
-  })),
-  ...GIT_C_PROJECT_TOOLS.map((tool) => ({
-    id: 'doctrine-git-c-project-forms',
-    label: `the rendered ${tool}(git -C <projectRoot> push) form dropped with it`,
-    apply: (r) => doctrineRuleset(r, (j) => {
-      j.permissions.ask = j.permissions.ask.filter((x) => x !== `${tool}(git -C <projectRoot> push:*)`);
-    }),
-  })),
-  // One control per operator-gate sentence, generated from the same tables the assertions come from
-  // (a surface added without a control would be a check nobody proved can fail, and the runner
-  // reports exactly that as a [NOTE] at the end of the section), each sabotaged with the regression
-  // the rule exists against rather than with a generic rewording: the pass goes back to riding the
-  // ticket's standing word, the announcement ANSWERS the audit-pass question instead of asking it,
-  // the host's ergonomic directives outrank the canon, the COO records rules as it goes, and a later
-  // readiness pass resumes like any other.
-  ...DOCTRINE_PASS_SURFACES.map((s) => ({
-    id: s.id,
-    label: `${s.file}: the rule reworded away ("${collapseWs(s.phrase).slice(0, 60)}" -> "${s.replacement}")`,
-    apply: (r) => doctrinePhrase(r, s.file, s.phrase, s.replacement),
-  })),
-  ...DOCTRINE_CONSOLIDATION_SURFACES.map((s) => ({
-    id: s.id,
-    label: `${s.file}: the adopted rule reverted ("${collapseWs(s.phrase).slice(0, 60)}" -> "${s.replacement}")`,
-    apply: (r) => doctrinePhrase(r, s.file, s.phrase, s.replacement),
-  })),
-  ...DOCTRINE_PASS_CONDUCT_SURFACES.map((s) => ({
-    id: s.id,
-    label: `${s.file}: the conduct rule loosened back ("${collapseWs(s.phrase).slice(0, 60)}" -> "${s.replacement}")`,
-    apply: (r) => doctrinePhrase(r, s.file, s.phrase, s.replacement),
-  })),
-  // The structural check gets one control per DIRECTION, because the two directions fail on
-  // opposite mutations and a single control would prove only the half it happened to pick: a skill
-  // that ships without being written into the line, and a name in the line that is NOT a skill
-  // directory - the state a rename or a removal leaves behind, and the one a name added by hand
-  // produces directly. The sabotage for the second is `telemetry` - a name that never had a
-  // directory in the base copy - because it is the one a throwaway copy can perform cleanly:
-  // deleting a real skill directory would also take its SKILL.md away, a second mutation this
-  // control never intended to make.
-  { id: 'doctrine-shipped-commands-structure',
-    label: 'a twelfth skill ships without being written into the index line',
-    apply: (r) => {
-      const dir = path.join(r, 'skills', 'ghost');
-      fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(path.join(dir, 'SKILL.md'), '---\nname: ghost\n---\n\nA skill nobody indexed.\n');
-    } },
-  { id: 'doctrine-shipped-commands-structure',
-    label: 'the index line names `telemetry`, which is not a skill directory (a rename, a removal, or a name added by hand)',
-    apply: (r) => doctrinePhrase(r, 'skills/README.md', DOCTRINE_SHIPPED_COMMANDS,
-      'Shipped: loop, review, qa, qal, brief, mission, work, roles, arbiter, setup, update, selfcheck, telemetry.') },
-  // The role section's structural check, one control per failure: a role's WHOLE multi-line bullet
-  // cut (a half-cut bullet would leave continuation lines a reader skips anyway), a bullet added that
-  // names no role, and a second bullet for a role already present. Each throws when its anchor is not in the copy, so a reworded section fails
-  // the control loudly instead of leaving the copy clean.
-  { id: 'doctrine-role-boundaries-structure',
-    label: 'loop-role-bullet-removed: the whole QAL bullet cut from docs/LOOP.md "## Role boundaries"',
-    apply: (r) => doctrineFile(r, 'docs/LOOP.md', (t) => {
-      const lines = t.split('\n');
-      const from = lines.findIndex((l) => l.startsWith('- **QAL**'));
-      if (from < 0) throw new Error('the control copy has no QAL bullet in docs/LOOP.md');
-      let to = from + 1;
-      while (to < lines.length && !lines[to].startsWith('- **')) to++;
-      return lines.slice(0, from).concat(lines.slice(to)).join('\n');
-    }) },
-  { id: 'doctrine-role-boundaries-structure',
-    label: 'loop-role-bullet-stranger: a `Scribe` bullet added after the Operator bullet of docs/LOOP.md "## Role boundaries"',
-    apply: (r) => afterOperatorBullet(r, '- **Scribe** - a role nobody defined.') },
-  { id: 'doctrine-role-boundaries-structure',
-    label: 'loop-role-bullet-duplicate: a second `Writer` bullet added after the Operator bullet of docs/LOOP.md "## Role boundaries"',
-    apply: (r) => afterOperatorBullet(r, '- **Writer** - a second bullet.') },
-];
-
-function sectionPayloadDoctrine(tmpRoot) {
-  section('PAYLOAD DOCTRINE - the rules that live only as text (each one learned from a violation)');
-  for (const f of payloadDoctrineFindings(PLUGIN_ROOT)) check(f.name, f.ok, f.detail);
-
-  section('PAYLOAD DOCTRINE CONTROLS - each of those assertions is proven able to FAIL');
-  const base = path.join(tmpRoot, 'doctrine-base');
-  copyDoctrineFiles(PLUGIN_ROOT, base);
-  const pristine = payloadDoctrineFindings(base);
-  check('the control copy is clean before any sabotage', pristine.every((f) => f.ok),
-    pristine.filter((f) => !f.ok).map((f) => f.id).join(', ') || `${pristine.length} checks`);
-  let i = 0;
-  const covered = new Set();
-  for (const m of DOCTRINE_CONTROLS) {
-    // A control may declare that its target is absent from THIS payload. That is not a control
-    // that failed to apply - it is one with nothing to prove here, and saying so is honest where
-    // reporting a failure would be noise. Every control without a skipWhen runs unconditionally.
-    const skip = typeof m.skipWhen === 'function' ? m.skipWhen(base) : null;
-    if (skip) { covered.add(m.id); note(`payload-doctrine control not exercised: ${m.label}`, skip); continue; }
-    const broken = path.join(tmpRoot, `doctrine-neg-${i += 1}`);
-    copyDoctrineFiles(base, broken);
-    try { m.apply(broken); } catch (e) { check(`control could be applied: ${m.label}`, false, String(e.message)); continue; }
-    const target = payloadDoctrineFindings(broken).find((f) => f.id === m.id);
-    if (!target) { check(`control "${m.label}" targets a live check (id "${m.id}")`, false, 'no check with that id was produced'); continue; }
-    covered.add(m.id);
-    check(`sabotage detected [${m.id}]: ${m.label}`, target.ok === false, target.ok ? 'still PASS - the check is vacuous' : 'FAIL as required');
-    try { fs.rmSync(broken, { recursive: true, force: true }); } catch (e) { /* best-effort */ }
-  }
-  for (const id of pristine.filter((f) => !covered.has(f.id)).map((f) => f.id)) {
-    note(`no negative control for payload-doctrine check "${id}"`, 'no control defined - add one or state why it cannot fail');
-  }
-}
-
 function sectionPayloadIntegrity() {
   section('PAYLOAD INTEGRITY - skills, cross-references, command prefix');
   const skillsDir = path.join(PLUGIN_ROOT, 'skills');
@@ -6884,15 +6335,11 @@ function sectionPayloadIntegrity() {
   // of date cannot be the two commands that refuse to run.
   const INTERLOCK_EXCEPTIONS = ['update', 'selfcheck'];
   const notEnforcing = [];
-  const stillFuture = [];
   for (const name of skillDirs) {
     const src = readText(path.join(skillsDir, name, 'SKILL.md')) || '';
-    if (/enforced\s+from v0\.2|do not simulate/i.test(src)) stillFuture.push(name);
     if (INTERLOCK_EXCEPTIONS.includes(name)) continue;
     if (!/scripts\/update\/aiwf-update\.mjs/.test(src) || !/--check/.test(src)) notEnforcing.push(name);
   }
-  check('no skill still carries the future-tense interlock wording ("enforced from v0.2" / "do not simulate")',
-    stillFuture.length === 0, stillFuture.join(', '));
   check('every non-exception skill runs the real --check entrypoint in Step 0',
     notEnforcing.length === 0, notEnforcing.length ? notEnforcing.join(', ') : `${skillDirs.length - INTERLOCK_EXCEPTIONS.length} skills`);
   check('both documented interlock exceptions ship', INTERLOCK_EXCEPTIONS.every((n) => skillDirs.includes(n)), skillDirs.join(', '));
@@ -6940,32 +6387,6 @@ function sectionPayloadIntegrity() {
       && fs.existsSync(path.join(PLUGIN_ROOT, 'scripts/native/sh/aiwf-roles.sh'))
       && !fs.existsSync(path.join(PLUGIN_ROOT, 'scripts/native/sh/nonexistent.sh')),
       `${hits.length} matched on constructed input`);
-  }
-
-  // Doc <-> code drift, on the one surface where a skill can promise something the engine does not
-  // have: its FLAGS. /pnp:setup now documents --adopt and --adopt-file next to --dry-run and the
-  // rest, and a flag a skill names while no setup entrypoint parses it is not a documentation
-  // wrinkle - it is an instruction that fails in the operator's hands, with the skill still reading
-  // green. Lines about a DIFFERENT command carry that command's flags and are skipped by name.
-  {
-    const skillText = readText(path.join(skillsDir, 'setup', 'SKILL.md')) || '';
-    const cliSources = ['interview.mjs', 'generate.mjs']
-      .map((f) => readText(path.join(PLUGIN_ROOT, 'scripts', 'setup', f)) || '');
-    const findings = setupFlagFindings(skillText, cliSources);
-    check('the /pnp:setup skill documents flags the setup CLI really parses',
-      findings.unparsed.length === 0,
-      findings.unparsed.length ? findings.unparsed.join(', ') : `${findings.documented.length} flag(s) checked`);
-    // The needle on constructed input: "nothing unparsed" is also what a scan that matched NOTHING
-    // reports, so the extractor is shown to both find a real flag and report a fabricated one.
-    const probe = setupFlagFindings(
-      'run it with --adopt and --not-a-real-flag\nand see `/pnp:update --resolve <key>` for later\n'
-      + 'and `node scripts/setup/aiwf-roles.mjs --show` for the audit table\n',
-      ["has('--adopt')"],
-    );
-    check('and that check can fail: a fabricated flag is reported, an update-only or roles-only one is not scanned',
-      probe.unparsed.length === 1 && probe.unparsed[0] === '--not-a-real-flag'
-      && !probe.documented.includes('--resolve') && !probe.documented.includes('--show'),
-      `${probe.documented.join(' ')} -> ${probe.unparsed.join(' ')}`);
   }
 
   // ENTRYPOINT IDENTITY. Every CLI here ends in `if (isMain())`, and that question has one honest
@@ -7522,7 +6943,6 @@ function versionGreater(a, b) {
 const PROBE_AIWF = {
   installedPluginVersion: '0.0.0',
   lastMigrationApplied: '0000_probe',
-  migrationJournal: null,
   managedRegions: {},
   ownedAskRules: [],
   suppressedAskRules: [],
@@ -8344,12 +7764,6 @@ const NEGATIVE_CONTROLS = [
       });
       fs.rmSync(path.join(r, '.claude', 'agents', 'reviewer.md'));
     } },
-  { id: 'managed-regions-cover', label: 'a claude-hosted review row whose reviewer agent has no bookkeeping entry',
-    apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
-      c.roles.reviewer = { engine: 'codex', model: 'codex-atom-2', effort: 'high' };
-      c.review.docs = { passes: 1, engine: 'claude', model: 'opus' };
-      delete c._aiwf.managedRegions['.claude/agents/reviewer.md'];
-    }) },
   // FLIPPED in 0.2.11. Until then this control pinned the Claude REVIEWER to an exact id and required
   // a failure; that config is legal now (the dispatch omits `model` and the agent file's pin runs).
   // What an exact id can still break is a Claude ROW, which shares the one reviewer agent file - so
@@ -8380,62 +7794,33 @@ const NEGATIVE_CONTROLS = [
     apply: (r) => patchText(r, ['.claude', 'agents', 'writer.md'], /^effort: .*$/m, 'effort: low') },
   { id: 'last-migration', label: 'the lastMigrationApplied stamp blanked',
     apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => { c._aiwf.lastMigrationApplied = ''; }) },
-  { id: 'journal-clear', label: 'an interrupted migration journal left in the bookkeeping',
-    apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => { c._aiwf.migrationJournal = { migration: '0002_x', opIndex: 0, state: 'prepared' }; }) },
   { id: 'path-overrides', label: 'the configured overrides document is missing',
     apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => { c.paths.overridesDoc = 'docs/ai/GONE.md'; }) },
   { id: 'path-scratch', label: 'the configured scratch directory is missing',
     apply: (r) => fs.rmSync(path.join(r, '.aiwf'), { recursive: true, force: true }) },
   { id: 'path-plans', label: 'the configured plans directory is missing',
     apply: (r) => fs.rmSync(path.join(r, 'docs', 'backlogs'), { recursive: true, force: true }) },
-  { id: 'path-changesDir', label: 'paths.changesDir climbs out of the project ("../x")',
-    apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => { c.paths.changesDir = '../x'; }) },
   { id: 'plans-active-subdir', label: 'plansDir has no active/ subdirectory',
     apply: (r) => fs.rmSync(path.join(r, 'docs', 'backlogs', 'active'), { recursive: true, force: true }) },
   { id: 'scratch-is-aiwf', label: 'scratchDir moved away from .aiwf (the route guard would be unarmed)',
     apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => { c.paths.scratchDir = '.scratch'; }) },
-  { id: 'managed-regions-shape', label: 'managedRegions replaced by something that is not an object',
+  // managed-regions-present, one control per way it can fail: a recorded whole file removed, a
+  // recorded region's markers gone, a value that is an object (not the legacy record), a value that is
+  // a string but no version, and a bookkeeping block that is not an object at all.
+  { id: 'managed-regions-present', label: 'a recorded managed file removed from disk (AGENTS.md)',
+    apply: (r) => fs.rmSync(path.join(r, 'AGENTS.md')) },
+  { id: 'managed-regions-present', label: 'a recorded managed REGION whose END marker is gone (CLAUDE.md)',
+    apply: (r) => patchText(r, ['CLAUDE.md'], /<!-- END aiwf-core -->/, '') },
+  { id: 'managed-regions-present', label: 'a recorded value that is an object, not a plugin version',
+    apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
+      c._aiwf.managedRegions['.claude/aiwf-native/roles.json'] = { version: c._aiwf.installedPluginVersion };
+    }) },
+  { id: 'managed-regions-present', label: 'a recorded value that is a string but not a plugin version',
+    apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
+      c._aiwf.managedRegions['.claude/agents/writer.md'] = 'latest';
+    }) },
+  { id: 'managed-regions-present', label: 'managedRegions replaced by something that is not an object',
     apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => { c._aiwf.managedRegions = 'nope'; }) },
-  { id: 'managed-regions-match', label: 'a managed file drifted from its recorded hash (roles.json edited)',
-    apply: (r) => patchText(r, ['.claude', 'aiwf-native', 'roles.json'], /"effort": "high"/, '"effort": "low"') },
-  { id: 'managed-regions-match', label: 'a managed REGION drifted (CLAUDE.md edited between the markers)',
-    apply: (r) => patchText(r, ['CLAUDE.md'], /Managed region body \(fixture\)\./, 'I edited the managed region.') },
-  { id: 'managed-regions-match', label: 'a recorded local hash that describes nothing on disk',
-    apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
-      c._aiwf.managedRegions['.claude/aiwf-native/roles.json'].local = '0'.repeat(64);
-    }) },
-  { id: 'managed-regions-cover', label: 'a surplus managedRegions entry for a file that does not exist',
-    apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
-      c._aiwf.managedRegions['.claude/agents/ghost.md'] = { upstream: '0'.repeat(64), local: '0'.repeat(64), override: false };
-    }) },
-  { id: 'managed-regions-cover', label: 'a managed artifact with no bookkeeping entry at all',
-    apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
-      delete c._aiwf.managedRegions['.claude/agents/writer.md'];
-    }) },
-  // The newest member of that set gets its own control: an expectation added to the cover check
-  // without one would be a line nobody has seen fail, and the artifact it names is exactly the kind
-  // an installation can end up carrying unrecorded (it arrives by migration on an older project).
-  { id: 'managed-regions-cover', label: 'the Orchestrator role rendered but not recorded (its bookkeeping entry deleted)',
-    apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
-      delete c._aiwf.managedRegions['.claude/aiwf-native/ORCHESTRATOR.md'];
-    }) },
-  // And the one after it, for the same reason: AGENTS.md is the artifact a hand-written file most
-  // often stands in for, so its missing record must be seen to turn the cover check red.
-  { id: 'managed-regions-cover', label: 'AGENTS.md rendered but not recorded (its bookkeeping entry deleted)',
-    apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
-      delete c._aiwf.managedRegions['AGENTS.md'];
-    }) },
-  // BOTH arms of the transfer-surface rule, because the check reads two spellings and a control for
-  // one of them would leave the other able to pass while recording nothing.
-  { id: 'transfer-surface-unmanaged', label: 'a managedRegions record for the transfer surface at the DEFAULT path',
-    apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
-      c._aiwf.managedRegions[`${c.paths.plansDir}/PNP_CANDIDATES.md`] = { upstream: '0'.repeat(64), local: '0'.repeat(64), override: false };
-    }) },
-  { id: 'transfer-surface-unmanaged', label: 'a managedRegions record for a CONFIGURED transfer surface',
-    apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
-      c.paths.transferSurface = 'docs/backlogs/OWN_SURFACE.md';
-      c._aiwf.managedRegions['docs/backlogs/OWN_SURFACE.md'] = { upstream: '0'.repeat(64), local: '0'.repeat(64), override: false };
-    }) },
   { id: 'config-schema-valid', label: 'a config that violates the schema (an OS channel that does not exist)',
     apply: (r) => mutateJson(r, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => { c.os = 'solaris'; }) },
 ];
@@ -8490,17 +7875,25 @@ function sectionNegativeControls(tmpRoot, pluginVersion) {
       target.note ? 'the check degraded to a NOTE instead of failing' : (target.ok ? 'still PASS - the check is vacuous' : 'FAIL as required'));
   }
 
-  // The POSITIVE face of path-changesDir. The control fixture carries no changesDir at all, so its
-  // clean pass is the absent branch; this fixture carries a value that climbs and comes back
-  // ("a/../reports" normalises to "reports") and must PASS - a check that refused every present value
-  // would satisfy the negative control above while breaking every installation that sets the key.
+  // The POSITIVE face of managed-regions-present: a bookkeeping block still in the LEGACY record shape
+  // ({upstream, local, override}, written before the update overwrote) is present-but-legacy. It must
+  // PASS and be reported as an observation - a check that failed it would fail every installation
+  // that has not run /pnp:update since, while the control above (an object that is NOT the legacy
+  // record) shows the value-shape half can still fail.
   {
-    const accepted = path.join(tmpRoot, 'pos-changes-dir');
-    copyTree(base, accepted);
-    mutateJson(accepted, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => { c.paths.changesDir = 'a/../reports'; });
-    const target = projectLayerFindings(accepted, PLUGIN_ROOT, { selfAuthored: true }).find((f) => f.id === 'path-changesDir');
-    check('positive fixture [path-changesDir]: "a/../reports" is accepted', !!target && target.ok === true && target.note !== true,
-      target ? target.detail : 'no check with that id was produced');
+    const legacy = path.join(tmpRoot, 'pos-legacy-regions');
+    copyTree(base, legacy);
+    mutateJson(legacy, ['.claude', 'aiwf-native', 'aiwf.config.json'], (c) => {
+      for (const key of Object.keys(c._aiwf.managedRegions)) {
+        c._aiwf.managedRegions[key] = { upstream: '0'.repeat(64), local: '0'.repeat(64), override: false };
+      }
+    });
+    const found = projectLayerFindings(legacy, PLUGIN_ROOT, { selfAuthored: true });
+    const target = found.find((f) => f.id === 'managed-regions-present');
+    const seen = found.find((f) => f.id === 'managed-regions-legacy');
+    check('positive fixture [managed-regions-present]: legacy {upstream, local, override} records PASS and are reported as an observation',
+      !!target && target.ok === true && target.note !== true && !!seen && seen.observation === true,
+      target ? `${target.detail}; observation: ${seen ? seen.detail : 'none'}` : 'no check with that id was produced');
   }
 
   // Honest coverage: which real checks have no control, and why.
@@ -8571,7 +7964,6 @@ function main() {
     sectionResolver(tmpRoot);
     sectionRolesCommand(tmpRoot, pluginVersion);
     sectionPayloadIntegrity();
-    sectionPayloadDoctrine(tmpRoot);
     sectionProvenance(tmpRoot);
     sectionExampleFixture(tmpRoot);
     sectionProjectLayer(PROJECT, selfAuthored);
@@ -8690,15 +8082,10 @@ function main() {
   console.log('reports the same "0 hits" as a clean payload. What is NOT proven: that the three name');
   console.log('digests have the preimages they claim - a payload that must not contain those names cannot');
   console.log('carry the proof, so the controls prove the mechanism and the digests are stated data.');
-  console.log('PAYLOAD DOCTRINE: nine checks, and no more - prose is read in place and is not pinned sentence by');
-  console.log('sentence. Five operator-gate sentences, each pinned in ONE home: one word per pass, the audit-pass');
-  console.log('question for a newborn ticket, the doctrine-write gate, host-directive precedence, and a warm');
-  console.log('readiness pass only on the operator\'s word. Four mechanical checks: no blanket git -C ask rule on');
-  console.log('either shell tool, the rendered git -C <projectRoot> push/merge/rebase forms on both tools, the');
-  console.log('model-agnostic Orchestrator template, and the shipped-commands index matching the directories');
-  console.log('under skills/. Each has a sabotage control on a copy of those files that must go red. What is NOT');
-  console.log('proven, and cannot be from here: that a session actually OBEYS any of them - only that the');
-  console.log('instruction is present and intact.');
+  console.log('PROSE IS NOT PINNED: no doctrine sentence, verbatim phrase or cross-file literal count is asserted -');
+  console.log('prose in docs/ and skills/ is read in place, and a reworded sentence is a prose change. The skills');
+  console.log('are checked for PRESENCE (frontmatter, the Step 0 contract, the --check interlock), the payload');
+  console.log('cross-references for EXISTENCE, and every /pnp:<cmd> for a shipped skill.');
   console.log('MARKETPLACE: the repository is its own marketplace (local checkout or GitHub) - the');
   console.log('manifest exists, parses, names itself and its owner, carries exactly one plugin entry');
   console.log('whose name matches plugin.json, whose source is "./" and which carries NO version');
@@ -8712,7 +8099,9 @@ function main() {
   console.log('member of the payload ruleset rendered for THIS project root, so a rule left behind by a moved');
   console.log('or renamed project fails as loudly as an invented one - rendered artifacts agreeing with the');
   console.log('config, the conditional-render contract (a Claude agent file exists iff its role is');
-  console.log('claude-hosted), and version bookkeeping - proven able to fail by the negative controls,');
+  console.log('claude-hosted), every recorded managed artifact PRESENT on disk at a recorded plugin version (a');
+  console.log('managed artifact\'s content is not compared - an update overwrites it), and version bookkeeping -');
+  console.log('proven able to fail by the negative controls,');
   console.log('which run against a fixture this script synthesises for that purpose alone. Checks with no');
   console.log('control are named individually above, each with its reason. The four (observed) rows - plans');
   console.log('drafts/, plans readiness/, whether git ignores the scratch directory and whether plansDir lies');

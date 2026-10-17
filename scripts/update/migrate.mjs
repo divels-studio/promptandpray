@@ -3,89 +3,59 @@
  * Migration runner - the engine behind /pnp:update. Importable; the CLI is aiwf-update.mjs.
  *
  * THE PROMISE
- *   An update reaches an installed project WITHOUT ever overwriting the operator's own content.
- *   Everything below exists to make that true even when the process dies halfway.
+ *   An update OVERWRITES what it renders and carries the project additions block. The consumer's
+ *   own text has exactly two homes: the overrides document (an update never touches it) and ONE
+ *   marked block per rendered Markdown file - `<!-- project additions -->` ... `<!-- /project
+ *   additions -->`, each marker on a line of its own - which every re-render carries over byte for
+ *   byte (generate.mjs carryProjectAdditions). Everything else an update renders is written from the
+ *   payload: an edited file, a deleted one, a file this installation never recorded. Nothing asks.
+ *   CLAUDE.md is the one managed file that also holds the operator's text OUTSIDE its `aiwf-core`
+ *   markers: only the region is written, every byte around it is kept, and the region is encoded in
+ *   the line-ending convention the file already uses.
  *
- * WHAT IT SHARES WITH SETUP, AND WHAT IT DELIBERATELY DOES NOT
- *   It imports the primitives from ../setup/generate.mjs - `sha256`, `renderTemplate`,
- *   `templateContext`, `planAskRules`, `lf`, `orderConfig`, `jsonText` - so a rendered artifact and
- *   its hash mean exactly the same thing in both engines. The CONFLICT STATE MACHINE is NOT setup's
- *   and is not shared: setup cleanly RE-RENDERS whenever `actual == local` (its legitimate re-render
- *   path), while an update asks the operator EXACTLY when there is something of theirs to lose -
- *     (a) `actual != local`     the operator edited the artifact (or it is GONE),
- *     (b) held AND edited       an override the operator has since changed again.
- *   A payload change alone is NOT a conflict: `newRender != upstream` on an artifact the operator
- *   never touched is the normal path of every migration, and it is applied silently through the same
- *   take-new machinery (see planRerender), listed in the CHANGES report. Setup re-renders the same
- *   config; an update brings a different payload - but only over content nobody has edited.
+ * THE MODEL
+ *   Migrations run in manifest order and each operation applies directly (a file write is atomic
+ *   through writeAtomic). After the LAST operation of a migration the config is written ONCE, with
+ *   `lastMigrationApplied` / `installedPluginVersion` moved to that migration and every bookkeeping
+ *   change its operations made. A crash mid-migration leaves the stamps at the previous migration,
+ *   and the next run simply runs that migration again - every operation is idempotent by
+ *   construction: a re-render overwrites, `add-config-key` skips a key that is already present,
+ *   `reconcile-ask-ruleset` reconciles. The one config write INSIDE a migration is the reconcile's:
+ *   it persists the ask-rule ownership right after it rewrites settings.json, because which rules
+ *   this engine inserted cannot be read back off a settings file it has already rewritten.
  *
- * THE TWO-HASH MODEL (PLAN "Update mechanism")
- *   `_aiwf.managedRegions[key] = { upstream, local, override }` where key is `<file>#<region>` for a
- *   marker region and `<file>` for a whole-file artifact. `upstream` = the content last RENDERED
- *   from the payload, `local` = the content last ACCEPTED. Clean: actual == local == upstream,
- *   override false. On a conflict the operator picks:
- *     take-new  - apply the render;  local = upstream = hash(render); override = false
- *     keep-mine - apply NOTHING;     local = hash(actual); upstream = hash(render); override = true
- *     merge     - apply the merged file; local = hash(merged); upstream = hash(render); override = true
- *   An `override: true` artifact is never re-applied by a later update: the new render is RECORDED
- *   as upstream and the artifact is listed in CHANGES. Leaving override is `--resolve <key>`, at any
- *   time, version bump or not. A DELETED file or region where bookkeeping has an entry is a manual
- *   edit too, so it is a conflict - never a silent re-create.
+ * BOOKKEEPING
+ *   `_aiwf.managedRegions[key] = "<semver>"` - the payload version that last rendered the artifact,
+ *   where key is `<file>#<region>` for a marker region and `<file>` for a whole file. A legacy shape
+ *   (an `{upstream, local, override}` object per key, a `migrationJournal` key) is normalised in
+ *   memory on load (generate.mjs normalizeBookkeeping) - `--check` included - and written back with
+ *   the first config write of the run.
  *
- * WRITE-AHEAD JOURNAL, AND WHY THE STAGE COMES FIRST
- *   Per operation N: the accepted RESULT is staged on disk first (rendered content, merged content,
- *   or the operator's answer), then `_aiwf.migrationJournal` goes `prepared` carrying preHash and
- *   postHash = hash(staged result), then the target is written file-atomically, then the journal
- *   flips to `applied` in ONE atomic config write together with that operation's hash/ownership
- *   bookkeeping, then the stage is removed. Staging BEFORE the journal is what lets a restart replay
- *   the exact accepted result - including a manual merge and an operator's answer - without asking
- *   the same question twice.
- *   Recovery, on start, with a journal present: `applied` at N -> resume at N+1; `prepared` -> hash
- *   the target with the applicable projection: == postHash -> flip and continue, == preHash ->
- *   re-apply from the stage (or re-plan when the stage is gone: that state is exactly the pre state),
- *   neither -> the SAME conflict dialog every other conflict goes through, re-decided against the
- *   file as it is now. Every write boundary is therefore recoverable, and no branch is a dead end.
+ * WHAT A RUN PRINTS
+ *   `--dry-run` and `--apply` print, before the first operation, every `## [x.y.z]` block of the
+ *   payload's CHANGELOG.md with installed < x.y.z <= payload - that is how a consumer learns what the
+ *   release changed. A `note` operation prints its text, docRefs and supersedes ids. The reconcile
+ *   names the payload rules it found present but not owned.
  *
- *   An operation that applies NOTHING but asserts something about an artifact (keep-mine, an
- *   artifact held through an override, an already-current re-render) journals that artifact with
- *   preHash == postHash == the hash its bookkeeping is about to claim. Only an operation with no
- *   artifact at all - a note, a config key that is already there - journals a null target. Without
- *   that identity a resume would stamp a hash describing a file that had changed in the meantime.
- *
- *   And because the state is READ when an operation is planned while the resolver may take any
- *   amount of time to answer (an interactive dialog can sit open), the target is re-hashed in the
- *   last instruction before the first write of every operation. A decision taken against a state
- *   that no longer exists is refused, not applied.
- *
- * HASHING PROJECTIONS
- *   ordinary file  -> sha256 over the LF-normalised whole file
- *   marker region  -> sha256 over the region INCLUDING its markers
- *   the config     -> sha256 over projectionText(config), which is the config WITHOUT
- *                     `_aiwf.migrationJournal`. Without that exclusion, a config-target operation
- *                     could never be recovered: writing the journal would change its own target's
- *                     hash.
- *
- * CRASH INJECTION (test-only, production-inert)
- *   PNP_UPDATE_CRASH_AT="<migration>/<opIndex>/<boundary>" with boundary one of
- *   `after-journal-prepared` | `after-target-apply` | `after-applied-flip` makes the process exit 86
- *   the instant that write completes. Without the variable nothing in here reads it twice and no
- *   branch changes. The acceptance suite uses ONLY this - a real process kill and a fresh process
- *   resume - never a hand-written journal state, because a hand-written state proves the recovery
- *   code parses a fixture, not that the engine can be killed.
+ * WHAT IT SHARES WITH SETUP
+ *   The render primitives (`renderTemplate`, `templateContext`, `planAskRules`, `lf`, `orderConfig`,
+ *   `jsonText`), the additions carry and the bookkeeping normalisation, all from
+ *   ../setup/generate.mjs - so a render means exactly the same bytes in both engines.
  *
  * WHAT THIS ENGINE NEVER DOES
  *   It never initialises a project (no config = setup's business), never commits, never touches the
- *   operator's zone (`.aiwf/` scratch, memory, text outside the markers, settings.local.json), and
- *   never removes a rule it did not insert.
+ *   operator's zone (`.aiwf/` scratch, memory, the overrides document, text outside the markers,
+ *   settings.local.json), and never removes a permission rule it did not insert.
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  CONFIG_REL, ROLES_REL, SETTINGS_REL,
-  jsonText, lf, orderConfig, planAskRules, renderTemplate, sha256, templateContext,
+  CONFIG_REL, ROLES_REL, SETTINGS_REL, ProjectAdditionsError,
+  carryProjectAdditions, dominantEol, encodeEol, jsonText, lf, normalizeBookkeeping, orderConfig, planAskRules,
+  renderTemplate, templateContext,
 } from '../setup/generate.mjs';
-import { containedRelativePath, formatErrors, loadSchema, validate } from '../setup/validate-config.mjs';
+import { formatErrors, loadSchema, validate } from '../setup/validate-config.mjs';
 import { claudePinErrors } from '../setup/role-rules.mjs';
 import { compareVersions, parseVersion, validatePayload } from './validate-payload.mjs';
 
@@ -96,111 +66,19 @@ const toPosix = (p) => p.split(path.sep).join('/');
 export const CONFIG_POSIX = toPosix(CONFIG_REL);
 export const SETTINGS_POSIX = toPosix(SETTINGS_REL);
 export const ROLES_POSIX = toPosix(ROLES_REL);
-export const STAGE_POSIX = '.claude/aiwf-native/update-stage';
 
 const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const own = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
 const readText = (p) => { try { return fs.readFileSync(p, 'utf8'); } catch { return null; } };
 
-/** A blocked run: the project is left exactly as the last completed write left it. Exit 1. */
+/** A blocked run: every write before the stop stands, the stamps say where to continue. Exit 1. */
 export class UpdateError extends Error {}
 /** The run could not start at all (no config, unreadable payload). Exit 2. */
 export class UpdateStartError extends Error {}
 
-/**
- * THE refusal for an artifact this installation has no record of while a file is standing at its
- * path. One definition, because it is raised from three places that must not drift: the planning arm
- * of `createIfAbsent`, the last read before that plan's first write, and the recovery of an
- * interrupted creation. It names the only door that exists: `/pnp:setup --adopt` refuses a project
- * that already HAS an installation, so telling the operator to adopt would be pointing at a locked
- * one.
- */
-const unrecordedFileRefusal = (key) =>
-  `${key}: this installation has no record of it but a file is standing at that path - an update never `
-  + 'adopts a file it did not write; move it aside or remove it, then run the update again';
-
-/**
- * The EARLY half of the creation guard: the last read before a creation's first write, so the
- * operator gets this sentence rather than an errno. It is exported so it can be exercised directly -
- * the in-process window between planning a creation and writing it has no crash point to inject at,
- * and a guard that is only reachable through a race is a guard nobody has seen work.
- *
- * A file standing at the target refuses only when it DIFFERS from the render. Identical bytes are
- * this engine's own write - the folder is the plugin's - so there is nothing there to lose and
- * nothing to ask about.
- *
- * This check is the message, not the guarantee - between it and the write there is a window nothing
- * in one process can close. `writeCreatedTarget` below is the guarantee.
- */
-export function assertNoForeignFileAtCreationTarget(absFile, content, key) {
-  const standing = readText(absFile);
-  if (standing !== null && lf(standing) !== lf(content)) throw new UpdateError(unrecordedFileRefusal(key));
-}
-
-/**
- * THE guarantee: a creation's target is published NO-CLOBBER, at the syscall boundary.
- *
- * `writeAtomic` is the wrong primitive here - its `rename` replaces whatever is at the target, which
- * is exactly right for re-rendering an artifact we own and exactly wrong for creating one we do not.
- * So the content is staged in the target's own directory and published with `link`, which FAILS with
- * EEXIST when anything is already there and is otherwise all-or-nothing: no window, no partial file,
- * no clobber. The temporary is removed either way; a hard link and its source are the same inode, so
- * unlinking the temp leaves the published file whole.
- *
- * It is called only where the target is ABSENT: the caller has already dealt with a file that is
- * there (identical content is ours and needs no write; differing content is refused). So an EEXIST
- * here is the race - a file that appeared between those two instructions - and it gets the same
- * refusal. Any OTHER link failure means this filesystem will not give the guarantee at all, and the
- * run stops rather than falling back to a write that could clobber.
- */
-export function writeCreatedTarget(absFile, content, key) {
-  fs.mkdirSync(path.dirname(absFile), { recursive: true });
-  const body = lf(content);
-  const tmp = `${absFile}.pnp-new-${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
-  fs.writeFileSync(tmp, body, 'utf8');
-  try {
-    fs.linkSync(tmp, absFile);
-  } catch (e) {
-    if (e && e.code === 'EEXIST') throw new UpdateError(unrecordedFileRefusal(key));
-    throw new UpdateError(
-      `${key}: could not publish without clobbering - the filesystem refused a hard link (${e && e.code}); `
-      + 'nothing was written, re-run on a filesystem that supports hard links',
-    );
-  } finally {
-    try { fs.rmSync(tmp, { force: true }); } catch { /* the publish already succeeded or threw */ }
-  }
-}
-
-// The setup-rendered managed artifacts and the payload template each one comes from. A migration op
-// names its own template explicitly; this map exists for `--resolve <key>`, which reopens the dialog
-// for an artifact OUTSIDE a version bump and therefore has no op to read the template from. The
-// self-check asserts every path here exists in the payload, so the map cannot rot silently.
-export const RESOLVABLE_ARTIFACT_TEMPLATES = {
-  'CLAUDE.md#aiwf-core': 'templates/CLAUDE.md.tmpl#aiwf-core',
-  [ROLES_POSIX]: 'templates/roles.json.tmpl',
-  '.claude/aiwf-native/ORCHESTRATOR.md': 'templates/ORCHESTRATOR.md.tmpl',
-  '.claude/agents/writer.md': 'templates/agents/writer.md.tmpl',
-  '.claude/agents/reviewer.md': 'templates/agents/reviewer.md.tmpl',
-  '.claude/agents/qa.md': 'templates/agents/qa.md.tmpl',
-  'AGENTS.md': 'templates/AGENTS.md.tmpl',
-};
-
 // ---------------------------------------------------------------------------
-// Projections
+// Marker regions
 // ---------------------------------------------------------------------------
-/**
- * THE canonical text of a config for hashing. Every hash of a config-target operation - pre, staged,
- * and the one recovery recomputes - goes through this one function, so they cannot disagree.
- * `_aiwf.migrationJournal` is excluded: it is the only key that changes as a side effect of
- * journalling the very operation whose target is this file.
- */
-export function projectionText(config) {
-  const clone = JSON.parse(JSON.stringify(config));
-  if (isPlainObject(clone._aiwf)) delete clone._aiwf.migrationJournal;
-  return jsonText(orderConfig(clone));
-}
-
-export const configHash = (config) => sha256(projectionText(config));
 export const beginMarker = (region) => `<!-- BEGIN ${region} -->`;
 export const endMarker = (region) => `<!-- END ${region} -->`;
 
@@ -215,77 +93,52 @@ export function extractRegion(text, region) {
   return text.slice(from, to + end.length);
 }
 
-function spliceRegion(text, region, replacement) {
+/**
+ * `text` with its marked region replaced by `replacement` - every byte outside the markers kept, the
+ * replacement encoded in the line-ending convention the file already uses. A region that is missing
+ * from the file is APPENDED (after a blank line), so the file's own text is never re-encoded.
+ */
+export function spliceRegion(text, region, replacement) {
+  const eol = dominantEol(text);
   const begin = beginMarker(region);
   const end = endMarker(region);
   const from = text.indexOf(begin);
   const to = text.indexOf(end);
   if (from === -1 || to === -1 || to < from) {
-    // The region is gone from a file that still exists. Appending is a DELIBERATE resolution here
-    // (the operator chose take-new / merge on the missing-region conflict), never a silent repair.
     const joiner = text.endsWith('\n') ? '\n' : '\n\n';
-    return text + joiner + replacement + '\n';
+    return text + encodeEol(joiner + replacement + '\n', eol);
   }
-  return text.slice(0, from) + replacement + text.slice(to + end.length);
+  return text.slice(0, from) + encodeEol(replacement, eol) + text.slice(to + end.length);
 }
 
 // ---------------------------------------------------------------------------
-// Atomic writes + crash injection
+// Writes
 // ---------------------------------------------------------------------------
-function writeAtomic(file, text) {
+/** Atomic replace. `raw` writes the bytes as they are (spliced regions, carried additions blocks). */
+function writeAtomic(file, text, { raw = false } = {}) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = `${file}.pnp-tmp-${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
-  fs.writeFileSync(tmp, lf(text), 'utf8');
+  fs.writeFileSync(tmp, raw ? text : lf(text), 'utf8');
   fs.renameSync(tmp, file); // rename replaces an existing file on both Windows and POSIX
 }
 
-// Inert unless PNP_UPDATE_CRASH_AT names exactly this boundary. Read fresh each time so a test can
-// set it per child process; nothing else in the engine branches on it.
-function crashPoint(migration, opIndex, boundary) {
-  const spec = process.env.PNP_UPDATE_CRASH_AT;
-  if (!spec) return;
-  if (spec === `${migration}/${opIndex}/${boundary}`) {
-    process.stderr.write(`pnp-update: PNP_UPDATE_CRASH_AT=${spec} - exiting 86 immediately after that write.\n`);
-    process.exit(86);
-  }
-}
-
 // ---------------------------------------------------------------------------
-// Resolution records (the ONE production resolver, two adapters over it)
+// Answer records (the ONE production resolver, its adapters below and in the CLI)
 // ---------------------------------------------------------------------------
-export const CONFLICT_RESOLUTIONS = ['take-new', 'keep-mine', 'merge'];
-
 /**
- * Validates a resolution record and returns it. Anything unexpected STOPS the run naming the
- * address: an unknown kind, an unknown field, a missing conditional field, a record of the wrong
- * kind for this address. Nothing is ever guessed - a guessed resolution is a silent overwrite with
- * extra steps.
+ * Validates an answer record and returns it. The only kind is `answer` - the value of a config key
+ * a migration marks `askOperator`. Anything else STOPS the run naming the address: an unknown kind
+ * (the old `conflict` records included), an unknown field, a missing value. Nothing is guessed.
  */
-export function checkResolutionRecord(record, expectedKind, address) {
+export function checkResolutionRecord(record, address) {
   const where = `resolution for "${address}"`;
   if (!isPlainObject(record)) throw new UpdateError(`${where}: not an object.`);
-  if (typeof record.kind !== 'string') throw new UpdateError(`${where}: missing the "kind" discriminator ("conflict" or "answer").`);
-  if (record.kind !== 'conflict' && record.kind !== 'answer') {
-    throw new UpdateError(`${where}: unknown kind "${record.kind}" - the vocabulary is "conflict" and "answer".`);
-  }
-  if (record.kind !== expectedKind) {
-    throw new UpdateError(`${where}: this address needs a "${expectedKind}" record, but a "${record.kind}" record was supplied.`);
-  }
-  if (record.kind === 'conflict') {
-    for (const key of Object.keys(record)) {
-      if (!['kind', 'resolution', 'mergedFile'].includes(key)) throw new UpdateError(`${where}: unknown field "${key}".`);
-    }
-    if (!CONFLICT_RESOLUTIONS.includes(record.resolution)) {
-      throw new UpdateError(`${where}: resolution must be one of ${CONFLICT_RESOLUTIONS.join(' | ')}, found ${JSON.stringify(record.resolution)}.`);
-    }
-    const isMerge = record.resolution === 'merge';
-    if (isMerge && (typeof record.mergedFile !== 'string' || record.mergedFile.trim() === '')) {
-      throw new UpdateError(`${where}: "merge" requires "mergedFile" - the path of the file you merged by hand.`);
-    }
-    if (!isMerge && own(record, 'mergedFile')) {
-      throw new UpdateError(`${where}: "mergedFile" is only allowed with resolution "merge".`);
-    }
-    return record;
+  if (typeof record.kind !== 'string') throw new UpdateError(`${where}: missing the "kind" discriminator (the only kind is "answer").`);
+  if (record.kind !== 'answer') {
+    throw new UpdateError(
+      `${where}: unknown kind "${record.kind}" - the only kind is "answer" (the value of a config key a migration asks about). `
+      + 'An update overwrites what it renders, so there is nothing else to decide.',
+    );
   }
   for (const key of Object.keys(record)) {
     if (!['kind', 'value'].includes(key)) throw new UpdateError(`${where}: unknown field "${key}".`);
@@ -295,71 +148,34 @@ export function checkResolutionRecord(record, expectedKind, address) {
 }
 
 /**
- * The scripted adapter: a JSON object mapping an address to a record. A missing entry STOPS the run
- * naming the address, so a scripted update can never proceed on a question nobody answered.
+ * The scripted adapter: a JSON object mapping "<migration>/<opIndex>/<key>" to an answer record.
+ * Every record is checked when the file is loaded, so a stale record (a `conflict` from an older
+ * engine, a typo in a field) stops the run before the first operation instead of being ignored. A
+ * missing entry for an address the run needs STOPS the run naming it - unless `onMissing` is given
+ * (a dry run lists it as `would ask` instead).
  */
-export function resolutionFileAdapter(table, { label = 'the resolution file' } = {}) {
-  if (!isPlainObject(table)) throw new UpdateStartError(`${label} must be a JSON object mapping "<migration>/<opIndex>/<key>" to a resolution record.`);
-  return (address, expectedKind) => {
+export function resolutionFileAdapter(table, { label = 'the resolution file', onMissing = null } = {}) {
+  if (!isPlainObject(table)) throw new UpdateStartError(`${label} must be a JSON object mapping "<migration>/<opIndex>/<key>" to an answer record.`);
+  for (const [address, record] of Object.entries(table)) checkResolutionRecord(record, address);
+  return (address, info) => {
     if (!own(table, address)) {
-      throw new UpdateError(
-        `no resolution for "${address}" in ${label}. Add a ${expectedKind === 'answer'
-          ? '{ "kind": "answer", "value": <json> }'
-          : '{ "kind": "conflict", "resolution": "take-new" | "keep-mine" | "merge" }'} record and re-run - nothing is guessed.`,
-      );
+      if (onMissing) return onMissing(address, info);
+      throw new UpdateError(`no answer for "${address}" in ${label}. Add a { "kind": "answer", "value": <json> } record and re-run - nothing is guessed.`);
     }
-    return checkResolutionRecord(table[address], expectedKind, address);
+    return table[address];
   };
 }
 
-/** The adapter that refuses to answer at all: dry-run previews and non-interactive runs with no file. */
+/** The adapter that refuses to answer: a non-interactive apply with no resolution file. */
 export function stopAdapter(reason) {
-  return (address, expectedKind) => {
-    throw new UpdateError(`"${address}" needs ${expectedKind === 'answer' ? 'an answer' : 'a conflict resolution'} and ${reason}`);
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Stage (durable, under the setup/update-owned tree - never under .aiwf/, which is the operator's)
-// ---------------------------------------------------------------------------
-const stageDir = (projectRoot, migration, opIndex) => path.join(projectRoot, ...STAGE_POSIX.split('/'), `${migration}-${opIndex}`);
-
-function writeStage(projectRoot, migration, opIndex, meta, content) {
-  const dir = stageDir(projectRoot, migration, opIndex);
-  // A stage from an earlier attempt at the SAME operation is superseded, not merged: leaving its
-  // `content` behind next to a new stage.json that has no content would hand recovery a result
-  // nobody accepted.
-  fs.rmSync(dir, { recursive: true, force: true });
-  fs.mkdirSync(dir, { recursive: true });
-  if (content !== null && content !== undefined) fs.writeFileSync(path.join(dir, 'content'), lf(content), 'utf8');
-  // stage.json LAST: its presence is what makes the stage complete and readable.
-  writeAtomic(path.join(dir, 'stage.json'), jsonText(meta));
-}
-
-function readStage(projectRoot, migration, opIndex) {
-  const dir = stageDir(projectRoot, migration, opIndex);
-  const metaRaw = readText(path.join(dir, 'stage.json'));
-  if (metaRaw === null) return null;
-  let meta;
-  try { meta = JSON.parse(metaRaw); } catch { return null; }
-  const content = readText(path.join(dir, 'content'));
-  return { meta, content };
-}
-
-function removeStage(projectRoot, migration, opIndex) {
-  fs.rmSync(stageDir(projectRoot, migration, opIndex), { recursive: true, force: true });
+  return (address) => { throw new UpdateError(`"${address}" needs an answer and ${reason}`); };
 }
 
 /**
- * Removes the whole stage tree. Called ONLY where nothing can be in flight - after the final config
- * write (the journal has just been cleared) and on the "already current" path (where a journal is an
- * invariant violation, checked in preflight). Anything left under it there is debris from a run that
- * died between its last write and this cleanup, and the next run must not inherit it: the directory
- * is setup/update-owned, so nothing of the operator's can be in it.
+ * The dry-run adapter: never prompts, never stops. It plans on the key's default and marks the
+ * operation so the preview prints `would ask: <address>`.
  */
-function removeStageRoot(projectRoot) {
-  fs.rmSync(path.join(projectRoot, ...STAGE_POSIX.split('/')), { recursive: true, force: true });
-}
+export const wouldAskAdapter = (address, info) => ({ kind: 'answer', value: info.fallback, wouldAsk: true });
 
 // ---------------------------------------------------------------------------
 // Config helpers
@@ -389,9 +205,8 @@ function setConfigPath(config, dotted, value) {
 
 function renderContext(projectRoot, config) {
   // The same context setup renders with - built by setup's OWN templateContext(), not by a second
-  // copy of its shape here, which is exactly how the two engines would drift into different bytes.
-  // `$schema` and `_aiwf` are stripped because setup renders from the answers, which never carry
-  // them.
+  // copy of its shape here. `$schema` and `_aiwf` are stripped because setup renders from the
+  // answers, which never carry them.
   const payloadHalf = { ...config };
   delete payloadHalf.$schema;
   delete payloadHalf._aiwf;
@@ -415,11 +230,13 @@ function renderRef(pluginRoot, ref, context) {
 }
 
 // ---------------------------------------------------------------------------
-// The runner
+// Loading and preflight
 // ---------------------------------------------------------------------------
 /**
- * Reads the project config. A missing or unreadable config is NOT a migration failure - it means
- * the runner was pointed at something it must never initialise, so it is an exit-2 "cannot start".
+ * Reads the project config and normalises a legacy bookkeeping shape IN MEMORY (nothing is written
+ * here). A missing or unreadable config is NOT a migration failure - it means the runner was pointed
+ * at something it must never initialise, so it is an exit-2 "cannot start".
+ * Returns { file, config, normalized } - `normalized` says the in-memory shape differs from disk.
  */
 export function loadProjectConfig(projectRoot) {
   const file = path.join(projectRoot, CONFIG_REL);
@@ -434,32 +251,8 @@ export function loadProjectConfig(projectRoot) {
   if (!isPlainObject(config) || !isPlainObject(config._aiwf)) {
     throw new UpdateError(`invariant violated: ${CONFIG_POSIX} carries no _aiwf bookkeeping block, so there is nothing to compare a payload against.`);
   }
-  return { file, config };
-}
-
-const JOURNAL_FIELDS = ['migration', 'opIndex', 'state', 'target', 'preHash', 'postHash', 'resolution'];
-export const JOURNAL_STATES = ['prepared', 'applied'];
-
-function checkJournal(journal) {
-  if (journal === null || journal === undefined) return null;
-  if (!isPlainObject(journal)) throw new UpdateError('invariant violated: _aiwf.migrationJournal is neither null nor an object.');
-  for (const key of Object.keys(journal)) {
-    if (!JOURNAL_FIELDS.includes(key)) throw new UpdateError(`invariant violated: _aiwf.migrationJournal has an unknown field "${key}".`);
-  }
-  for (const key of JOURNAL_FIELDS) {
-    if (!own(journal, key)) throw new UpdateError(`invariant violated: _aiwf.migrationJournal is missing "${key}".`);
-  }
-  if (typeof journal.migration !== 'string' || !Number.isInteger(journal.opIndex)) {
-    throw new UpdateError('invariant violated: _aiwf.migrationJournal needs a migration id and an integer opIndex.');
-  }
-  // THE state vocabulary, as a named list rather than two literals in a condition: `prepared` and
-  // `applied` are the two ends of every operation, creations included. A creation needs no state of
-  // its own, because byte-identical content at its target IS this engine's own write - the artifact
-  // lives in the plugin's own folder - so the hashes already say everything a resume has to know.
-  if (!JOURNAL_STATES.includes(journal.state)) {
-    throw new UpdateError(`invariant violated: _aiwf.migrationJournal state "${journal.state}" is not one of ${JOURNAL_STATES.map((s) => `"${s}"`).join(', ')}.`);
-  }
-  return journal;
+  const normalized = normalizeBookkeeping(config);
+  return { file, config, normalized };
 }
 
 /**
@@ -467,15 +260,13 @@ function checkJournal(journal) {
  * because "the update refused" is only actionable when the operator learns which rule said no.
  */
 export function preflight({ pluginRoot, projectRoot }) {
-  const payload = validatePayload(pluginRoot); // throws UpdateStartError-worthy PayloadError only when plugin.json is unreadable
+  const payload = validatePayload(pluginRoot); // throws PayloadError only when plugin.json is unreadable
   if (payload.errors.length) {
     throw new UpdateError(`the migration payload is not coherent, so nothing was applied:\n  - ${payload.errors.join('\n  - ')}`);
   }
-  const { file: configFile, config } = loadProjectConfig(projectRoot);
-  // The Claude pin rule, before anything else is judged and whatever the pending operations are: a
-  // Claude review row whose exact id the ONE reviewer agent file does not carry would dispatch a
-  // model other than the one it records, and no update carries a config like that forward. It lives
-  // in ONE function that every writer of the config calls (scripts/setup/role-rules.mjs).
+  const { file: configFile, config, normalized } = loadProjectConfig(projectRoot);
+  // The Claude pin rule, before anything else is judged and whatever the pending operations are
+  // (scripts/setup/role-rules.mjs - one function every writer of the config calls).
   const pinErrors = claudePinErrors(config);
   if (pinErrors.length) {
     throw new UpdateError(
@@ -495,15 +286,14 @@ export function preflight({ pluginRoot, projectRoot }) {
   if (typeof bk.lastMigrationApplied !== 'string' || bk.lastMigrationApplied === '') {
     throw new UpdateError('invariant violated: _aiwf.lastMigrationApplied is empty - there is no point in the sequence to continue from.');
   }
+  // The map itself must be there: `ifRecorded` reads it. Its ENTRIES are whatever normalisation left
+  // (the version strings), and nothing below judges them.
   if (!isPlainObject(bk.managedRegions)) {
-    throw new UpdateError('invariant violated: _aiwf.managedRegions is not an object, so no managed artifact can be judged.');
+    throw new UpdateError('invariant violated: _aiwf.managedRegions is not an object, so no managed artifact can be looked up.');
   }
-  // The downgrade check comes FIRST, ahead of the manifest lookup, because it is the same situation
-  // seen from the operator's side: an older payload run against a newer project would otherwise be
-  // reported as "lastMigrationApplied names a migration I have never heard of", which is true and
-  // useless. (With every other invariant intact this branch is also the only way installed can
-  // exceed the payload version, since the manifest's last entry equals that version and versions
-  // only rise - so it stays as an explicit refusal rather than an assumption.)
+  // The downgrade check comes FIRST, ahead of the manifest lookup: an older payload run against a
+  // newer project would otherwise be reported as "lastMigrationApplied names a migration I have
+  // never heard of", which is true and useless.
   if (compareVersions(bk.installedPluginVersion, payload.version) > 0) {
     throw new UpdateError(
       `downgrade refused: this project is at ${bk.installedPluginVersion} and the payload is ${payload.version}. ` +
@@ -524,14 +314,45 @@ export function preflight({ pluginRoot, projectRoot }) {
     );
   }
   const pending = payload.manifest.slice(index + 1);
-  const journal = checkJournal(bk.migrationJournal ?? null);
-  if (journal && !pending.some((e) => e.id === journal.migration)) {
-    throw new UpdateError(
-      `invariant violated: the journal names migration "${journal.migration}", which is not among the migrations still ` +
-      'pending for this project. The bookkeeping was edited by hand or the payload changed under an interrupted run.',
-    );
+  return { payload, configFile, config, pending, normalized };
+}
+
+// ---------------------------------------------------------------------------
+// The CHANGELOG blocks a consumer is owed
+// ---------------------------------------------------------------------------
+const CHANGELOG_HEADING = /^## \[(\d+\.\d+\.\d+)\]/;
+
+/**
+ * The lines to print: every `## [x.y.z]` block of `<pluginRoot>/CHANGELOG.md` with
+ * from < x.y.z <= to, verbatim and in file order, under ONE header line. A block runs from its
+ * heading to the next `## ` heading (or the end of the file); trailing blank lines are not part of
+ * it. No file, or no block in the range, is ONE line saying so.
+ */
+export function changelogLines(pluginRoot, from, to) {
+  const text = readText(path.join(pluginRoot, 'CHANGELOG.md'));
+  const blocks = [];
+  if (text !== null) {
+    let current = null;
+    for (const line of text.split(/\r?\n/)) {
+      if (line.startsWith('## ')) {
+        if (current) blocks.push(current);
+        current = null;
+        const m = CHANGELOG_HEADING.exec(line);
+        if (m && parseVersion(m[1]) && compareVersions(from, m[1]) < 0 && compareVersions(m[1], to) <= 0) current = [line];
+        continue;
+      }
+      if (current) current.push(line);
+    }
+    if (current) blocks.push(current);
   }
-  return { payload, configFile, config, pending, journal };
+  if (blocks.length === 0) return [`CHANGELOG: no block between ${from} and ${to}`];
+  const out = [`CHANGELOG ${from} -> ${to}:`];
+  blocks.forEach((block, i) => {
+    while (block.length > 1 && block[block.length - 1].trim() === '') block.pop();
+    if (i > 0) out.push('');
+    out.push(...block);
+  });
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -539,8 +360,7 @@ export function preflight({ pluginRoot, projectRoot }) {
 // ---------------------------------------------------------------------------
 /**
  * The address key of an operation - the `<key>` half of `<migration>/<opIndex>/<key>`. ONE
- * definition, used by the planner, by recovery and by every message that has to name an operation,
- * so a message can never describe an address the resolver would not recognise.
+ * definition, used by the planner and by every message that has to name an operation.
  */
 export function operationKey(op, fallback = null) {
   if (!isPlainObject(op)) return fallback;
@@ -553,53 +373,44 @@ export function operationKey(op, fallback = null) {
   }
 }
 
-// A plan is what apply() executes. `mode` decides the projection used for hashing:
-//   'file'     whole file        'region'  marked region        'settings' whole settings.json
-//   'config'   config projection 'none'    nothing on disk changes (a note, or a held artifact)
-//
-// `staged` is the result an interrupted attempt at THIS operation already accepted (read back from
-// its stage). It is passed only when recovery re-plans an operation, and it exists so that a
-// question the operator has already answered is never asked a second time.
-function planOperation(ctx, migration, opIndex, op, staged = null) {
+// A plan is what applyPlan() executes. `mode`:
+//   'file'     a project file (whole file or spliced region)   'settings'  settings.json
+//   'config'   a config key (in memory until the migration's config write)   'none'  nothing
+// `lines` are printed under the operation's summary (a note's text, docRefs and supersedes).
+function planOperation(ctx, migration, opIndex, op) {
   const address = (key) => `${migration}/${opIndex}/${key}`;
   switch (op.op) {
     case 'note':
       return {
-        op, mode: 'none', target: null, key: op.id, preHash: null, postHash: null,
-        content: null, resolution: null, bookkeeping: null, summary: `note ${op.id}`,
+        op, mode: 'none', key: op.id, summary: `note ${op.id}`,
+        lines: [
+          `note: ${op.text}`,
+          ...(op.docRefs || []).map((ref) => `  - ${ref}`),
+          ...(op.supersedes || []).map((id) => `  supersedes: ${id}`),
+        ],
       };
     case 'add-config-key':
-      return planAddConfigKey(ctx, op, address(op.path), staged);
+      return planAddConfigKey(ctx, op, address(op.path));
     case 'rerender-managed-region':
-      return planRerender(ctx, op, (key) => address(key));
+      return planRerender(ctx, op);
     case 'reconcile-ask-ruleset':
-      return planReconcile(ctx, op, address(SETTINGS_POSIX));
+      return planReconcile(ctx, op);
     default:
       // Unreachable: validate-payload rejects unknown op types before anything runs.
       throw new UpdateError(`unknown operation type "${op.op}".`);
   }
 }
 
-function planAddConfigKey(ctx, op, address, staged = null) {
+function planAddConfigKey(ctx, op, address) {
   if (hasConfigPath(ctx.config, op.path)) {
-    return {
-      op, mode: 'none', target: null, key: op.path, preHash: null, postHash: null,
-      content: null, resolution: null, bookkeeping: null,
-      summary: `config key ${op.path} already present - left exactly as it is`,
-    };
+    return { op, mode: 'none', key: op.path, summary: `config key ${op.path} already present - left exactly as it is` };
   }
   let value = op.default;
+  let wouldAsk = false;
   if (op.askOperator === true) {
-    // A STAGED answer is the operator's answer to this very question, already given. Re-planning
-    // this operation against a config that moved while the update was down must re-check the
-    // current state (the key may be there now, and the schema still gates the result) - but it must
-    // not ask again. The resolver is consulted only when there is genuinely no staged answer.
-    if (staged) {
-      value = staged.value;
-      ctx.log(`  ${op.path}: the answer you already gave was replayed from the stage (not asked again).`);
-    } else {
-      value = ctx.resolve(address, 'answer', { question: op.question, path: op.path, fallback: op.default }).value;
-    }
+    const record = ctx.resolve(address, { question: op.question, path: op.path, fallback: op.default });
+    value = record.value;
+    wouldAsk = record.wouldAsk === true;
   }
   const next = JSON.parse(JSON.stringify(ctx.config));
   setConfigPath(next, op.path, value);
@@ -610,190 +421,64 @@ function planAddConfigKey(ctx, op, address, staged = null) {
     throw new UpdateError(`adding the config key "${op.path}" would produce a config the payload schema rejects:\n${formatErrors(errors)}`);
   }
   return {
-    op, mode: 'config', target: CONFIG_POSIX, key: op.path,
-    preHash: configHash(ctx.config), postHash: configHash(next),
-    content: null, value, resolution: null, bookkeeping: null,
-    summary: `config key ${op.path} = ${JSON.stringify(value)}`,
+    op, mode: 'config', key: op.path, value,
+    summary: wouldAsk ? `would ask: ${address}` : `config key ${op.path} = ${JSON.stringify(value)}`,
   };
-}
-
-function planRerender(ctx, op, addressOf) {
-  const key = op.region ? `${op.file}#${op.region}` : op.file;
-  const address = addressOf(key);
-  const fileText = ctx.readProjected(op.file);
-  const actual = op.region ? extractRegion(fileText, op.region) : fileText;
-  const newRender = ctx.render(op.template);
-  const previous = ctx.config._aiwf.managedRegions[key];
-
-  if (!isPlainObject(previous)) {
-    // `ifRecorded: true` says this artifact exists on SOME installations only - `.claude/agents/
-    // reviewer.md` is rendered for a claude-hosted host and does not exist at all on a
-    // codex-configured project. Skipping it is not a relaxation of the invariant below: there is
-    // still no adoption, no write and no bookkeeping entry - the operation simply has no subject
-    // here, and it says so. Without the field the throw stands, which is what makes the field a
-    // deliberate statement by the migration author rather than a default.
-    if (op.ifRecorded === true) {
-      return {
-        op, mode: 'none', target: null, key, preHash: null, postHash: null,
-        content: null, resolution: null, bookkeeping: null,
-        summary: `${key}: not on this installation (no record) - skipped`,
-      };
-    }
-    // `createIfAbsent: true` is the opposite answer to the same state, for an artifact the payload
-    // has only just started rendering: an installation older than it has no record, and the
-    // migration is what puts the artifact there. It relaxes NOTHING about adoption. Nothing on disk
-    // is the ordinary case - render, write, stamp. A file whose content IS the render is this
-    // engine's own write (the artifact lives in the plugin's own folder), so the creation is planned
-    // anyway and ends as a stamp with nothing written. A file that DIFFERS is content this engine
-    // never wrote, and the run stops - the refusal says what to do with it.
-    if (op.createIfAbsent === true) {
-      // "a file is already standing there" is read off the FILE, never off the extracted region: for
-      // a region artifact a null extraction ALSO means "the file is there and carries no markers",
-      // and creating from the render in that state would splice into - or replace - a file this
-      // engine did not write. The file is the honest subject of the question.
-      if (fileText !== null && lf(fileText) !== lf(newRender)) throw new UpdateError(unrecordedFileRefusal(key));
-      const createHash = sha256(newRender);
-      return {
-        // The region arm is unreachable: the validator refuses `createIfAbsent` on a region op.
-        op, mode: op.region ? 'region' : 'file', target: op.file, key,
-        // `created` marks this plan as a CREATION for every step that touches the target after
-        // planning. It is not derivable from `preHash: null`: a take-new or merge that resolved a
-        // conflict over a MISSING file carries a null preHash too, and that one has an operator
-        // decision behind it, so the two must not share a refusal.
-        created: true,
-        preHash: null, postHash: createHash, content: newRender, resolution: null,
-        bookkeeping: { managedRegions: { [key]: { upstream: createHash, local: createHash, override: false } } },
-        summary: `${key}: created (no record, no file) - rendered and recorded`,
-      };
-    }
-    throw new UpdateError(
-      `invariant violated: "${key}" is not recorded in _aiwf.managedRegions, so this update has no idea what the project ` +
-      'last accepted there. An update never adopts a file it did not write - that is /pnp:setup\'s '
-      + 'business, and `--adopt` is the flag that bootstraps ownership over a surface already on disk.',
-    );
-  }
-
-  const renderHash = sha256(newRender);
-  const held = previous.override === true;
-  const localEdit = actual === null || sha256(actual) !== previous.local;
-  const upstreamChange = renderHash !== previous.upstream;
-
-  // An operation that applies NOTHING still journals the artifact it is about to make an assertion
-  // about, with preHash == postHash == the hash its bookkeeping will claim as `local`. Nothing is
-  // written to the file in either branch, but recovery must be able to tell "the artifact is exactly
-  // what the decision was taken on" from "it changed while the process was down" - and a journal
-  // with a null target cannot tell those apart, so it would stamp a hash describing a file that no
-  // longer looks like that.
-  if (held && !localEdit) {
-    // Held by the operator: never re-applied. The new render is RECORDED as upstream and the
-    // artifact goes into CHANGES; the file itself is not touched in any branch.
-    const identity = sha256(actual);
-    return {
-      op, mode: 'none', target: op.file, key, preHash: identity, postHash: identity,
-      content: null, resolution: null,
-      bookkeeping: { managedRegions: { [key]: { upstream: renderHash, local: previous.local, override: true } } },
-      summary: `${key} is held by you (override) - the new render was recorded as upstream, not applied`,
-    };
-  }
-
-  if (!held && !localEdit && !upstreamChange) {
-    const identity = sha256(actual);
-    return {
-      op, mode: 'none', target: op.file, key, preHash: identity, postHash: identity,
-      content: null, resolution: null, bookkeeping: null,
-      summary: `${key} is already current (neither the project nor the payload changed it)`,
-    };
-  }
-
-  if (!held && !localEdit && upstreamChange) {
-    // The normal path of every migration: the payload moved and the operator never touched the
-    // artifact, so there is nothing of theirs to lose and nothing to ask about. It goes through the
-    // SAME applyResolution path an operator take-new goes through - identical journal, stage and
-    // resume - with a synthetic record; only the summary differs, and it says why it was not asked.
-    return applyResolution(ctx, {
-      op, key, address, actual, newRender, renderHash,
-      record: { resolution: 'take-new', auto: true },
-    });
-  }
-
-  const record = ctx.resolve(address, 'conflict', {
-    key,
-    predicates: [localEdit ? (actual === null ? 'the file or region is GONE from the project' : 'you edited it') : null,
-      upstreamChange ? 'the payload changed it' : null].filter(Boolean),
-    held,
-    actual,
-    newRender,
-  });
-  return applyResolution(ctx, { op, key, address, actual, newRender, renderHash, record });
 }
 
 /**
- * Turns an accepted resolution into a plan. It overwrites only an artifact the operator has not
- * edited (the synthetic `record.auto` take-new planRerender builds for that case), and says so in
- * the summary; every other branch here rests on a decision the operator actually made.
+ * A re-render ALWAYS writes the fresh render: a region is spliced into the file (bytes outside the
+ * markers kept; a missing region appended; a missing file recreated as the region alone), a whole
+ * Markdown file goes through the additions carry, any other whole file is the render. The record is
+ * the payload version. `ifRecorded: true` keeps its one meaning - an artifact with no record here is
+ * not on this installation and is skipped. `createIfAbsent` is accepted by the validator and needs
+ * nothing here: a render always creates what is missing.
  */
-function applyResolution(ctx, { op, key, address, actual, newRender, renderHash, record }) {
-  const mode = op.region ? 'region' : 'file';
-  const preHash = actual === null ? null : sha256(actual);
-  const base = { op, mode, target: op.file, key, preHash, resolution: record.resolution };
-
-  if (record.resolution === 'keep-mine') {
-    if (actual === null) {
-      throw new UpdateError(
-        `"${address}": keep-mine needs something to keep, and ${key} is not on disk. Resolve this one with take-new ` +
-        '(write the payload version) or merge (supply the content you want).',
-      );
-    }
-    // Nothing is applied, but the artifact IS journalled (preHash == postHash == the hash this
-    // resolution records as `local`), so a resume can prove the file still looks the way it did when
-    // the operator chose to keep it - see the note in planRerender.
-    return {
-      ...base, mode: 'none', postHash: preHash, content: null,
-      bookkeeping: { managedRegions: { [key]: { upstream: renderHash, local: preHash, override: true } } },
-      summary: `${key}: kept yours (nothing applied); the payload version was recorded as upstream`,
-    };
+function planRerender(ctx, op) {
+  const key = operationKey(op);
+  const recorded = own(ctx.config._aiwf.managedRegions, key);
+  if (!recorded && op.ifRecorded === true) {
+    return { op, mode: 'none', key, summary: `${key}: not on this installation (no record) - skipped` };
   }
-
-  let accepted = newRender;
-  if (record.resolution === 'merge') {
-    const mergedPath = path.isAbsolute(record.mergedFile) ? record.mergedFile : path.join(ctx.projectRoot, record.mergedFile);
-    const merged = readText(mergedPath);
-    if (merged === null) throw new UpdateError(`"${address}": the merged file "${record.mergedFile}" cannot be read.`);
-    if (op.region && extractRegion(merged, op.region) === null) {
-      throw new UpdateError(
-        `"${address}": the merged file "${record.mergedFile}" carries no ${beginMarker(op.region)} / ${endMarker(op.region)} ` +
-        'markers, so there is no region to install.',
-      );
+  const newRender = ctx.render(op.template);
+  const fileText = ctx.readProjected(op.file);
+  let content;
+  let raw = false;
+  let carried = false;
+  if (op.region) {
+    if (fileText === null) content = `${newRender}\n`;
+    else { content = spliceRegion(fileText, op.region, newRender); raw = true; }
+  } else if (op.file.endsWith('.md')) {
+    try {
+      ({ text: content, carried } = carryProjectAdditions(fileText, newRender, op.file));
+    } catch (e) {
+      if (e instanceof ProjectAdditionsError) throw new UpdateError(e.message);
+      throw e;
     }
-    accepted = op.region ? extractRegion(merged, op.region) : merged;
+    raw = carried;
+  } else {
+    content = newRender;
   }
-  const acceptedHash = sha256(accepted);
-  const isMerge = record.resolution === 'merge';
+  const write = fileText === null || lf(fileText) !== lf(content);
+  let summary;
+  if (fileText === null) summary = `${key}: created from the payload render`;
+  else if (!write) summary = `${key}: already current`;
+  else if (op.region && extractRegion(fileText, op.region) === null) summary = `${key}: region appended (it was not in the file)`;
+  else if (!recorded) summary = `${key}: overwritten with the payload render (this installation had no record of it)`;
+  else summary = `${key}: the payload render written`;
+  if (carried) summary += ' (project additions carried)';
   return {
-    ...base,
-    postHash: acceptedHash,
-    content: accepted,
-    bookkeeping: {
-      managedRegions: {
-        [key]: isMerge
-          ? { upstream: renderHash, local: acceptedHash, override: true }
-          : { upstream: renderHash, local: acceptedHash, override: false },
-      },
-    },
-    summary: isMerge
-      ? `${key}: your merged content applied (upstream recorded, held)`
-      : record.auto === true
-        ? `${key}: the payload version applied (you had not edited it)`
-        : `${key}: the payload version applied`,
+    op, mode: 'file', target: op.file, key, content, raw, write,
+    bookkeeping: { managedRegions: { [key]: ctx.payload.version } },
+    summary,
   };
 }
 
-function planReconcile(ctx, op, address) {
+function planReconcile(ctx, op) {
   const raw = ctx.readProjected(SETTINGS_POSIX);
   if (raw === null) {
     throw new UpdateError(
-      `${SETTINGS_POSIX} is GONE from the project. A deletion is a manual edit, and an update never recreates one - ` +
-      're-run /pnp:setup if you want the ask ruleset installed again.',
+      `${SETTINGS_POSIX} is GONE from the project - re-run /pnp:setup to install the ask ruleset again.`,
     );
   }
   let settings;
@@ -815,14 +500,7 @@ function planReconcile(ctx, op, address) {
     );
   }
 
-  const rulesetRaw = readText(path.join(ctx.pluginRoot, ...op.ruleset.split('/')));
-  if (rulesetRaw === null) throw new UpdateError(`the payload ruleset "${op.ruleset}" is missing.`);
-  let ruleset;
-  try { ruleset = JSON.parse(rulesetRaw); } catch (e) { throw new UpdateError(`the payload ruleset "${op.ruleset}" is not valid JSON (${e.message}).`); }
-  const declared = (isPlainObject(ruleset.permissions) && Array.isArray(ruleset.permissions.ask)) ? ruleset.permissions.ask : null;
-  if (!declared) throw new UpdateError(`the payload ruleset "${op.ruleset}" declares no permissions.ask list.`);
-  const desired = declared.map((rule) => rule.split('<projectRoot>').join(ctx.projectRoot));
-
+  const desired = readDesiredRules(ctx, op.ruleset);
   const bk = ctx.config._aiwf;
   const plan = planAskRules({
     desired,
@@ -831,54 +509,39 @@ function planReconcile(ctx, op, address) {
     suppressed: Array.isArray(bk.suppressedAskRules) ? bk.suppressedAskRules : [],
   });
   // to-remove = owned n (old desired - new desired) is computed INSIDE planAskRules (see its
-  // header): `owned` is by construction a subset of the OLD desired set, so owned n (old - new) ==
-  // owned - new, computable without the previous payload's ruleset. It used to be recomputed here,
-  // which is how setup and update came to disagree about a stale `<projectRoot>` render; the
-  // formula now has one home and this function only reports what it decided.
+  // header); this function only reports what it decided.
   const { toRemove, ask, owned } = plan;
-
-  const next = { ...settings, permissions: { ...permissions, ask } };
-  const content = jsonText(next);
-  const preHash = sha256(raw);
-  const postHash = sha256(content);
+  const content = jsonText({ ...settings, permissions: { ...permissions, ask } });
   const parts = [];
   if (plan.toAdd.length) parts.push(`+${plan.toAdd.length}`);
   if (toRemove.length) parts.push(`-${toRemove.length} (owned, no longer desired)`);
   if (plan.newlyTombstoned.length) parts.push(`${plan.newlyTombstoned.length} tombstoned`);
-  // The one thing the reconcile does NOT do, said out loud. A payload rule the project already
-  // carries in the payload's own spelling but never had inserted by this engine is left alone
-  // forever - correct, and invisible in a diff that has no lines for it, which is how an operator
-  // comes to believe those rules are maintained for them. It is appended AFTER the parenthesis
-  // rather than mixed into the change parts, so "nothing to change" stays the honest first half.
+  // The one thing the reconcile does NOT do, said out loud: a payload rule the project already
+  // carries in the payload's own spelling but never had inserted by this engine is left alone.
   const foreignNote = plan.presentForeign.length
     ? `; ${plan.presentForeign.length} payload rule(s) present but not owned here - hand-edited, the engine will never touch them`
     : '';
   return {
-    op, mode: 'settings', target: SETTINGS_POSIX, key: SETTINGS_POSIX,
-    preHash, postHash, content, resolution: null,
+    op, mode: 'settings', target: SETTINGS_POSIX, key: SETTINGS_POSIX, content,
+    write: lf(raw) !== lf(content),
     bookkeeping: { ownedAskRules: owned, suppressedAskRules: plan.suppressed },
     summary: `ask ruleset reconciled: ${parts.length ? parts.join(', ') : 'nothing to change'} (foreign rules untouched)${foreignNote}`,
   };
 }
 
+function readDesiredRules(ctx, ruleset) {
+  const rulesetRaw = readText(path.join(ctx.pluginRoot, ...ruleset.split('/')));
+  if (rulesetRaw === null) throw new UpdateError(`the payload ruleset "${ruleset}" is missing.`);
+  let parsed;
+  try { parsed = JSON.parse(rulesetRaw); } catch (e) { throw new UpdateError(`the payload ruleset "${ruleset}" is not valid JSON (${e.message}).`); }
+  const declared = (isPlainObject(parsed.permissions) && Array.isArray(parsed.permissions.ask)) ? parsed.permissions.ask : null;
+  if (!declared) throw new UpdateError(`the payload ruleset "${ruleset}" declares no permissions.ask list.`);
+  return declared.map((rule) => rule.split('<projectRoot>').join(ctx.projectRoot));
+}
+
 // ---------------------------------------------------------------------------
 // Applying one planned operation
 // ---------------------------------------------------------------------------
-function stageMetaOf(migration, opIndex, plan) {
-  return {
-    migration, opIndex, op: plan.op.op, mode: plan.mode, key: plan.key, target: plan.target,
-    region: plan.op.region ?? null, resolution: plan.resolution ?? null,
-    // `created` TRAVELS. A replay rebuilds the plan from this record, and a rebuilt plan without the
-    // flag would take the ordinary write path - `writeAtomic`, which clobbers - for an artifact this
-    // engine is bringing into existence. The flag is what routes the write to the no-clobber
-    // publish, so it has to survive the crash that makes a replay necessary.
-    created: plan.created === true,
-    preHash: plan.preHash, postHash: plan.postHash,
-    bookkeeping: plan.bookkeeping ?? null,
-    value: plan.mode === 'config' ? { value: plan.value } : null,
-  };
-}
-
 function mergeBookkeeping(config, bookkeeping) {
   if (!bookkeeping) return;
   const bk = config._aiwf;
@@ -889,11 +552,24 @@ function mergeBookkeeping(config, bookkeeping) {
   if (bookkeeping.suppressedAskRules) bk.suppressedAskRules = bookkeeping.suppressedAskRules;
 }
 
-// `$schema` is NOT touched here. It is refreshed at exactly one point, refreshSchemaRef below, before
-// any operation is planned or journalled - a refresh inside this function would move the config hash
-// under a journal written a moment earlier, and a crash there would leave a hash matching neither.
 function writeConfig(ctx) {
   writeAtomic(ctx.configFile, jsonText(orderConfig(ctx.config)));
+}
+
+/**
+ * Applies one plan. In a dry run (`ctx.overlay` set) nothing touches the disk: file contents go to
+ * the overlay and config changes stay in memory, so the next operation is planned against the state
+ * this one would leave.
+ */
+function applyPlan(ctx, plan) {
+  if (plan.mode === 'config') setConfigPath(ctx.config, plan.op.path, plan.value);
+  if ((plan.mode === 'file' || plan.mode === 'settings') && plan.write) {
+    if (ctx.overlay) ctx.overlay.set(plan.target, plan.content);
+    else writeAtomic(path.join(ctx.projectRoot, ...plan.target.split('/')), plan.content, { raw: plan.raw === true });
+  }
+  mergeBookkeeping(ctx.config, plan.bookkeeping);
+  // The reconcile's ownership is persisted the moment settings.json carries it (see THE MODEL).
+  if (plan.mode === 'settings' && !ctx.overlay) writeConfig(ctx);
 }
 
 // ---------------------------------------------------------------------------
@@ -903,12 +579,10 @@ function writeConfig(ctx) {
 export const schemaRef = (pluginRoot) => toPosix(path.join(pluginRoot, 'schema', 'aiwf.config.schema.json'));
 
 /**
- * Points a stale `$schema` at this run's payload. Called ONCE per update run, and only when no
- * journal exists: every hash the run then takes is over the refreshed config, and a RESUMED run keeps
- * the hashes its journal was written with (it refreshes on the next clean run instead). In a dry run
- * the value is assigned in memory only. Idempotent: a value that is already right is not written, so
- * the file stays byte for byte what it was. An update refused at a later operation keeps the
- * refreshed pointer - the value is right either way. Returns { from, to }, or null when nothing was stale.
+ * Points a stale `$schema` at this run's payload, ONCE per run and before the first operation. In a
+ * dry run the value is assigned in memory only. Idempotent: a value that is already right is not
+ * written, so the file stays byte for byte what it was. Returns { from, to }, or null when nothing
+ * was stale.
  */
 export function refreshSchemaRef(configFile, config, pluginRoot, dryRun) {
   const to = schemaRef(pluginRoot);
@@ -922,431 +596,34 @@ export function refreshSchemaRef(configFile, config, pluginRoot, dryRun) {
 export const schemaRefreshLine = ({ from, to }) => `refreshed $schema: ${from === null ? '(none)' : String(from)} -> ${to}`;
 
 // ---------------------------------------------------------------------------
-// paths.changesDir - where the CHANGES report goes
+// The payload rules present but not owned
 // ---------------------------------------------------------------------------
 /**
- * The folder the report is written into, judged BEFORE the first operation: a value that leaves the
- * project, or names something that is not a folder, would otherwise fail the report write AFTER every
- * operation had been applied and journalled. An ABSENT key reads as "." - the project root, where an
- * installation that predates the key has always found its report. The containment rule is the one
- * setup applies (containedRelativePath). Returns the absolute folder.
+ * Measured from the FINAL state (the settings file as it now is, plus the final bookkeeping) for
+ * every ruleset a pending migration reconciled. The set is invariant across the reconcile (see
+ * planAskRules' header), so measuring afterwards is the same answer. Returns the lines to print:
+ * `N payload rule(s) present but not owned here: <names>`, one per ruleset that has any.
  */
-function changesFolder(projectRoot, config) {
-  const paths = isPlainObject(config.paths) ? config.paths : {};
-  const value = own(paths, 'changesDir') ? paths.changesDir : '.';
-  if (!containedRelativePath(value)) {
-    throw new UpdateError(
-      `paths.changesDir (${JSON.stringify(value)}) is not a folder inside the project - the CHANGES report would be ` +
-      `written outside it. Nothing was applied; set it to a project-relative folder in ${CONFIG_POSIX} and run the update again.`,
-    );
-  }
-  const folder = path.resolve(projectRoot, value);
-  let stat = null;
-  try { stat = fs.statSync(folder); } catch (e) {
-    if (e.code !== 'ENOENT') {
-      throw new UpdateError(
-        `paths.changesDir (${JSON.stringify(value)}) cannot be used as a folder (${e.code || e.message}). Nothing was applied; ` +
-        `fix it in ${CONFIG_POSIX} and run the update again.`,
-      );
-    }
-  }
-  if (stat && !stat.isDirectory()) {
-    throw new UpdateError(
-      `paths.changesDir (${JSON.stringify(value)}) names something that exists and is not a folder. Nothing was applied; ` +
-      `point it at a folder in ${CONFIG_POSIX}, or move that file aside, and run the update again.`,
-    );
-  }
-  return folder;
-}
-
-/**
- * The FULL text this plan would put in its target file - the one place that knows how a region is
- * spliced back into the file around it. Both the writer and the dry-run preview go through it, so a
- * preview cannot claim one thing while the apply does another.
- */
-function projectedFileContent(ctx, plan) {
-  if (plan.mode !== 'region') return plan.content;
-  // A missing FILE in region mode is only reachable through a conflict the operator resolved with
-  // take-new or merge, so the accepted region becomes the whole file: it is the honest
-  // reconstruction of a file that is not there, and it is never a silent one.
-  const fileText = ctx.readProjected(plan.target);
-  return fileText === null ? `${plan.content}\n` : spliceRegion(fileText, plan.op.region, plan.content);
-}
-
-/** Writes the operation's TARGET, file-atomically. Returns true when a byte really changed. */
-function applyTarget(ctx, plan) {
-  if (plan.mode === 'none') return false;
-  if (plan.mode === 'config') {
-    setConfigPath(ctx.config, plan.op.path, plan.value);
-    writeConfig(ctx);
-    return true;
-  }
-  const abs = path.join(ctx.projectRoot, ...plan.target.split('/'));
-  const next = projectedFileContent(ctx, plan);
-  // A CREATION does not take `writeAtomic` at all: its rename replaces whatever is at the target,
-  // which is right for an artifact this engine owns and wrong for one it is bringing into
-  // existence. The three cases are decided HERE, in the last instruction before the write, and the
-  // equality test comes first because `link` cannot tell "identical, ours" from "different,
-  // somebody else's" - both are EEXIST to it.
-  if (plan.created === true) {
-    const standing = readText(abs);
-    if (standing === null) { writeCreatedTarget(abs, next, plan.key); return true; }
-    // Identical bytes are this engine's own write - the folder is the plugin's - so there is
-    // nothing to write and nothing to ask about; the bookkeeping flip stamps it.
-    if (lf(standing) === lf(next)) return false;
-    throw new UpdateError(unrecordedFileRefusal(plan.key));
-  }
-  const current = readText(abs);
-  if (current !== null && lf(current) === lf(next)) return false; // identical bytes: do not touch the file
-  writeAtomic(abs, next);
-  return true;
-}
-
-/**
- * Hashes the plan's target AS IT IS ON DISK RIGHT NOW, with the projection that plan implies. Used
- * for the re-check below, so it deliberately re-reads the config from disk rather than hashing the
- * in-memory copy: the point is to catch a change this process did not make.
- */
-function hashPlanTargetOnDisk(ctx, plan) {
-  if (!plan.target) return null;
-  if (plan.mode === 'config') {
-    const raw = readText(ctx.configFile);
-    if (raw === null) return null;
-    try { return configHash(JSON.parse(raw)); } catch { return null; }
-  }
-  const text = readText(path.join(ctx.projectRoot, ...plan.target.split('/')));
-  if (plan.op.op === 'rerender-managed-region' && plan.op.region) {
-    const region = extractRegion(text, plan.op.region);
-    return region === null ? null : sha256(region);
-  }
-  return text === null ? null : sha256(text);
-}
-
-function applyOperation(ctx, migration, opIndex, plan) {
-  // 0. The state was READ when this operation was planned, and the resolver may have taken any
-  // amount of time to answer - an interactive dialog can sit open for an hour. So the target is
-  // re-hashed here, in the last instruction before the first write, and an operation planned against
-  // a state that no longer exists is refused rather than applied to a file it never saw. Zero writes
-  // for this operation; everything before it stays applied and journalled.
-  // 0a. A CREATION is judged on its own terms, and BEFORE the generic re-check. That check asks only
-  // "did the target move", and for a creation every answer other than "still absent" would be
-  // reported as a state change - true, but the wrong sentence: the real question is whether somebody
-  // else's file is now standing at that path. This is the last read before the first write, so it is
-  // where the window between planning and writing NARROWS - it is closed by the no-clobber publish
-  // in `applyTarget`, not here. The generic check must not run for a creation: it would report a
-  // state change where this one names the situation.
-  if (plan.created === true && plan.target) {
-    assertNoForeignFileAtCreationTarget(
-      path.join(ctx.projectRoot, ...plan.target.split('/')), projectedFileContent(ctx, plan), plan.key,
-    );
-  }
-  const nowHash = hashPlanTargetOnDisk(ctx, plan);
-  if (plan.target && plan.created !== true && nowHash !== plan.preHash) {
-    throw new UpdateError(
-      `"${migration}/${opIndex}/${plan.key}": ${plan.target} changed while the update was deciding what to do with it, ` +
-      'so the decision was taken against a state that no longer exists. Nothing was applied - re-run the update and it ' +
-      'will re-plan this operation against the file as it is now.',
-    );
-  }
-
-  // 1. stage the ACCEPTED result first, so a restart replays it without asking again
-  writeStage(ctx.projectRoot, migration, opIndex, stageMetaOf(migration, opIndex, plan), plan.content);
-
-  // 2. the write-ahead journal, atomically, with the hashes of the staged result.
-  // `target` is null only for an operation that has NO artifact to be right or wrong about (a note,
-  // a config key that is already present). An operation that applies nothing but asserts something
-  // about an artifact still records it - see the note in planRerender.
-  ctx.config._aiwf.migrationJournal = {
-    migration, opIndex, state: 'prepared', target: plan.target,
-    preHash: plan.preHash, postHash: plan.postHash, resolution: plan.resolution ?? null,
-  };
-  writeConfig(ctx);
-  crashPoint(migration, opIndex, 'after-journal-prepared');
-
-  // 3. the target itself
-  applyTarget(ctx, plan);
-  crashPoint(migration, opIndex, 'after-target-apply');
-
-  // 4. ONE atomic config write: the journal flips to applied together with this op's bookkeeping
-  ctx.config._aiwf.migrationJournal.state = 'applied';
-  mergeBookkeeping(ctx.config, plan.bookkeeping);
-  writeConfig(ctx);
-  crashPoint(migration, opIndex, 'after-applied-flip');
-
-  // 5. the stage has served its purpose
-  removeStage(ctx.projectRoot, migration, opIndex);
-}
-
-// ---------------------------------------------------------------------------
-// Recovery
-// ---------------------------------------------------------------------------
-/** Hashes the operation's target with the projection that operation's mode implies. */
-function hashTarget(ctx, op, target) {
-  if (target === null) return null;
-  if (op.op === 'add-config-key') return configHash(ctx.config);
-  const abs = path.join(ctx.projectRoot, ...target.split('/'));
-  const text = readText(abs);
-  if (op.op === 'rerender-managed-region' && op.region) {
-    const region = extractRegion(text, op.region);
-    return region === null ? null : sha256(region);
-  }
-  return text === null ? null : sha256(text);
-}
-
-/**
- * Finishes an operation whose target already carries the staged result: the journal flips to
- * `applied` together with the bookkeeping the stage recorded.
- *
- * A MISSING stage is tolerated here (the target already matches postHash, so nothing is at risk in
- * the file), and the bookkeeping is then recomputed as far as it is derivable:
- *   - a re-rendered artifact: fully derivable (local = the content on disk, upstream = a fresh
- *     render, override = whether the recorded resolution held the file);
- *   - a reconciled ask ruleset: NOT derivable, because "which rules did we insert" cannot be read
- *     off the post-state without claiming ownership of rules that were already there. The safe
- *     direction is to claim nothing new, and to say so out loud.
- */
-function flipWithoutStage(ctx, migration, opIndex, op, journal) {
-  const stage = readStage(ctx.projectRoot, migration, opIndex);
-  if (stage && stage.meta && stage.meta.bookkeeping !== undefined) return stage.meta.bookkeeping;
-  if (op.op === 'rerender-managed-region') {
-    const key = op.region ? `${op.file}#${op.region}` : op.file;
-    const previous = ctx.config._aiwf.managedRegions[key] || {};
-    // AN `ifRecorded` OPERATION WITH NO RECORD WAS SKIPPED, AND IT STAYS SKIPPED - decided HERE,
-    // before anything on disk is read, and NOT on whether a file happens to exist at that path.
-    // Reading first was a silent adoption: on an installation that renders no artifact there, a
-    // FOREIGN file someone else put at that path would be hashed into a fresh `local`/`upstream`
-    // pair with `override: false`, i.e. the update would take ownership of a file it never wrote -
-    // the one thing this engine promises it never does - and the next payload change would then
-    // overwrite it without a dialog. "No record" is the whole answer: no read, no adoption, no
-    // bookkeeping, whatever is or is not on disk.
-    if (op.ifRecorded === true && !isPlainObject(ctx.config._aiwf.managedRegions[key])) return null;
-    // A `createIfAbsent` OPERATION WITH NO RECORD IS DELIBERATELY *NOT* EARLY-RETURNED HERE, and the
-    // reason is the mirror image of the paragraph above: that operation's whole point is that a
-    // record must EXIST when it is done, so returning null would leave an artifact this engine
-    // rendered and then refused to own - the next payload change would meet it unrecorded and
-    // abort. Reconstructing it from disk is safe because of WHO may arrive here: a creation reaches
-    // this function only through the journal-state rule in `recover`, i.e. only when the journal
-    // says our own write succeeded AND the bytes on disk are the ones it recorded. A file this
-    // engine did not write is refused there and never gets this far, so the generic reconstruction
-    // below is already the consistent form for the field.
-    // The artifact is hashed from the OPERATION rather than from journal.target: the operation is
-    // the authority on which file and which region this record is about, and this path is reached
-    // exactly when the journal's own account of it (the stage) is missing.
-    const abs = path.join(ctx.projectRoot, ...op.file.split('/'));
-    const text = readText(abs);
-    const artifact = op.region ? extractRegion(text, op.region) : text;
-    if (artifact === null) {
-      throw new UpdateError(
-        `the staged bookkeeping for ${migration}/${opIndex} was lost and "${key}" is not on disk either, so its record ` +
-        'cannot be reconstructed. Nothing was written; inspect the artifact and re-run.',
-      );
-    }
-    // override follows the RECORDED resolution; with no resolution (a held artifact, or an operation
-    // that had nothing to do) the operator's existing hold is preserved rather than quietly dropped.
-    const override = journal.resolution === 'keep-mine' || journal.resolution === 'merge'
-      ? true
-      : (journal.resolution === 'take-new' ? false : previous.override === true);
-    const upstream = sha256(ctx.render(op.template));
-    ctx.warn(`the staged bookkeeping for ${migration}/${opIndex} was lost; "${key}" was restamped from what is on disk.`);
-    return { managedRegions: { [key]: { upstream, local: sha256(artifact), override } } };
-  }
-  if (op.op === 'reconcile-ask-ruleset') {
-    const bk = ctx.config._aiwf;
-    const settings = (() => { try { return JSON.parse(readText(path.join(ctx.projectRoot, ...SETTINGS_POSIX.split('/'))) || 'null'); } catch { return null; } })();
-    const ask = (isPlainObject(settings) && isPlainObject(settings.permissions) && Array.isArray(settings.permissions.ask)) ? settings.permissions.ask : [];
-    const owned = (Array.isArray(bk.ownedAskRules) ? bk.ownedAskRules : []).filter((rule) => ask.includes(rule));
-    ctx.warn(
-      `the staged ownership delta for ${migration}/${opIndex} was lost. The reconciled rules were applied to ` +
-      `${SETTINGS_POSIX}, but the ones this update inserted were NOT claimed as owned (claiming what cannot be proven ` +
-      'would take over rules the project already had). Re-run /pnp:setup to restore ownership.',
-    );
-    return { ownedAskRules: owned, suppressedAskRules: Array.isArray(bk.suppressedAskRules) ? bk.suppressedAskRules : [] };
-  }
-  return null;
-}
-
-/**
- * Decides where an interrupted run continues. Returns { migrationIndex, opIndex } - the FIRST
- * operation that still has to run.
- */
-function recover(ctx, pending) {
-  const journal = ctx.config._aiwf.migrationJournal;
-  const migrationIndex = pending.findIndex((e) => e.id === journal.migration);
-  const migration = journal.migration;
-  const ops = ctx.payload.migrations.get(migration).operations;
-  const opIndex = journal.opIndex;
-  if (opIndex < 0 || opIndex >= ops.length) {
-    throw new UpdateError(`invariant violated: the journal points at operation ${opIndex} of "${migration}", which has ${ops.length} operation(s).`);
-  }
-  const op = ops[opIndex];
-
-  if (journal.state === 'applied') {
-    ctx.log(`resuming: ${migration} operation ${opIndex} was already applied.`);
-    removeStage(ctx.projectRoot, migration, opIndex); // idempotent
-    return { migrationIndex, opIndex: opIndex + 1 };
-  }
-
-  // state === 'prepared'
-
-  // AN INTERRUPTED CREATION, decided before any hash branch and in three ways only. Identical bytes
-  // at the target are THIS ENGINE'S OWN WRITE: the artifact lives in the plugin's own folder, so a
-  // file there with exactly the render's content came from a run of ours, and the postHash branch
-  // below stamps it. A DIFFERING file is content this engine never wrote, and the conflict
-  // vocabulary is wrong for it in both directions - keep-mine would adopt it, take-new would
-  // overwrite it - so it is refused here instead. Nothing on disk is nothing to decide: that falls
-  // through to the ordinary resume, which replays the stage or re-plans and writes no-clobber.
-  const creationKey = op.op === 'rerender-managed-region' && op.createIfAbsent === true
-    ? operationKey(op, journal.target) : null;
-  if (creationKey !== null && !isPlainObject(ctx.config._aiwf.managedRegions[creationKey])) {
-    const standing = readText(path.join(ctx.projectRoot, ...op.file.split('/')));
-    if (standing !== null && sha256(standing) !== journal.postHash) {
-      throw new UpdateError(unrecordedFileRefusal(creationKey));
-    }
-  }
-
-  if (journal.target === null) {
-    // Nothing on disk to compare (a note, or a held artifact): finishing it is a bookkeeping write.
-    const bookkeeping = flipWithoutStage(ctx, migration, opIndex, op, journal);
-    ctx.config._aiwf.migrationJournal.state = 'applied';
-    mergeBookkeeping(ctx.config, bookkeeping);
-    writeConfig(ctx);
-    removeStage(ctx.projectRoot, migration, opIndex);
-    ctx.log(`resuming: ${migration} operation ${opIndex} touched no file; its bookkeeping was completed.`);
-    return { migrationIndex, opIndex: opIndex + 1 };
-  }
-
-  const actualHash = hashTarget(ctx, op, journal.target);
-  if (actualHash !== null && actualHash === journal.postHash) {
-    const bookkeeping = flipWithoutStage(ctx, migration, opIndex, op, journal);
-    ctx.config._aiwf.migrationJournal.state = 'applied';
-    mergeBookkeeping(ctx.config, bookkeeping);
-    writeConfig(ctx);
-    removeStage(ctx.projectRoot, migration, opIndex);
-    ctx.log(`resuming: ${migration} operation ${opIndex} had already reached its target; it was marked applied.`);
-    return { migrationIndex, opIndex: opIndex + 1 };
-  }
-
-  if (actualHash === journal.preHash) {
-    const stage = readStage(ctx.projectRoot, migration, opIndex);
-    if (stage && stage.meta) {
-      // Replay the EXACT accepted result - including a manual merge and an operator's answer.
-      const plan = {
-        op, mode: stage.meta.mode, target: stage.meta.target, key: stage.meta.key,
-        // Rebuilt from the STAGE where the stage says so, and from the OPERATION otherwise: a stage
-        // written by an older payload carries no `created` field, and for a `createIfAbsent` op on a
-        // key this installation still has no record of, the answer is the same one planning would
-        // give. Without it the replayed write would clobber.
-        created: stage.meta.created === true
-          || (op.op === 'rerender-managed-region' && op.createIfAbsent === true
-            && !isPlainObject(ctx.config._aiwf.managedRegions[stage.meta.key])),
-        preHash: stage.meta.preHash, postHash: stage.meta.postHash,
-        content: stage.content, value: stage.meta.value ? stage.meta.value.value : undefined,
-        resolution: stage.meta.resolution, bookkeeping: stage.meta.bookkeeping,
-        summary: `${stage.meta.key}: replayed from the stage`,
-      };
-      ctx.log(`resuming: ${migration} operation ${opIndex} is replayed from its stage (no question is asked twice).`);
-      applyOperation(ctx, migration, opIndex, plan);
-      ctx.applied.push({ migration, opIndex, summary: plan.summary, op });
-      return { migrationIndex, opIndex: opIndex + 1 };
-    }
-    ctx.log(`resuming: ${migration} operation ${opIndex} never reached its target and its stage is gone; it is planned again.`);
-    return { migrationIndex, opIndex };
-  }
-
-  // Neither hash: the target moved under an interrupted run. That is EXACTLY a conflict, so it is
-  // resolved through the same dialog every other conflict goes through - a recovery that could only
-  // throw would be a state the machine can enter and never leave.
-  // A CREATION never reaches this branch: the three-way rule above has already decided it - stamped
-  // (its own bytes), refused (a differing file), or fallen through with nothing on disk, which
-  // matches a creation's null preHash and is handled by the replay branch. That is deliberate, not
-  // incidental: the conflict vocabulary is wrong for a creation in both directions - keep-mine would
-  // ADOPT a file this engine never wrote, take-new would OVERWRITE it.
-  const key = operationKey(op, journal.target);
-  const address = `${migration}/${opIndex}/${key}`;
-  // The interrupted attempt's stage is NOT cleared here: if this dialog goes unanswered the run is
-  // blocked, and a blocked run writes nothing at all. It is superseded the moment a decision is
-  // taken - writeStage replaces the whole stage directory before the new one is journalled.
-
-  if (op.op === 'rerender-managed-region') {
-    const fileText = ctx.readProjected(op.file);
-    const actual = op.region ? extractRegion(fileText, op.region) : fileText;
-    const newRender = ctx.render(op.template);
-    const previous = ctx.config._aiwf.managedRegions[key] || {};
-    const record = ctx.resolve(address, 'conflict', {
-      key,
-      predicates: ['it changed while the update was down, so it matches neither the state the interrupted operation started from nor the result it staged'],
-      held: previous.override === true,
-      actual,
-      newRender,
-    });
-    const plan = applyResolution(ctx, { op, key, address, actual, newRender, renderHash: sha256(newRender), record });
-    applyOperation(ctx, migration, opIndex, plan);
-    ctx.applied.push({ migration, opIndex, summary: plan.summary, op });
-    ctx.log(`resuming: ${migration} operation ${opIndex} was re-decided against the file as it is now.`);
-    return { migrationIndex, opIndex: opIndex + 1 };
-  }
-
-  // add-config-key and reconcile-ask-ruleset have no conflict vocabulary of their own: neither ever
-  // overwrites an existing value or a foreign rule, so the faithful answer to "the target moved" is
-  // to plan them again from the state that is really there. The main loop does that on return.
-  //
-  // What the re-plan must NOT do is ask again. An interrupted add-config-key with askOperator has
-  // the operator's answer in its stage, and re-planning is a state question ("is the key there
-  // now?"), never a fresh question to the operator - so the staged answer travels with the resume.
-  const stage = readStage(ctx.projectRoot, migration, opIndex);
-  const staged = (stage && stage.meta && stage.meta.value) ? stage.meta.value : null;
-  ctx.log(
-    `resuming: ${migration} operation ${opIndex} (${op.op}) found ${journal.target} changed while the update was down; ` +
-    `it is planned again against the current state${staged ? ', replaying the answer you already gave' : ''} ` +
-    '(this operation never overwrites what it finds).',
-  );
-  return { migrationIndex, opIndex, staged };
-}
-
-// ---------------------------------------------------------------------------
-// CHANGES report
-// ---------------------------------------------------------------------------
-/**
- * The rules the reconcile deliberately did not touch, measured for the report.
- *
- * Measured from the FINAL state - the settings file as it now is plus the final bookkeeping - and
- * NOT collected while the operations ran, for the same reason `assembleChanges` is: a run that was
- * interrupted and resumed in a second process has no in-memory record of the operations the first
- * one applied, and a report built from such an accumulator would silently lose exactly the rules it
- * exists to name. The set is invariant across the reconcile (see `planAskRules`' header), so
- * measuring it afterwards is the same answer, available in every process.
- *
- * Returns a Map keyed by the ruleset ref, so two migrations reconciling the same ruleset in one run
- * report one measurement - which is what the final state is.
- */
-function measureForeignAskRules(ctx, pending) {
-  const out = new Map();
+function foreignAskRuleLines(ctx, pending) {
+  const lines = [];
+  const seen = new Set();
   for (const entry of pending) {
     const ops = (ctx.payload.migrations.get(entry.id) || { operations: [] }).operations;
     for (const op of ops) {
-      if (op.op !== 'reconcile-ask-ruleset' || out.has(op.ruleset)) continue;
-      // Anything unreadable here is reported, never swallowed: the operation itself has already
-      // read both of these successfully, so a failure at report time is news, and a missing line
-      // would read as "no foreign rules" - the one wrong answer.
-      const rulesetRaw = readText(path.join(ctx.pluginRoot, ...op.ruleset.split('/')));
-      const settingsRaw = ctx.readProjected(SETTINGS_POSIX);
+      if (op.op !== 'reconcile-ask-ruleset' || seen.has(op.ruleset)) continue;
+      seen.add(op.ruleset);
       let desired = null;
       let actual = null;
       try {
-        const ruleset = rulesetRaw === null ? null : JSON.parse(rulesetRaw);
-        if (isPlainObject(ruleset) && isPlainObject(ruleset.permissions) && Array.isArray(ruleset.permissions.ask)) {
-          desired = ruleset.permissions.ask.map((rule) => rule.split('<projectRoot>').join(ctx.projectRoot));
-        }
-        const settings = settingsRaw === null ? null : JSON.parse(settingsRaw);
+        desired = readDesiredRules(ctx, op.ruleset);
+        const settings = JSON.parse(ctx.readProjected(SETTINGS_POSIX) || 'null');
         if (isPlainObject(settings) && isPlainObject(settings.permissions) && Array.isArray(settings.permissions.ask)) {
           actual = settings.permissions.ask;
         }
-      } catch { /* handled by the null checks below */ }
+      } catch { /* reported below */ }
       if (desired === null || actual === null) {
-        ctx.warn(
-          `the ask ruleset "${op.ruleset}" could not be re-read against ${SETTINGS_POSIX} after it was applied, so the ` +
-          'report names no rules as "present but not owned" for it. Run /pnp:selfcheck to inspect the settings file.',
-        );
+        // Never swallowed: a missing line would read as "no foreign rules" - the one wrong answer.
+        ctx.warn(`the ask ruleset "${op.ruleset}" could not be re-read against ${SETTINGS_POSIX}, so no rules are named as "present but not owned" for it.`);
         continue;
       }
       const bk = ctx.config._aiwf;
@@ -1356,393 +633,113 @@ function measureForeignAskRules(ctx, pending) {
         owned: Array.isArray(bk.ownedAskRules) ? bk.ownedAskRules : [],
         suppressed: Array.isArray(bk.suppressedAskRules) ? bk.suppressedAskRules : [],
       });
-      out.set(op.ruleset, presentForeign);
+      if (presentForeign.length) lines.push(`${presentForeign.length} payload rule(s) present but not owned here: ${presentForeign.join(', ')}`);
     }
   }
-  return out;
-}
-
-/**
- * Assembled from the pending operations and the FINAL bookkeeping - never from an accumulator built
- * during the run. That is what makes it identical whether the run completed in one process or in
- * three after two crashes. `foreignAskRules` obeys the same rule: it is measured from the final
- * state by `measureForeignAskRules` above, not accumulated by the operations that ran.
- *
- * `createdOps` is the ONE input that cannot obey that rule, and it is worth saying why rather than
- * pretending otherwise. It names the OPERATIONS - `<migrationId>/<opIndex>`, never bare artifact
- * keys - that really created an artifact in this run: the first pending `createIfAbsent` op on a key
- * that had no bookkeeping record when the process started. The identity is per-operation because a
- * run can carry several migrations: with the key alone, a LATER migration re-rendering the same
- * artifact in the same run would print "created" too, and only one of those operations created
- * anything. The fact itself - "there was no record before" - is destroyed by the act of creating the
- * record, so no reading of the final state can recover it and no derivation exists that a resumed
- * process could repeat. The caller takes it as a snapshot of the pre-run bookkeeping (not as an
- * accumulator built by the operations), and the cost is bounded to ONE label on ONE line: after a
- * crash between the creation and this report, that operation prints as `payload-current`, which is
- * less specific and still true - the payload version is what is on disk. Every other line, and
- * everything else in this report, stays derived from the final state. The alternative - a `created`
- * flag written into the operator's durable bookkeeping - would pay for a one-line label with a
- * permanent field in a record that describes content, not history.
- */
-export function assembleChanges({ from, to, pending, migrations, managedRegions, foreignAskRules = new Map(), createdOps = new Set(), schemaRefreshed = null }) {
-  const notes = [];
-  const held = [];
-  // The managed-artifact renders this run really carried. A `rerender-managed-region` whose key has
-  // no bookkeeping record was SKIPPED (`ifRecorded: true` on an artifact this installation never
-  // had), so it is not one of them - and a note-only migration has none at all. Measured from the
-  // FINAL bookkeeping like everything else here, never from an accumulator built during the run.
-  const renders = [];
-  for (const entry of pending) {
-    const ops = (migrations.get(entry.id) || { operations: [] }).operations;
-    for (const op of ops) {
-      if (op.op === 'note') notes.push(op);
-      if (op.op === 'rerender-managed-region') {
-        const key = op.region ? `${op.file}#${op.region}` : op.file;
-        const record = managedRegions[key];
-        if (record) renders.push(key);
-        if (record && record.override === true && record.upstream !== record.local) held.push(key);
-      }
-    }
-  }
-
-  const lines = [];
-  lines.push(`# What changed: ${from} -> ${to}`, '');
-  lines.push('This report is generated by `/pnp:update`. It is a one-off note to you, not tracked bookkeeping:');
-  lines.push('each update writes its own version-named report; keeping or deleting them is your call, nothing reads them back.', '');
-  // The dialog legend belongs to a run that actually rendered a managed artifact. Printed
-  // unconditionally it told the reader of a note-only release that something of theirs "was applied
-  // without a dialog" when nothing of theirs had been applied at all - a sentence that is false in
-  // exactly the releases that touch nothing, which is when a consumer most needs to trust it. The
-  // wording for a run that DOES render is unchanged.
-  if (renders.length) {
-    lines.push(
-      'An unheld artifact you had not edited, whose payload render changed, was applied without a dialog; '
-      + 'edited ones were asked about; held ones were recorded, not applied.',
-      '',
-    );
-  }
-
-  if (notes.length) {
-    lines.push('## Review these sections', '');
-    for (const note of notes) {
-      lines.push(`- **${note.id}** - ${note.text}`);
-      for (const ref of note.docRefs || []) lines.push(`  - ${ref}`);
-      // What this release RETIRES, one id per line. It applies nothing - no record of the operator's
-      // is touched by a note - so the only way an installation loses a superseded rule is by reading
-      // this list and acting on it. Printed under the note it belongs to, never aggregated, because
-      // the text above is what explains why the id is here at all.
-      for (const id of note.supersedes || []) lines.push(`  - Supersedes: ${id}`);
-    }
-    lines.push('');
-  }
-
-  if (held.length) {
-    lines.push('## Held by you (override) - the payload version changed and was NOT applied', '');
-    for (const key of held) {
-      lines.push(`- \`${key}\` - you keep your own version. The new payload render was recorded as upstream only.`);
-      lines.push(`  Reopen the choice any time with \`/pnp:update --resolve ${key}\`.`);
-    }
-    lines.push('');
-  }
-
-  lines.push('## Applied', '');
-  // The `$schema` refresh is the other input that is not derived from the final state: it happened
-  // in THIS process before the first operation, so a run resumed after a crash does not print it - the
-  // value on disk is right either way, and the line is a note about this process, not about the result.
-  if (schemaRefreshed) lines.push(`- ${schemaRefreshLine(schemaRefreshed)}`, '');
-  for (const entry of pending) {
-    const ops = (migrations.get(entry.id) || { operations: [] }).operations;
-    lines.push(`### ${entry.id} (-> ${entry.targetPluginVersion})`, '');
-    if (ops.length === 0) lines.push('- no operations (a version bump with nothing to migrate)');
-    for (const [opIndex, op] of ops.entries()) {
-      if (op.op === 'add-config-key') lines.push(`- \`add-config-key\` ${op.path}`);
-      else if (op.op === 'rerender-managed-region') {
-        // The label is the artifact's FINAL state, read from the bookkeeping and nowhere else, so it
-        // is the same whether the run took one process or three. Bookkeeping distinguishes exactly
-        // two outcomes: `override:false` (the payload version is what is on disk - an auto take-new,
-        // an operator take-new and an "already current" artifact all end there) and `override:true`
-        // (the operator's own content stands - keep-mine and merge alike). The third label is the
-        // created one, and it is the single thing here the final bookkeeping cannot tell apart -
-        // see `createdOps` in the doc comment above, degradation included. It is matched on THIS
-        // operation's identity, so a later migration re-rendering the same artifact in the same run
-        // gets the ordinary label: only one operation created anything.
-        const key = op.region ? `${op.file}#${op.region}` : op.file;
-        const record = managedRegions[key];
-        const label = !isPlainObject(record)
-          ? (op.ifRecorded === true ? 'not on this installation - skipped' : null)
-          : createdOps.has(`${entry.id}/${opIndex}`) ? 'created (no record, no file)'
-            : record.override === true ? 'held (your version kept)' : 'payload-current';
-        lines.push(`- \`rerender-managed-region\` ${key}${label ? ` - ${label}` : ''}`);
-      }
-      else if (op.op === 'reconcile-ask-ruleset') {
-        lines.push(`- \`reconcile-ask-ruleset\` ${op.ruleset}`);
-        // BY NAME, because a count alone sends the operator hunting through a 100-rule list for
-        // rules that are indistinguishable from the maintained ones by looking at them.
-        const foreign = foreignAskRules.get(op.ruleset) || [];
-        if (foreign.length) {
-          lines.push(`  - ${foreign.length} payload rule(s) present but not owned here - hand-edited, the engine will never touch them:`);
-          for (const rule of foreign) lines.push(`    - \`${rule}\``);
-        }
-      }
-      else lines.push(`- \`note\` ${op.id}`);
-    }
-    lines.push('');
-  }
-  lines.push('Nothing here was committed: the diff is yours to review and commit as usual.', '');
-  return lines.join('\n');
+  return lines;
 }
 
 // ---------------------------------------------------------------------------
-// The three modes
+// The modes
 // ---------------------------------------------------------------------------
 function makeContext({ pluginRoot, projectRoot, payload, configFile, config, resolve, log, warn }) {
   const ctx = {
-    pluginRoot, projectRoot, payload, configFile, config, resolve,
+    pluginRoot, projectRoot, payload, configFile, config, resolve, log, warn,
     schema: loadSchema(path.join(pluginRoot, 'schema', 'aiwf.config.schema.json')),
-    applied: [], notes: [], log, warn,
+    applied: [],
     // The dry-run overlay: project-relative path -> the content the previewed operations would have
     // left there. null in apply mode, where every read goes straight to disk.
     overlay: null,
   };
   // The render context is built PER RENDER, never cached: an earlier operation in the same run may
-  // have added a config key, and a template rendered against a snapshot taken before it would
-  // produce content that disagrees with the config now on disk.
+  // have added a config key the template reads.
   ctx.render = (ref) => renderRef(pluginRoot, ref, renderContext(projectRoot, ctx.config));
-  // EVERY planning read of a project file goes through this. In apply mode it is the disk; in a
-  // dry run it is the disk PLUS what the operations previewed so far would have written - so a
-  // migration that touches the same artifact twice previews the second operation against the first
-  // one's result, exactly as the apply will see it, instead of re-reading the untouched file and
-  // reporting a conflict that will not happen.
   ctx.readProjected = (rel) => {
     if (ctx.overlay && ctx.overlay.has(rel)) return ctx.overlay.get(rel);
     return readText(path.join(projectRoot, ...rel.split('/')));
   };
-  ctx.project = (rel, content) => { if (ctx.overlay) ctx.overlay.set(rel, content); };
   return ctx;
 }
 
 /**
- * `--check`: the version interlock every /pnp:* skill runs in Step 0. Touches nothing.
- * Returns { current: bool, pending: [...] }; the CLI turns that into an exit code.
+ * `--check`: the version interlock every /pnp:* skill runs in Step 0. Touches nothing - a legacy
+ * bookkeeping shape is normalised in memory and left on disk as it is.
  */
 export function checkInterlock({ pluginRoot, projectRoot }) {
-  const { payload, config, pending, journal } = preflight({ pluginRoot, projectRoot });
+  const { payload, config, pending } = preflight({ pluginRoot, projectRoot });
   return {
-    current: pending.length === 0 && !journal,
+    current: pending.length === 0,
     pending,
-    journal,
     installedVersion: config._aiwf.installedPluginVersion,
     payloadVersion: payload.version,
   };
 }
 
 /**
- * The whole update. `dryRun` plans everything and writes NOTHING - not one byte, not even a stage.
- * Returns a report; throws UpdateError when the run is blocked (nothing half-written is left behind
- * beyond operations that had already completed, each of which is journalled and resumable).
+ * The whole update. `dryRun` plans everything and writes NOTHING. Returns a report; throws
+ * UpdateError when the run is blocked (every migration completed before it stays applied and
+ * stamped; the one it stopped in runs again on the next start).
+ *
+ * `resolve(address, { question, path, fallback })` answers an `askOperator` key with an answer
+ * record (the CLI builds it: a resolution file, a prompt, a stop, or - in a dry run - `would ask`).
  */
 export function runUpdate({ pluginRoot, projectRoot, resolve, dryRun = false, log = () => {}, warn = null }) {
-  const { payload, configFile, config, pending, journal } = preflight({ pluginRoot, projectRoot });
+  const { payload, configFile, config, pending, normalized } = preflight({ pluginRoot, projectRoot });
   const from = config._aiwf.installedPluginVersion;
   const to = payload.version;
 
+  // The one write a run makes before its first operation: a `$schema` left pointing at another
+  // plugin root.
+  const schemaRefreshed = refreshSchemaRef(configFile, config, pluginRoot, dryRun);
   if (pending.length === 0) {
-    if (journal) throw new UpdateError('invariant violated: a migration journal is present although no migration is pending.');
-    // The one write an already-current run can make: a `$schema` left pointing at another plugin
-    // root. No journal exists here (that is the invariant above), so this is the clean-run refresh.
-    const schemaRefreshed = refreshSchemaRef(configFile, config, pluginRoot, dryRun);
-    // Nothing is in flight here (a journal on this path is the invariant violation above), so stage
-    // debris left by a run that died between its final write and its cleanup is collected now -
-    // otherwise "already current" would be the one answer that never cleans up after itself.
-    if (!dryRun) removeStageRoot(projectRoot);
-    return { current: true, from, to, applied: [], pending: [], dryRun, changesFile: null, notes: [], schemaRefreshed };
+    // An already-current project whose config still carries the legacy bookkeeping shape gets it
+    // written back here - otherwise nothing would ever rewrite it until the next version bump, and a
+    // config the schema rejects would stand until then. (refreshSchemaRef already wrote the
+    // normalised object when it wrote at all; writing it again is the same bytes.)
+    const bookkeepingNormalized = normalized && !dryRun;
+    if (bookkeepingNormalized) writeAtomic(configFile, jsonText(orderConfig(config)));
+    return { current: true, from, to, applied: [], preview: [], pending: [], dryRun, schemaRefreshed, bookkeepingNormalized, foreign: [] };
   }
-
-  // Judged before ANY write of this run - the $schema refresh included - so a refused value leaves the
-  // project byte for byte as it was. Not in preflight: --check and --resolve share it and never write
-  // a report, so a bad value must not refuse them.
-  const changesDir = changesFolder(projectRoot, config);
-
-  // A resumed run (journal present) keeps the hashes its journal was written with; it refreshes on the
-  // next clean run. A clean run refreshes here, before makeContext, so every hash it takes is over the
-  // refreshed config.
-  const schemaRefreshed = journal === null ? refreshSchemaRef(configFile, config, pluginRoot, dryRun) : null;
 
   const ctx = makeContext({
     pluginRoot, projectRoot, payload, configFile, config, resolve, log,
     warn: warn || ((message) => log(`warning: ${message}`)),
   });
+  for (const line of changelogLines(pluginRoot, from, to)) log(line);
 
   if (dryRun) {
-    // A preview NEVER writes and NEVER prompts: it plans each operation against the current state
-    // and reports it. Where a resolution is required it comes from the resolution file, or the
-    // preview stops there - which is itself the answer the operator needs from a preview.
-    //
-    // The preview is SEQUENTIAL: each operation is planned against the state its predecessors would
-    // have left - config keys and bookkeeping in memory, file contents in the overlay. Without that,
-    // a migration touching one artifact twice would preview the second operation against the
-    // untouched file and announce a conflict the apply will never raise.
+    // A preview NEVER writes and NEVER prompts. It is SEQUENTIAL: each operation is planned against
+    // the state its predecessors would have left (config in memory, files in the overlay).
     ctx.overlay = new Map();
     const preview = [];
     for (const entry of pending) {
       for (const [opIndex, op] of payload.migrations.get(entry.id).operations.entries()) {
         const plan = planOperation(ctx, entry.id, opIndex, op);
-        preview.push({ migration: entry.id, opIndex, summary: plan.summary, op });
-        if (plan.mode === 'config') setConfigPath(ctx.config, op.path, plan.value);
-        else if (plan.mode !== 'none') ctx.project(plan.target, projectedFileContent(ctx, plan));
-        if (plan.bookkeeping) mergeBookkeeping(ctx.config, plan.bookkeeping);
+        applyPlan(ctx, plan);
+        preview.push({ migration: entry.id, opIndex, summary: plan.summary, lines: plan.lines || [], op });
       }
     }
-    return { current: false, from, to, applied: [], preview, pending, dryRun: true, changesFile: null, notes: ctx.notes, schemaRefreshed };
+    return { current: false, from, to, applied: [], preview, pending, dryRun: true, schemaRefreshed, foreign: foreignAskRuleLines(ctx, pending) };
   }
 
-  // Taken BEFORE recovery and before the first operation, because this is the last moment the fact
-  // still exists: which `createIfAbsent` artifacts this installation had no record of. The moment
-  // one is created the record is there, and nothing in the final state distinguishes it from an
-  // artifact that had always been recorded (see assembleChanges). Only the report's label depends on
-  // it, and only for a run that completes in this process.
-  //
-  // Recorded as `<migrationId>/<opIndex>` and claimed ONCE per key, in the order the operations will
-  // run: the operation that finds no record is the one that creates the artifact, and every later
-  // operation on the same key in the same run meets a record and creates nothing.
-  const createdOps = new Set();
-  const claimed = new Set();
   for (const entry of pending) {
-    for (const [opIndex, op] of payload.migrations.get(entry.id).operations.entries()) {
-      if (op.op !== 'rerender-managed-region' || op.createIfAbsent !== true) continue;
-      const key = op.region ? `${op.file}#${op.region}` : op.file;
-      if (claimed.has(key) || isPlainObject(ctx.config._aiwf.managedRegions[key])) continue;
-      claimed.add(key);
-      createdOps.add(`${entry.id}/${opIndex}`);
-    }
-  }
-
-  let start = { migrationIndex: 0, opIndex: 0, staged: null };
-  if (journal) start = recover(ctx, pending);
-
-  for (let m = start.migrationIndex; m < pending.length; m += 1) {
-    const entry = pending[m];
     const ops = payload.migrations.get(entry.id).operations;
-    const firstOp = m === start.migrationIndex ? start.opIndex : 0;
-    for (let i = firstOp; i < ops.length; i += 1) {
-      // The staged result belongs to ONE operation - the interrupted one recovery handed back.
-      const staged = (m === start.migrationIndex && i === start.opIndex) ? (start.staged ?? null) : null;
-      const plan = planOperation(ctx, entry.id, i, ops[i], staged);
-      applyOperation(ctx, entry.id, i, plan);
-      ctx.applied.push({ migration: entry.id, opIndex: i, summary: plan.summary, op: ops[i] });
-      log(`  ${entry.id}[${i}] ${plan.summary}`);
+    for (const [opIndex, op] of ops.entries()) {
+      const plan = planOperation(ctx, entry.id, opIndex, op);
+      applyPlan(ctx, plan);
+      ctx.applied.push({ migration: entry.id, opIndex, summary: plan.summary, op });
+      log(`  ${entry.id}[${opIndex}] ${plan.summary}`);
+      for (const line of plan.lines || []) log(`    ${line}`);
     }
+    // ONE config write per migration: its bookkeeping, and the stamps that say it is done. The
+    // version moves WITH the migration id, so the two never disagree after a stop between migrations.
+    ctx.config._aiwf.lastMigrationApplied = entry.id;
+    ctx.config._aiwf.installedPluginVersion = entry.targetPluginVersion;
+    writeConfig(ctx);
   }
 
-  // The report first (it is derived, so a crash here costs nothing but a re-run), then ONE final
-  // atomic config write that moves the version stamps and clears the journal.
-  const changes = assembleChanges({
-    from, to, pending, migrations: payload.migrations, managedRegions: ctx.config._aiwf.managedRegions,
-    foreignAskRules: measureForeignAskRules(ctx, pending), createdOps, schemaRefreshed,
-  });
-  const changesFile = path.join(changesDir, `CHANGES_${from}-to-${to}.md`);
-  writeAtomic(changesFile, changes);
-
-  ctx.config._aiwf.lastMigrationApplied = pending[pending.length - 1].id;
-  ctx.config._aiwf.installedPluginVersion = to;
-  ctx.config._aiwf.migrationJournal = null;
-  writeConfig(ctx);
-  removeStageRoot(projectRoot);
-
-  return { current: false, from, to, applied: ctx.applied, pending, dryRun: false, changesFile, notes: ctx.notes, schemaRefreshed };
-}
-
-/**
- * `--resolve <key>`: reopens the conflict dialog for ONE managed artifact, at any time - a version
- * bump is not required, and this is the only way out of an `override`.
- *
- * It is deliberately NOT journalled: it is a single operation with two writes (the artifact, then
- * its bookkeeping), and a journal that could not name a migration would have to invent an id that
- * recovery must then special-case. The residual is bounded and visible: a crash between the two
- * writes leaves the artifact updated and its stamp stale, which the next `/pnp:selfcheck` reports as
- * a drifted managed artifact and a second `--resolve` fixes.
- */
-export function resolveArtifact({ pluginRoot, projectRoot, key, resolve, log = () => {} }) {
-  const { payload, configFile, config, journal } = preflight({ pluginRoot, projectRoot });
-  if (journal) {
-    // The interrupted operation owns its artifact until it finishes, and the update run reopens
-    // exactly this dialog for it. So the refusal names the LITERAL address that dialog will use -
-    // derived from the journalled operation itself, not from journal.target, which for a region
-    // operation carries the file and not the `#region` half the address needs. A message the
-    // operator cannot copy a record from would point at a door without giving them the key.
-    const ops = payload.migrations.get(journal.migration);
-    const journalOp = ops ? ops.operations[journal.opIndex] : null;
-    const journalKey = operationKey(journalOp, journal.target ?? '(unknown)');
-    const address = `${journal.migration}/${journal.opIndex}/${journalKey}`;
-    // What the operator has to DO differs by operation, so the message says only what is true of
-    // the one in the journal. Promising a record where none is consumed sends them to write a file
-    // the resume will ignore - and then to wonder why it changed nothing.
-    let advice;
-    if (journalOp && journalOp.op === 'rerender-managed-region') {
-      // The only operation whose resume can reopen a dialog: a target that moved while the update
-      // was down is a conflict, and a conflict is the one thing a record answers.
-      advice = `If that artifact changed while the update was down, the resume reopens the decision at the address "${address}", ` +
-        'where the record is { "kind": "conflict", "resolution": "take-new" | "keep-mine" | "merge" }.';
-    } else if (journalOp && journalOp.op === 'add-config-key' && journalOp.askOperator === true) {
-      // The answer it already has is replayed from the stage, so a record is needed only in the one
-      // case where that stage is gone.
-      advice = 'The answer you already gave is staged and replays automatically. Only if that stage has been deleted does ' +
-        `the resume ask again, at the address "${address}", where the record is { "kind": "answer", "value": <json> }.`;
-    } else {
-      advice = 'No record is needed - just re-run /pnp:update and this operation resumes on its own.';
-    }
-    throw new UpdateError(
-      `an interrupted update is in flight: ${journal.migration} operation ${journal.opIndex} ` +
-      `(${journalOp ? journalOp.op : 'unknown operation'}, ${journalKey}). Finish it with \`/pnp:update\` first - it ` +
-      `resumes from the journal. ${advice}`,
-    );
-  }
-  const previous = config._aiwf.managedRegions[key];
-  if (!isPlainObject(previous)) {
-    throw new UpdateError(`"${key}" is not a managed artifact of this project (nothing with that key is recorded in _aiwf.managedRegions).`);
-  }
-  const template = RESOLVABLE_ARTIFACT_TEMPLATES[key];
-  if (!template) {
-    throw new UpdateError(
-      `"${key}" is recorded, but no payload template is associated with it, so there is nothing to re-render against. ` +
-      `Resolvable keys: ${Object.keys(RESOLVABLE_ARTIFACT_TEMPLATES).join(', ')}.`,
-    );
-  }
-  const cut = key.indexOf('#');
-  const op = {
-    op: 'rerender-managed-region',
-    file: cut === -1 ? key : key.slice(0, cut),
-    region: cut === -1 ? null : key.slice(cut + 1),
-    template,
+  return {
+    current: false, from, to, applied: ctx.applied, preview: [], pending, dryRun: false, schemaRefreshed,
+    foreign: foreignAskRuleLines(ctx, pending),
   };
-  const ctx = makeContext({
-    pluginRoot, projectRoot, payload, configFile, config, resolve, log,
-    warn: (message) => log(`warning: ${message}`),
-  });
-
-  const fileText = ctx.readProjected(op.file);
-  const actual = op.region ? extractRegion(fileText, op.region) : fileText;
-  const newRender = ctx.render(op.template);
-  const renderHash = sha256(newRender);
-  // The dialog is reopened UNCONDITIONALLY here - that is what --resolve means. There is no
-  // "nothing to do" branch: leaving an override is a decision, not a diff.
-  const record = ctx.resolve(key, 'conflict', {
-    key, held: previous.override === true, actual, newRender,
-    predicates: ['you asked to reopen this artifact'],
-  });
-  const plan = applyResolution(ctx, { op, key, address: key, actual, newRender, renderHash, record });
-  // The same re-check applyOperation does, for the same reason: this dialog can sit open just as
-  // long, and a decision taken about content that has since changed must not be applied to it.
-  const nowHash = hashPlanTargetOnDisk(ctx, plan);
-  if (plan.target && nowHash !== plan.preHash) {
-    throw new UpdateError(
-      `"${key}": ${plan.target} changed while you were deciding, so the resolution was taken against a state that no ` +
-      'longer exists. Nothing was applied - run --resolve again to decide against the file as it is now.',
-    );
-  }
-  applyTarget(ctx, plan);
-  mergeBookkeeping(ctx.config, plan.bookkeeping);
-  writeConfig(ctx);
-  log(`  ${plan.summary}`);
-  return { key, resolution: record.resolution, summary: plan.summary };
 }

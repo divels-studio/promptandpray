@@ -5,18 +5,23 @@ The update engine behind `/pnp:update`.
 | file | what it is |
 |---|---|
 | `validate-payload.mjs` | the shared, fail-closed validator of `migrations/` (manifest + every ops.json). BOTH the runner and setup call it before their first write; also a CLI (`--plugin-root`), which is how the self-check exercises it. |
-| `migrate.mjs` | the engine: preflight invariants, per-operation planning, the two-hash conflict state machine, the write-ahead journal + recovery, the durable stage, and the CHANGES assembly. Importable; no CLI of its own. |
-| `aiwf-update.mjs` | the CLI: `--check` (the version interlock every skill runs in Step 0), `--dry-run`, `--apply`, `--resolve <key>`, plus `--quiet` and `--no-selfcheck`. Exit 0 = success / already current, 1 = blocked, 2 = could not start. The two modes that WRITE (`--apply` that really applied, and `--resolve`) run the self-check as their last step; a red or unrunnable one is exit 1 with the writes left standing. |
-| `test-update.mjs` | the acceptance suite: real entrypoints, temp projects, real payload copies with a bumped version, crash recovery proven by really killing the process, and the integrated self-check step in all four of its states (PASS, skipped, unrunnable, RED after a successful apply). |
+| `migrate.mjs` | the engine: loading (with the legacy bookkeeping normalised in memory), preflight invariants, the CHANGELOG blocks between the installed and the payload version, per-operation planning and applying, one config write per migration. Importable; no CLI of its own. |
+| `aiwf-update.mjs` | the CLI: `--check` (the version interlock every skill runs in Step 0; a project that is behind also gets a `behind:` line), `--dry-run`, `--apply`, plus `--resolution-file`, `--quiet` and `--no-selfcheck`. Exit 0 = success / already current / a clean dry run, 1 = blocked, 2 = could not start. An `--apply` that really applied migrations runs the self-check as its last step; a red or unrunnable one is exit 1 with the writes left standing. |
+| `test-update.mjs` | the acceptance suite: real entrypoints, temp projects, real payload copies with a bumped version, the overwrite and additions-carry contract, legacy bookkeeping, the CHANGELOG print, an interrupted migration re-run, and the integrated self-check step in all its states (PASS, skipped, unrunnable, RED after a successful apply). |
 
 Two properties everything here exists to protect:
 
-- **nothing of yours is overwritten.** A conflict is raised exactly when there is operator content
-  to lose: the project edited the artifact, the artifact is gone, or a held artifact was edited
-  again; the operator then picks take-new / keep-mine / merge, and a held artifact is never
-  re-applied by a later update. A payload change to an artifact nobody edited is not a conflict -
-  it is applied without a dialog and listed in the CHANGES report.
-- **deterministic recovery.** The accepted result of each operation is staged before the journal
-  records it, so a process killed at any write boundary resumes into the same end state without
-  asking the same question twice. `PNP_UPDATE_CRASH_AT="<migration>/<opIndex>/<boundary>"` is the
-  test-only injection point (production-inert) the suite uses to prove it.
+- **an update overwrites what it renders, and keeps the consumer's two homes.** Every managed
+  artifact - an edited one, a deleted one, one this installation never recorded - is written from
+  the payload render without a question; the consumer's own text lives in the overrides document
+  (never touched) and in ONE `<!-- project additions -->` ... `<!-- /project additions -->` block
+  per rendered Markdown file, carried byte for byte. A malformed block stops the run naming the
+  file. Text outside the `aiwf-core` markers of `CLAUDE.md` is kept byte for byte.
+- **a stop is a re-run, not a recovery.** Each migration's bookkeeping and stamps are written once,
+  after its last operation; a run that stops inside a migration leaves the stamps at the previous
+  one, and the next run runs that migration again - every operation is idempotent (a re-render
+  overwrites, a present config key is skipped, the ask ruleset reconciles).
+
+The one question an update can ask is the value of a config key a migration marks `askOperator`:
+answered interactively, through `--resolution-file` (`{ "kind": "answer", "value": <json> }` per
+`<migration>/<opIndex>/<key>` address), or - in a dry run - listed as `would ask: <address>`.

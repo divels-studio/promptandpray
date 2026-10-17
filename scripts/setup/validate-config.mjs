@@ -265,8 +265,8 @@ export function formatErrors(errors) {
 }
 
 /**
- * THE containment rule of `paths.changesDir`, and the only one: setup, the update engine and the
- * self-check all call this function, so no two of them can disagree about a value. True iff `v` is a
+ * A project-relative containment rule (written for `paths.changesDir`, which setup and the update
+ * no longer read; the self-check still calls it). True iff `v` is a
  * non-empty string that is absolute in NEITHER dialect, carries no drive letter at all (`C:x` is not
  * win32-absolute and still leaves the project on Windows), and does not climb out once normalised
  * (`a/../reports` is `reports` and is contained; `a/../../x` is `../x` and is not). The answer is the

@@ -41,12 +41,18 @@ Exit 0 = every assertion held. Exit 1 = at least one failed. Exit 2 = the run co
 
 - `[PASS] / [FAIL]` are assertions that really ran.
 - `[NOTE]` is a branch this run could not exercise (an empty owned-rule list, a codex-hosted role
-  with no agent frontmatter to compare). A NOTE is deliberately **not** counted as a pass. The four
+  with no agent frontmatter to compare). A NOTE is deliberately **not** counted as a pass. The
   project-layer rows whose name carries `(observed)` are observations instead: facts about the
   inspected project the self-check reports and never counts, with no control because nothing in
   them can fail.
 - The **NEGATIVE CONTROLS** section breaks a throwaway copy of a synthetic fixture and requires each
   project-layer check to actually fail. A check that cannot fail is not a check.
+
+What the run proves is **presence and working hooks**: the hooks and resolvers executed as the
+harness runs them, the wrappers' locked flags, the skills and payload references present, and - for
+the project - every managed artifact recorded in the bookkeeping present on disk, with the rendered
+values (roles, models, efforts) agreeing with the config. It pins no prose: no doctrine sentence and
+no managed file's content is compared, because an update overwrites managed files.
 
 What the run does **not** prove, and does not claim: that the harness ENFORCES the declarative
 permission rules, or that it RENDERS the Yes/No dialog for an `ask` decision. Neither is reachable
@@ -55,6 +61,7 @@ from Node; both rest on recorded live observations.
 ## Step 3 - Report
 
 Report in `{{config.operator.language}}`: the assertion count, the exit code, and - for each failure -
-the check name and the one action that fixes it. A drifted rendered artifact (roles.json or an agent
-file disagreeing with `aiwf.config.json`) is fixed at the SOURCE: edit the config and re-render
-through `/pnp:setup`, never by editing the rendered file.
+the check name and the one action that fixes it. A rendered value disagreeing with
+`aiwf.config.json` (roles.json, or an agent file's model or effort) is fixed at the SOURCE: change
+the config through `/pnp:roles` or `/pnp:setup`, which re-render it; a recorded managed artifact
+missing from disk is recreated by `/pnp:setup`. Never fix it by editing the rendered file.

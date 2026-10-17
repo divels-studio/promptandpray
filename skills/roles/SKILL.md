@@ -19,8 +19,8 @@ one line - no re-interview, no hand-edited `roles.json`.
    one line: *PromptAndPray is not installed in this project - run `/pnp:setup`.*
 3. **Version interlock.** Run
    `node "${CLAUDE_PLUGIN_ROOT}/scripts/update/aiwf-update.mjs" --check --project-root "<root>"`.
-   Exit 0 = this project is current. Any non-zero exit = migrations are pending (or an interrupted
-   update is in flight): **stop** and point the operator at `/pnp:update`. The command reads only.
+   Exit 0 = this project is current. Any non-zero exit = migrations are pending: **stop** and point
+   the operator at `/pnp:update`. The command reads only.
    That matters here more than elsewhere: an installation that predates the audit table has no
    `review.<class>` rows to show or set.
 4. **Reading is not a shell job.** Read or inspect files with the Read/Grep/Glob tools - never
@@ -72,10 +72,11 @@ only the last one is bad:
   the Reviewer is Claude-hosted. `/pnp:review` passes an alias as the Agent tool's `model` and omits
   an exact id, so the file's pin is what would run - a different id would run a model the row does
   not name. The Reviewer and QA roles themselves take a tier alias or any exact id;
-- an artifact you **hold** through an override - `/pnp:update --resolve <key>` is that door;
-- an artifact you **edited by hand** that is not already exactly the render this run wants;
-- a file at an artifact's path that PromptAndPray never wrote and that differs from the render;
-- a **stale** agent file without `--confirm-remove-stale`;
+- a malformed project additions block in a file it re-renders (one marker without the other, or two
+  blocks) - named, nothing guessed;
+- a RECORDED **stale** agent file without `--confirm-remove-stale` (an unrecorded file at that path
+  is not a refusal: it is left untouched, named as `left alone: <path> (not rendered by this
+  configuration)`, and the run continues);
 - `<row>.effort=` on a Claude row: every Claude-hosted review pass is dispatched through the ONE
   rendered `reviewer` agent, whose effort is `roles.reviewer.effort`, because the Agent tool has no
   per-invocation effort. Change `roles.reviewer.effort` instead;
@@ -84,14 +85,19 @@ only the last one is bad:
 
 `--set X.engine=claude` with no model fills in the **top tier** and prints that it did.
 
+Every artifact it re-renders is **overwritten** from the payload render - an edited file and a file
+PromptAndPray never wrote alike. A rendered agent file keeps its `<!-- project additions -->` ...
+`<!-- /project additions -->` block verbatim; that block, and the overrides document, are where the
+project's own text belongs.
+
 ### The honest guarantee about writing
 
 Phase 1 decides and validates everything and writes nothing. Phase 2 writes in a fixed order - agent
 files, then `roles.json`, then `aiwf.config.json` (config and bookkeeping together, last). It is
 **plan-before-write, not a transaction**: no journal, no rollback. If it is interrupted between two
-files, an artifact is left with a stamp that is not yet updated; `/pnp:selfcheck` shows that as a
-drifted managed artifact, and **running the same command again finishes it** - the file on disk
-already is the render, so the run takes the already-applied branch and completes the stamp.
+files, an artifact can be ahead of the config that describes it; `/pnp:selfcheck` shows that as a
+rendered artifact disagreeing with the config, and **running the same command again finishes it** -
+every write is a render of the same decision, so repeating it is safe.
 
 **When the host refuses the write.** In an auto-approving permission mode, Claude Code's own
 classifier may refuse the write to `aiwf.config.json` as self-modification, whatever the operator
@@ -145,5 +151,5 @@ R1            -       -                  -       0       no auditor
 Report in `{{config.operator.language}}`: print the table verbatim, then - if this run changed
 something - the one-line list of what was written, and nothing else. On a refusal (exit 1), give the
 refusal line as it came and the single action that resolves it. Never edit `roles.json` or an agent
-file by hand to work around a refusal: they are rendered artifacts, and a hand edit there is a
-managed-artifact conflict, not a second source.
+file by hand to work around a refusal: they are rendered artifacts, and the next render overwrites a
+hand edit outside the project additions block.

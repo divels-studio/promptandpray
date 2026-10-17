@@ -16,8 +16,18 @@
   section perfectly plausible - and an empty or implausibly small file list is not read as
   agreement;
 - **project-layer invariants** - the owned/suppressed ask-rule bookkeeping, the rendered
-  artifacts (roles.json, agent frontmatter) agreeing with `aiwf.config.json`, and the version
+  artifacts (roles.json, agent frontmatter) agreeing with `aiwf.config.json`, every artifact recorded
+  in `_aiwf.managedRegions` present on disk at a recorded plugin version, and the version
   bookkeeping.
+
+It checks **presence and working hooks**, not words: no doctrine sentence, verbatim phrase,
+cross-file literal count or managed file's content is pinned - an update overwrites managed files,
+and prose in `docs/` and `skills/` is read in place.
+
+The sections, in run order: BASH HOST; GATE 1; GATE 2; GATE 2 MODE; ONE PREFIX PER PLAN; GATE 4;
+GATE 3, GATE 3 TOGGLE, GATE 3 SURFACE; CONFIG SCHEMA; MIGRATION PAYLOAD; HOOK WIRING; MARKETPLACE;
+WRAPPERS (both channels); PLAN GATE; ROLE RESOLVER; /pnp:roles; PAYLOAD INTEGRITY; PROVENANCE; EXAMPLE
+FIXTURE; PROJECT LAYER and its observations; COMMIT AUTOMATION; NEGATIVE CONTROLS.
 
 `run-selfcheck.mjs` - the shared step that makes `/pnp:setup` and `/pnp:update` run the engine
 above themselves, instead of telling an agent to. One module, so the spawn, the exit-code contract
@@ -37,7 +47,7 @@ whatever `--project-fixture` pointed at, which may be a real project - sabotages
 project-layer check, and requires each check to actually FAIL. Controls target checks by a stable
 id, so none of them silently stops targeting anything when a fixture value changes. Checks with no
 control are named individually with the reason, and a check this run could not exercise is
-reported as a `[NOTE]` - never counted as a pass. The four project-layer rows whose name carries
+reported as a `[NOTE]` - never counted as a pass. The project-layer rows whose name carries
 `(observed)` are observations instead: facts about the inspected project the self-check reports and
 never counts, with no control because nothing in them can fail. Exit 0 = all assertions held; 1 =
 at least one failed; 2 = the run could not start.

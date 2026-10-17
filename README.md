@@ -61,19 +61,17 @@ What is here:
   than defaults inherited from a config - two of them sandboxed read-only (Reviewer, QA) and QAL,
   which trades the sandbox away to get a live browser and is therefore operator-gated and off by
   default.
-- **The setup engine and the config schema**: an interview, a plan-then-write generator that never
-  overwrites your own content, and a JSON Schema that is the single authority for the config shape.
-  `--adopt` installs into a project that already carries an AIWF surface: identical files are adopted
-  clean and silently, different ones are one operator decision each (keep-mine / take-new), an
-  unanswered decision stops the run with nothing written, and nothing is ever deleted.
-- **The update engine and the migration runner**: an ordered migration manifest, a two-hash conflict
-  machine (take-new / keep-mine / merge) that asks only where there is content of yours to lose, a
-  write-ahead journal with deterministic crash recovery, and a generated CHANGES report naming each
-  managed artifact's final state. A new plugin version reaches an installed project without stepping
-  on that project's own voice - and this path has been walked on a **consumer** installation, not
-  only on fixtures: a project other than this one took 0.1.0 -> 0.1.1 through `/plugin update` +
-  `/pnp:update`, carrying its own history across the bump. Its two take-new dialogs for artifacts
-  nobody had edited are what 0.1.2 removes.
+- **The setup engine and the config schema**: an interview, a plan-then-write generator, and a JSON
+  Schema that is the single authority for the config shape. Managed artifacts are rendered and
+  overwritten; your own text lives in the overrides document, outside the managed region of
+  `CLAUDE.md`, and in the one `<!-- project additions -->` block a rendered Markdown file may carry,
+  which every re-render keeps verbatim.
+- **The update engine and the migration runner**: an ordered migration manifest that overwrites
+  managed artifacts (each keeping its project additions block), asks only for a new config key that
+  needs your value, and prints the `CHANGELOG.md` blocks between your installed version and the
+  payload's, so the project learns what changed. An interrupted run is simply run again. This path
+  has been walked on a **consumer** installation, not only on fixtures, through `/plugin update` +
+  `/pnp:update`.
 - **The self-check**, which executes all three hooks and the resolver at their real entrypoints rather
   than reading their source, and then insists its own checks can fail: the project-layer, example
   fixture and provenance sections each sabotage a copy one way per assertion and require the target
@@ -102,8 +100,7 @@ What is **not** here yet:
   (`CHANGELOG.md`, 0.2.2 § Known limits). It is tracked rather than fixed - pinning it needs a Mac,
   and there is none.
 - **One consumer installation so far.** It has taken every release from 0.1.0 to 0.1.2 through
-  `/plugin update` + `/pnp:update` - the first bump asked two take-new questions, 0.1.2 asked none -
-  and there is no second consumer yet.
+  `/plugin update` + `/pnp:update`, and there is no second consumer yet.
 
 ## Three names
 
@@ -180,8 +177,8 @@ the installation is still consistent.
 
 ## Quickstart
 
-`examples/example-project/README.md` is the runnable cycle - install, a simulated version bump, an
-update that meets a real conflict, and the self-check - written as the exact commands, with the exit
+`examples/example-project/README.md` is the runnable cycle - install, a simulated version bump, the
+update that applies it, and the self-check - written as the exact commands, with the exit
 code each one produces. Its commands are not a paraphrase: the self-check compares them against the
 list the CI driver really runs, in both directions, so a quickstart that describes something else
 fails a gate instead of misleading someone. Run the whole thing at once with:
@@ -204,7 +201,7 @@ node scripts/ci/run-example-cycle.mjs
 | `/pnp:roles` | the audit table on one screen - who audits what, on which engine, with how many passes - and the one command that changes it, without a re-interview. |
 | `/pnp:arbiter` | the escalation session, opened cold when one of the four triggers fires: it loads the rule, reads the ruling ledger, takes the brief the COO parked and returns one ruling. Read-only - it writes nothing, not even the ledger row. |
 | `/pnp:setup` | installs or re-interviews the project layer. |
-| `/pnp:update` | applies the payload's migrations to this project, with conflict dialogs and a CHANGES report. Never commits. |
+| `/pnp:update` | applies the payload's migrations to this project: prints the CHANGELOG blocks in between, overwrites managed artifacts (each keeps its project additions block). Never commits. |
 | `/pnp:selfcheck` | runs the payload and project-layer assertions, with their negative controls. |
 
 Reviewer and QA are engine-neutral: each is hosted on Codex or on Claude, chosen per role in

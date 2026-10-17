@@ -31,12 +31,10 @@
  *   test path). The two paths converge on the same generator, so a scripted install and an
  *   interactive one cannot drift apart.
  *
- * ADOPT
- *   --adopt installs into a project that ALREADY carries a legacy AIWF surface: an encountered file
- *   identical to the render is adopted silently, a different one asks (keep-mine | take-new), and
- *   nothing is ever deleted. --adopt-file <json> answers those questions for a scripted run. The
- *   contract lives in generate.mjs; this file only carries the flags and refuses --adopt on a
- *   project that already has an installation - before the first question, not after the last one.
+ * A PROJECT THAT ALREADY CARRIES FILES
+ *   The generator overwrites every managed artifact from the render and names each file it had no
+ *   record of as `overwrote: <path>`; nothing asks. The consumer's own text belongs in the overrides
+ *   document or in the project additions block of a rendered Markdown file (generate.mjs).
  *
  * THE SELF-CHECK IS PART OF THE INSTALL, NOT A REMINDER
  *   A successful, non-dry-run install that really wrote something finishes by RUNNING
@@ -48,8 +46,7 @@
  *
  * CLI
  *   node interview.mjs [--answers-file <json>] [--project-root <dir>] [--plugin-root <dir>]
- *                      [--confirm-remove-stale] [--adopt] [--adopt-file <json>] [--dry-run]
- *                      [--no-seeds] [--no-selfcheck]
+ *                      [--confirm-remove-stale] [--dry-run] [--no-seeds] [--no-selfcheck]
  *   exit 0 = installed; exit 1 = refused, blocked (nothing written), or a red/unrunnable self-check
  *   after a successful write; exit 2 = cannot start.
  */
@@ -60,8 +57,8 @@ import { stdin as input, stdout as output } from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { loadSchema, collectDefaults } from './validate-config.mjs';
 import {
-  DEFAULT_PLUGIN_ROOT, SetupError, adoptRefusal, assertSupportedOs, existingOverridesWarning,
-  existingPlansWarning, formatReport, generateProject, makeAdoptResolver, plansDirUnderScratchWarning,
+  DEFAULT_PLUGIN_ROOT, SetupError, assertSupportedOs, existingOverridesWarning,
+  existingPlansWarning, formatReport, generateProject, plansDirUnderScratchWarning,
   readMemorySeeds, resolveProjectRoot,
 } from './generate.mjs';
 import { TIER_ALIASES } from './role-rules.mjs';
@@ -233,8 +230,6 @@ export async function runInterview({ schema, ask, installed = null, projectRoot 
     allowEmpty: false,
     warn: (value) => existingOverridesWarning({ projectRoot, overridesDoc: value }),
   });
-  // Empty takes the schema default ".", the project root - where the report has always been.
-  await text('paths.changesDir', 'update: folder for the CHANGES_<from>-to-<to>.md reports, relative to the project root', { allowEmpty: true });
 
   out.write('\n-- product boundary checks (rendered into the Reviewer; empty is a valid answer) --\n');
   const checks = [];
@@ -275,26 +270,6 @@ if (isMain()) {
       try { installed = JSON.parse(fs.readFileSync(configFile, 'utf8')); } catch { installed = null; }
     }
 
-    // Refused HERE as well as in the engine, and deliberately before the first question: an operator
-    // who typed --adopt on an installed project must not answer a whole interview to be told so.
-    const adopt = has('--adopt');
-    if (adopt) {
-      // The SAME predicate the engine uses, imported rather than re-stated: two spellings of
-      // "already installed" would eventually disagree, and the one that is wrong would be the one
-      // that lets an adopt run through.
-      const refusal = adoptRefusal(installed);
-      if (refusal) throw new SetupError(refusal);
-    }
-    if (!adopt && has('--adopt-file')) {
-      throw new SetupError('--adopt-file only means something with --adopt - a resolution file for a mode this run is not in would be read by nobody.');
-    }
-    // A missing value must not degrade into "no file": the next flag would be read as a path, or the
-    // run would silently fall back to having nobody to ask. Same shape as --resolve in /pnp:update.
-    const adoptFileArg = flag('--adopt-file');
-    if (has('--adopt-file') && (!adoptFileArg || adoptFileArg.startsWith('--'))) {
-      throw new SetupError('--adopt-file needs the path of the JSON file that answers the adopt decisions.');
-    }
-
     let answers;
     const answersFile = flag('--answers-file');
     if (answersFile) {
@@ -319,9 +294,6 @@ if (isMain()) {
       pluginRoot, projectRoot, answers,
       confirmRemoveStale: has('--confirm-remove-stale'),
       dryRun: has('--dry-run'),
-      adopt,
-      // The interview's readline is closed by now, so the adopt dialog owns stdin alone.
-      resolveAdopt: adopt ? makeAdoptResolver({ adoptFile: adoptFileArg, dryRun: has('--dry-run') }) : null,
     });
     const seeds = (has('--no-seeds') || report.blocked || has('--dry-run')) ? [] : readMemorySeeds(pluginRoot);
     console.log(formatReport(report, { projectRoot, seeds }));

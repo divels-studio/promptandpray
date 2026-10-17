@@ -283,6 +283,7 @@ widening.
 ## The project's AGENTS.md
 
 `/pnp:setup` and `/pnp:update` render the project-root `AGENTS.md` the Codex auditor reads from
-`templates/AGENTS.md.tmpl` as a managed artifact; it names no version and no plugin path, a file
-already there whose bytes equal the render is recorded without a write, and any other file at that
-path blocks the update until it is moved aside.
+`templates/AGENTS.md.tmpl` as a managed artifact; it names no version and no plugin path. Like every
+managed artifact it is overwritten by each render, a file already at that path included; the
+project's own text for the auditor goes into its `<!-- project additions -->` ...
+`<!-- /project additions -->` block, which every render keeps verbatim.

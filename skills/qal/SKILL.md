@@ -54,8 +54,8 @@ a guarantee. The chosen-flag rationale lives in the wrapper header and
    one line: *PromptAndPray is not installed in this project - run `/pnp:setup`.*
 3. **Version interlock.** Run
    `node "${CLAUDE_PLUGIN_ROOT}/scripts/update/aiwf-update.mjs" --check --project-root "<root>"`.
-   Exit 0 = this project is current. Any non-zero exit = migrations are pending (or an interrupted
-   update is in flight): **stop** and point the operator at `/pnp:update`. The command reads only.
+   Exit 0 = this project is current. Any non-zero exit = migrations are pending: **stop** and point
+   the operator at `/pnp:update`. The command reads only.
    Two skills are documented exceptions and run anyway: `/pnp:update` and `/pnp:selfcheck`.
 
 Notation: `{{config.some.key}}` in this document means *substitute the value you read in step 2*.

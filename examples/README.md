@@ -7,9 +7,9 @@ It holds four things, all of them data: `answers.json` (a complete non-interacti
 answers file), `seed/` (the host project as it looks BEFORE the install, with its
 own CLAUDE.md prose, its own permission rule and its own source file), `bump/`
 (the simulated next release: its slug, a migration with one operation of each of
-the four types plus a second `rerender-managed-region` over an artifact the
-operator never touched - the one that is applied without a dialog - and the schema
-property that migration introduces), and `README.md` (the quickstart, listing
+the four types plus a second `rerender-managed-region` over a whole file that
+carries the project's own additions block - the one text an update keeps - and the
+schema property that migration introduces), and `README.md` (the quickstart, listing
 exactly the commands the cycle runs).
 
 `bump/` is a template that the harness numbers: it carries no migration number and

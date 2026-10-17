@@ -11,7 +11,9 @@
  *      other: this suite proves setup writes, the self-check proves what it wrote is consistent);
  *   2. re-running with unchanged answers is a ZERO DIFF, byte for byte, _aiwf included;
  *   3. text outside the managed markers survives a re-run;
- *   4. an edit INSIDE a managed artifact stops the run and overwrites NOTHING;
+ *   4. a render OVERWRITES: an edited, deleted or never-recorded managed artifact ends as the render,
+ *      a file this installation had no record of is named as `overwrote: <path>`, and the project
+ *      additions block of a Markdown file is carried byte for byte (a malformed one blocks);
  *   5. the conditional agent render is correct in BOTH directions, and removing a stale render is
  *      gated on an explicit confirmation;
  *   6. every shipped OS channel installs and renders ITS OWN wrapper paths (windows -> the
@@ -22,12 +24,7 @@
  *   8. the self-check is the install's OWN last step: a fresh install runs it and reports PASS,
  *      --no-selfcheck skips it out loud, and a self-check that cannot be run at all makes the
  *      install exit 1 rather than report a green it never obtained;
- *   9. ADOPT (--adopt), the whole matrix: an encountered file identical to the render is adopted
- *      clean and in silence, a different one is decided by the operator (keep-mine keeps every byte,
- *      take-new applies the render), a decision nobody can answer STOPS the run with zero bytes
- *      written, an answer for an address nobody asked about is refused by name, "merge" is not an
- *      adopt word, an installed project is refused outright, the pre-adopt blockers keep their exact
- *      force, and the superseded-legacy list is advisory text that touches nothing;
+ *   9. legacy bookkeeping (two-hash objects, a journal key) is normalised on the next run;
  *  10. the three warnings: a project that ALREADY carries plans under `<plansDir>/active/`, or whose
  *      plansDir lies under the scratch directory, is warned about on both paths - the interview at
  *      the question, the generator as a note in its plan and report (12b, 12c); an overrides
@@ -48,7 +45,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { plansDirUnderScratchWarning, renderTemplate, scanSupersededLegacy, sha256, templateContext } from './generate.mjs';
+import { plansDirUnderScratchWarning, renderTemplate, templateContext } from './generate.mjs';
 import { runInterview } from './interview.mjs';
 import { E2E_TRACE_NOTE } from './e2e-trace-note.mjs';
 // Read through the module NAMESPACE, not a named import: a helper this payload does not export yet
@@ -230,7 +227,7 @@ check('memory seeds are PRINTED for the operator', r1.out.includes('MEMORY SEEDS
       manifest.length > 0 && manifest[manifest.length - 1].targetPluginVersion === plugin.version,
       `${manifest.length ? manifest[manifest.length - 1].targetPluginVersion : '(no manifest)'} vs ${plugin.version}`);
   }
-  check('_aiwf journal is clear', bk.migrationJournal === null);
+  check('_aiwf carries no journal key', !Object.prototype.hasOwnProperty.call(bk, 'migrationJournal'));
   check('$schema points at the payload schema', typeof cfg.$schema === 'string' && cfg.$schema.endsWith('schema/aiwf.config.schema.json'), String(cfg.$schema));
   // Both enforcement keys are REQUIRED by the schema, so a fresh install carries them whatever the
   // answers say - a hook that had to guess a mode would be guessing on every project.
@@ -238,9 +235,7 @@ check('memory seeds are PRINTED for the operator', r1.out.includes('MEMORY SEEDS
     cfg.enforcement && cfg.enforcement.routeWriteGuard === true && cfg.enforcement.dispatchGate === 'always',
     JSON.stringify(cfg.enforcement));
 
-  // Bookkeeping correctness: every recorded hash must be the hash of what is really on disk, with
-  // upstream == local == actual and override false on a clean install. A wrong hash here would make
-  // the very first /pnp:update report a conflict that never happened.
+  // Bookkeeping: one entry per rendered artifact, each the payload version that rendered it.
   const regions = bk.managedRegions || {};
   const keys = Object.keys(regions).sort();
   check('managedRegions covers exactly the rendered artifacts',
@@ -290,21 +285,9 @@ check('memory seeds are PRINTED for the operator', r1.out.includes('MEMORY SEEDS
       && !/[0-9]+\.[0-9]+\.[0-9]+/.test(rendered) && !/[A-Za-z]:[\\/]/.test(rendered) && !rendered.includes('{{'),
       rendered === null ? 'the file is missing' : `${rendered.length} bytes`);
   }
-  let hashOk = keys.length > 0;
-  for (const key of keys) {
-    const entry = regions[key];
-    const [file, region] = key.split('#');
-    let actual = read(at(p1, file));
-    if (actual === null) { hashOk = false; break; }
-    if (region) {
-      const start = actual.indexOf(`<!-- BEGIN ${region} -->`);
-      const end = actual.indexOf(`<!-- END ${region} -->`);
-      actual = actual.slice(start, end + `<!-- END ${region} -->`.length);
-    }
-    const h = sha256(actual);
-    if (entry.upstream !== h || entry.local !== h || entry.override !== false) hashOk = false;
-  }
-  check('every managedRegions entry is upstream == local == sha256(actual), override false', hashOk);
+  check('every managedRegions entry is the payload version, and every recorded file is on disk',
+    keys.length > 0 && keys.every((key) => regions[key] === plugin.version && read(at(p1, key.split('#')[0])) !== null),
+    JSON.stringify(regions));
 
   const settings = readJson(at(p1, '.claude/settings.json')) || {};
   const ask = (settings.permissions || {}).ask || [];
@@ -350,31 +333,25 @@ section('3 - manual edits OUTSIDE the markers are preserved');
 }
 
 // ---------------------------------------------------------------------------
-section('4 - an edit INSIDE a managed artifact is a conflict, and nothing is overwritten');
+section('4 - an edit INSIDE a managed artifact is overwritten by the render, and nothing asks');
 {
   const claudeFile = at(p1, 'CLAUDE.md');
   const src = read(claudeFile);
   fs.writeFileSync(claudeFile, src.replace('## Your role', '## Your role (I edited this)'));
-  const before = snapshot(p1);
   const r = install(p1, baseAnswers(), ['--no-seeds']);
-  const after = snapshot(p1);
-  check('the run is BLOCKED (exit 1)', r.status === 1, `exit ${r.status}`);
-  check('the message names the managed key and the resolve path', r.out.includes('CLAUDE.md#aiwf-core') && r.out.includes('/pnp:update'));
-  check('the edited region was NOT overwritten', (read(claudeFile) || '').includes('## Your role (I edited this)'));
-  check('the run wrote nothing at all', diffSnapshots(before, after).length === 0, diffSnapshots(before, after).join(', '));
-  fs.writeFileSync(claudeFile, src); // restore for the next case
+  check('the run exits 0', r.status === 0, why(r, true));
+  check('the edited region is the render again', read(claudeFile) === src, 'region differs from the render');
+  check('the text outside the markers survived', (read(claudeFile) || '').includes('## My own section'));
 }
 {
   const rolesFile = at(p1, ROLES_REL);
   const src = read(rolesFile);
   fs.writeFileSync(rolesFile, src.replace('"effort": "high"', '"effort": "low"'));
-  const before = snapshot(p1);
   const r = install(p1, baseAnswers(), ['--no-seeds']);
-  const after = snapshot(p1);
-  check('a hand-edited whole-file artifact (roles.json) blocks too', r.status === 1, `exit ${r.status}`);
-  check('the message names roles.json', r.out.includes('.claude/aiwf-native/roles.json'));
-  check('nothing was written', diffSnapshots(before, after).length === 0, diffSnapshots(before, after).join(', '));
-  fs.writeFileSync(rolesFile, src);
+  check('a hand-edited whole-file artifact (roles.json) is re-rendered (exit 0)', r.status === 0, why(r, true));
+  check('roles.json is the render again', read(rolesFile) === src);
+  check('it is reported as a re-render, not as overwrote (this installation wrote it)',
+    r.out.includes('.claude/aiwf-native/roles.json') && !r.out.includes('overwrote:'), why(r, true));
 }
 
 // ---------------------------------------------------------------------------
@@ -387,9 +364,8 @@ section('5 - a changed answer re-renders cleanly (the config is the source, the 
   check('roles.json followed the config', (read(at(p1, ROLES_REL)) || '').includes('"model": "sonnet"'));
   check('the agent frontmatter followed too', /^model: sonnet$/m.test(read(at(p1, '.claude/agents/reviewer.md')) || ''));
   const bk = (readJson(at(p1, CONFIG_REL)) || {})._aiwf || {};
-  const entry = (bk.managedRegions || {})[ROLES_REL] || {};
-  check('bookkeeping restamped: upstream == local == sha256(new content), override false',
-    entry.upstream === sha256(read(at(p1, ROLES_REL))) && entry.local === entry.upstream && entry.override === false);
+  const plugin = readJson(path.join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json')) || {};
+  check('bookkeeping restamped with the payload version', (bk.managedRegions || {})[ROLES_REL] === plugin.version);
   install(p1, baseAnswers(), ['--no-seeds']); // back to the baseline
 }
 
@@ -578,31 +554,20 @@ section('9 - the project root resolves from git when it is not passed');
 }
 
 // ---------------------------------------------------------------------------
-section('10 - WITHOUT --adopt, a pre-existing artifact is never taken over (section 18 is the adopt path)');
+section('10 - a pre-existing artifact on a fresh install is overwritten and named (section 18 has the matrix)');
+// The Codex auditor's instruction file is the one a project is the likeliest to have written by hand
+// before it ever installed: the render replaces it, the report names it, and text the project wants
+// kept belongs in the overrides document or in a project additions block.
 {
-  const p12 = project('unadopted');
-  fs.mkdirSync(at(p12, '.claude/aiwf-native'), { recursive: true });
-  fs.writeFileSync(at(p12, ROLES_REL), '{ "reviewer": "mine, hand-written" }\n');
-  const before = snapshot(p12);
-  const r = install(p12, baseAnswers(), ['--no-seeds']);
-  check('the run is BLOCKED (exit 1)', r.status === 1, `exit ${r.status}`);
-  check('the message says setup will not take over a file it did not write, and names --adopt as the deliberate way',
-    r.out.includes('not recorded in _aiwf.managedRegions') && r.out.includes('--adopt'));
-  check('the operator\'s file is untouched and nothing else was written', diffSnapshots(before, snapshot(p12)).length === 0);
-}
-// The same rule for the Codex auditor's instruction file, which a project is the likeliest to have
-// written by hand before it ever installed: a foreign AGENTS.md on a fresh install BLOCKS the run.
-{
-  const pa = project('unadopted-agents');
+  const pa = project('foreign-agents');
   const MINE = '# My own auditor notes\n\nHand-written before the install.\n';
   fs.writeFileSync(at(pa, 'AGENTS.md'), MINE);
-  const before = snapshot(pa);
   const r = install(pa, baseAnswers(), ['--no-seeds']);
-  check('[setup-agents-4] a foreign AGENTS.md on a fresh install BLOCKS the run (exit 1), naming the file',
-    r.status === 1 && r.out.includes('AGENTS.md already exists but is not recorded in _aiwf.managedRegions'), why(r, true));
-  check('[setup-agents-5] and the foreign AGENTS.md is byte-untouched, with nothing else written',
-    read(at(pa, 'AGENTS.md')) === MINE && diffSnapshots(before, snapshot(pa)).length === 0,
-    diffSnapshots(before, snapshot(pa)).join(', '));
+  check('[setup-agents-4] a foreign AGENTS.md on a fresh install does not block (exit 0) and is named as overwrote',
+    r.status === 0 && r.out.includes('overwrote: AGENTS.md'), why(r, true));
+  check('[setup-agents-5] and AGENTS.md is the render now',
+    read(at(pa, 'AGENTS.md')) !== MINE && (read(at(pa, 'AGENTS.md')) || '').startsWith('# AGENTS - '),
+    JSON.stringify(String(read(at(pa, 'AGENTS.md'))).slice(0, 60)));
 }
 // The overrides document is a second writer: pointed at the managed AGENTS.md it would overwrite the
 // render right after it was stamped, so the collision is a blocker before anything is written.
@@ -866,18 +831,15 @@ section('13 - dry run writes nothing; unreadable state and escaping paths stop t
 }
 
 // ---------------------------------------------------------------------------
-section('14 - a DELETED managed artifact is a conflict, not an invitation to recreate it');
+section('14 - a DELETED managed artifact is recreated, a deleted region re-appended');
 {
   const p18 = project('deleted-file');
   check('install exits 0', install(p18, baseAnswers(), ['--no-seeds']).status === 0);
+  const original = read(at(p18, ROLES_REL));
   fs.rmSync(at(p18, ROLES_REL));
-  const before = snapshot(p18);
   const r = install(p18, baseAnswers(), ['--no-seeds']);
-  check('deleting a recorded artifact BLOCKS the re-run', r.status === 1, `exit ${r.status}`);
-  check('the message names the key and the resolve path',
-    r.out.includes('.claude/aiwf-native/roles.json') && r.out.includes('GONE from disk') && r.out.includes('/pnp:update --resolve'));
-  check('the file was NOT silently recreated', !exists(at(p18, ROLES_REL)));
-  check('and nothing else was written', diffSnapshots(before, snapshot(p18)).length === 0, diffSnapshots(before, snapshot(p18)).join(', '));
+  check('the re-run over a deleted recorded artifact exits 0', r.status === 0, why(r, true));
+  check('the file is recreated from the render', read(at(p18, ROLES_REL)) === original);
 }
 {
   const p19 = project('deleted-region');
@@ -885,18 +847,19 @@ section('14 - a DELETED managed artifact is a conflict, not an invitation to rec
   const text = read(at(p19, 'CLAUDE.md'));
   const start = text.indexOf('<!-- BEGIN aiwf-core -->');
   const end = text.indexOf('<!-- END aiwf-core -->') + '<!-- END aiwf-core -->'.length;
-  fs.writeFileSync(at(p19, 'CLAUDE.md'), text.slice(0, start) + '(the operator removed the managed region)' + text.slice(end));
-  const before = snapshot(p19);
+  const kept = text.slice(0, start) + '(the operator removed the managed region)' + text.slice(end);
+  fs.writeFileSync(at(p19, 'CLAUDE.md'), kept);
   const r = install(p19, baseAnswers(), ['--no-seeds']);
-  check('deleting the REGION out of a recorded file BLOCKS too (no silent re-append)', r.status === 1, `exit ${r.status}`);
-  check('the message names the region key', r.out.includes('CLAUDE.md#aiwf-core'));
-  check('no region was appended back', !(read(at(p19, 'CLAUDE.md')) || '').includes('<!-- BEGIN aiwf-core -->'));
-  check('nothing else was written', diffSnapshots(before, snapshot(p19)).length === 0);
+  check('the re-run over a removed region exits 0', r.status === 0, why(r, true));
+  const after = read(at(p19, 'CLAUDE.md')) || '';
+  check('the region is appended back, after every byte that was there', after.startsWith(kept) && after.includes('<!-- BEGIN aiwf-core -->'));
 }
 
 // ---------------------------------------------------------------------------
-section('15 - --confirm-remove-stale deletes ONLY a recorded, unmodified render');
+section('15 - --confirm-remove-stale deletes ONLY a recorded render');
 {
+  // Recorded is the whole condition: an edit inside a stale render is the same overwrite-class
+  // change as any other edit, and the flag confirms removing the file setup recorded at that path.
   const p20 = project('stale-edited');
   const claudeQa = baseAnswers();
   claudeQa.roles.qa = { engine: 'claude', model: 'haiku', effort: 'medium' };
@@ -904,22 +867,25 @@ section('15 - --confirm-remove-stale deletes ONLY a recorded, unmodified render'
   const agent = at(p20, '.claude/agents/qa.md');
   fs.writeFileSync(agent, read(agent) + '\nMy own note in the agent file.\n');
   const before = snapshot(p20);
+  const blocked = install(p20, baseAnswers(), ['--no-seeds']);
+  check('a recorded stale render without the flag BLOCKS', blocked.status === 1 && blocked.out.includes('--confirm-remove-stale'), why(blocked, true));
+  check('and nothing was written or deleted', diffSnapshots(before, snapshot(p20)).length === 0);
   const r = install(p20, baseAnswers(), ['--no-seeds', '--confirm-remove-stale']);
-  check('a stale render that was ALSO hand-edited BLOCKS even with the flag', r.status === 1, `exit ${r.status}`);
-  check('the message says it is not the file the flag confirms', r.out.includes('edited by hand') || r.out.includes('ALSO edited'));
-  check('the file is still there, with the operator\'s text', (read(agent) || '').includes('My own note in the agent file.'));
-  check('nothing was written or deleted', diffSnapshots(before, snapshot(p20)).length === 0);
+  check('with the flag the recorded stale render is removed, edited or not (exit 0)', r.status === 0 && !exists(agent), why(r, true));
 }
 {
   const p21 = project('stale-foreign');
   check('install with a codex-hosted qa exits 0', install(p21, baseAnswers(), ['--no-seeds']).status === 0);
   fs.writeFileSync(at(p21, '.claude/agents/qa.md'), '---\nname: qa\n---\nSomeone else wrote this.\n');
-  const before = snapshot(p21);
-  const r = install(p21, baseAnswers(), ['--no-seeds', '--confirm-remove-stale']);
-  check('an UNRECORDED file at a managed path is never deleted, flag or no flag', r.status === 1, `exit ${r.status}`);
-  check('the message says setup does not adopt (or delete) what it did not write', r.out.includes('not recorded in _aiwf.managedRegions'));
-  check('the foreign file survived', (read(at(p21, '.claude/agents/qa.md')) || '').includes('Someone else wrote this.'));
-  check('nothing else changed', diffSnapshots(before, snapshot(p21)).length === 0);
+  const foreign = '---\nname: qa\n---\nSomeone else wrote this.\n';
+  for (const extra of [[], ['--confirm-remove-stale']]) {
+    const label = extra.length ? 'with the flag' : 'without the flag';
+    const r = install(p21, baseAnswers(), ['--no-seeds', ...extra]);
+    check(`an UNRECORDED file at a stale agent path does not stop the run (${label}, exit 0)`, r.status === 0, why(r, true));
+    check(`and it is named as left alone (${label})`,
+      r.out.includes('left alone: .claude/agents/qa.md (not rendered by this configuration)'), why(r, true));
+    check(`and it is neither deleted nor written (${label})`, read(at(p21, '.claude/agents/qa.md')) === foreign);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1123,26 +1089,21 @@ section('17 - the self-check is the install\'s own last step, and "could not che
 }
 
 // ---------------------------------------------------------------------------
-// ADOPT MODE. Every case below installs into a project that ALREADY carries an AIWF surface, which
-// is the only situation --adopt exists for. The properties under test are the ones an adopt run can
-// get catastrophically wrong: a silent overwrite, a deletion, and a bookkeeping record that
-// describes something other than what is on disk. So each case asserts the FILE (byte for byte) and
-// the RECORD (both hashes and the override flag), never just the exit code.
-section('18 - adopt: identical is adopted silently, different is decided, nothing is ever guessed');
-const ADOPT_KEY = ROLES_REL;
+// A RENDER OVERWRITES. The consumer's own text has two homes - the overrides document and the
+// project additions block of a rendered Markdown file - and everything else setup renders is written
+// from the payload, whatever is on disk. Each case asserts the FILE (byte for byte where it matters),
+// the RECORD (the payload version), and the report line, never just the exit code.
+section('18 - setup overwrites: a pre-existing file is replaced and named, the additions block is carried');
 const CLAUDE_KEY = 'CLAUDE.md#aiwf-core';
-const MINE_ROLES = '{\n  "reviewer": { "engine": "claude", "model": "haiku", "effort": "low" }\n}\n';
-// The render, obtained from a real install with the same answers rather than re-implemented here:
-// a test that renders the artifact itself proves the test can render, not that the engine can.
-const refProject = project('adopt-reference');
+const AGENTS_REL = 'AGENTS.md';
+const PLUGIN_VERSION = (readJson(path.join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json')) || {}).version;
+// The render, obtained from a real install with the same answers rather than re-implemented here.
+const refProject = project('overwrite-reference');
 const refInstall = install(refProject, baseAnswers(), ['--no-seeds']);
 check('the reference install (for the render bytes) exits 0', refInstall.status === 0, why(refInstall));
 const RENDER_ROLES = read(at(refProject, ROLES_REL)) || '';
-const RENDER_ROLES_HASH = sha256(RENDER_ROLES);
-// The rendered CLAUDE.md REGION, taken from that same real install. The region carries no
-// project-root value (the template has no {{resolvedRoot}} inside the markers), so the region one
-// project renders is the region every project with these answers renders - which is what makes it a
-// legitimate EXPECTED value here rather than a second implementation of the renderer.
+// The rendered CLAUDE.md REGION carries no project-root value, so the region one project renders is
+// the region every project with these answers renders - a legitimate EXPECTED value here.
 const regionOfFile = (text) => {
   const start = (text || '').indexOf('<!-- BEGIN aiwf-core -->');
   const end = (text || '').indexOf('<!-- END aiwf-core -->');
@@ -1151,455 +1112,125 @@ const regionOfFile = (text) => {
 const RENDER_REGION = regionOfFile(read(at(refProject, 'CLAUDE.md')));
 check('the reference render carries a non-empty managed region (the expected value below is real)',
   RENDER_REGION.length > 0 && RENDER_REGION.includes('BEGIN aiwf-core'));
+const record = (dir, key) => (((readJson(at(dir, CONFIG_REL)) || {})._aiwf || {}).managedRegions || {})[key];
+const ADD_BEGIN = '<!-- project additions -->';
+const ADD_END = '<!-- /project additions -->';
+const BLOCK_CRLF = `${ADD_BEGIN}\r\nMy own rule for the Writer.\r\nA second line, CRLF on purpose.\r\n${ADD_END}`;
 
-function adoptFile(name, table) {
-  const file = path.join(tmpRoot, `adopt-${name}.json`);
-  fs.writeFileSync(file, JSON.stringify(table, null, 2));
-  return file;
-}
-function legacyProject(name, rolesText) {
-  const dir = project(name);
+// (a) a whole-file artifact already on disk with no record -> OVERWRITTEN, named, recorded.
+{
+  const dir = project('overwrite-foreign-roles');
   fs.mkdirSync(at(dir, '.claude/aiwf-native'), { recursive: true });
-  fs.writeFileSync(at(dir, ROLES_REL), rolesText);
-  return dir;
-}
-const record = (dir, key) => ((readJson(at(dir, CONFIG_REL)) || {})._aiwf || {}).managedRegions[key] || {};
-
-// (a) identical to the render -> adopted CLEAN, in silence. Planted with CRLF on purpose: the hash
-// is taken over LF-normalised text, so a CRLF checkout must read as identical - and because nothing
-// is written, the file must still be CRLF afterwards.
-{
-  const mine = RENDER_ROLES.replace(/\n/g, '\r\n');
-  const dir = legacyProject('adopt-identical', mine);
-  const r = install(dir, baseAnswers(), ['--no-seeds', '--adopt']);
-  check('(a) an identical pre-existing artifact adopts with NO resolution supplied at all', r.status === 0, why(r));
-  check('(a) the report classifies it as identical and says nothing was written for it',
-    r.out.includes('identical - adopted clean'), why(r, true).slice(0, 160));
-  check('(a) the file is byte-identical, CRLF and all - an adopt of identical content writes nothing',
-    read(at(dir, ROLES_REL)) === mine);
-  const e = record(dir, ADOPT_KEY);
-  check('(a) the record is CLEAN: upstream == local == sha256(render), override false',
-    e.upstream === RENDER_ROLES_HASH && e.local === RENDER_ROLES_HASH && e.override === false, JSON.stringify(e));
+  fs.writeFileSync(at(dir, ROLES_REL), '{ "reviewer": "mine, hand-written" }\n');
+  const dry = install(dir, baseAnswers(), ['--no-seeds', '--dry-run']);
+  check('(a) --dry-run over a foreign file exits 0 and names it as "overwrote:"',
+    dry.status === 0 && dry.out.includes(`overwrote: ${ROLES_REL}`), why(dry, true).slice(0, 200));
+  check('(a) and the dry run wrote nothing', read(at(dir, ROLES_REL)) === '{ "reviewer": "mine, hand-written" }\n');
+  const r = install(dir, baseAnswers(), ['--no-seeds']);
+  check('(a) the install exits 0 - nothing asks', r.status === 0, why(r, true));
+  check('(a) the file IS the render now', read(at(dir, ROLES_REL)) === RENDER_ROLES);
+  check('(a) the report names it as "overwrote:"', r.out.includes(`overwrote: ${ROLES_REL}`), why(r, true).slice(0, 200));
+  check('(a) the record is the payload version', record(dir, ROLES_REL) === PLUGIN_VERSION, String(record(dir, ROLES_REL)));
   const before = snapshot(dir);
   const again = install(dir, baseAnswers(), ['--no-seeds']);
-  check('(a) and the ordinary re-run afterwards is a zero diff',
-    again.status === 0 && diffSnapshots(before, snapshot(dir)).length === 0, diffSnapshots(before, snapshot(dir)).join(', '));
+  check('(a) and the ordinary re-run afterwards is a zero diff with no overwrote line',
+    again.status === 0 && diffSnapshots(before, snapshot(dir)).length === 0 && !again.out.includes('overwrote:'),
+    diffSnapshots(before, snapshot(dir)).join(', '));
 }
 
-// (b) different + keep-mine -> the bootstrap. Not one byte of the operator's file is touched, and
-// the two hashes describe two different things on purpose.
+// (b) a CLAUDE.md carrying a FOREIGN aiwf-core region, CRLF: the region is replaced, every byte
+// around it stays, and the region is named.
 {
-  const dir = legacyProject('adopt-keep-mine', MINE_ROLES);
-  const file = adoptFile('keep-mine', { [ADOPT_KEY]: 'keep-mine' });
-  const r = install(dir, baseAnswers(), ['--no-seeds', '--adopt', '--adopt-file', file]);
-  check('(b) different + keep-mine exits 0', r.status === 0, why(r));
-  check('(b) the operator\'s file is byte-untouched', read(at(dir, ROLES_REL)) === MINE_ROLES);
-  const e = record(dir, ADOPT_KEY);
-  check('(b) the record is local = sha256(what is on disk), upstream = sha256(render), override TRUE',
-    e.local === sha256(MINE_ROLES) && e.upstream === RENDER_ROLES_HASH && e.override === true, JSON.stringify(e));
-  check('(b) the report names the decision', r.out.includes('keep-mine: yours stays'), why(r, true).slice(0, 160));
-
-  // (h) idempotence: the ordinary re-run reads that record and re-applies nothing.
-  const before = snapshot(dir);
-  const again = install(dir, baseAnswers(), ['--no-seeds']);
-  check('(h) a re-run after adopt is a zero diff, byte for byte',
-    again.status === 0 && diffSnapshots(before, snapshot(dir)).length === 0, diffSnapshots(before, snapshot(dir)).join(', '));
-  check('(h) and it says the artifact is held by the operator', again.out.includes('held by the operator (override)'));
-}
-
-// (c) different + take-new -> the render replaces the file, and the record is clean.
-{
-  const dir = legacyProject('adopt-take-new', MINE_ROLES);
-  const file = adoptFile('take-new', { [ADOPT_KEY]: 'take-new' });
-  const r = install(dir, baseAnswers(), ['--no-seeds', '--adopt', '--adopt-file', file]);
-  check('(c) different + take-new exits 0', r.status === 0, why(r));
-  check('(c) the file IS the render now', read(at(dir, ROLES_REL)) === RENDER_ROLES);
-  const e = record(dir, ADOPT_KEY);
-  check('(c) the record is CLEAN: upstream == local == sha256(render), override false',
-    e.upstream === RENDER_ROLES_HASH && e.local === RENDER_ROLES_HASH && e.override === false, JSON.stringify(e));
-  const before = snapshot(dir);
-  const again = install(dir, baseAnswers(), ['--no-seeds']);
-  check('(c) and the re-run afterwards is a zero diff',
-    again.status === 0 && diffSnapshots(before, snapshot(dir)).length === 0);
-}
-
-// (d) different, nobody to ask -> FAIL-STOP with the address named, and zero bytes written. This is
-// the case a guessing engine would "solve" by picking a default; the whole point is that it stops.
-{
-  const dir = legacyProject('adopt-unanswered', MINE_ROLES);
-  const before = snapshot(dir);
-  const r = install(dir, baseAnswers(), ['--no-seeds', '--adopt']);
-  check('(d) a decision with nobody to ask BLOCKS (exit 1)', r.status === 1, `exit ${r.status}`);
-  check('(d) the message names the address that needs an answer', r.out.includes(ADOPT_KEY), why(r, true).slice(0, 200));
-  check('(d) and says there is nobody to ask (not interactive, no --adopt-file)',
-    r.out.includes('not interactive') && r.out.includes('--adopt-file'), why(r, true).slice(0, 200));
-  check('(d) NOT ONE BYTE was written', diffSnapshots(before, snapshot(dir)).length === 0, diffSnapshots(before, snapshot(dir)).join(', '));
-  check('(d) and the classification is still reported, so the operator can answer it',
-    r.out.includes('DECISION PENDING'), why(r, true).slice(0, 200));
-}
-
-// (d2) --dry-run never asks: it classifies, marks the decision pending and writes nothing.
-{
-  const dir = legacyProject('adopt-dryrun', MINE_ROLES);
-  const before = snapshot(dir);
-  const r = install(dir, baseAnswers(), ['--no-seeds', '--adopt', '--dry-run']);
-  check('(d2) --adopt --dry-run exits 0 - a preview is not a refusal', r.status === 0, why(r));
-  check('(d2) it shows the classification AND the pending decision',
-    r.out.includes('ADOPT - the AIWF surface') && r.out.includes('DECISION PENDING'), why(r, true).slice(0, 200));
-  check('(d2) it previews both sides of the decision', r.out.includes('yours  :') && r.out.includes('payload:'), why(r, true).slice(0, 200));
-  check('(d2) and wrote nothing at all', diffSnapshots(before, snapshot(dir)).length === 0, diffSnapshots(before, snapshot(dir)).join(', '));
-}
-
-// (e) an adopt file naming an address this run never had to decide -> refused BY NAME. An answer
-// that lands in no decision is a typo, and proceeding on it means an operator decision went nowhere.
-{
-  const dir = legacyProject('adopt-unknown-address', MINE_ROLES);
-  const before = snapshot(dir);
-  const file = adoptFile('unknown', { [ADOPT_KEY]: 'keep-mine', '.claude/aiwf-native/rolez.json': 'take-new' });
-  const r = install(dir, baseAnswers(), ['--no-seeds', '--adopt', '--adopt-file', file]);
-  check('(e) an unconsumed address BLOCKS the run', r.status === 1, `exit ${r.status}`);
-  check('(e) and it is named', r.out.includes('.claude/aiwf-native/rolez.json'), why(r, true).slice(0, 200));
-  check('(e) nothing was written', diffSnapshots(before, snapshot(dir)).length === 0);
-}
-
-// (e2) "merge" is not an adopt word: it is the update engine's, and adopt says where to get it.
-{
-  const dir = legacyProject('adopt-merge', MINE_ROLES);
-  const before = snapshot(dir);
-  const file = adoptFile('merge', { [ADOPT_KEY]: 'merge' });
-  const r = install(dir, baseAnswers(), ['--no-seeds', '--adopt', '--adopt-file', file]);
-  check('(e2) resolution "merge" at adopt time is refused', r.status === 1, `exit ${r.status}`);
-  check('(e2) and it points at /pnp:update --resolve, which does have merge',
-    r.out.includes('/pnp:update --resolve') && r.out.includes('keep-mine'), why(r, true).slice(0, 200));
-  check('(e2) nothing was written', diffSnapshots(before, snapshot(dir)).length === 0);
-}
-
-// (e3) the two flag-shape refusals: a resolution file for a mode this run is not in would be read by
-// nobody, and a flag with no value would be a silent fallback to "there is no file".
-{
-  const dir = legacyProject('adopt-flag-shapes', MINE_ROLES);
-  const before = snapshot(dir);
-  const file = adoptFile('orphan', { [ADOPT_KEY]: 'keep-mine' });
-  const noMode = install(dir, baseAnswers(), ['--no-seeds', '--adopt-file', file]);
-  check('(e3) --adopt-file without --adopt is refused', noMode.status === 1 && noMode.out.includes('only means something with --adopt'), why(noMode, true).slice(0, 160));
-  const noValue = install(dir, baseAnswers(), ['--no-seeds', '--adopt', '--adopt-file']);
-  check('(e3) --adopt-file with no path is refused, not treated as "no file"',
-    noValue.status === 1 && noValue.out.includes('needs the path'), why(noValue, true).slice(0, 160));
-  check('(e3) neither refusal wrote anything', diffSnapshots(before, snapshot(dir)).length === 0);
-}
-
-// (f) a CLAUDE.md carrying a FOREIGN aiwf-core region: the region is adopted, the text around it is
-// not the plugin's business in this branch any more than in any other.
-{
-  const dir = project('adopt-claude-region');
-  const mine = '# My project\n\nMy own instructions.\n\n<!-- BEGIN aiwf-core -->\nSomeone else wrote this core.\n<!-- END aiwf-core -->\n\n## My tail\n\nStill mine.\n';
-  fs.writeFileSync(at(dir, 'CLAUDE.md'), mine);
-  const file = adoptFile('claude', { [CLAUDE_KEY]: 'keep-mine' });
-  const r = install(dir, baseAnswers(), ['--no-seeds', '--adopt', '--adopt-file', file]);
-  check('(f) adopting a foreign managed region exits 0', r.status === 0, why(r));
-  check('(f) CLAUDE.md is byte-identical - keep-mine writes nothing, inside or outside the markers',
-    read(at(dir, 'CLAUDE.md')) === mine);
-  const e = record(dir, CLAUDE_KEY);
-  check('(f) the record holds the region hashes: local = the region on disk, override TRUE',
-    e.local === sha256(regionOfFile(mine)) && e.override === true, JSON.stringify(e));
-  // The EXACT value, not "differs from something": upstream is the hash of the rendered REGION, and
-  // an assertion that only says "not the whole file" is satisfied by any unrelated digest.
-  check('(f) upstream is exactly sha256(the rendered region)',
-    e.upstream === sha256(RENDER_REGION), `${e.upstream} vs ${sha256(RENDER_REGION)}`);
-  const before = snapshot(dir);
-  const again = install(dir, baseAnswers(), ['--no-seeds']);
-  check('(f) and the re-run afterwards is a zero diff', again.status === 0 && diffSnapshots(before, snapshot(dir)).length === 0);
-}
-
-// (f2) the same region, adopted with take-new, over a CRLF file. This is the case that proves the
-// write path: the region must be replaced, and every byte around it - line endings included - must
-// come out of the file exactly as it went in.
-{
-  const dir = project('adopt-claude-take-new');
+  const dir = project('overwrite-claude-region');
   const head = '# My project\r\n\r\nMy own instructions.\r\n\r\n';
   const tail = '\r\n\r\n## My tail\r\n\r\nStill mine.\r\n';
-  const mine = `${head}<!-- BEGIN aiwf-core -->\r\nSomeone else wrote this core.\r\n<!-- END aiwf-core -->${tail}`;
-  fs.writeFileSync(at(dir, 'CLAUDE.md'), mine);
-  const file = adoptFile('claude-take-new', { [CLAUDE_KEY]: 'take-new' });
-  const r = install(dir, baseAnswers(), ['--no-seeds', '--adopt', '--adopt-file', file]);
-  check('(f2) adopting a foreign region with take-new exits 0', r.status === 0, why(r));
+  fs.writeFileSync(at(dir, 'CLAUDE.md'), `${head}<!-- BEGIN aiwf-core -->\r\nSomeone else wrote this core.\r\n<!-- END aiwf-core -->${tail}`);
+  const r = install(dir, baseAnswers(), ['--no-seeds']);
+  check('(b) the install over a foreign region exits 0', r.status === 0, why(r, true));
   const after = read(at(dir, 'CLAUDE.md')) || '';
-  check('(f2) the region really was replaced by the render',
-    sha256(regionOfFile(after)) === sha256(RENDER_REGION));
-  check('(f2) the text OUTSIDE the markers is byte-identical, CRLF and all',
+  check('(b) the region is the render now', regionOfFile(after).replace(/\r\n/g, '\n') === RENDER_REGION);
+  check('(b) the text OUTSIDE the markers is byte-identical, CRLF and all',
     after.slice(0, head.length) === head && after.slice(-tail.length) === tail, JSON.stringify(after.slice(0, 24)));
-  check('(f2) the written region uses the file\'s own convention, so not one line ending in the file moved',
-    /<!-- BEGIN aiwf-core -->\r\n/.test(after) && !/[^\r]\n/.test(after), `${(after.match(/\r\n/g) || []).length} CRLF, ${(after.match(/[^\r]\n/g) || []).length} bare LF`);
-  const e = record(dir, CLAUDE_KEY);
-  check('(f2) the record is CLEAN and both hashes are exactly sha256(the rendered region)',
-    e.local === sha256(RENDER_REGION) && e.upstream === sha256(RENDER_REGION) && e.override === false, JSON.stringify(e));
-  const before = snapshot(dir);
-  const again = install(dir, baseAnswers(), ['--no-seeds']);
-  check('(f2) and the re-run over the CRLF file is a zero diff',
-    again.status === 0 && diffSnapshots(before, snapshot(dir)).length === 0, diffSnapshots(before, snapshot(dir)).join(', '));
+  check('(b) the written region uses the file\'s own convention (no bare LF anywhere)', !/[^\r]\n/.test(after));
+  check('(b) the report names the region as "overwrote:"', r.out.includes(`overwrote: ${CLAUDE_KEY}`), why(r, true).slice(0, 200));
+  check('(b) and records it', record(dir, CLAUDE_KEY) === PLUGIN_VERSION);
 }
 
-// (g) --adopt on a project that already has an installation: refused in one line. Adopt bootstraps a
-// LEGACY surface; re-deciding a recorded artifact is /pnp:update --resolve, which has a journal.
+// (c) a RECORDED artifact edited by hand -> overwritten on the next run (a re-render, not an
+// "overwrote:" - this installation wrote it).
 {
-  const dir = project('adopt-already-installed');
-  check('(g) the ordinary install first exits 0', install(dir, baseAnswers(), ['--no-seeds']).status === 0);
-  const before = snapshot(dir);
-  const r = install(dir, baseAnswers(), ['--no-seeds', '--adopt']);
-  check('(g) --adopt on an installed project is refused (exit 1)', r.status === 1, `exit ${r.status}`);
-  check('(g) the refusal says there is nothing to adopt and points at /pnp:update --resolve',
-    r.out.includes('nothing here to adopt') && r.out.includes('/pnp:update --resolve'), why(r, true).slice(0, 200));
-  check('(g) nothing was written', diffSnapshots(before, snapshot(dir)).length === 0);
+  const dir = project('overwrite-edited');
+  install(dir, baseAnswers(), ['--no-seeds']);
+  fs.writeFileSync(at(dir, '.claude/agents/writer.md'), `${read(at(dir, '.claude/agents/writer.md'))}\nMy hand edit.\n`);
+  const r = install(dir, baseAnswers(), ['--no-seeds']);
+  check('(c) the re-run over a hand-edited managed file exits 0', r.status === 0, why(r, true));
+  check('(c) the hand edit is gone', !(read(at(dir, '.claude/agents/writer.md')) || '').includes('My hand edit.'));
+  check('(c) and it is reported as a re-render, not as overwrote',
+    r.out.includes('re-rendered') && !r.out.includes('overwrote:'), why(r, true).slice(0, 200));
 }
 
-// (i) the ownership-without-takeover machinery is unchanged by adopt: a rule that was already in
-// settings.json is never claimed as ours, in this mode as in every other.
+// (d) the project additions block: carried verbatim (CRLF inside), appended after the render, and a
+// re-run - with a changed answer that really re-renders the file - still carries exactly one copy.
 {
-  const dir = legacyProject('adopt-settings', MINE_ROLES);
-  fs.mkdirSync(at(dir, '.claude'), { recursive: true });
-  fs.writeFileSync(at(dir, '.claude/settings.json'), JSON.stringify({
-    permissions: { allow: ['Bash(ls:*)'], deny: [], ask: ['Bash(my-own-tool:*)', 'Bash(git commit:*)'] },
-  }, null, 2));
-  const file = adoptFile('settings', { [ADOPT_KEY]: 'keep-mine' });
-  const r = install(dir, baseAnswers(), ['--no-seeds', '--adopt', '--adopt-file', file]);
-  check('(i) the adopt run exits 0', r.status === 0, why(r));
-  const settings = readJson(at(dir, '.claude/settings.json')) || {};
-  const ask = (settings.permissions || {}).ask || [];
+  const dir = project('additions-carry');
+  install(dir, baseAnswers(), ['--no-seeds']);
+  const writer = at(dir, '.claude/agents/writer.md');
+  fs.writeFileSync(writer, `${read(writer)}\nAn edit outside the block.\n\n${BLOCK_CRLF}\n`);
+  const changed = baseAnswers();
+  changed.roles.writer.effort = 'medium';
+  const r = install(dir, changed, ['--no-seeds']);
+  check('(d) the re-run with a changed answer exits 0', r.status === 0, why(r, true));
+  const text = read(writer) || '';
+  check('(d) the block survived byte for byte, CRLF included, exactly once',
+    text.split(BLOCK_CRLF).length - 1 === 1, `${text.split(BLOCK_CRLF).length - 1} copies`);
+  check('(d) appended after the render\'s last line behind one blank line', text.endsWith(`\n\n${BLOCK_CRLF}\n`) && !text.endsWith(`\n\n\n${BLOCK_CRLF}\n`),
+    JSON.stringify(text.slice(-160)));
+  check('(d) the edit OUTSIDE the block was overwritten, and the render followed the answer',
+    !text.includes('An edit outside the block.') && /effort: medium/.test(text), JSON.stringify(text.slice(0, 200)));
+  check('(d) the report says the block was carried', r.out.includes('project additions carried'), why(r, true).slice(0, 200));
+  const before = snapshot(dir);
+  const again = install(dir, changed, ['--no-seeds']);
+  check('(d) and the re-run after it is a zero diff', again.status === 0 && diffSnapshots(before, snapshot(dir)).length === 0,
+    diffSnapshots(before, snapshot(dir)).join(', '));
+}
+
+// (e) a malformed block -> BLOCKED naming the file, nothing written anywhere.
+{
+  const dir = project('additions-malformed');
+  install(dir, baseAnswers(), ['--no-seeds']);
+  fs.writeFileSync(at(dir, AGENTS_REL), `${read(at(dir, AGENTS_REL))}\n${ADD_BEGIN}\nhalf a block\n`);
+  const before = snapshot(dir);
+  const changed = baseAnswers();
+  changed.roles.writer.effort = 'medium';
+  const r = install(dir, changed, ['--no-seeds']);
+  check('(e) a malformed additions block BLOCKS the run (exit 1), naming the file',
+    r.status === 1 && r.out.includes(AGENTS_REL) && r.out.includes('malformed'), why(r, true));
+  check('(e) and nothing was written', diffSnapshots(before, snapshot(dir)).length === 0, diffSnapshots(before, snapshot(dir)).join(', '));
+}
+
+// (f) legacy bookkeeping on disk (two-hash objects, a journal key) is normalised on the next run.
+{
+  const dir = project('legacy-bookkeeping');
+  install(dir, baseAnswers(), ['--no-seeds']);
+  const cfg = readJson(at(dir, CONFIG_REL));
+  for (const key of Object.keys(cfg._aiwf.managedRegions)) cfg._aiwf.managedRegions[key] = { upstream: 'a'.repeat(64), local: 'a'.repeat(64), override: true };
+  cfg._aiwf.migrationJournal = null;
+  fs.writeFileSync(at(dir, CONFIG_REL), JSON.stringify(cfg, null, 2) + '\n');
+  const r = install(dir, baseAnswers(), ['--no-seeds']);
+  check('(f) a re-run over a legacy config exits 0', r.status === 0, why(r, true));
   const bk = (readJson(at(dir, CONFIG_REL)) || {})._aiwf || {};
-  check('(i) a pre-existing identical ask rule did NOT become owned', !bk.ownedAskRules.includes('Bash(git commit:*)'));
-  check('(i) the foreign rule is still there and is not owned either',
-    ask.includes('Bash(my-own-tool:*)') && !bk.ownedAskRules.includes('Bash(my-own-tool:*)'));
-  check('(i) the project\'s own allow posture was not replaced',
-    JSON.stringify((settings.permissions || {}).allow) === JSON.stringify(['Bash(ls:*)']));
-  check('(i) and every owned rule really is in settings.json', bk.ownedAskRules.length > 0 && bk.ownedAskRules.every((rule) => ask.includes(rule)));
+  check('(f) and writes the current shape: version strings only, no journal key',
+    !Object.prototype.hasOwnProperty.call(bk, 'migrationJournal')
+    && Object.values(bk.managedRegions || {}).every((v) => v === PLUGIN_VERSION) && Object.keys(bk.managedRegions || {}).length > 0,
+    JSON.stringify(bk).slice(0, 200));
 }
 
-// (j) the blockers adopt must NOT weaken.
-{
-  const dir = project('adopt-stale-foreign');
-  fs.mkdirSync(at(dir, '.claude/agents'), { recursive: true });
-  const foreign = '---\nname: qa\n---\nSomeone else wrote this.\n';
-  fs.writeFileSync(at(dir, '.claude/agents/qa.md'), foreign);
-  const before = snapshot(dir);
-  const r = install(dir, baseAnswers(), ['--no-seeds', '--adopt', '--confirm-remove-stale']);
-  check('(j) a foreign file at a path this config renders NOTHING at still blocks under --adopt', r.status === 1, `exit ${r.status}`);
-  check('(j) the message says adopt does not cover it and why',
-    r.out.includes('not recorded in _aiwf.managedRegions') && r.out.includes('--adopt does not cover it'), why(r, true).slice(0, 200));
-  check('(j) the foreign file survived, flag or no flag', read(at(dir, '.claude/agents/qa.md')) === foreign);
-  check('(j) nothing else was written either', diffSnapshots(before, snapshot(dir)).length === 0);
-}
-{
-  // A hand-edited RECORDED artifact is bookkeeping's business, not adopt's - and because that
-  // project has an _aiwf block, --adopt is refused before the conflict is even reached. Both halves
-  // are asserted: the refusal WITH the flag, and the untouched hand-edit blocker without it.
-  const dir = project('adopt-hand-edited');
-  check('(j) the ordinary install exits 0', install(dir, baseAnswers(), ['--no-seeds']).status === 0);
-  const edited = (read(at(dir, ROLES_REL)) || '').replace('"effort": "high"', '"effort": "low"');
-  fs.writeFileSync(at(dir, ROLES_REL), edited);
-  const before = snapshot(dir);
-  const withFlag = install(dir, baseAnswers(), ['--no-seeds', '--adopt']);
-  check('(j) --adopt over a recorded install is refused, so it cannot launder a hand edit',
-    withFlag.status === 1 && withFlag.out.includes('nothing here to adopt'), why(withFlag, true).slice(0, 200));
-  const without = install(dir, baseAnswers(), ['--no-seeds']);
-  check('(j) and without the flag the hand-edit blocker is exactly what it always was',
-    without.status === 1 && without.out.includes('was edited by hand') && without.out.includes('/pnp:update --resolve'),
-    why(without, true).slice(0, 200));
-  check('(j) neither run wrote anything', diffSnapshots(before, snapshot(dir)).length === 0);
-  check('(j) and the hand edit is still there', read(at(dir, ROLES_REL)) === edited);
-}
 
-// (k) the ADVISORY superseded-legacy list: reported by name, and not one of them is touched.
-{
-  const dir = project('adopt-superseded');
-  fs.mkdirSync(at(dir, '.claude/hooks'), { recursive: true });
-  const hook = '// the project\'s own hand-maintained copy\nprocess.exit(0);\n';
-  fs.writeFileSync(at(dir, '.claude/hooks/pretooluse-mutation-guard.js'), hook);
-  fs.mkdirSync(at(dir, '.claude/commands'), { recursive: true });
-  fs.writeFileSync(at(dir, '.claude/commands/review.md'), 'my own review command\n');
-  const r = install(dir, baseAnswers(), ['--no-seeds', '--adopt']);
-  check('(k) an adopt run with nothing to decide exits 0', r.status === 0, why(r));
-  check('(k) the advisory list names the planted hook',
-    r.out.includes('possible superseded legacy files') && r.out.includes('.claude/hooks/pretooluse-mutation-guard.js'),
-    why(r, true).slice(0, 200));
-  check('(k) and the planted command file, matched by skill name', r.out.includes('.claude/commands/review.md'), why(r, true).slice(0, 200));
-  check('(k) it says plainly that nothing was touched and removal is a separate decision',
-    r.out.includes('ADVISORY') && r.out.includes('never deletes'), why(r, true).slice(0, 200));
-  check('(k) the hook file is byte-identical', read(at(dir, '.claude/hooks/pretooluse-mutation-guard.js')) === hook);
-  check('(k) and the command file too', read(at(dir, '.claude/commands/review.md')) === 'my own review command\n');
-  check('(k) the install itself really happened', exists(at(dir, CONFIG_REL)) && exists(at(dir, ROLES_REL)));
-}
-
-// ---------------------------------------------------------------------------
-// (b2) a PARTIALLY answered adopt file. Working through a legacy surface a few files at a time is
-// the normal way to use this, so the preview must show the answered ones classified and the rest
-// pending - and exit 0, because a dry run that refuses to preview is not a preview. The same file
-// without --dry-run still blocks by name: only the writing run demands a complete table.
-{
-  const dir = legacyProject('adopt-partial', MINE_ROLES);
-  fs.writeFileSync(at(dir, 'CLAUDE.md'), '# Mine\n\n<!-- BEGIN aiwf-core -->\nnot the render\n<!-- END aiwf-core -->\n');
-  const file = adoptFile('partial', { [ADOPT_KEY]: 'keep-mine' }); // CLAUDE.md#aiwf-core deliberately unanswered
-  const before = snapshot(dir);
-  const dry = install(dir, baseAnswers(), ['--no-seeds', '--adopt', '--adopt-file', file, '--dry-run']);
-  check('(b2) a partial adopt file with --dry-run previews instead of refusing (exit 0)', dry.status === 0, why(dry, true).slice(0, 200));
-  check('(b2) the answered address shows its decision', dry.out.includes('keep-mine: yours stays'), why(dry, true).slice(0, 200));
-  check('(b2) the unanswered one shows as pending, named', dry.out.includes(CLAUDE_KEY) && dry.out.includes('DECISION PENDING'), why(dry, true).slice(0, 200));
-  check('(b2) and the dry run wrote nothing', diffSnapshots(before, snapshot(dir)).length === 0);
-  const wet = install(dir, baseAnswers(), ['--no-seeds', '--adopt', '--adopt-file', file]);
-  check('(b2) the SAME partial file without --dry-run blocks', wet.status === 1, `exit ${wet.status}`);
-  check('(b2) naming the address that is still open', wet.out.includes(CLAUDE_KEY) && wet.out.includes('has no entry for it'), why(wet, true).slice(0, 200));
-  check('(b2) and that run wrote nothing either', diffSnapshots(before, snapshot(dir)).length === 0);
-}
-
-// (b3) the advisory scan is bounded in TRAVERSAL, not just in what it prints. Driven in-process
-// with an injected readdir, because "it stopped early" is a claim about how much it read, and an
-// output-only assertion cannot tell a capped list from a complete one.
-{
-  const dir = project('adopt-scan-bound');
-  const planted = 12;
-  for (let i = 0; i < planted; i += 1) {
-    fs.mkdirSync(at(dir, `docs/area-${String(i).padStart(2, '0')}`), { recursive: true });
-    fs.writeFileSync(at(dir, `docs/area-${String(i).padStart(2, '0')}/WORKFLOW.md`), 'mine\n');
-  }
-  let dirsRead = 0;
-  const counting = (d) => { dirsRead += 1; return fs.readdirSync(d, { withFileTypes: true }); };
-  const capped = scanSupersededLegacy({ pluginRoot: PLUGIN_ROOT, projectRoot: dir, readdir: counting, limit: 5 });
-  check('(b3) the scan returns at most its cap', capped.hits.length === 5, `${capped.hits.length} hit(s)`);
-  check('(b3) and says the list is truncated rather than presenting it as complete', capped.truncated === true);
-  check('(b3) it stopped READING once the cap was full (it never enumerated all 12 directories)',
-    dirsRead <= 7 && capped.dirsRead === dirsRead, `${dirsRead} directories read for ${planted} planted`);
-  // The control: with room for all of them it finds all of them, so the bound above is the cap
-  // doing its job and not a scan that simply cannot see past five files.
-  dirsRead = 0;
-  const full = scanSupersededLegacy({ pluginRoot: PLUGIN_ROOT, projectRoot: dir, readdir: counting, limit: 50 });
-  check('(b3) with room, the same scan finds every planted file and reports no truncation',
-    full.hits.length === planted && full.truncated === false, `${full.hits.length} hit(s)`);
-  check('(b3) the truncated result names its cause, so a report can say WHY it is a sample',
-    capped.causes.includes('hitLimit') && full.causes.length === 0, capped.causes.join(', '));
-}
-
-// (b3-i) THE HIT CAP IS NOT A TRAVERSAL BOUND. A sparse tree with nothing matching satisfies the hit
-// cap forever, so without a separate directory budget the scan would read a whole repository to
-// print nothing - and report that nothing as complete.
-{
-  const dir = project('adopt-scan-sparse');
-  const planted = 30;
-  for (let i = 0; i < planted; i += 1) {
-    fs.mkdirSync(at(dir, `docs/empty-${String(i).padStart(2, '0')}`), { recursive: true });
-    fs.writeFileSync(at(dir, `docs/empty-${String(i).padStart(2, '0')}/notes.md`), 'nothing that matches\n');
-  }
-  let dirsRead = 0;
-  const counting = (d) => { dirsRead += 1; return fs.readdirSync(d, { withFileTypes: true }); };
-  const bounded = scanSupersededLegacy({ pluginRoot: PLUGIN_ROOT, projectRoot: dir, readdir: counting, limit: 1, maxDirs: 5 });
-  check('(b3-i) with NO matches at all, the directory budget still stops the walk',
-    dirsRead === 5 && bounded.dirsRead === 5, `${dirsRead} directories read`);
-  check('(b3-i) and the empty result is reported as TRUNCATED, not as "nothing is here"',
-    bounded.truncated === true && bounded.hits.length === 0 && bounded.causes.includes('traversal'), bounded.causes.join(', '));
-  dirsRead = 0;
-  const whole = scanSupersededLegacy({ pluginRoot: PLUGIN_ROOT, projectRoot: dir, readdir: counting, limit: 1, maxDirs: 500 });
-  check('(b3-i) control: with a budget that fits, the same tree is walked whole and is NOT truncated',
-    dirsRead === planted + 1 && whole.truncated === false && whole.hits.length === 0, `${dirsRead} directories read`);
-}
-
-// (b3-ii) the class-root boundary: the hit cap filling exactly at the END of one root must not leave
-// the next root unvisited AND the result claiming to be complete. Two hooks fill a cap of two; the
-// matching doc under docs/ is then never seen.
-{
-  const dir = project('adopt-scan-boundary');
-  fs.mkdirSync(at(dir, '.claude/hooks'), { recursive: true });
-  fs.writeFileSync(at(dir, '.claude/hooks/pretooluse-mutation-guard.js'), 'mine\n');
-  fs.writeFileSync(at(dir, '.claude/hooks/pretooluse-dispatch-gate.js'), 'mine\n');
-  fs.mkdirSync(at(dir, 'docs'), { recursive: true });
-  fs.writeFileSync(at(dir, 'docs/WORKFLOW.md'), 'mine\n');
-  const atBoundary = scanSupersededLegacy({ pluginRoot: PLUGIN_ROOT, projectRoot: dir, limit: 2 });
-  check('(b3-ii) the cap filled exactly at the end of the first root returns exactly the cap',
-    atBoundary.hits.length === 2 && atBoundary.hits.every((h) => h.rel.startsWith('.claude/hooks/')), atBoundary.hits.map((h) => h.rel).join(', '));
-  check('(b3-ii) and the unvisited root makes the result TRUNCATED, not silently complete',
-    atBoundary.truncated === true && atBoundary.causes.includes('hitLimit'), atBoundary.causes.join(', '));
-  const roomy = scanSupersededLegacy({ pluginRoot: PLUGIN_ROOT, projectRoot: dir, limit: 50 });
-  check('(b3-ii) control: with room, the file in the second root IS found and nothing is truncated',
-    roomy.hits.length === 3 && roomy.hits.some((h) => h.rel === 'docs/WORKFLOW.md') && roomy.truncated === false,
-    roomy.hits.map((h) => h.rel).join(', '));
-}
-
-// (b3-iii) the depth cutoff and (b3-iv) the per-directory cutoff are stops too, and a stop that does
-// not say so is the same defect as a cap that does not say so.
-{
-  const deep = project('adopt-scan-deep');
-  const chain = Array.from({ length: 10 }, (_, i) => `l${i}`).join('/');
-  fs.mkdirSync(at(deep, `docs/${chain}`), { recursive: true });
-  fs.writeFileSync(at(deep, `docs/${chain}/WORKFLOW.md`), 'too deep to see\n');
-  const cut = scanSupersededLegacy({ pluginRoot: PLUGIN_ROOT, projectRoot: deep });
-  check('(b3-iii) a tree deeper than the scan follows marks the result truncated, with the cause',
-    cut.truncated === true && cut.causes.includes('depth') && cut.hits.length === 0, cut.causes.join(', '));
-
-  const shallow = project('adopt-scan-shallow');
-  fs.mkdirSync(at(shallow, 'docs/one'), { recursive: true });
-  fs.writeFileSync(at(shallow, 'docs/one/WORKFLOW.md'), 'visible\n');
-  const ok = scanSupersededLegacy({ pluginRoot: PLUGIN_ROOT, projectRoot: shallow });
-  check('(b3-iii) control: a shallow tree is found in full and is NOT truncated',
-    ok.truncated === false && ok.hits.length === 1 && ok.causes.length === 0, ok.causes.join(', '));
-
-  const wide = project('adopt-scan-wide');
-  fs.mkdirSync(at(wide, 'docs'), { recursive: true });
-  for (let i = 0; i < 5; i += 1) fs.writeFileSync(at(wide, `docs/file-${i}.md`), 'nothing that matches\n');
-  const clipped = scanSupersededLegacy({ pluginRoot: PLUGIN_ROOT, projectRoot: wide, maxPerDir: 2 });
-  check('(b3-iv) a directory with more entries than the scan reads marks the result truncated',
-    clipped.truncated === true && clipped.causes.includes('perDir'), clipped.causes.join(', '));
-  const readAll = scanSupersededLegacy({ pluginRoot: PLUGIN_ROOT, projectRoot: wide, maxPerDir: 50 });
-  check('(b3-iv) control: with the per-directory bound above the entry count, nothing is truncated',
-    readAll.truncated === false && readAll.causes.length === 0, readAll.causes.join(', '));
-}
-
-// (b3-v) and the report SAYS it: a truncated scan that found nothing must not print as silence.
-{
-  const dir = project('adopt-scan-report');
-  fs.mkdirSync(at(dir, '.claude/hooks'), { recursive: true });
-  fs.writeFileSync(at(dir, '.claude/hooks/pretooluse-mutation-guard.js'), 'mine\n');
-  const chain = Array.from({ length: 10 }, (_, i) => `l${i}`).join('/');
-  fs.mkdirSync(at(dir, `docs/${chain}`), { recursive: true });
-  fs.writeFileSync(at(dir, `docs/${chain}/WORKFLOW.md`), 'too deep to see\n');
-  const r = install(dir, baseAnswers(), ['--no-seeds', '--adopt']);
-  check('(b3-v) the adopt run exits 0', r.status === 0, why(r));
-  check('(b3-v) the report says the scan STOPPED EARLY and names the cause',
-    r.out.includes('STOPPED EARLY') && r.out.includes('deeper than this scan follows'), why(r, true).slice(0, 240));
-  check('(b3-v) and says plainly that the list is a sample, not an inventory',
-    r.out.includes('sample, not an inventory'), why(r, true).slice(0, 240));
-}
-
-// (b4) the --adopt refusal is decided on the PRESENCE of _aiwf, never on its shape. A malformed
-// block is the dangerous case: adopting over it would stamp a fresh one and destroy whatever it
-// recorded. Both entrypoints, because a refusal that lives in only one of them is not a refusal.
-for (const [name, value] of [['a list', []], ['a string', 'corrupt'], ['null', null]]) {
-  const viaInterview = project(`adopt-aiwf-${name.replace(/\W+/g, '-')}-interview`);
-  const viaGenerate = project(`adopt-aiwf-${name.replace(/\W+/g, '-')}-generate`);
-  for (const [dir, run, label] of [[viaInterview, install, 'interview.mjs'], [viaGenerate, generateInstall, 'generate.mjs']]) {
-    fs.mkdirSync(at(dir, '.claude/aiwf-native'), { recursive: true });
-    fs.writeFileSync(at(dir, CONFIG_REL), JSON.stringify({ _aiwf: value }, null, 2));
-    const before = snapshot(dir);
-    const r = run(dir, baseAnswers(), ['--no-seeds', '--adopt']);
-    check(`(b4) _aiwf = ${name} refuses --adopt via ${label} (exit 1)`, r.status === 1, `exit ${r.status}`);
-    check(`(b4) _aiwf = ${name} via ${label}: the message names the malformed bookkeeping`,
-      r.out.includes('is not a bookkeeping object'), why(r, true).slice(0, 200));
-    check(`(b4) _aiwf = ${name} via ${label}: nothing was written over it`,
-      diffSnapshots(before, snapshot(dir)).length === 0, diffSnapshots(before, snapshot(dir)).join(', '));
-  }
-}
-{
-  // The control: a config WITHOUT the key is not refused, so the rule above is about presence and
-  // not about "a config file exists".
-  const dir = project('adopt-config-no-aiwf');
-  fs.mkdirSync(at(dir, '.claude/aiwf-native'), { recursive: true });
-  fs.writeFileSync(at(dir, CONFIG_REL), JSON.stringify({ os: 'windows' }, null, 2));
-  const r = install(dir, baseAnswers(), ['--no-seeds', '--adopt']);
-  check('(b4) a config with no _aiwf key at all is NOT refused - adopt proceeds', r.status === 0, why(r, true).slice(0, 200));
-  check('(b4) and it now carries real bookkeeping', !!((readJson(at(dir, CONFIG_REL)) || {})._aiwf || {}).managedRegions);
-}
 
 // ---------------------------------------------------------------------------
 // The one managed file that also holds the operator's own text is CLAUDE.md, and every branch that
-// writes it splices bytes rather than re-encoding the file. This section is about the WRITE, not
-// about adopt: the append and re-render branches predate it and are asserted here for the first
-// time. A CRLF checkout is the case that catches a whole-file normalisation - the region comes out
+// writes it splices bytes rather than re-encoding the file. This section is about the WRITE: the
+// append and re-render branches. A CRLF checkout is the case that catches a whole-file normalisation - the region comes out
 // right and every line around it is silently rewritten.
 section('19 - CLAUDE.md: the bytes outside the markers survive every write branch, CRLF included');
 {
@@ -1804,6 +1435,35 @@ section('22 - the audit table: a fresh install gets it without being asked, and 
     c.status === 0 && readJson(at(p22, CONFIG_REL)).roles.reviewer.model === 'fable'
     && exists(at(p22, '.claude/agents/reviewer.md'))
     && /^model: fable$/m.test(read(at(p22, '.claude/agents/reviewer.md')) || ''), c.out.trim().slice(-200));
+  // /pnp:roles re-renders through the same carry: a project additions block (CRLF inside) in the
+  // Writer agent survives a --set that re-renders it, and a malformed one is refused with nothing
+  // written.
+  {
+    const writer = at(p22, '.claude/agents/writer.md');
+    const block = '<!-- project additions -->\r\nMy rule, kept by /pnp:roles.\r\n<!-- /project additions -->';
+    fs.writeFileSync(writer, `${read(writer)}\n${block}\n`);
+    const d = roleCmd(['--set', 'writer.effort=medium']);
+    const text = read(writer) || '';
+    check('/pnp:roles: a re-render of the Writer carries its project additions block verbatim, once',
+      d.status === 0 && /^effort: medium$/m.test(text) && text.split(block).length - 1 === 1 && text.endsWith(`\n\n${block}\n`),
+      `exit ${d.status}: ${d.out.trim().split('\n').slice(-2).join(' | ')}`);
+    fs.writeFileSync(writer, `${text}\n<!-- project additions -->\nhalf a block\n`);
+    const before = snapshot(p22);
+    const e = roleCmd(['--set', 'writer.effort=high']);
+    check('/pnp:roles: a malformed block is refused (exit 1) naming the file, and nothing is written',
+      e.status === 1 && e.out.includes('.claude/agents/writer.md') && e.out.includes('malformed')
+      && diffSnapshots(before, snapshot(p22)).length === 0, `exit ${e.status}: ${e.out.trim().split('\n').slice(-2).join(' | ')}`);
+    fs.writeFileSync(writer, text);
+    // An unrecorded file at a stale agent path (qa is codex-hosted here) is left alone and named.
+    const qa = at(p22, '.claude/agents/qa.md');
+    const FOREIGN_QA = '---\nname: qa\n---\nSomeone else wrote this.\n';
+    fs.writeFileSync(qa, FOREIGN_QA);
+    const f = roleCmd(['--set', 'writer.effort=medium', '--confirm-remove-stale']);
+    check('/pnp:roles: an unrecorded file at a stale agent path does not stop the run (exit 0), is named, and is untouched',
+      f.status === 0 && f.out.includes('left alone: .claude/agents/qa.md (not rendered by this configuration)') && read(qa) === FOREIGN_QA,
+      `exit ${f.status}: ${f.out.trim().split('\n').slice(-3).join(' | ')}`);
+    fs.rmSync(qa);
+  }
   const selfcheck = spawnSync(process.execPath, [SELFCHECK, '--plugin-root', PLUGIN_ROOT, '--project-fixture', p22], { encoding: 'utf8' });
   check('the self-check is green on the project after the whole round trip',
     selfcheck.status === 0, (selfcheck.stdout || '').split('\n').filter((l) => l.includes('[FAIL]')).slice(0, 3).join(' | ').slice(0, 240));
@@ -2178,12 +1838,10 @@ section('24 - the transfer surface: seeded once at the resolved path, never mana
   }
 }
 
-section('25 - paths.changesDir: ONE containment rule, the same seven literals on every platform');
+section('25 - paths.changesDir: unused and ignored; the containment helper keeps its seven literals');
 {
-  // The rule is the exported production helper, called directly: the update engine and setup both
-  // call this one function, so its answers ARE the containment contract of the key. The six refused
-  // literals are refused on EVERY platform - a drive-letter form is refused on POSIX too, because a
-  // config written on one machine is read on another.
+  // The helper is still exported (the self-check calls it). The six refused literals are refused on
+  // EVERY platform - a drive-letter form is refused on POSIX too.
   const fn = validateConfig.containedRelativePath;
   check('validate-config.mjs exports containedRelativePath', typeof fn === 'function', typeof fn);
   // Drive-letter literals are composed, never written out: the self-check's provenance section reads
@@ -2198,15 +1856,14 @@ section('25 - paths.changesDir: ONE containment rule, the same seven literals on
     check(`containedRelativePath(${JSON.stringify(value)}) is ${expected}`, got === expected, String(got));
   }
 
-  // The setup consumer: a configured changesDir that leaves the project is refused before a write,
-  // and the accepted literal installs.
-  const refused = project('changes-dir-refused');
-  const r = install(refused, baseAnswers({ paths: { ...baseAnswers().paths, changesDir: '../x' } }), ['--no-seeds']);
-  check('setup refuses paths.changesDir "../x" (exit 1), naming the key', r.status === 1 && r.out.includes('paths.changesDir'), why(r, true));
-  check('and that refusal wrote nothing', Object.keys(snapshot(refused)).length === 0, Object.keys(snapshot(refused)).join(', '));
-  const accepted = project('changes-dir-accepted');
-  const a = install(accepted, baseAnswers({ paths: { ...baseAnswers().paths, changesDir: 'a/../reports' } }), ['--no-seeds']);
-  check('setup accepts paths.changesDir "a/../reports" (exit 0)', a.status === 0, why(a));
+  // The setup consumer: nothing reads the key any more, so a fresh install does not write it, and an
+  // old value is carried over and ignored - no refusal, whatever it says.
+  check('a fresh install writes no paths.changesDir', !Object.prototype.hasOwnProperty.call((readJson(at(p1, CONFIG_REL)) || {}).paths || {}, 'changesDir'),
+    JSON.stringify((readJson(at(p1, CONFIG_REL)) || {}).paths));
+  const carried = project('changes-dir-carried');
+  const r = install(carried, baseAnswers({ paths: { ...baseAnswers().paths, changesDir: '../x' } }), ['--no-seeds']);
+  check('setup does not judge an old paths.changesDir value (exit 0) and carries it as it is',
+    r.status === 0 && ((readJson(at(carried, CONFIG_REL)) || {}).paths || {}).changesDir === '../x', why(r, true));
 }
 
 // ---------------------------------------------------------------------------

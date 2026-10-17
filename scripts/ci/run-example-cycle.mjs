@@ -5,7 +5,7 @@
  * WHAT IT IS
  *   The one gate that runs the whole product the way an operator would, against data checked into
  *   the repository (`examples/example-project/`) rather than fixtures invented in a test file. Each
- *   of the nine steps is an assertion, and the commands it runs are LITERALLY the commands
+ *   of the eight steps is an assertion, and the commands it runs are LITERALLY the commands
  *   `examples/example-project/README.md` shows: both are read from DOCUMENTED_COMMANDS below, so the
  *   quickstart cannot document one thing while CI runs another. The self-check asserts the README
  *   still lists exactly these lines (EXAMPLE FIXTURE section).
@@ -60,10 +60,9 @@ export const DOCUMENTED_COMMANDS = [
   'node <payload2>/scripts/update/aiwf-update.mjs --check --plugin-root <payload2> --project-root <project>',
   'node <payload2>/scripts/update/aiwf-update.mjs --dry-run --plugin-root <payload2> --project-root <project>',
   'node <payload2>/scripts/update/aiwf-update.mjs --apply --plugin-root <payload2> --project-root <project> --resolution-file <work>/resolutions.json',
-  'node <payload2>/scripts/update/aiwf-update.mjs --resolve CLAUDE.md#aiwf-core --plugin-root <payload2> --project-root <project> --resolution-file <work>/resolve-take-new.json',
   'node <payload2>/scripts/selfcheck/aiwf-selfcheck.js --plugin-root <payload2> --project-fixture <project>',
 ];
-const [CMD_INSTALL, CMD_BUILD, CMD_VALIDATE, CMD_CHECK, CMD_DRYRUN, CMD_APPLY, CMD_RESOLVE, CMD_SELFCHECK] = DOCUMENTED_COMMANDS;
+const [CMD_INSTALL, CMD_BUILD, CMD_VALIDATE, CMD_CHECK, CMD_DRYRUN, CMD_APPLY, CMD_SELFCHECK] = DOCUMENTED_COMMANDS;
 
 // ---------------------------------------------------------------------------
 // Reporting
@@ -306,13 +305,13 @@ const BEGIN = '<!-- BEGIN aiwf-core -->';
 const END = '<!-- END aiwf-core -->';
 const CONFIG_REL = '.claude/aiwf-native/aiwf.config.json';
 const SETTINGS_REL = '.claude/settings.json';
-const STAGE_REL = '.claude/aiwf-native/update-stage';
 const CLAUDE_KEY = 'CLAUDE.md#aiwf-core';
-// The second managed artifact of the bump: a whole-file one the operator never touches. It is what
-// makes the cycle show BOTH halves of the re-render rule - a dialog where the operator edited, none
-// where they did not.
+// The second managed artifact of the bump: a whole-file one. The operator keeps text of their own in
+// it the one way that survives an update - a project additions block - and the cycle shows both
+// halves of the rule: the render is written over everything else, the block is carried verbatim.
 const WRITER_REL = '.claude/agents/writer.md';
 const WRITER_NEW_LINE = 'A line the simulated next release added to the Writer agent.';
+const ADDITIONS_BLOCK = '<!-- project additions -->\nThis project\'s own rule for its Writer, kept across every update.\n<!-- /project additions -->';
 const FOREIGN_RULE = 'Bash(example-project-own-tool:*)';
 const SEED_PROSE = 'This file existed before PromptAndPray was installed';
 
@@ -327,7 +326,7 @@ for (const rel of ['answers.json', 'answers-linux.json', 'README.md', 'seed/CLAU
 }
 
 // The answers file is DATA the caller may choose, so every way of getting it wrong is refused
-// BEFORE anything is created, rather than surfacing nine steps later as an install failure with a
+// BEFORE anything is created, rather than surfacing several steps later as an install failure with a
 // misleading reason: no value, an EMPTY value, a path that cannot be read, and a path that is not a
 // regular file.
 //
@@ -432,7 +431,6 @@ const PAYLOAD_1 = path.join(workDir, 'payload-shipped');
 const PAYLOAD_2 = path.join(workDir, 'payload-bumped');
 const PROJECT = path.join(workDir, 'project');
 const RESOLUTIONS = path.join(workDir, 'resolutions.json');
-const RESOLVE_TAKE_NEW = path.join(workDir, 'resolve-take-new.json');
 const run = makeRunner({
   '<repo>': REPO_ROOT,
   '<answers>': ANSWERS_FILE,
@@ -521,9 +519,8 @@ try {
     `${payload1Version} -> ${bumpVersion} (expected ${expectedVersion})`);
   if (build.status !== 0 || bumpId !== expectedId) throw new Error('the bumped payload could not be built, and every later step runs against it');
   {
-    // The other half of the same release: the Writer agent template really changes. Without this the
-    // migration's second re-render would meet an artifact whose render is identical, and the cycle
-    // would exercise the "already current" branch instead of the silent-apply one it is here for.
+    // The other half of the same release: the Writer agent template really changes, so the
+    // migration's second re-render writes something rather than meeting an already-current file.
     const writerTemplate = path.join(PAYLOAD_2, 'templates', 'agents', 'writer.md.tmpl');
     fs.appendFileSync(writerTemplate, `\n${WRITER_NEW_LINE}\n`, 'utf8');
   }
@@ -540,8 +537,8 @@ try {
   check('--check exits 1 (pending migrations - that is what makes it an interlock)', interlock.status === 1, tail(interlock));
   check('--check names the pending migration', interlock.out.includes(bumpId), tail(interlock, 2));
 
-  // -- 5. the operator edits a managed region by hand -------------------------
-  step('5 - the operator edits the managed region by hand, so the update meets a real conflict');
+  // -- 5. the operator's own text, in the two places an update meets it -------
+  step('5 - the operator writes a project additions block into the Writer agent, and edits the managed region by hand');
   const MY_EDIT = 'A line the operator wrote INSIDE the managed region.';
   {
     const file = path.join(PROJECT, 'CLAUDE.md');
@@ -552,103 +549,68 @@ try {
       const t = read(file);
       return t.indexOf(MY_EDIT) > t.indexOf(BEGIN) && t.indexOf(MY_EDIT) < t.indexOf(END);
     })());
+    const writer = path.join(PROJECT, ...WRITER_REL.split('/'));
+    fs.writeFileSync(writer, `${read(writer)}\n${ADDITIONS_BLOCK}\n`, 'utf8');
+    check('the project additions block is in the Writer agent', (read(writer) || '').includes(ADDITIONS_BLOCK));
   }
 
   // -- 6. dry run with no answers --------------------------------------------
-  step('6 - a dry run with no resolution file stops, and writes nothing at all');
+  step('6 - a dry run with no resolution file previews everything, lists the one question, and writes nothing');
   const beforeDry = hashTree(PROJECT);
   const dry = run(CMD_DRYRUN);
-  check('--dry-run with no --resolution-file exits 1', dry.status === 1, tail(dry));
-  check('and it names the address it stopped on', dry.out.includes(`${bumpId}/0/`), tail(dry, 2));
-  check('the project is byte-identical to before the dry run (nothing staged, nothing written)',
+  check('--dry-run with no --resolution-file exits 0 - a preview never stops on a question', dry.status === 0, tail(dry));
+  check('and it lists the config key it would ask about', dry.out.includes(`would ask: ${bumpId}/0/enforcement.exampleToggle`), tail(dry, 8));
+  check('the project is byte-identical to before the dry run',
     diffTrees(beforeDry, hashTree(PROJECT)).length === 0, diffTrees(beforeDry, hashTree(PROJECT)).join(', '));
 
   // -- 7. apply ---------------------------------------------------------------
-  step('7 - apply, answering the new config key and keeping the hand-edited region');
+  step('7 - apply, answering the new config key - the only question an update asks');
   const resolutionsHash = writeJsonExclusive(RESOLUTIONS, {
     [`${bumpId}/0/enforcement.exampleToggle`]: { kind: 'answer', value: false },
-    [`${bumpId}/1/${CLAUDE_KEY}`]: { kind: 'conflict', resolution: 'keep-mine' },
   });
   recordCreatedFile('resolutions.json', resolutionsHash);
-  // Note what this table does NOT contain: any record for operation 4, the re-render of
-  // `.claude/agents/writer.md`. The resolution-file adapter stops the run naming the address when a
-  // decision it needs has no record - so an apply that exits 0 with this table is itself the proof
-  // that the untouched artifact was never asked about.
   const apply = run(CMD_APPLY);
   check('--apply exits 0', apply.status === 0, tail(apply, 6));
   {
     const claude = read(path.join(PROJECT, 'CLAUDE.md')) || '';
     const cfg = readJson(path.join(PROJECT, ...CONFIG_REL.split('/'))) || {};
     const bk = cfg._aiwf || {};
-    const entry = (bk.managedRegions || {})[CLAUDE_KEY] || {};
     const ask = ((readJson(path.join(PROJECT, ...SETTINGS_REL.split('/'))) || {}).permissions || {}).ask || [];
-    // Read at the project root: the example answers set no paths.changesDir, so the config carries
-    // the schema default "." and the report lands where it always did.
-    const changes = read(path.join(PROJECT, `CHANGES_${payload1Version}-to-${bumpVersion}.md`));
-
-    check('keep-mine: the hand-edited content survived', claude.includes(MY_EDIT));
-    check('keep-mine: the artifact is now HELD (override true) and upstream != local',
-      entry.override === true && typeof entry.upstream === 'string' && entry.upstream !== entry.local,
-      `override=${entry.override}`);
+    check('the CHANGELOG line is printed before the first operation',
+      /CHANGELOG/.test(apply.out) && apply.out.search(/CHANGELOG/) < apply.out.indexOf(`${bumpId}[0]`), tail(apply, 8));
+    check('the hand-edited region was OVERWRITTEN with the payload render', !claude.includes(MY_EDIT) && claude.includes(BEGIN));
+    check('the operator text OUTSIDE the markers is untouched', claude.includes(SEED_PROSE) && claude.indexOf(SEED_PROSE) < claude.indexOf(BEGIN));
     check('add-config-key applied the OPERATOR\'s answer, not the op\'s default (true)',
       cfg.enforcement && cfg.enforcement.exampleToggle === false, JSON.stringify(cfg.enforcement));
     check('reconcile-ask-ruleset applied', apply.out.includes('ask ruleset reconciled'), tail(apply, 6));
     check('and it left the project\'s own foreign rule alone', ask.includes(FOREIGN_RULE));
     const writerAfter = read(path.join(PROJECT, ...WRITER_REL.split('/'))) || '';
-    const writerEntry = (bk.managedRegions || {})[WRITER_REL] || {};
-    check('the artifact the operator never touched was applied WITHOUT a dialog (no record for it in the resolution file, and the run still exits 0)',
-      writerAfter.includes(WRITER_NEW_LINE) && !JSON.stringify(readJson(RESOLUTIONS) || {}).includes(WRITER_REL),
-      `applied=${writerAfter.includes(WRITER_NEW_LINE)}`);
-    check('and the run said WHY it did not ask',
-      apply.out.includes(`${WRITER_REL}: the payload version applied (you had not edited it)`), tail(apply, 8));
-    check('its bookkeeping is a plain take-new: upstream == local, override false',
-      writerEntry.override === false && typeof writerEntry.local === 'string' && writerEntry.local === writerEntry.upstream,
-      `override=${writerEntry.override}`);
-    check('the note reached the CHANGES report, with its docRefs', !!changes && changes.includes('example-bump') && changes.includes('docs/LOOP.md'));
-    check('the CHANGES report labels the silently applied artifact `payload-current`',
-      !!changes && changes.includes(`\`rerender-managed-region\` ${WRITER_REL} - payload-current`),
-      (changes || '').split('\n').filter((l) => l.includes('rerender-managed-region')).join(' | '));
-    check('and it labels the artifact the operator kept `held (your version kept)`',
-      !!changes && changes.includes(`\`rerender-managed-region\` ${CLAUDE_KEY} - held (your version kept)`));
-    check('the report says in one sentence what was applied without a dialog and what was not',
-      !!changes && changes.includes('An unheld artifact you had not edited, whose payload render changed, was applied without a dialog; edited ones were asked about; held ones were recorded, not applied.'));
-    check('the CHANGES report was written at the project root', changes !== null);
+    check('the Writer agent is the new payload render', writerAfter.includes(WRITER_NEW_LINE), `applied=${writerAfter.includes(WRITER_NEW_LINE)}`);
+    check('and the project additions block survived it verbatim, exactly once',
+      writerAfter.split(ADDITIONS_BLOCK).length - 1 === 1, `${writerAfter.split(ADDITIONS_BLOCK).length - 1} copies`);
+    check('the run said the block was carried', apply.out.includes(`${WRITER_REL}: the payload render written (project additions carried)`), tail(apply, 8));
+    check('the note was printed, with its docRefs', apply.out.includes('note: ') && apply.out.includes('- docs/LOOP.md'), tail(apply, 8));
     check('the version stamps moved together',
       bk.installedPluginVersion === bumpVersion && bk.lastMigrationApplied === bumpId,
       `${bk.installedPluginVersion} / ${bk.lastMigrationApplied}`);
-    check('the migration journal is clear', bk.migrationJournal === null, JSON.stringify(bk.migrationJournal));
+    check('the re-rendered artifacts are recorded as the payload version, and no journal key is left',
+      (bk.managedRegions || {})[CLAUDE_KEY] === bumpVersion && (bk.managedRegions || {})[WRITER_REL] === bumpVersion
+      && !Object.prototype.hasOwnProperty.call(bk, 'migrationJournal'), JSON.stringify(bk.managedRegions));
     check('the update ran the self-check ITSELF and it passed', apply.out.includes('self-check: PASS'));
-    check('the stage directory left no debris', !fs.existsSync(path.join(PROJECT, ...STAGE_REL.split('/'))));
   }
 
-  // -- 8. leaving the override ------------------------------------------------
-  step('8 - --resolve is the way OUT of an override, with no version bump involved');
-  const takeNewHash = writeJsonExclusive(RESOLVE_TAKE_NEW, { [CLAUDE_KEY]: { kind: 'conflict', resolution: 'take-new' } });
-  recordCreatedFile('resolve-take-new.json', takeNewHash);
-  const resolve = run(CMD_RESOLVE);
-  check('--resolve exits 0', resolve.status === 0, tail(resolve, 4));
-  {
-    const claude = read(path.join(PROJECT, 'CLAUDE.md')) || '';
-    const entry = ((readJson(path.join(PROJECT, ...CONFIG_REL.split('/'))) || {})._aiwf || {}).managedRegions[CLAUDE_KEY] || {};
-    check('the hand edit is gone and the payload render is in place', !claude.includes(MY_EDIT) && claude.includes(BEGIN));
-    check('the operator text OUTSIDE the markers is still untouched', claude.includes(SEED_PROSE) && claude.indexOf(SEED_PROSE) < claude.indexOf(BEGIN));
-    check('the artifact is no longer held: override false, local == upstream',
-      entry.override === false && entry.local === entry.upstream, `override=${entry.override}`);
-  }
-
-  // -- 9. the final self-check ------------------------------------------------
-  step('9 - the self-check, run on its own against the finished project');
+  // -- 8. the final self-check ------------------------------------------------
+  step('8 - the self-check, run on its own against the finished project');
   const selfcheck = run(CMD_SELFCHECK);
   check('the self-check exits 0 against the updated project', selfcheck.status === 0,
     selfcheck.status === 0 ? '' : '\n' + (selfcheck.out || '').trim().split('\n').slice(-16).join('\n'));
   // The Codex auditor's instruction file is a managed artifact of every installation: after the
-  // whole cycle it is on disk at the project root and recorded clean under its own key. Whether the
-  // record still describes the bytes is the self-check's managed-regions-match, run just above.
+  // whole cycle it is on disk at the project root and recorded under its own key. That every recorded
+  // artifact is present is the self-check's managed-regions-present, run just above.
   {
     const entry = (((readJson(path.join(PROJECT, ...CONFIG_REL.split('/'))) || {})._aiwf || {}).managedRegions || {})['AGENTS.md'];
-    check('AGENTS.md is on disk and recorded under the key "AGENTS.md" after the cycle (upstream == local, override false)',
-      fs.existsSync(path.join(PROJECT, 'AGENTS.md')) && !!entry && typeof entry.local === 'string'
-      && entry.local === entry.upstream && entry.override === false,
+    check('AGENTS.md is on disk and recorded under the key "AGENTS.md" after the cycle (a payload version)',
+      fs.existsSync(path.join(PROJECT, 'AGENTS.md')) && typeof entry === 'string' && /^\d+\.\d+\.\d+$/.test(entry),
       JSON.stringify(entry));
   }
 } catch (e) {
