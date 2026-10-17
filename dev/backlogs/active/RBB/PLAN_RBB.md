@@ -30,7 +30,7 @@ any hook or engine change (`--hash`, a planner agent type - Deferred), any consu
 | ref | title | implements | status | record |
 |---|---|---|---|---|
 | RBB-001 | `/pnp:plan` - the cycle as a skill, the brief templates | D-01 D-02 D-03 D-04 D-05 D-06 D-10 | closed (`05d8b39`) | `records/RBB-001.md` |
-| RBB-002 | `/pnp:review` reduced; the docs and the pointers say the cycle once | D-07 D-08 D-09 | open | - |
+| RBB-002 | `/pnp:review` reduced; the docs and the pointers say the cycle once | D-07 D-08 D-09 | closed (`16ddc77`) | `records/RBB-002.md` |
 | RBB-003 | release 0.3.0: migration 0025, the example bump, CHANGELOG, the retired rules | D-11 D-12 D-13 D-16 | open | - |
 
 Order: 001 -> 002 -> 003, each on the operator's own word (D-14). 001 and 002 are prose, R1 in the
