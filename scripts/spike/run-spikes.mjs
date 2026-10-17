@@ -274,6 +274,19 @@ const projectMode = (name, configRaw, planText) => {
 const modeConfig = (mode) => JSON.stringify({ project: { name: 'Spike' }, enforcement: { routeWriteGuard: true, dispatchGate: mode } });
 const planWith = (ref) => `# PLAN DEMO\n\n## ${ref} - the only ref this fixture plan carries\n\nBody.\n`;
 const PLAN_ONE = planWith('DEMO-1');
+// A FOLDER plan (`active/<ABBR>/`): `files` maps paths under the default active/ to their text, in
+// an off-plan project.
+const projectModeFolder = (name, files) => {
+  const root = path.join(tmpRoot, 'mode-' + name);
+  fs.mkdirSync(path.join(root, '.claude', 'aiwf-native'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.claude', 'aiwf-native', 'aiwf.config.json'), modeConfig('off-plan'));
+  for (const [rel, text] of Object.entries(files)) {
+    const file = path.join(root, 'docs', 'backlogs', 'active', ...rel.split('/'));
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, text);
+  }
+  return root;
+};
 
 const modeOffPlan = projectMode('offplan', modeConfig('off-plan'), PLAN_ONE);
 // The four near-miss fixtures. Each holds ONE ref that a naive matcher would let clear another:
@@ -291,6 +304,15 @@ const modeAlways = projectMode('always', modeConfig('always'), PLAN_ONE);
 const modeNoConfig = projectMode('noconfig', null, PLAN_ONE);
 const modeCorrupt = projectMode('corrupt', '{ not json ', PLAN_ONE);
 const modeWrongCase = projectMode('wrongcase', modeConfig('OFF-PLAN'), PLAN_ONE);
+const modeFolder = projectModeFolder('folder', {
+  'DEMO/PLAN_DEMO.md': planWith('DEMO-007'),
+  'DEMO/tickets/DEMO-007.md': '# DEMO-007 - the ticket file\n',
+});
+// The ref is present in the folder, but only where Gate 2 does not look: DECISIONS.md and records/.
+const modeFolderBare = projectModeFolder('folder-bare', {
+  'DEMO/DECISIONS.md': '- D-01 names DEMO-007 in passing.\n',
+  'DEMO/records/DEMO-007.md': '# DEMO-007 - a completion record\n',
+});
 
 const writerBrief = (prompt) => agentEnvelope({
   description: 'Implement a ticket', prompt, subagent_type: 'writer', model: 'opus', run_in_background: false,
@@ -309,6 +331,8 @@ const gate2ModeCases = [
   { name: 'off-plan mode, a ref ending in a dash, ABC-, present EXACTLY', projectDir: modeTrailingDash, payload: writerBrief('Ticket: ABC-\n\nDo the thing.'), expect: 'allow(passthrough)' },
   { name: 'off-plan mode, the ref ABC- vs a plan holding only ABC-X', projectDir: modeTrailingDashX, payload: writerBrief('Ticket: ABC-\n\nDo the thing.'), expect: 'ask' },
   { name: 'off-plan mode, the plans directory does not exist', projectDir: modeNoPlansDir, payload: writerBrief('Ticket: DEMO-1\n\nDo the thing.'), expect: 'ask' },
+  { name: 'off-plan mode, ref in a FOLDER plan (active/DEMO/)', projectDir: modeFolder, payload: writerBrief('Ticket: DEMO-007\n\nDo the thing.'), expect: 'allow(passthrough)' },
+  { name: 'off-plan mode, folder without index or ticket file', projectDir: modeFolderBare, payload: writerBrief('Ticket: DEMO-007\n\nDo the thing.'), expect: 'ask' },
   { name: 'off-plan mode, non-writer subagent (untouched by the gate)', projectDir: modeOffPlan, payload: agentEnvelope({ description: 'review', prompt: 'Ticket: DEMO-2', subagent_type: 'reviewer' }), expect: 'allow(passthrough)' },
   { name: 'always mode, ref IS in an active PLAN (still a click)', projectDir: modeAlways, payload: writerBrief('Ticket: DEMO-1\n\nDo the thing.'), expect: 'ask' },
   { name: 'NO config file, ref IS in an active PLAN (factory = always)', projectDir: modeNoConfig, payload: writerBrief('Ticket: DEMO-1\n\nDo the thing.'), expect: 'ask' },

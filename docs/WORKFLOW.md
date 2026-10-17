@@ -243,10 +243,11 @@ change of COO model, and each of these was learned from an observed violation.
   Read/check that the state already present does not cover it. A demand that one Read would have
   cancelled is a workflow defect.
 - **(e) An approved plan lands in the repo immediately.** At the moment of approval, in the same
-  session, unprompted: the plan lands in `<plansDir>/active/PLAN_<ABBR>.md` (the Git canon) -
-  moved there from `<plansDir>/drafts/PLAN_<ABBR>.draft.md`, where it was an untracked draft - its
-  readiness history under `<plansDir>/readiness/<ABBR>/` is added in the same commit, and any
-  plan-mode file outside the repo becomes a pointer to it. The principle "durable
+  session, unprompted: the plan lands in `<plansDir>/active/PLAN_<ABBR>.md`, or as a folder
+  `<plansDir>/active/<ABBR>/` with the index `PLAN_<ABBR>.md` (the Git canon) - moved there from
+  `<plansDir>/drafts/PLAN_<ABBR>.draft.md`, where it was an untracked draft - its readiness history
+  under `<plansDir>/readiness/<ABBR>/` is added in the same commit, and any plan-mode file outside
+  the repo becomes a pointer to it. The principle "durable
   knowledge lives in Git" already existed; what had never been written down was the mechanical
   moment of approval.
 - **(f) Host-directive precedence.** A host - the CLI, an editor integration, a wrapper around the
@@ -575,10 +576,11 @@ Every Writer brief additionally carries the ticket ref on a **line of its own**,
 the machine-readable form of the ref the contract already requires. That line is not decoration: it
 is the contract Gate 2 reads. In the factory mode (`enforcement.dispatchGate: "always"`) the gate
 raises a native Yes/No dialog on every Writer dispatch. In `off-plan` mode it looks `<REF>` up in
-`<plansDir>/active/PLAN_*.md` and stays **silent** when the ticket is really in an active PLAN,
-raising the dialog only for a brief with no ticket line, a ref that is in no active PLAN, or a plans
-directory it cannot read - because a dispatch that cannot name a ticket in an active PLAN is work
-nobody planned, which is exactly the accident worth one operator click.
+`<plansDir>/active/PLAN_*.md` and the plan folders `active/<ABBR>/` (index and `tickets/`) and stays
+**silent** when the ticket is really in an active PLAN, raising the dialog only for a brief with no
+ticket line, a ref that is in no active PLAN, or a plans directory it cannot read - because a
+dispatch that cannot name a ticket in an active PLAN is work nobody planned, which is exactly the
+accident worth one operator click.
 
 At the same moment - dispatch of an R2/R3 ticket - the COO writes the **route state**,
 `.aiwf/route-state.json` (kept out of git by the project's own `.gitignore`), as
@@ -735,7 +737,9 @@ carries a closed status and its completion record, the COO moves the file from
 of closing the final ticket, not as a step someone has to remember later. The archive has a
 naming convention the active directory does not: `<NNN>_PLAN_<ABBR>_<YYYY-MM-DD>.md`, where
 `NNN` is the next free sequence number and the date is the day of ARCHIVING, not of creation.
-`git mv` preserves the history; a bare copy of the active filename does not belong there.
+`git mv` preserves the history; a bare copy of the active filename does not belong there. A folder
+plan moves as a DIRECTORY under the same name grammar: `git mv <plansDir>/active/<ABBR>/
+<plansDir>/archive/<NNN>_PLAN_<ABBR>_<YYYY-MM-DD>/`.
 `<plansDir>/readiness/<ABBR>/` is not moved: the archive numbering is for plans, and the history
 stays where the plan's landing put it. And
 archiving CHECKS as well as moves - the step is not only a `git mv` but a last look at the plan:
@@ -763,6 +767,7 @@ Use the configured paths (`paths.plansDir`):
 <plansDir>/drafts/PLAN_<ABBR>.draft.md       the draft, untracked, while the plan is one
 <plansDir>/readiness/<ABBR>/                  its readiness history, committed at landing, kept
 <plansDir>/active/PLAN_<ABBR>.md
+<plansDir>/active/<ABBR>/PLAN_<ABBR>.md       or a folder plan: this index + tickets/, records/
 <plansDir>/archive/
 ```
 
@@ -783,12 +788,14 @@ has sat untracked beside the draft since the cycle began. Rough personal notes a
 implementation authority.
 When a durable record is warranted:
 
-- **one prefix per plan.** A plan file is `PLAN_<ABBR>.md`, where `<ABBR>` is an abbreviation of the
+- **one prefix per plan.** A plan file is `PLAN_<ABBR>.md` - a folder plan's index
+  `active/<ABBR>/PLAN_<ABBR>.md` carries the same name - where `<ABBR>` is an abbreviation of the
   plan's topic written as **2 to 8 uppercase letters `A-Z`**, and every ticket in that plan carries
   the Ticket Ref `<ABBR>-<NNN>`: the SAME abbreviation as its plan file, plus `<NNN>`, a **three-
   digit** sequential number that is never reused - not even for a ticket that was dropped.
   `PLAN_ABC.md` holds `ABC-001`, `ABC-002`, and so on. That grammar is what the tooling reads: it
-  is the shape the dispatch gate turns into a filename and the shape the self-check holds a plan to.
+  is the shape the dispatch gate turns into a filename (`PLAN_<ABBR>.md`, then `<ABBR>/PLAN_<ABBR>.md`,
+  then `<ABBR>/tickets/<ABBR>-<NNN>.md`) and the shape the self-check holds a plan to.
   An `<ABBR>` is never reused by a later plan: its `<plansDir>/readiness/<ABBR>/` outlives the plan,
   and a second plan with the same letters would write over it.
   The ref is a lookup key, not a description: from the ref alone the plan file is known without

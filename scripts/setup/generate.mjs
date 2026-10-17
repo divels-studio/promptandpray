@@ -67,6 +67,9 @@ import { collectDefaults, formatErrors, loadSchema, validate } from './validate-
 import { REVIEW_CLASSES, claudePinErrors } from './role-rules.mjs';
 import { validatePayload } from '../update/validate-payload.mjs';
 import { finishWithSelfCheck } from '../selfcheck/run-selfcheck.mjs';
+// CommonJS, read through Node's named-export interop (aiwf-lib.js ends in a static
+// `module.exports = { ... }` block): the plan-shape predicate Gate 2 itself uses.
+import { listActivePlanFiles } from '../engine/aiwf-lib.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const DEFAULT_PLUGIN_ROOT = path.resolve(HERE, '..', '..');
@@ -707,22 +710,22 @@ export function resolveRoadmap(paths) {
  */
 
 /**
- * A pre-existing `<plansDir>/active/` that already holds `PLAN_*.md` files. The predicate is
- * deliberately the byte-for-byte one Gate 2 uses (`entry.isFile()` + `/^PLAN_.*\.md$/`, see
- * scripts/engine/pretooluse-dispatch-gate.js) - a count that did not describe exactly the set the
- * gate reads would be a warning about a different thing.
+ * A pre-existing `<plansDir>/active/` that already holds plans - `PLAN_*.md` files or `<ABBR>/`
+ * plan folders. The predicate is not restated here: it is Gate 2's own, imported from
+ * scripts/engine/aiwf-lib.js (`listActivePlanFiles`) - a count that did not describe exactly the set
+ * the gate reads would be a warning about a different thing. One plan per monolith file and one per
+ * folder that holds an index or a ticket file Gate 2 reads; a folder that could not be listed adds
+ * nothing (nothing observed, so nothing claimed).
  * Returns the warning line, or null when there is nothing to warn about.
  */
 export function existingPlansWarning({ projectRoot, plansDir }) {
   if (!projectRoot || typeof plansDir !== 'string' || plansDir.trim() === '') return null;
   const rel = toPosix(path.join(plansDir, 'active'));
-  let entries;
-  try {
-    entries = fs.readdirSync(path.resolve(projectRoot, plansDir, 'active'), { withFileTypes: true });
-  } catch { return null; } // absent or unreadable: nothing observed, so nothing claimed
-  const count = entries.filter((e) => e.isFile() && /^PLAN_.*\.md$/.test(e.name)).length;
+  const listed = listActivePlanFiles(path.resolve(projectRoot, plansDir, 'active'));
+  // An absent or unreadable active/ lists no files: nothing observed, so nothing claimed.
+  const count = new Set(listed.files.map((f) => f.plan)).size;
   if (count === 0) return null;
-  return `${count} existing PLAN_*.md in ${rel} - Gate 2 off-plan will read them as active pnp plans; pick another paths.plansDir if they are not.`;
+  return `${count} existing plan(s) - PLAN_*.md or <ABBR>/ folders - in ${rel} - Gate 2 off-plan will read them as active pnp plans; pick another paths.plansDir if they are not.`;
 }
 
 /**
@@ -1251,9 +1254,9 @@ export function planInstall({
   // ---- 7. directories ------------------------------------------------------
   // A plans directory that is already FULL is not an error - an operator may be pointing setup at
   // the plans this project keeps, on purpose. It is reported rather than adopted in silence:
-  // `enforcement.dispatchGate: off-plan` reads every PLAN_*.md there as an active pnp plan, so a
-  // Writer dispatch naming a ticket in one of them raises no dialog at all. Said in the plan and in
-  // the report, so a --dry-run shows it before anything is written.
+  // `enforcement.dispatchGate: off-plan` reads every PLAN_*.md and <ABBR>/ plan folder there as an
+  // active pnp plan, so a Writer dispatch naming a ticket in one of them raises no dialog at all.
+  // Said in the plan and in the report, so a --dry-run shows it before anything is written.
   {
     const warning = existingPlansWarning({ projectRoot, plansDir: merged.paths.plansDir });
     if (warning) notes.push(warning);

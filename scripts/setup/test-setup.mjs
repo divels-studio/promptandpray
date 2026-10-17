@@ -45,7 +45,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { plansDirUnderScratchWarning, renderTemplate, templateContext } from './generate.mjs';
+import { existingPlansWarning, plansDirUnderScratchWarning, renderTemplate, templateContext } from './generate.mjs';
 import { runInterview } from './interview.mjs';
 import { E2E_TRACE_NOTE } from './e2e-trace-note.mjs';
 // Read through the module NAMESPACE, not a named import: a helper this payload does not export yet
@@ -641,15 +641,22 @@ section('12b - a project that already has plans is WARNED about, on both paths, 
   // The situation: setup is pointed at a project whose `docs/backlogs/active/` is already full of
   // somebody else's plans, and whose overrides document already exists. Nothing here is an error -
   // it may be exactly what the operator wants - but `enforcement.dispatchGate: off-plan` will read
-  // every one of those PLAN_*.md files as an active pnp plan, so it is never adopted in silence.
+  // every one of those PLAN_*.md files and <ABBR>/ plan folders as an active pnp plan, so it is
+  // never adopted in silence.
   const p = project('inherited-plans');
   fs.mkdirSync(at(p, 'docs/backlogs/active'), { recursive: true });
   fs.writeFileSync(at(p, 'docs/backlogs/active/PLAN_FOREIGN.md'), '# somebody else\n\n## FOR-001 - a ticket\n');
   fs.writeFileSync(at(p, 'docs/backlogs/active/PLAN_OTHER.md'), '# and another\n');
-  // Two shapes that must NOT be counted, because Gate 2 does not read them either: a file that is
-  // not a PLAN_*.md, and a DIRECTORY whose name happens to match the pattern.
+  // A FOLDER plan, the third plan Gate 2 reads: `active/<ABBR>/PLAN_<ABBR>.md`.
+  fs.mkdirSync(at(p, 'docs/backlogs/active/FOLD'), { recursive: true });
+  fs.writeFileSync(at(p, 'docs/backlogs/active/FOLD/PLAN_FOLD.md'), '# a folder plan\n\n## FOLD-001 - a ticket\n');
+  // Three shapes that must NOT be counted, because Gate 2 does not read them either: a file that is
+  // not a PLAN_*.md, a DIRECTORY whose name happens to match the pattern, and a directory whose
+  // name is outside the ABBR grammar even though it holds a plan-looking file.
   fs.writeFileSync(at(p, 'docs/backlogs/active/notes.md'), 'not a plan\n');
   fs.mkdirSync(at(p, 'docs/backlogs/active/PLAN_DIRECTORY.md'), { recursive: true });
+  fs.mkdirSync(at(p, 'docs/backlogs/active/misc'), { recursive: true });
+  fs.writeFileSync(at(p, 'docs/backlogs/active/misc/PLAN_misc.md'), '# not a plan folder\n');
   fs.mkdirSync(at(p, 'docs/ai'), { recursive: true });
   fs.writeFileSync(at(p, 'docs/ai/PROJECT_OVERRIDES.md'), '# my own overrides\n');
 
@@ -658,8 +665,20 @@ section('12b - a project that already has plans is WARNED about, on both paths, 
     schema: loadSchemaJson(), ask: scriptedAsk, projectRoot: p, out: { write: (s) => said.push(s) },
   });
   const heard = said.join('');
-  check('the interview warns AT the plans question, counting only what Gate 2 would read (2, not 4)',
-    heard.includes('2 existing PLAN_*.md in docs/backlogs/active'), heard.split('\n').filter((l) => l.includes('PLAN_')).join(' | ') || '(no such line)');
+  check('the interview warns AT the plans question, counting only what Gate 2 would read (3, not 6)',
+    heard.includes('3 existing plan(s) - PLAN_*.md or <ABBR>/ folders - in docs/backlogs/active'),
+    heard.split('\n').filter((l) => l.includes('plan(s)')).join(' | ') || '(no such line)');
+  {
+    // The folder count on its own: one folder plan and nothing else. An ABBR-named folder that holds
+    // neither an index nor a ticket file is nothing Gate 2 reads, so it is not a plan here either.
+    const q = project('inherited-folder-plan-only');
+    fs.mkdirSync(at(q, 'docs/backlogs/active/FOLD'), { recursive: true });
+    fs.writeFileSync(at(q, 'docs/backlogs/active/FOLD/PLAN_FOLD.md'), '# a folder plan\n');
+    fs.mkdirSync(at(q, 'docs/backlogs/active/EMPTY'), { recursive: true });
+    const w = existingPlansWarning({ projectRoot: q, plansDir: 'docs/backlogs' });
+    check('a folder plan active/<ABBR>/PLAN_<ABBR>.md alone is counted as ONE plan (an empty ABBR-named folder is not)',
+      w !== null && w.startsWith('1 existing plan(s) - PLAN_*.md or <ABBR>/ folders - in docs/backlogs/active'), String(w));
+  }
   check('and it names the consequence, not just the count',
     heard.includes('Gate 2 off-plan will read them as active pnp plans'));
   check('the overrides question says the document is already there and will not be rewritten',
@@ -675,7 +694,7 @@ section('12b - a project that already has plans is WARNED about, on both paths, 
   const dry = install(p, baseAnswers(), ['--no-seeds', '--dry-run']);
   check('--dry-run exits 0 - a full plans directory is a warning, not a blocker', dry.status === 0, why(dry));
   check('the dry-run report carries the same line as a note',
-    dry.out.includes('note   2 existing PLAN_*.md in docs/backlogs/active')
+    dry.out.includes('note   3 existing plan(s) - PLAN_*.md or <ABBR>/ folders - in docs/backlogs/active')
     && dry.out.includes('Gate 2 off-plan will read them as active pnp plans'),
     dry.out.split('\n').filter((l) => l.includes('PLAN_*.md')).join(' | ') || '(no such line)');
   check('--dry-run still wrote nothing at all', diffSnapshots(before, snapshot(p)).length === 0,
@@ -695,10 +714,10 @@ section('12b - a project that already has plans is WARNED about, on both paths, 
     schema: loadSchemaJson(), ask: scriptedAsk, projectRoot: clean, out: { write: (s) => said.push(s) },
   });
   check('a clean project hears nothing about plans or an overrides document',
-    !said.join('').includes('existing PLAN_*.md') && !said.join('').includes('already exists'),
+    !said.join('').includes('existing plan(s)') && !said.join('').includes('already exists'),
     said.join('').split('\n').filter((l) => l.trim().startsWith('docs')).join(' | ') || 'silent');
   const dry = install(clean, baseAnswers(), ['--no-seeds', '--dry-run']);
-  check('and its dry-run report carries no such note', dry.status === 0 && !dry.out.includes('existing PLAN_*.md'), why(dry, true).slice(0, 120));
+  check('and its dry-run report carries no such note', dry.status === 0 && !dry.out.includes('existing plan(s)'), why(dry, true).slice(0, 120));
   // The control of 12c below: a plansDir outside the scratch directory (the schema default,
   // docs/backlogs) hears no under-scratch line on either path. It cannot fail alone - 12c's
   // interview and dry-run checks are its flipping faces.

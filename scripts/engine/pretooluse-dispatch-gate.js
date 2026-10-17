@@ -12,11 +12,12 @@
  *     of a rule the orchestrating model has to remember.
  *   - "off-plan" - the dispatch is judged against the PLAN instead of being counted. The brief's
  *     marker line `Ticket: <REF>` is read out of `tool_input.prompt` and `<REF>` is looked up in
- *     `<plansDir>/active/PLAN_*.md`. Found -> passthrough, SILENTLY: dispatching the Writer inside an
- *     approved plan is exactly the COO's job. Missing marker line, a ref that is in no active PLAN,
- *     or a plans directory that cannot be read -> the dialog, naming the ref. The lookup is targeted
- *     first (see `lookupTicketRef`), with the scan of the other plans as its fallback; which of the
- *     two answered is invisible in the decision, by construction.
+ *     `<plansDir>/active/PLAN_*.md` or a plan folder `<plansDir>/active/<ABBR>/` (its index
+ *     `PLAN_<ABBR>.md` and `tickets/<ABBR>-NNN.md`). Found -> passthrough, SILENTLY: dispatching
+ *     the Writer inside an approved plan is exactly the COO's job. Missing marker line, a ref that
+ *     is in no active PLAN, or a plans directory that cannot be read -> the dialog, naming the ref.
+ *     The lookup is targeted first (see `lookupTicketRef`), with the scan of the other plans as its
+ *     fallback; which of the two answered is invisible in the decision, by construction.
  *
  * In BOTH modes:
  *   - `tool_input.subagent_type !== "writer"` -> passthrough. Reviewer, QA, Explore, general-purpose
@@ -121,90 +122,80 @@ function plansDirOf(projectDir, config) {
 }
 
 // Is `<REF>` in an active PLAN? One prefix per plan (payload docs/WORKFLOW.md, "Durable development
-// history"): a plan file is `PLAN_<ABBR>.md` and every ticket in it is `<ABBR>-<NNN>`, so the ref
-// ADDRESSES its plan instead of merely describing the work - `ABC-007` is read out of `PLAN_ABC.md`
-// directly, with no other plan content-read. The full scan stays as the fallback, because the
-// convention is not retroactive: a plan created before it (`PLAN_LEGACY_NAME.md`, a ref whose prefix
-// is not its file's) must still be found.
+// history"): a plan is `PLAN_<ABBR>.md` - a monolith file, or the index of a plan FOLDER
+// `<ABBR>/PLAN_<ABBR>.md` with its ticket files `<ABBR>/tickets/<ABBR>-<NNN>.md` - and every ticket
+// in it is `<ABBR>-<NNN>`, so the ref ADDRESSES its plan instead of merely describing the work:
+// `ABC-007` is read out of `PLAN_ABC.md`, else `ABC/PLAN_ABC.md`, else `ABC/tickets/ABC-007.md`,
+// directly, with no other plan content-read. Both shapes come from ONE predicate in aiwf-lib.js
+// (targetedPlanCandidates, listActivePlanFiles), the one setup and the self-check read too. The full
+// scan stays as the fallback, because the convention is not retroactive: a plan created before it
+// (`PLAN_LEGACY_NAME.md`, a ref whose prefix is not its file's) must still be found.
 //
 // THE DECISION SURFACE IS UNCHANGED BY THIS ORDER. The only difference from the pure-scan version is
-// which files are READ, never what the gate decides: every dispatch that raised a dialog before
-// raises one now. Two things keep that true, and both exist for no other reason:
-//   - the targeted candidate must pass the SAME eligibility test as a scanned entry (`lstat().
-//     isFile()`, the Dirent semantics of the scan below), so a directory or a symlink bearing the
-//     name cannot clear a ref the scan would have skipped;
-//   - a targeted hit still PROBES the directory (names only, nothing read) before it clears the ref,
-//     because the old code enumerated first and therefore asked whenever the plans directory could
-//     not be read, even when the ref was findable.
+// which files are READ, never what the gate decides: every dispatch the scan alone would answer with
+// a dialog is answered with one here. Three things keep that true, and all exist for no other reason:
+//   - every targeted candidate is a file the scan itself would read (aiwf-lib.js builds the folder
+//     candidates only inside the ABBR and ticket-file grammars);
+//   - each candidate must pass the SAME eligibility test as a scanned entry (`lstat().isFile()` on
+//     the file, `lstat().isDirectory()` on each folder on the way - the Dirent semantics of the
+//     scan), so a directory or a symlink bearing the name cannot clear a ref the scan would have
+//     skipped;
+//   - a targeted hit still PROBES the plan set (the scan's own listing: names only, nothing read)
+//     before it clears the ref, because the scan lists first and therefore asks whenever the plans
+//     directory - or a plan folder in it - could not be read, even when the ref was findable.
 // A quieter gate is exactly the direction this hook may not drift in.
 //
 // Returns `{ found, filesRead, dirError }`:
-//   - `found`    - the ref appears as a whole identifier in some active PLAN;
-//   - `filesRead` - the names of the PLAN files whose CONTENT was read, in read order. The targeted
-//     path content-reads exactly one file, which is what makes "it read nothing else" observable in
-//     a test; the parity probe enumerates names and adds nothing here;
-//   - `dirError` - the error from reading `activeDir` as a directory, whether that happened in the
-//     probe or in the fallback. The caller judges it BEFORE `found`, exactly as the pure-scan
-//     version did: a lookup that could not look is not a "no", and it is not a "yes" either.
+//   - `found`    - the ref appears as a whole identifier in some active PLAN file;
+//   - `filesRead` - the active/-relative names (`PLAN_X.md`, `X/PLAN_X.md`, `X/tickets/X-001.md`) of
+//     the files whose CONTENT was read, in read order. The targeted path content-reads only its
+//     candidates, which is what makes "it read nothing else" observable in a test; the parity probe
+//     enumerates names and adds nothing here;
+//   - `dirError` - the first error from listing `activeDir` or a plan folder in it, whether that
+//     happened in the probe or in the fallback. The caller judges it BEFORE `found`, exactly as the
+//     pure-scan version did: a lookup that could not look is not a "no", and it is not a "yes" either.
 function lookupTicketRef(activeDir, ref) {
   const filesRead = [];
   const refRe = lib.refRegex(ref); // whole-identifier match; the rationale lives beside it in aiwf-lib.js
 
-  // `<ABBR>` is the ref's text before its FIRST `-`. No dash (or a leading one) -> no targeted
-  // candidate at all, and the scan below is the only path.
-  const dash = ref.indexOf('-');
-  const targetedName = dash > 0 ? `PLAN_${ref.slice(0, dash)}.md` : null;
-  if (targetedName !== null) {
-    const targetedPath = path.join(activeDir, targetedName);
-    // ELIGIBILITY FIRST, and with lstat. The scan below clears a ref only out of an entry whose
-    // `Dirent.isFile()` is true, and a Dirent reports the entry ITSELF - a symlink dirent is not a
-    // file there, a directory is not a file there. `stat` would follow the link and make the
-    // targeted path clear a ref the scan would have skipped; `lstat` reproduces the scan's own
-    // eligibility exactly. Anything that is not a regular file falls through to the scan, whose
-    // isFile() filter then skips it - the same decision the pure-scan version reached.
+  // No dash (or a leading one) -> no targeted candidate at all, and the scan below is the only path.
+  for (const candidate of lib.targetedPlanCandidates(activeDir, ref)) {
+    // ELIGIBILITY FIRST, and with lstat. The scan clears a ref only out of an entry whose
+    // `Dirent.isFile()` is true, inside folders whose `Dirent.isDirectory()` is true, and a Dirent
+    // reports the entry ITSELF - a symlink dirent is neither a file nor a directory there. `stat`
+    // would follow the link and make the targeted path clear a ref the scan would have skipped;
+    // `lstat` reproduces the scan's own eligibility exactly. Anything that is not eligible falls
+    // through to the next candidate and then to the scan, which skips it too.
     let eligible = false;
     try {
-      eligible = fs.lstatSync(targetedPath).isFile();
+      eligible = candidate.dirs.every((d) => fs.lstatSync(d).isDirectory()) && fs.lstatSync(candidate.file).isFile();
     } catch (e) {
       eligible = false; // not there, or unstattable
     }
+    if (!eligible) continue;
     let text = null;
-    if (eligible) {
-      try {
-        text = fs.readFileSync(targetedPath, 'utf8');
-      } catch (e) {
-        text = null; // unreadable -> fall through to the scan, never decide on it
-      }
+    try {
+      text = fs.readFileSync(candidate.file, 'utf8');
+    } catch (e) {
+      text = null; // unreadable -> fall through, never decide on it
     }
-    if (text !== null) {
-      filesRead.push(targetedName);
-      if (refRe.test(text)) {
-        // The parity probe described above: names only, result discarded. A directory that opens a
-        // named file but refuses to be enumerated (a traverse-without-list ACL) asked before this
-        // change, so it asks after it too.
-        try {
-          fs.readdirSync(activeDir, { withFileTypes: true });
-        } catch (e) {
-          return { found: true, filesRead, dirError: e };
-        }
-        return { found: true, filesRead, dirError: null };
-      }
+    if (text === null) continue;
+    filesRead.push(candidate.name);
+    if (refRe.test(text)) {
+      // The parity probe described above: the scan's listing, result discarded. A directory that
+      // opens a named file but refuses to be enumerated (a traverse-without-list ACL) asks, as it
+      // would through the scan.
+      return { found: true, filesRead, dirError: lib.listActivePlanFiles(activeDir).dirError };
     }
   }
 
-  let entries;
-  try {
-    entries = fs.readdirSync(activeDir, { withFileTypes: true });
-  } catch (e) {
-    return { found: false, filesRead, dirError: e };
-  }
-  for (const entry of entries) {
-    if (!entry.isFile()) continue;
-    if (!/^PLAN_.*\.md$/.test(entry.name)) continue;
-    if (entry.name === targetedName && filesRead.includes(entry.name)) continue; // already read above, and it did not carry the ref
+  const listed = lib.listActivePlanFiles(activeDir);
+  if (listed.dirError) return { found: false, filesRead, dirError: listed.dirError };
+  for (const entry of listed.files) {
+    if (filesRead.includes(entry.name)) continue; // already read above, and it did not carry the ref
     let text = '';
     try {
-      text = fs.readFileSync(path.join(activeDir, entry.name), 'utf8');
+      text = fs.readFileSync(entry.file, 'utf8');
     } catch (e) {
       continue; // one unreadable PLAN must not clear or block on its own; the others still decide.
     }
@@ -241,9 +232,9 @@ function offPlanDecision(ti, projectDir, config) {
   if (hit.found) return lib.allowPassthrough(); // on plan -> silent, the common path
 
   return lib.askPreTool(
-    `Off-plan Writer dispatch: ticket "${ref}" appears in no active PLAN (searched PLAN_*.md in ` +
-    `${activeDir}). Either the ticket is not in a plan yet, or the ref is a typo. Approve only if the ` +
-    `dispatch is deliberate. ${TAG}`
+    `Off-plan Writer dispatch: ticket "${ref}" appears in no active PLAN (searched PLAN_*.md and ` +
+    `<ABBR>/ plan folders in ${activeDir}). Either the ticket is not in a plan yet, or the ref is a ` +
+    `typo. Approve only if the dispatch is deliberate. ${TAG}`
   );
 }
 

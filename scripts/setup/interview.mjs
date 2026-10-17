@@ -12,11 +12,12 @@
  *
  * WHAT IT WARNS ABOUT
  *   The two path questions look at the project before they are answered - on the offered default and
- *   again on the typed answer. A `<plansDir>/active/` that already holds PLAN_*.md files is named
- *   with its count, because `enforcement.dispatchGate: off-plan` will read those files as active pnp
- *   plans; an overrides document that already exists is named too, because setup seeds that file
- *   once and never rewrites it; a plans directory under the scratch directory is named at the plans
- *   question, because a plan canon there is outside git wherever the scratch directory is ignored.
+ *   again on the typed answer. A `<plansDir>/active/` that already holds plans (PLAN_*.md files or
+ *   <ABBR>/ folders) is named with its count, because `enforcement.dispatchGate: off-plan` will read
+ *   them as active pnp plans; an overrides document that already exists is named too, because setup
+ *   seeds that file once and never rewrites it; a plans directory under the scratch directory is
+ *   named at the plans question, because a plan canon there is outside git wherever the scratch
+ *   directory is ignored.
  *   All three are WARNINGS - the operator may mean exactly that - and the generator repeats the
  *   first and the third in its plan/report, so --dry-run shows them as well.
  *

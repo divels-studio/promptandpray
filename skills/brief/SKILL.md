@@ -31,9 +31,10 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
 ## Step 1 - Collect the current state (read-only)
 
 - `git status --short` + `git log --oneline -5` -> branch, **HEAD SHA**, clean/dirty tree.
-- The active plan under `{{config.paths.plansDir}}/active/` (plansDir is the PARENT of `active/`,
-  `archive/`, `drafts/` and `readiness/`) -> the target ticket's section (scope, risk threshold,
-  stop condition, VERIFY) and the ledger entries -> which tickets are CLOSED.
+- The active plan under `{{config.paths.plansDir}}/active/` - `PLAN_<ABBR>.md`, or `active/<ABBR>/`
+  with its ticket file (plansDir is the PARENT of `active/`, `archive/`, `drafts/` and
+  `readiness/`) -> the target ticket's section (scope, risk threshold, stop condition, VERIFY) and
+  the ledger entries -> which tickets are CLOSED.
 - Your memory tool -> the resume point, machine-local facts, any recorded operator gates.
 - Everything THIS session learned the hard way (environment quirks, commands that actually work,
   decisions taken) - that goes into the brief VERBATIM, so it is not rediscovered.

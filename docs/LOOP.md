@@ -138,10 +138,10 @@ through the Agent tool, in one of two modes chosen by `enforcement.dispatchGate`
 - **`always`** (the factory default) - EVERY Writer dispatch becomes a native **Yes/No** dialog: no
   repo write starts without an operator click.
 - **`off-plan`** - the dispatch is judged instead of counted. The brief's `Ticket: <REF>` line is
-  read out of the prompt and `<REF>` is looked up in `<plansDir>/active/PLAN_*.md`: a ticket that is
-  in an active PLAN passes **silently** (dispatching the Writer inside an approved plan is the COO's
-  job), while a missing line, a ref in no active PLAN, or a plans directory that cannot be read
-  raises the dialog naming the ref.
+  read out of the prompt and `<REF>` is looked up in `<plansDir>/active/PLAN_*.md` and `<ABBR>/`
+  plan folders: a ticket that is in an active PLAN passes **silently** (dispatching the Writer
+  inside an approved plan is the COO's job), while a missing line, a ref in no active PLAN, or a
+  plans directory that cannot be read raises the dialog naming the ref.
 
 Every other state of the key - absent, misspelled, the wrong case, a non-string, or a config that
 cannot be read at all - is `always`. For an ask-gate that is the safe direction: a broken config

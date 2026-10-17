@@ -66,6 +66,9 @@
  * readable brief, not an error path) — see the asymmetry note above.
  */
 
+const fs = require('fs');
+const path = require('path');
+
 function readStdin() {
   return new Promise((resolve) => {
     let data = '';
@@ -116,6 +119,100 @@ function refRegex(ref) {
   return new RegExp('(?<![A-Za-z0-9_-])' + escapeRe(ref) + '(?![A-Za-z0-9_-])');
 }
 
+// ---- plan shapes -----------------------------------------------------------
+// The ONE definition of what an active plan is, read by Gate 2 (pretooluse-dispatch-gate.js), by
+// setup's existing-plans warning (scripts/setup/generate.mjs) and by the self-check's plan-ref
+// section - a count or a grammar check that described a different set than the gate reads would be
+// a statement about a different thing. A plan is either
+//   - a MONOLITH file `active/PLAN_<anything>.md` (the name a plan had before the folder shape), or
+//   - a FOLDER `active/<ABBR>/`: the index `PLAN_<ABBR>.md` and the ticket files
+//     `tickets/<ABBR>-NNN.md`; `DECISIONS.md`, `RESEARCH.md` and `records/` belong to the plan but
+//     are not where a ticket lives, so no reader looks there.
+// The grammar is the doctrine's own (payload docs/WORKFLOW.md, "one prefix per plan").
+const PLAN_ABBR_RE = /^[A-Z]{2,8}$/;
+const PLAN_FILE_RE = /^PLAN_.*\.md$/;
+const PLAN_TICKET_FILE_RE = /^([A-Z]{2,8})-(\d{3})\.md$/;
+
+// The targeted lookup of `ref`, IN ORDER: `PLAN_<ABBR>.md`, `<ABBR>/PLAN_<ABBR>.md`,
+// `<ABBR>/tickets/<REF>.md`, where `<ABBR>` is the ref's text before its FIRST `-`. No dash (or a
+// leading one) -> no candidate at all. The folder candidates exist only where the scan below would
+// reach the same file - `<ABBR>` inside the ABBR grammar, `<REF>.md` inside the ticket-file grammar -
+// so the targeted path can never clear a ref out of a file the scan would not have read.
+// Each candidate: `name` (active/-relative, `/`-separated - the form `filesRead` reports), `file`
+// (the path) and `dirs` (the directories between active/ and the file, which a reader must find to
+// be real directories, as the scan's Dirent test does).
+function targetedPlanCandidates(activeDir, ref) {
+  const dash = typeof ref === 'string' ? ref.indexOf('-') : -1;
+  if (dash <= 0) return [];
+  const abbr = ref.slice(0, dash);
+  const out = [{ name: `PLAN_${abbr}.md`, file: path.join(activeDir, `PLAN_${abbr}.md`), dirs: [] }];
+  if (!PLAN_ABBR_RE.test(abbr)) return out;
+  const folder = path.join(activeDir, abbr);
+  out.push({ name: `${abbr}/PLAN_${abbr}.md`, file: path.join(folder, `PLAN_${abbr}.md`), dirs: [folder] });
+  if (PLAN_TICKET_FILE_RE.test(`${ref}.md`)) {
+    const tickets = path.join(folder, 'tickets');
+    out.push({ name: `${abbr}/tickets/${ref}.md`, file: path.join(tickets, `${ref}.md`), dirs: [folder, tickets] });
+  }
+  return out;
+}
+
+// Every active plan file, NAMES only (nothing is content-read): each regular `PLAN_*.md` directly
+// under active/, and for each DIRECTORY there whose name is an ABBR, its regular `PLAN_<ABBR>.md`
+// index and the regular `tickets/<ABBR>-NNN.md` files. Nothing deeper; a directory outside the
+// grammar is not a plan folder. Eligibility is the Dirent's own (`isFile()` / `isDirectory()` on the
+// entry ITSELF, so a symlink is neither).
+// Returns `{ files, dirError }`; each file is `{ plan, name, file }` (`plan` = the monolith's file
+// name or the folder's ABBR, so a caller can count plans). A readdir error is NEVER thrown and never
+// read as "no plans": an unreadable active/ returns at once with no files; an unreadable plan folder
+// (or its tickets/) is recorded as the FIRST `dirError` while the listing goes on, so a caller that
+// must not decide on a partial view (Gate 2) can refuse to, and one that only reports what it saw
+// (setup) still can. A folder with no `tickets/` entry is a folder without ticket files, not an error.
+function listActivePlanFiles(activeDir) {
+  let entries;
+  try {
+    entries = fs.readdirSync(activeDir, { withFileTypes: true });
+  } catch (e) {
+    return { files: [], dirError: e };
+  }
+  const files = [];
+  let dirError = null;
+  for (const entry of entries) {
+    if (entry.isFile()) {
+      if (PLAN_FILE_RE.test(entry.name)) files.push({ plan: entry.name, name: entry.name, file: path.join(activeDir, entry.name) });
+      continue;
+    }
+    if (!entry.isDirectory() || !PLAN_ABBR_RE.test(entry.name)) continue;
+    const abbr = entry.name;
+    const folder = path.join(activeDir, abbr);
+    let inner;
+    try {
+      inner = fs.readdirSync(folder, { withFileTypes: true });
+    } catch (e) {
+      if (dirError === null) dirError = e;
+      continue;
+    }
+    const index = `PLAN_${abbr}.md`;
+    let hasTickets = false;
+    for (const f of inner) {
+      if (f.name === index && f.isFile()) files.push({ plan: abbr, name: `${abbr}/${index}`, file: path.join(folder, index) });
+      else if (f.name === 'tickets' && f.isDirectory()) hasTickets = true;
+    }
+    if (!hasTickets) continue;
+    const ticketsDir = path.join(folder, 'tickets');
+    let tickets;
+    try {
+      tickets = fs.readdirSync(ticketsDir, { withFileTypes: true });
+    } catch (e) {
+      if (dirError === null) dirError = e;
+      continue;
+    }
+    for (const t of tickets) {
+      if (t.isFile() && PLAN_TICKET_FILE_RE.test(t.name)) files.push({ plan: abbr, name: `${abbr}/tickets/${t.name}`, file: path.join(ticketsDir, t.name) });
+    }
+  }
+  return { files, dirError };
+}
+
 // Any unexpected throw fails CLOSED (deny) for the PreToolUse gate.
 function runFailClosed(fn) {
   fn().catch((err) => denyPreTool(`AIWF gate error (fail-closed): ${err && err.message ? err.message : String(err)}`));
@@ -130,4 +227,5 @@ function runFailAsk(fn) {
 module.exports = {
   readStdin, parseInput, denyPreTool, askPreTool, allowPassthrough, runFailClosed, runFailAsk,
   escapeRe, refRegex,
+  PLAN_ABBR_RE, PLAN_FILE_RE, PLAN_TICKET_FILE_RE, targetedPlanCandidates, listActivePlanFiles,
 };

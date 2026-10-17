@@ -77,17 +77,18 @@ Three constraints worth stating before the operator answers:
   creates all four;
 - `enforcement.dispatchGate` has exactly two values. `always` (the factory one) raises the Yes/No
   dialog on **every** Writer dispatch. `off-plan` raises it only when the brief's `Ticket: <REF>`
-  line names no ticket in `<plansDir>/active/PLAN_*.md` - quieter, and it only means anything in a
-  project that really keeps its plans there.
+  line names no ticket in `<plansDir>/active/PLAN_*.md` or `active/<ABBR>/` - quieter, and it only
+  means anything in a project that really keeps its plans there.
 
 **The two path questions look at the project before they are answered** - the offered default first,
 then whatever is typed - and each can print one warning line:
 
-- `N existing PLAN_*.md in <plansDir>/active - Gate 2 off-plan will read them as active pnp plans;
-  pick another paths.plansDir if they are not.` This is the whole reason the warning exists: in
-  `off-plan` mode Gate 2 counts a ticket as planned when its `<REF>` appears in a `PLAN_*.md` file
-  under that directory, and it stays **silent** on a dispatch that names one. Pointed at a directory
-  of somebody else's plans, the gate goes quiet on refs nobody in this loop ever approved - so an
+- `N existing plan(s) - PLAN_*.md or <ABBR>/ folders - in <plansDir>/active - Gate 2 off-plan will
+  read them as active pnp plans; pick another paths.plansDir if they are not.` This is the whole
+  reason the warning exists: in `off-plan` mode Gate 2 counts a ticket as planned when its `<REF>`
+  appears in a `PLAN_*.md` file or an `<ABBR>/` plan folder under that directory, and it stays
+  **silent** on a dispatch that names one. Pointed at a directory of somebody else's plans, the
+  gate goes quiet on refs nobody in this loop ever approved - so an
   installation that inherits a full plans directory must be a deliberate answer rather than a
   default nobody looked at.
 - `<overridesDoc> already exists - setup seeds that document once and never rewrites it ...` - the

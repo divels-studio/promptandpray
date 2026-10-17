@@ -793,7 +793,8 @@ function sectionGate2Mode(tmpRoot) {
   let n = 0;
   // `configRaw === null` writes no config file; `plans === null` builds no plans directory at all.
   // A `plans` entry is { dir: 'a/b/c', files: { 'PLAN_X.md': <text> | null } }, where a null text
-  // makes that name a DIRECTORY instead of a file.
+  // makes that name a DIRECTORY instead of a file. A folder plan is two entries: `active/<ABBR>`
+  // with its index, and `active/<ABBR>/tickets` with its ticket files.
   const mkProject = (name, configRaw, plans) => {
     const root = path.join(tmpRoot, `g2m-${name}-${n += 1}`);
     fs.mkdirSync(path.join(root, '.claude', 'aiwf-native'), { recursive: true });
@@ -832,7 +833,8 @@ function sectionGate2Mode(tmpRoot) {
   {
     const r = D(offPlan, 'Ticket: DEMO-2\n\nImplement the thing.');
     check('off-plan + a ref in NO active PLAN -> ASK naming the ref and the directory searched',
-      ask(r) && r.reason.includes('DEMO-2') && r.reason.includes('PLAN_*.md'), r.reason.slice(0, 70));
+      ask(r) && r.reason.includes('DEMO-2') && r.reason.includes('PLAN_*.md') && r.reason.includes('<ABBR>/ plan folders'),
+      r.reason.slice(0, 120));
   }
   {
     const r = D(offPlan, 'Implement the thing. No ticket line anywhere.');
@@ -936,6 +938,73 @@ function sectionGate2Mode(tmpRoot) {
     for (const f of bad) { try { fs.chmodSync(f, 0o600); } catch (e) { /* best-effort, for the cleanup */ } }
   }
 
+  // --- a plan FOLDER (active/<ABBR>/) is found as well as a monolith file ------------------------
+  // The folder shape is an index `<ABBR>/PLAN_<ABBR>.md` plus ticket files `<ABBR>/tickets/<ABBR>-NNN.md`,
+  // read through the predicate the gate shares with setup and this self-check (aiwf-lib.js). Every
+  // case is a pair with the one beside it: the same shape, one fact changed.
+  const FOLDER = `${DEFAULT_PLANS}/DEMO`;
+  const folderPlan = mkProject('folderplan', cfg(mode('off-plan')), [
+    { dir: FOLDER, files: { 'PLAN_DEMO.md': planWith('DEMO-007') } },
+    { dir: `${FOLDER}/tickets`, files: { 'DEMO-007.md': '# DEMO-007 - the ticket file\n' } },
+  ]);
+  check('off-plan + the ref in a FOLDER plan (active/DEMO/PLAN_DEMO.md + tickets/DEMO-007.md) -> SILENT',
+    silent(D(folderPlan, brief('DEMO-007'))));
+  {
+    const r = D(folderPlan, brief('DEMO-008'));
+    check('off-plan + that folder plan and a ref it does not carry -> ASK, the reason naming BOTH plan shapes (the control)',
+      ask(r) && r.reason.includes('DEMO-008') && r.reason.includes('PLAN_*.md') && r.reason.includes('<ABBR>/ plan folders'),
+      r.reason.slice(0, 120));
+  }
+  const ticketOnly = mkProject('folder-ticketonly', cfg(mode('off-plan')),
+    [{ dir: `${FOLDER}/tickets`, files: { 'DEMO-007.md': '# DEMO-007 - a ticket file whose index is absent\n' } }]);
+  check('off-plan + the ref ONLY in active/DEMO/tickets/DEMO-007.md, no index -> SILENT (the third candidate; a missing index is the plan-ref section\'s finding, not the lookup\'s)',
+    silent(D(ticketOnly, brief('DEMO-007'))));
+  const ticketOffGrammar = mkProject('folder-ticket-offgrammar', cfg(mode('off-plan')),
+    [{ dir: `${FOLDER}/tickets`, files: { 'DEMO-7.md': '# DEMO-7 - a ticket file outside the <ABBR>-NNN grammar\n' } }]);
+  check('off-plan + the same shape with tickets/DEMO-7.md (not <ABBR>-NNN) -> ASK (the control: a ticket file outside the grammar is read neither by the targeted path nor by the scan)',
+    ask(D(ticketOffGrammar, brief('DEMO-7'))));
+  const folderOffGrammar = mkProject('folder-offgrammar', cfg(mode('off-plan')), [
+    { dir: `${DEFAULT_PLANS}/DEMO1`, files: { 'PLAN_DEMO1.md': planWith('DEMO1-007') } },
+    { dir: `${DEFAULT_PLANS}/DEMO1/tickets`, files: { 'DEMO1-007.md': '# DEMO1-007 - x\n' } },
+  ]);
+  check('off-plan + a directory whose name is outside the ABBR grammar (DEMO1/) -> ASK (not a plan folder, so never read)',
+    ask(D(folderOffGrammar, brief('DEMO1-007'))));
+  {
+    const bare = mkProject('folder-bare', cfg(mode('off-plan')), [
+      { dir: FOLDER, files: { 'DECISIONS.md': '- D-01 names DEMO-007 in passing.\n' } },
+      { dir: `${FOLDER}/records`, files: { 'DEMO-007.md': '# DEMO-007 - a completion record\n' } },
+    ]);
+    const r = D(bare, brief('DEMO-007'));
+    check('off-plan + a folder with NO index and NO ticket file (the ref only in DECISIONS.md and records/) -> ASK naming both shapes',
+      ask(r) && r.reason.includes('DEMO-007') && r.reason.includes('PLAN_*.md') && r.reason.includes('<ABBR>/ plan folders'),
+      r.reason.slice(0, 120));
+  }
+  {
+    // The folder-level twin of the unreadable-directory ask: a plan folder that cannot be listed
+    // asks exactly as an unreadable active/ does - even when the ref is found in a monolith beside
+    // it, because the targeted hit's probe lists the same set the scan would. Exercised only where
+    // the platform really refuses the listing (chmod is advisory on Windows); otherwise a NOTE.
+    const locked = mkProject('folder-unlistable', cfg(mode('off-plan')), [
+      { dir: DEFAULT_PLANS, files: { 'PLAN_DEMO.md': planWith('DEMO-1') } },
+      { dir: `${DEFAULT_PLANS}/ZZ`, files: { 'PLAN_ZZ.md': '# PLAN ZZ\n' } },
+    ]);
+    check('off-plan + the ref in PLAN_DEMO.md beside a LISTABLE plan folder -> silent (the control for the unlistable case)',
+      silent(D(locked, TICKET)));
+    const folder = path.join(locked, ...DEFAULT_PLANS.split('/'), 'ZZ');
+    let unlistable = false;
+    try { fs.chmodSync(folder, 0o000); } catch (e) { /* the platform refused the chmod itself */ }
+    try { fs.readdirSync(folder); } catch (e) { unlistable = true; }
+    if (!unlistable) {
+      note('a plan FOLDER that cannot be listed -> ASK (dirError), never a silent clear',
+        'this platform cannot make a directory unlistable to its own owner (chmod is advisory here), so the folder-level dirError branch was not exercised; the top-level ENOENT case above reaches the same ask end to end');
+    } else {
+      const r = D(locked, TICKET);
+      check('off-plan + the same ref while that plan folder CANNOT be listed -> ASK (a lookup that could not look is not a yes)',
+        ask(r) && r.reason.includes('missing or unreadable'), r.reason.slice(0, 120));
+    }
+    try { fs.chmodSync(folder, 0o700); } catch (e) { /* best-effort, for the cleanup */ }
+  }
+
   // --- every non-"off-plan" state is the ALWAYS mode -------------------------------------------
   // Each of these carries a plan that DOES hold the ref, so the only reason they ask is the mode
   // itself - the pair with the first check of this section is what proves that.
@@ -977,8 +1046,9 @@ function sectionGate2Mode(tmpRoot) {
 //      other plan content-read - while a plan named before the convention is still found by the
 //      fallback scan. The lookup helper is required from the gate itself, so this reads the
 //      production path rather than a copy of its logic. What the helper DOES still do on a targeted
-//      hit is enumerate the directory's NAMES and discard them, so that a directory it cannot read
-//      asks exactly as it did before the targeted path existed;
+//      hit is enumerate the plan set's NAMES - the same listing the scan makes, plan folders
+//      included - and discard them, so that a directory it cannot read asks exactly as it did before
+//      the targeted path existed;
 //   2. a plan that ALREADY has the `PLAN_<ABBR>.md` shape carries no ticket heading with a foreign
 //      prefix. Deliberately not retroactive: a file whose name does not match the shape (a legacy
 //      `PLAN_TOPIC_NAME.md`, or a one-letter `PLAN_A.md` - the grammar is 2-8 uppercase letters) is
@@ -986,11 +1056,16 @@ function sectionGate2Mode(tmpRoot) {
 //      dropped. The check says how many files and headings it really examined so an empty run cannot
 //      read as a green one, and an APPLICABLE plan it could not read is a finding, not a skip: a
 //      mixed directory must not pass while the one file that mattered went unchecked.
-const PLAN_FILE_RE = /^PLAN_.*\.md$/;               // what Gate 2 itself scans
-// The subset the naming rule binds. The grammar is the doctrine's own (payload docs/WORKFLOW.md,
-// "one prefix per plan": 2-8 uppercase letters, and a three-digit number) - prose and pattern have
-// to say the same thing, or one of them is decoration.
-const PLAN_ABBR_FILE_RE = /^PLAN_([A-Z]{2,8})\.md$/;
+//   A plan may also be a FOLDER, `active/<ABBR>/` (index `PLAN_<ABBR>.md`, `tickets/<ABBR>-NNN.md`):
+//   a directory whose name matches the ABBR grammar is applicable - its index must exist, the index's
+//   ticket headings and every ticket file name carry the folder's own ABBR. A directory whose name is
+//   outside the grammar is not a plan folder and stays ignored, exactly as Gate 2 ignores it.
+// The plan-shape grammar is NOT restated here: it is required from the payload's aiwf-lib.js, the
+// same definitions Gate 2 and setup read (PLAN_FILE_RE, PLAN_ABBR_RE, PLAN_TICKET_FILE_RE). The
+// grammar is the doctrine's own (payload docs/WORKFLOW.md, "one prefix per plan": 2-8 uppercase
+// letters, and a three-digit number) - prose and pattern have to say the same thing, or one of them
+// is decoration.
+const AIWF_LIB = path.join(PLUGIN_ROOT, 'scripts', 'engine', 'aiwf-lib.js');
 // A ticket heading: any heading level from ## to ####, then `<PREFIX>-<NNN>` as the FIRST token.
 // `\S+` before the number so a prefix that itself contains a dash is read whole (`X-DEMO-001` is a
 // heading whose prefix is `X-DEMO`, not `X`), and `(?!\d)` so a four-digit tail is not a three-digit
@@ -1001,8 +1076,34 @@ const TICKET_HEADING_RE = /^#{2,4} +(\S+)-(\d{3})(?!\d)/;
 // actually read, and the caller prints both. FAILS CLOSED on an applicable plan it cannot read - an
 // entry whose NAME says the rule binds it but whose content never reached the matcher is reported,
 // because "no mismatch found" in a file nobody could open is not a statement about that file.
-function planRefNamingFindings(activeDir) {
-  const out = { files: 0, headings: 0, findings: [], skipped: [], unreadable: [], dirError: null };
+function planRefNamingFindings(activeDir, lib) {
+  const out = { files: 0, headings: 0, folders: 0, ticketFiles: 0, findings: [], skipped: [], unreadable: [], dirError: null };
+  const byName = (a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+  // One plan file's ticket headings against its abbreviation; `label` is the name findings carry.
+  const judgeIndex = (label, isFile, file, abbr) => {
+    if (!isFile) {
+      out.unreadable.push(label);
+      out.findings.push(`${label}: applicable by name but is not a regular file, so its ticket headings were never checked`);
+      return;
+    }
+    const text = readText(file);
+    if (text === null) {
+      out.unreadable.push(label);
+      out.findings.push(`${label}: applicable by name but could not be read, so its ticket headings were never checked`);
+      return;
+    }
+    out.files += 1;
+    const lines = text.split(/\r?\n/);
+    for (let i = 0; i < lines.length; i += 1) {
+      const h = TICKET_HEADING_RE.exec(lines[i]);
+      if (!h) continue;
+      out.headings += 1;
+      if (h[1] !== abbr) out.findings.push(`${label}:${i + 1} ticket "${h[1]}-${h[2]}" in a plan whose abbreviation is ${abbr}`);
+    }
+  };
+  const list = (dir) => {
+    try { return fs.readdirSync(dir, { withFileTypes: true }).sort(byName); } catch (e) { return null; }
+  };
   let entries;
   try {
     entries = fs.readdirSync(activeDir, { withFileTypes: true });
@@ -1010,32 +1111,45 @@ function planRefNamingFindings(activeDir) {
     out.dirError = e && e.message ? e.message : String(e);
     return out;
   }
-  for (const entry of entries.slice().sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
-    if (!PLAN_FILE_RE.test(entry.name)) continue; // not a plan file name at all
-    const named = PLAN_ABBR_FILE_RE.exec(entry.name);
+  for (const entry of entries.slice().sort(byName)) {
+    // A FOLDER plan: a directory whose name is an ABBR. Any other directory that is not PLAN_*.md by
+    // name is not a plan folder and is ignored, as Gate 2 ignores it.
+    if (entry.isDirectory() && lib.PLAN_ABBR_RE.test(entry.name)) {
+      const abbr = entry.name;
+      const folder = path.join(activeDir, abbr);
+      const index = `PLAN_${abbr}.md`;
+      out.folders += 1;
+      const inner = list(folder);
+      if (inner === null) {
+        out.unreadable.push(`${abbr}/`);
+        out.findings.push(`${abbr}/: a plan folder by name that could not be listed, so its index and ticket files were never checked`);
+        continue;
+      }
+      const idx = inner.find((e) => e.name === index);
+      if (!idx) out.findings.push(`${abbr}/: a plan folder with no ${index} index`);
+      else judgeIndex(`${abbr}/${index}`, idx.isFile(), path.join(folder, index), abbr);
+      const ticketsEntry = inner.find((e) => e.name === 'tickets' && e.isDirectory());
+      if (!ticketsEntry) continue;
+      const tickets = list(path.join(folder, 'tickets'));
+      if (tickets === null) {
+        out.unreadable.push(`${abbr}/tickets/`);
+        out.findings.push(`${abbr}/tickets/: could not be listed, so its ticket file names were never checked`);
+        continue;
+      }
+      for (const t of tickets) {
+        const m = t.isFile() ? lib.PLAN_TICKET_FILE_RE.exec(t.name) : null;
+        if (!m) continue; // not a ticket file by name: Gate 2 does not read it either
+        out.ticketFiles += 1;
+        if (m[1] !== abbr) out.findings.push(`${abbr}/tickets/${t.name}: ticket file "${m[1]}-${m[2]}" in a plan whose abbreviation is ${abbr}`);
+      }
+      continue;
+    }
+    if (!lib.PLAN_FILE_RE.test(entry.name)) continue; // not a plan file name at all
+    const named = /^PLAN_(.*)\.md$/.exec(entry.name);
     // Outside the grammar -> outside the rule, whatever the entry is. Recorded, never judged.
-    if (!named) { out.skipped.push(entry.name); continue; }
+    if (!named || !lib.PLAN_ABBR_RE.test(named[1])) { out.skipped.push(entry.name); continue; }
     // Applicable by NAME. From here every exit is either a checked file or a finding.
-    if (!entry.isFile()) {
-      out.unreadable.push(entry.name);
-      out.findings.push(`${entry.name}: applicable by name but is not a regular file, so its ticket headings were never checked`);
-      continue;
-    }
-    const text = readText(path.join(activeDir, entry.name));
-    if (text === null) {
-      out.unreadable.push(entry.name);
-      out.findings.push(`${entry.name}: applicable by name but could not be read, so its ticket headings were never checked`);
-      continue;
-    }
-    out.files += 1;
-    const abbr = named[1];
-    const lines = text.split(/\r?\n/);
-    for (let i = 0; i < lines.length; i += 1) {
-      const h = TICKET_HEADING_RE.exec(lines[i]);
-      if (!h) continue;
-      out.headings += 1;
-      if (h[1] !== abbr) out.findings.push(`${entry.name}:${i + 1} ticket "${h[1]}-${h[2]}" in a plan whose abbreviation is ${abbr}`);
-    }
+    judgeIndex(entry.name, entry.isFile(), path.join(activeDir, entry.name), named[1]);
   }
   return out;
 }
@@ -1046,18 +1160,28 @@ function sectionPlanRefNaming(tmpRoot, projectRoot) {
   try { gate = require(GATE2); } catch (e) { gate = null; }
   if (!check('Gate 2 exports its ticket lookup (so these checks run the REAL helper, not a copy of it)',
     gate != null && typeof gate.lookupTicketRef === 'function')) return;
+  let lib = null;
+  try { lib = require(AIWF_LIB); } catch (e) { lib = null; }
+  if (!check('aiwf-lib.js exports the ONE plan-shape predicate Gate 2, setup and this section read (no mirrored grammar)',
+    lib != null && lib.PLAN_ABBR_RE instanceof RegExp && lib.PLAN_FILE_RE instanceof RegExp
+    && lib.PLAN_TICKET_FILE_RE instanceof RegExp && typeof lib.targetedPlanCandidates === 'function'
+    && typeof lib.listActivePlanFiles === 'function')) return;
 
   let n = 0;
   // A `null` text makes that name a DIRECTORY instead of a file - the portable stand-in for "an
   // entry that bears a plan's name and is not a plan file" (the same device the Gate 2 MODE section
-  // uses, because Windows has no cheap symlinks and chmod is advisory here).
+  // uses, because Windows has no cheap symlinks and chmod is advisory here). A name may carry `/`
+  // (`AB/tickets/AB-001.md`), which is how a folder plan is written.
+  const put = (dir, file, text) => {
+    const target = path.join(dir, ...file.split('/'));
+    if (text === null) { fs.mkdirSync(target, { recursive: true }); return; }
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, text, 'utf8');
+  };
   const mkDir = (name, files) => {
     const dir = path.join(tmpRoot, `refnaming-${name}-${n += 1}`);
     fs.mkdirSync(dir, { recursive: true });
-    for (const [file, text] of Object.entries(files)) {
-      if (text === null) fs.mkdirSync(path.join(dir, file), { recursive: true });
-      else fs.writeFileSync(path.join(dir, file), text, 'utf8');
-    }
+    for (const [file, text] of Object.entries(files)) put(dir, file, text);
     return dir;
   };
   // The same fixture wrapped in a minimal off-plan PROJECT, so the same state can also be judged by
@@ -1070,10 +1194,7 @@ function sectionPlanRefNaming(tmpRoot, projectRoot) {
     fs.writeFileSync(path.join(root, '.claude', 'aiwf-native', 'aiwf.config.json'), JSON.stringify({
       project: { name: 'RefNaming' }, enforcement: { routeWriteGuard: true, dispatchGate: 'off-plan' },
     }), 'utf8');
-    for (const [file, text] of Object.entries(files)) {
-      if (text === null) fs.mkdirSync(path.join(activeDir, file), { recursive: true });
-      else fs.writeFileSync(path.join(activeDir, file), text, 'utf8');
-    }
+    for (const [file, text] of Object.entries(files)) put(activeDir, file, text);
     return { root, activeDir };
   };
   const dispatch = (root, ref) => runHook(GATE2, {
@@ -1151,6 +1272,63 @@ function sectionPlanRefNaming(tmpRoot, projectRoot) {
       dispatch(p.root, 'AB-001').decision === 'allow(passthrough)');
   }
 
+  // --- 1c. the FOLDER shape: three targeted candidates in order, and a scan one level deep -----
+  // The candidates are `PLAN_<ABBR>.md`, `<ABBR>/PLAN_<ABBR>.md`, `<ABBR>/tickets/<REF>.md`
+  // (aiwf-lib.js targetedPlanCandidates); the scan descends into `<ABBR>/` directories only, and
+  // there reads the index and the `tickets/<ABBR>-NNN.md` files - nothing deeper, nothing else.
+  {
+    const dir = mkDir('folder-index', {
+      'PLAN_AA.md': DECOY,
+      'AB/PLAN_AB.md': '# PLAN AB\n\n## AB-001 - the ticket this folder plan carries\n\nBody.\n',
+      'AB/tickets/AB-001.md': '# AB-001 - the ticket file\n',
+    });
+    const r = gate.lookupTicketRef(dir, 'AB-001');
+    check('AB-001 is found in the folder index AB/PLAN_AB.md (the second candidate) and nothing else was content-read',
+      r.found === true && eq(r.filesRead, ['AB/PLAN_AB.md']) && r.dirError === null,
+      `found=${r.found} read=${JSON.stringify(r.filesRead)}`);
+  }
+  {
+    const dir = mkDir('folder-ticket', {
+      'PLAN_AA.md': DECOY,
+      'AB/PLAN_AB.md': '# PLAN AB\n\nNo ticket heading yet.\n',
+      'AB/tickets/AB-001.md': '# AB-001 - the ticket file\n',
+    });
+    const r = gate.lookupTicketRef(dir, 'AB-001');
+    check('an index that does not carry the ref is read, then the third candidate AB/tickets/AB-001.md clears it - and no other plan was read',
+      r.found === true && eq(r.filesRead, ['AB/PLAN_AB.md', 'AB/tickets/AB-001.md']) && r.dirError === null,
+      `found=${r.found} read=${JSON.stringify(r.filesRead)}`);
+  }
+  {
+    // The folder candidates take the scan's eligibility too: a DIRECTORY bearing the index's or
+    // the ticket file's name clears nothing.
+    const p = mkProject('folder-not-a-file', { 'AB/PLAN_AB.md': null, 'AB/tickets/AB-001.md': null });
+    const r = gate.lookupTicketRef(p.activeDir, 'AB-001');
+    check('directories named AB/PLAN_AB.md and AB/tickets/AB-001.md do NOT clear AB-001 (the scan\'s isFile test holds in a folder)',
+      r.found === false && eq(r.filesRead, []) && r.dirError === null, `found=${r.found} read=${JSON.stringify(r.filesRead)}`);
+    const hook = dispatch(p.root, 'AB-001');
+    check('and the gate ASKS on it',
+      hook.decision === 'ask' && hook.exit === 0 && hook.reason.includes('AB-001'), `${hook.decision} - ${hook.reason.slice(0, 60)}`);
+  }
+  {
+    const files = {
+      'CD/PLAN_CD.md': '# PLAN CD\n\n## CD-001 - a ticket whose body names LEG-007\n\nBody.\n',
+      'CD/DECISIONS.md': '- D-01 names ZQ-001.\n',
+      'CD/RESEARCH.md': 'ZQ-001 is mentioned here.\n',
+      'CD/records/CD-001.md': '# CD-001 record - names ZQ-001\n',
+      'CD/tickets/CD-001.md': '# CD-001 - the ticket file\n',
+      'CD/tickets/notes.md': 'ZQ-001 in a file outside the ticket grammar.\n',
+      'NOTES_X/PLAN_NOTES_X.md': '## ZQ-001 - in a directory outside the ABBR grammar\n',
+    };
+    const dir = mkDir('folder-scan', files);
+    const r = gate.lookupTicketRef(dir, 'LEG-007');
+    check('the fallback scan descends into a folder plan: LEG-007 is found in CD/PLAN_CD.md',
+      r.found === true && eq(r.filesRead, ['CD/PLAN_CD.md']), `found=${r.found} read=${JSON.stringify(r.filesRead)}`);
+    const z = gate.lookupTicketRef(dir, 'ZQ-001');
+    check('the control: a ref only in DECISIONS.md, RESEARCH.md, records/, a non-ticket file or a non-ABBR directory is NOT found - only the index and the ticket file were read',
+      z.found === false && eq(z.filesRead, ['CD/PLAN_CD.md', 'CD/tickets/CD-001.md']) && z.dirError === null,
+      `found=${z.found} read=${JSON.stringify(z.filesRead)}`);
+  }
+
   // --- 2. the fallback: a plan named before the convention is still found ----------------------
   {
     const p = mkProject('legacy-name', {
@@ -1175,7 +1353,7 @@ function sectionPlanRefNaming(tmpRoot, projectRoot) {
   };
   {
     const dir = mkDir('naming-clean', CLEAN);
-    const f = planRefNamingFindings(dir);
+    const f = planRefNamingFindings(dir, lib);
     check('a conforming active/ directory produces NO naming finding - and it really read something',
       f.findings.length === 0 && f.files === 1 && f.headings === 2 && f.dirError === null,
       `${f.files} file(s), ${f.headings} heading(s) checked, ${f.findings.length} finding(s)`);
@@ -1186,7 +1364,7 @@ function sectionPlanRefNaming(tmpRoot, projectRoot) {
     const dir = mkDir('naming-sabotaged', Object.assign({}, CLEAN, {
       'PLAN_AB.md': CLEAN['PLAN_AB.md'] + '\n### ZZ-001 - a ticket carrying another plan\'s prefix\n\nBody.\n',
     }));
-    const f = planRefNamingFindings(dir);
+    const f = planRefNamingFindings(dir, lib);
     check('the control: a foreign prefix inside PLAN_AB.md is reported, naming both the ref and the abbreviation',
       f.findings.length === 1 && f.findings[0].includes('ZZ-001') && f.findings[0].includes('AB'),
       f.findings.length === 1 ? `FAIL as required - ${f.findings[0]}` : `${f.findings.length} finding(s): ${f.findings.join('; ')}`);
@@ -1196,10 +1374,52 @@ function sectionPlanRefNaming(tmpRoot, projectRoot) {
     // at all. Silently skipping it would let a mixed directory pass while the one file the rule
     // binds went unchecked - a green that means "I did not look".
     const dir = mkDir('naming-unreadable', Object.assign({}, CLEAN, { 'PLAN_XX.md': null }));
-    const f = planRefNamingFindings(dir);
+    const f = planRefNamingFindings(dir, lib);
     check('the control: an applicable PLAN_XX.md that is not a regular file is a FINDING, not a skip',
       f.findings.length === 1 && f.findings[0].includes('PLAN_XX.md') && eq(f.unreadable, ['PLAN_XX.md'])
       && !f.skipped.includes('PLAN_XX.md') && f.files === 1,
+      f.findings.length === 1 ? `FAIL as required - ${f.findings[0]}` : `${f.findings.length} finding(s): ${f.findings.join('; ')}`);
+  }
+
+  // --- 3b. the naming assertion on FOLDER plans, both legs --------------------------------------
+  const FOLDER_CLEAN = {
+    'AB/PLAN_AB.md': '# PLAN AB\n\n## AB-001 - the first ticket\n\nBody.\n',
+    'AB/DECISIONS.md': '- D-01 a decision.\n',
+    'AB/RESEARCH.md': '## QQ-001 - a heading in RESEARCH.md, which is not the index\n',
+    'AB/tickets/AB-001.md': '# AB-001 - the first ticket file\n',
+    'AB/tickets/AB-002.md': '# AB-002 - the second ticket file\n',
+    'AB/records/AB-001.md': '# AB-001 - its completion record\n',
+    'misc/PLAN_ZZ.md': '## QQ-001 - a foreign prefix in a directory outside the ABBR grammar\n',
+  };
+  {
+    const f = planRefNamingFindings(mkDir('naming-folder-clean', FOLDER_CLEAN), lib);
+    check('a valid FOLDER plan produces NO naming finding - and its index and ticket files were really read (a directory outside the ABBR grammar is ignored)',
+      f.findings.length === 0 && f.folders === 1 && f.files === 1 && f.headings === 1 && f.ticketFiles === 2 && f.dirError === null,
+      `${f.folders} folder(s), ${f.files} index file(s), ${f.headings} heading(s), ${f.ticketFiles} ticket file(s), ${f.findings.length} finding(s): ${f.findings.join('; ')}`);
+  }
+  {
+    const f = planRefNamingFindings(mkDir('naming-folder-noindex', {
+      'CD/tickets/CD-001.md': '# CD-001 - a ticket file in a folder with no index\n',
+      'CD/DECISIONS.md': '- D-01 a decision.\n',
+    }), lib);
+    check('the control: a plan folder whose PLAN_<ABBR>.md index is missing is a FINDING',
+      f.findings.length === 1 && f.findings[0].includes('CD/') && f.findings[0].includes('PLAN_CD.md'),
+      f.findings.length === 1 ? `FAIL as required - ${f.findings[0]}` : `${f.findings.length} finding(s): ${f.findings.join('; ')}`);
+  }
+  {
+    const f = planRefNamingFindings(mkDir('naming-folder-foreign-ticket', Object.assign({}, FOLDER_CLEAN, {
+      'AB/tickets/ZZ-001.md': '# ZZ-001 - a ticket file carrying another plan\'s prefix\n',
+    })), lib);
+    check('the control: a ticket file with a FOREIGN ref in tickets/ is reported, naming both the ref and the abbreviation',
+      f.findings.length === 1 && f.findings[0].includes('ZZ-001') && f.findings[0].includes('AB'),
+      f.findings.length === 1 ? `FAIL as required - ${f.findings[0]}` : `${f.findings.length} finding(s): ${f.findings.join('; ')}`);
+  }
+  {
+    const f = planRefNamingFindings(mkDir('naming-folder-foreign-heading', Object.assign({}, FOLDER_CLEAN, {
+      'AB/PLAN_AB.md': FOLDER_CLEAN['AB/PLAN_AB.md'] + '\n### ZZ-002 - a heading carrying another plan\'s prefix\n',
+    })), lib);
+    check('the control: a foreign ticket heading inside a folder index is reported like one in a monolith',
+      f.findings.length === 1 && f.findings[0].includes('ZZ-002') && f.findings[0].includes('AB/PLAN_AB.md'),
       f.findings.length === 1 ? `FAIL as required - ${f.findings[0]}` : `${f.findings.length} finding(s): ${f.findings.join('; ')}`);
   }
 
@@ -1209,20 +1429,21 @@ function sectionPlanRefNaming(tmpRoot, projectRoot) {
     const plansDir = (cfg && cfg.paths && typeof cfg.paths.plansDir === 'string' && cfg.paths.plansDir.trim() !== '')
       ? cfg.paths.plansDir.trim() : 'docs/backlogs';
     const activeDir = path.join(projectRoot, ...plansDir.split('/'), 'active');
-    const f = planRefNamingFindings(activeDir);
+    const f = planRefNamingFindings(activeDir, lib);
     if (f.dirError !== null) {
       note(`the active PLAN directory ${plansDir}/active could not be read`, f.dirError);
-    } else if (f.files === 0 && f.findings.length === 0) {
+    } else if (f.files === 0 && f.ticketFiles === 0 && f.findings.length === 0) {
       // Nothing the rule binds AND nothing it failed to read: the honest answer is "not exercised".
       note('this project\'s active plans follow the PLAN_<ABBR>.md convention',
-        `no file matching PLAN_<ABBR>.md in ${plansDir}/active (${f.skipped.length} plan file(s) are outside the grammar), so there was nothing to judge`);
+        `no file matching PLAN_<ABBR>.md and no <ABBR>/ plan folder in ${plansDir}/active (${f.skipped.length} plan file(s) are outside the grammar), so there was nothing to judge`);
     } else {
       // One PASS condition for both failure directions: a foreign prefix in an applicable plan, and
       // an applicable plan that was never read. A file that mattered and went unchecked cannot hide
       // behind the count of the ones that did.
       check(`this project's active plans carry only their own ticket prefix, and every applicable plan was read (${plansDir}/active)`,
         f.findings.length === 0,
-        f.findings.length ? f.findings.slice(0, 4).join('; ') : `${f.files} plan file(s), ${f.headings} ticket heading(s) checked`);
+        f.findings.length ? f.findings.slice(0, 4).join('; ')
+          : `${f.files} plan file(s), ${f.folders} plan folder(s), ${f.headings} ticket heading(s), ${f.ticketFiles} ticket file(s) checked`);
     }
     if (f.skipped.length) {
       observation('active plan files outside the PLAN_<ABBR>.md grammar are outside the naming assertion',

@@ -235,7 +235,7 @@
           "type": "string",
           "enum": ["always", "off-plan"],
           "default": "always",
-          "description": "Gate 2. \"always\" (or a config/key the hook cannot read) = every Writer dispatch raises the native Yes/No dialog. \"off-plan\" = a dispatch whose brief carries a Ticket: <REF> line naming a ticket found in <plansDir>/active/PLAN_*.md passes silently, while a missing line, a ref in no active PLAN or an unreadable plans directory raises the dialog. Only the exact string \"off-plan\" leaves the always mode; Gate 1 (non-writer subagents cannot write) is never affected by this key."
+          "description": "Gate 2. \"always\" (or a config/key the hook cannot read) = every Writer dispatch raises the native Yes/No dialog. \"off-plan\" = a dispatch whose brief carries a Ticket: <REF> line naming a ticket found in <plansDir>/active/PLAN_*.md or a plan folder <plansDir>/active/<ABBR>/ (its PLAN_<ABBR>.md index or tickets/<ABBR>-NNN.md) passes silently, while a missing line, a ref in no active PLAN or an unreadable plans directory raises the dialog. Only the exact string \"off-plan\" leaves the always mode; Gate 1 (non-writer subagents cannot write) is never affected by this key."
         },
         "routeWriteGuard": {
           "type": "boolean",
@@ -298,7 +298,7 @@
           "type": "string",
           "minLength": 1,
           "default": "docs/backlogs",
-          "description": "The PARENT of active/, archive/, drafts/ and readiness/. A plan ENTERS the repo into <plansDir>/active/ at approval and LEAVES into <plansDir>/archive/ when every ticket is closed; setup creates all four; a draft lives in drafts/ while the plan is one, and the plan's readiness history lands in readiness/<ABBR>/ with the plan. A tracked path: under the scratch directory or any ignored path nothing here reaches git."
+          "description": "The PARENT of active/, archive/, drafts/ and readiness/. A plan ENTERS the repo into <plansDir>/active/ at approval (a PLAN_<ABBR>.md file or an <ABBR>/ folder) and LEAVES into <plansDir>/archive/ when every ticket is closed (a folder moves as a directory); setup creates all four; a draft lives in drafts/ while the plan is one, and the plan's readiness history lands in readiness/<ABBR>/ with the plan. A tracked path: under the scratch directory or any ignored path nothing here reaches git."
         },
         "overridesDoc": {
           "type": "string",

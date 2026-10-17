@@ -456,7 +456,8 @@ per revision), `own-pass.md` (Step 2d, one per plan, rewritten at every stamp) a
 brief's `PLAN:` line names the draft; the own pass is stamped over the draft.
 
 At approval the draft is moved - a plain rename, not `git mv`, which refuses an untracked file - to
-`active/PLAN_<ABBR>.md` (`docs/WORKFLOW.md` guard (e)), the approval note goes into its header, and
+`active/PLAN_<ABBR>.md` - or, for a folder plan, into `active/<ABBR>/` with the index
+`PLAN_<ABBR>.md` - (`docs/WORKFLOW.md` guard (e)), the approval note goes into its header, and
 `git add` takes the plan and `readiness/<ABBR>/` into ONE docs commit. The approval note changes the
 plan's text, so the stamped hash verifies against the audited draft and not against the landed
 plan: `revisions.md` records both hashes - the stamp, and `plan-gate.js --hash` over the landed

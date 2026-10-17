@@ -55,9 +55,9 @@ only repo writer. **Never pass `model`**: the Writer's model is pinned in its fr
 override would replace the pin (payload `docs/LOOP.md` § Role boundaries). Every Writer brief carries
 `Ticket: <REF>` on a **line of its own** - Gate 2 reads it. This project's Gate 2 mode is
 `off-plan`: `always` = a Yes/No dialog on every Writer dispatch; `off-plan`
-= silent when `<REF>` names a ticket in `dev/backlogs/active/PLAN_*.md`, a dialog
-otherwise. **Who audits the ticket, on which engine and with how many passes is the audit table:
-`/pnp:roles`** - the review brief's `Class: plan | code | docs` names the row.
+= silent when `<REF>` names a ticket in `dev/backlogs/active/PLAN_*.md` or an `<ABBR>/`
+folder there, a dialog otherwise. **Who audits the ticket, on which engine and with how many passes
+is the audit table: `/pnp:roles`** - the review brief's `Class: plan | code | docs` names the row.
 
 **Doctrine preflight.** Before the FIRST Writer dispatch of a session - and before authoring any
 R2/R3 ticket brief - read payload `docs/WORKFLOW.md`, payload `docs/LOOP.md`,

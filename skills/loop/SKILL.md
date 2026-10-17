@@ -60,7 +60,8 @@ and `docs/LOOP.md` (the one-page native mapping).
 
 1. **PLAN.** Classify the work R1/R2/R3 (`docs/WORKFLOW.md`). R1 = direct in this session, no
    subagents/Reviewer/QA - skip the rest of this loop. Durable R2/R3 -> the plan-readiness
-   review and the living PLAN under `{{config.paths.plansDir}}/active/` apply before implementation.
+   review and the living PLAN under `{{config.paths.plansDir}}/active/` (`PLAN_<ABBR>.md` or
+   `active/<ABBR>/`) apply before implementation.
 2. **Writer implements.** Delegate the concrete ticket to the `writer` subagent (Agent tool,
    `subagent_type: "writer"`). Give it the outcome, scope, acceptance criteria, risk threshold,
    and stop condition. Tests are part of implementation, not polish. The Writer returns
@@ -68,7 +69,8 @@ and `docs/LOOP.md` (the one-page native mapping).
    Carry `Ticket: <REF>` on a line of its own in the brief. Gate 2 then decides in the project's
    configured mode (`enforcement.dispatchGate`): `always` = every dispatch surfaces a native
    **Yes/No** dialog and the operator clicks; `off-plan` = a ref found in
-   `{{config.paths.plansDir}}/active/PLAN_*.md` passes silently and everything else raises the dialog.
+   `{{config.paths.plansDir}}/active/PLAN_*.md` or `active/<ABBR>/` passes silently and everything
+   else raises the dialog.
 3. **Review.** Run `/pnp:review <TICKET_REF>` over the Writer's diff.
 4. **QA (conditional).** If - and only if - the ticket declares observable runtime/UI behavior,
    run `/pnp:qa <TICKET_REF>`. Otherwise skip QA entirely.
