@@ -14,7 +14,12 @@
   approvals are marked under the table). A second-opinion review (GPT, the same day, on this file)
   raised four architectural points and one nit; all five are taken into the text below (marked
   "review 2026-10-17").
-- Next: the tickets (§ Tickets), plan A first, each on the operator's word.
+- Plans A and B done; 0.3.0 released and proven in Silerax (`--apply` exit 0, self-check
+  1300/1300, `--check` up to date, four expected files changed, the additions block kept - relayed by
+  the arbitration session, 2026-10-17). The start after 0.3.0: ~130k here with PLAN_HARD read
+  (number (b)); preflight-only 110k here, 120k in Silerax, the doctrine read ~71k of it (operator's
+  `/context`, 2026-10-17) - so C2 goes ahead of the first Silerax plan.
+- Next: plan C, `dev/backlogs/active/RBC/` (landed 2026-10-17), each ticket on the operator's word.
 
 ## Goal
 
