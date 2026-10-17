@@ -1283,6 +1283,38 @@ The operator, during UPDARCH-002: „следващите 3 реда редак�
   under 3 minutes each - parallel fixture groups, one install reused across read-only cases, the
   duplicated cases cut. A code ticket of its own, on the operator's word.
 
+## AFTER 0.2.20 - the order of the de-engineering (COO proposal 2026-10-17, parked by the operator: „запиши ги, после ще се върнем към тях")
+
+The operator's verdict after the two UPDARCH tickets: the plugin is over-engineered. Five steps, in
+this order, each with its one-line why; each starts on its own operator word, none is started by this
+record.
+
+1. **0.2.20 proven in a consumer first** (the operator's test: `/plugin update` + `/pnp:update` in
+   Silerax or Furnissimo; expected: the CHANGELOG block printed, the held `writer.md` overwritten,
+   four to six renders, no dialog). The architecture is proven only there; a defect seen there is a
+   ticket here. Everything below waits for this result.
+2. **Cut the readiness ceremony** (R1 prose + one small hook change). Today: behavior ledger,
+   consequence scan, own-pass file, fact-check agents per ticket, the plan-gate hook - and PLAN_DOCT's
+   pass 1 cost ~12% of a weekly Codex quota for 12 blockers on a docs plan. Proposal: the full
+   readiness only for R3 (migrations / access policy / destructive / push); an R2 plan gets zero or one
+   Codex pass, on the word; the plan gate (`scripts/engine/plan-gate.js`, Gate 2's `Class: plan` branch,
+   the Codex wrapper's exit 2) applies to R3 only. Files: `docs/WORKFLOW.md` § Plan readiness review,
+   `skills/review/SKILL.md` Steps 2a-2e, `docs/REVIEW_CHECKLIST.md` § Plan readiness, the gate code.
+3. **DOCT as plain prose tickets, no plan.** With the architecture done the doctrine compaction is
+   next: `docs/WORKFLOW.md` is 1145 lines, much of it "measured on a consumer ..." history and
+   rationale. The templates' rule applies to the docs - the rule stays, the story goes. One ticket per
+   document (WORKFLOW, LOOP, REVIEW_CHECKLIST, the review skill), a commit after each, no readiness
+   (step 2 makes that legitimate). PLAN_DOCT's draft r5 and `readiness/DOCT/` are input, then deleted
+   on the operator's word.
+4. **The suites: fast or fewer.** The candidate above (under 3 minutes each), and one cut on its own:
+   `example-cycle-linux` is a Windows run with Linux-flavoured answers, not POSIX proof - CI's ubuntu
+   leg is; candidate for removal from `verify.commands`.
+5. **Then PLAN_FOLD (0.3.0) and HARD-011 (README, 0.3.1)** - after the doctrine is cut, so they
+   document the plugin as it will be, not as it was.
+
+Stopped without a ticket, from 2026-10-17 on (recorded in the section above): the double VERIFY, suites
+for prose or templates, the "audit pass?" question for prose.
+
 ## The Writer template inlines a test routing that contradicts the project's (born 2026-10-16, Furnissimo closing grep after the alignment)
 
 `templates/agents/writer.md.tmpl:80-82` says "Route per this project's test policy (named in the
