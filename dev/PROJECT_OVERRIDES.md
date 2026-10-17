@@ -187,7 +187,8 @@ Boundaries a reviewer checks:
   and `NOTES.md`, validated
   by `scripts/update/validate-payload.mjs` and applied by the update engine (`scripts/update/`) with
   a write-ahead journal. The op vocabulary is `add-config-key`, `rerender-managed-region`,
-  `reconcile-ask-ruleset`, `note` - nothing else, and no migration ever deletes an operator file.
+  `reconcile-ask-ruleset`, `note`, `seed-file` (a file written only when absent, never recorded; RBA-001)
+  - nothing else, and no migration ever deletes an operator file.
 - Access control is the **permission ask-ruleset** (`templates/settings.ask-ruleset.json`): a rule
   added there is a managed-artifact change (migration + bump); a rule removed there ships with a
   `reconcile-ask-ruleset` op so consumers lose only what they never edited.
@@ -248,12 +249,12 @@ snap `pwsh` cache, root prep + `su - pnp` legs) live there; this section stays t
 Every brief that runs VERIFY carries the pointer, and a red test on a trap described there is a
 defect of the brief, not of the code.
 
-**The Writer's green run of a row IS its verification** (operator rule 2026-10-17, replacing the
-2026-10-15 rule). A row the Writer ran green while writing is verified; a fresh `general-purpose`
-agent on `sonnet` runs ONLY a row the Writer did not run, with the exact commands and the runbook
-pointer, fixes nothing, writes no tracked file, runs no git, and returns exit codes and summary
-lines. Never a second full batch over rows already green. Logs of any run go OUTSIDE the repository
-(the example cycle asserts a byte-identical tree).
+**The Writer runs only the tests it adds (red, then green)** (operator rule 2026-10-17, evening,
+replacing the morning rule of the same day). The row's suite runs ONCE, started by the COO in the
+background at the Writer's handoff, in parallel with the diff read; a fresh scan agent only when the
+COO cannot run it. Never a second batch. Logs of any run go OUTSIDE the repository (the example cycle
+asserts a byte-identical tree). No micro-round edits while a suite is running - an edit mid-run
+invalidates the run (RBA-001).
 
 **Independent units run in parallel by default** (operator rule 2026-10-02 and 2026-10-05) -
 independent steps, large mechanical Writer work split across two or more Writers from the dispatch,
@@ -269,7 +270,8 @@ The documents the "status / release docs policy" in the payload doc `docs/WORKFL
 
 - status page: root `README.md` § Status (what is here / what is not here yet - kept true per release)
 - changelog: `CHANGELOG.md` (one block per version, written at the bump, English)
-- roadmap: `dev/backlogs/active/` (the open plans ARE the roadmap; `dev/README.md` says how it runs)
+- roadmap: `dev/backlogs/ROADMAP.md` (one entry per idea, the strict format of `dev/REBUILD.md`) +
+  `dev/backlogs/active/` (the open plans); `dev/README.md` says how it runs
 
 ## Communication
 

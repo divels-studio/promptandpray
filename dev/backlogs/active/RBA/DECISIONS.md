@@ -22,7 +22,10 @@ tickets implement the decision.
 - **D-04** The migration `0025_roadmap-seed`, the version bump and the CHANGELOG block are plan B's
   (release 0.3.0), because `validate-payload.mjs:258-268` requires the last manifest entry to equal
   `plugin.json` and a bump is a release act. RBA-001 proves the op through `test-update.mjs`
-  fixtures only. plan: RBB (plan B, written after plan A lands)
+  fixtures only. The self-check's `OP_TYPES` copy (`aiwf-selfcheck.js` § example bump) stays at four
+  ops until then, because it requires the example bump to use every op: the example bump gains its
+  `seed-file` op with migration 0025 (COO decision at RBA-001, the Writer's blocker). plan: RBB (plan
+  B, written after plan A lands)
 - **D-05** The `## Candidates` section leaves the transfer-surface template; its bullet becomes a
   pointer to `ROADMAP.md`. The verbatim skeleton and the "Four sections" sentence in
   `docs/WORKFLOW.md` § The transfer surface change in the same diff; the rest of that section's prose
@@ -74,6 +77,15 @@ tickets implement the decision.
   each on `COO: top (Fable) - because check 1` (a seeding op and Gate 3 in 001, Gate 2's lookup in
   002, the gate's enforcement code in 003); a Codex pass over the code only when the operator asks
   („A's code gets a Codex pass only if the operator asks"). plan: RBA
+- **D-15** (operator rule 2026-10-17, via the arbitration session: „всеки тикет по 20-30 мин" must
+  not stack; „ама му кажи да го запише в плана") Per code ticket the row's suite runs ONCE: started in
+  the background at the Writer's handoff (timeout 3600000, log outside the repo), in parallel with the
+  COO's full diff read, by the COO itself or a `sonnet` agent that fixes nothing and runs no git; the
+  Writer runs only its own new tests red/green, no suite. Rows: RBA-001 = `setup-suite` +
+  `validate-payload` + `selfcheck`; RBA-002 and RBA-003 = `selfcheck` + `spikes`; plan B tickets = no
+  suite (provenance grep + `validate-payload`); the example cycles only when `scripts/ci/` or
+  `examples/` change. Three suite runs in plan A in total; the fast suites (C3) stay after 0.3.0; CI
+  runs the full set on the pushed commit. No micro-round edit while a suite is running. plan: RBA
 
 ## Deferred
 

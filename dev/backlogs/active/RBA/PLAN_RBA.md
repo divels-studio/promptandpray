@@ -27,7 +27,7 @@ measurement instruments and the suites (plan C), any consumer tree.
 
 | ref | title | implements | status | record |
 |---|---|---|---|---|
-| RBA-001 | ROADMAP.md: template, setup seed, `seed-file` op, Gate 3 surface | D-01 D-02 D-03 D-05 D-06 | open | - |
+| RBA-001 | ROADMAP.md: template, setup seed, `seed-file` op, Gate 3 surface | D-01 D-02 D-03 D-05 D-06 | closed 2026-10-17, `926a3c6` | `records/RBA-001.md` |
 | RBA-002 | the plan folder: every reader learns both shapes | D-07 D-08 D-09 | open | - |
 | RBA-003 | the mechanical plan gate on the folder contract | D-10 D-11 D-12 | open | - |
 
