@@ -1,0 +1,15 @@
+{
+  "plan": "RBA",
+  "contract": "dee5be70e803da8a22e25edac75a81d3b721b2c69a2e6b907a9d8985cbf3c835",
+  "files": {
+    "DECISIONS.md": "9675962613682df716cbdc15a51385e36455642acc9811ada8cb9958c6d6ed5b",
+    "PLAN_RBA.md": "a6c80d0cc14d8f9b8bed3646297e764149bc14f3fb93f7a5e21c6d7bb7759621",
+    "tickets/RBA-001.md": "37bb30a0c90b5e08ec292a0cf7af674eb1e4c2ba57d836560a3bf04ba3967b60",
+    "tickets/RBA-002.md": "7a89169cc04104f620d99a13bc8029f60d3b6cce7b3d07c5285ca2cd0ee47500",
+    "tickets/RBA-003.md": "4e2e3a1fb577bf4974d22334cae6d8cac4d53785089835974f5d88f2d8696e56"
+  },
+  "xrefs": {
+    "RBA/D-04": "7dc19bda840abf82fdcc3aa5cee50c813cfec92ff02fe361e779293ba601754a"
+  },
+  "stampedAt": "2026-10-17T11:51:22.952Z"
+}
