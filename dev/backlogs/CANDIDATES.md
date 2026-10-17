@@ -1293,6 +1293,11 @@ record.
    Silerax or Furnissimo; expected: the CHANGELOG block printed, the held `writer.md` overwritten,
    four to six renders, no dialog). The architecture is proven only there; a defect seen there is a
    ticket here. Everything below waits for this result.
+   **DONE 2026-10-17 in Silerax** (its commit `b94c75a8`): 0.2.19 -> 0.2.20, 6 operations, no
+   dialog, no question, self-check 1251/1251; the CHANGELOG block was read and reported by its COO; the
+   held `writer.md` lost nothing; `AGENTS.md` lost ~240 lines of project rules the operator had written
+   into the rendered file, and the ones with no other home went into its project additions block - the
+   designed path, exercised once for real. No defect found.
 2. **Cut the readiness ceremony** (R1 prose + one small hook change). Today: behavior ledger,
    consequence scan, own-pass file, fact-check agents per ticket, the plan-gate hook - and PLAN_DOCT's
    pass 1 cost ~12% of a weekly Codex quota for 12 blockers on a docs plan. Proposal: the full
