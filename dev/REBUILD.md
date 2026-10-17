@@ -7,13 +7,14 @@
 > for new entries until this design is approved (operator 2026-10-17: „файла с кандидати е миш маш").
 > Rewritten WHOLE at every change; history is in git.
 
-## Status (2026-10-17, evening)
+## Status (2026-10-17, night)
 
 - 0.2.20 released and proven in Silerax. Closed.
-- Inputs complete: the GSD / BMad / Gas Town scan is in (§ Inputs 4). § The cycle below is the COO's
-  DRAFT from those inputs, with a proposed answer to every open question. Nothing in it is approved.
-- Next step: the operator walks § The cycle stage by stage and § Proposed answers one by one; each
-  approval or correction is written into this file. Tickets only after the whole cycle is approved.
+- **The cycle is APPROVED** - all nine stages and the six answers, by the operator on 2026-10-17 (the
+  approvals are marked under the table). A second-opinion review (GPT, the same day, on this file)
+  raised four architectural points and one nit; all five are taken into the text below (marked
+  "review 2026-10-17").
+- Next: the tickets (§ Tickets), plan A first, each on the operator's word.
 
 ## Goal
 
@@ -56,7 +57,7 @@ catch share; the mechanical half of them is a script in both frameworks, the jud
 | **analysis** | COO with the operator | chat -> file | `DECISIONS.md`: numbered decisions `D-NN` (the operator's words verbatim where they are the source), a Deferred list, and numbered **Open Questions** that STOP the stage until the operator answers - an unknown is never written down as an assumption. | operator answers the OQs |
 | **plan** | a planner subagent (`opus`, fresh context), briefed with RESEARCH + DECISIONS + the goal | subagent | `PLAN_<ABBR>.md` (index: goal, scope, ticket table with status) + `tickets/<ABBR>-NNN.md`, one file per ticket: Outcome, Scope, Acceptance, Risk threshold, Stop condition, Verify, Code Map slice, the `D-NN` it implements. Caps: **<= 3 tickets per plan, <= ~1,500 tokens per ticket**; over the cap = split or defer, the COO decides. The COO reads the result; it does not write the plan. | - |
 | **phases** | - | - | A plan IS one phase. A bigger goal is a sequence of plans listed in `ROADMAP.md`; a later plan cites earlier `D-NN` by id, never restates them. | - |
-| **plan review and approval** | (a) a mechanical gate (script, seconds): caps, every ticket has its six fields, every `D-NN` cited by some ticket, no TBD, every path in the Code Map exists; (b) **ONE Codex readiness pass** over the plan folder with the blocker contract: a BLOCKER names the property the plan must have + the evidence; INFO never triggers a revision; wording, formatting and `file:line` precision are out of scope; (c) COO triage per finding - fix / reject with a refutation / defer / ask the operator; the fix is written by the planner subagent (fresh), not by the COO; (d) cap: at most 2 revisions, and a revision that does not reduce the BLOCKER count stops and goes to the operator; a second Codex pass only when pass 1 found a BLOCKER that reverses a `D-NN`, on the operator's word | Codex + COO + planner agent | `readiness/<ABBR>/round-N.md`: the findings with their disposition (fixed / rejected: why / deferred) | operator approval -> the plan folder lands in `active/` |
+| **plan review and approval** | (a) a mechanical gate (script, seconds): caps, every ticket has its six fields, every `D-NN` **assigned to this plan** cited by some ticket (a decision carries `plan: A | B | deferred`; a decision of another plan is cited qualified, `<ABBR>/D-NN` - review 2026-10-17), no TBD, every path in the Code Map exists; the SHA stamp covers the FROZEN contract only - the index, `DECISIONS.md` and `tickets/` - never `records/` or the readiness history (review 2026-10-17); (b) **ONE Codex readiness pass** over the plan folder with the blocker contract: a BLOCKER names the property the plan must have + the evidence; INFO never triggers a revision; wording, formatting and `file:line` precision are out of scope; (c) COO triage per finding - fix / reject with a refutation / defer / ask the operator; the fix is written by the planner subagent (fresh), not by the COO; (d) cap: at most 2 revisions, and a revision that does not reduce the BLOCKER count stops and goes to the operator; a second Codex pass on the operator's word when pass 1 found a BLOCKER that reverses a `D-NN`, OR when the COO asks for it with a NAMED risk - security, tenancy, concurrency, transactions - after a substantive revision (review 2026-10-17); never automatic | Codex + COO + planner agent | `readiness/<ABBR>/round-N.md`: the findings with their disposition (fixed / rejected: why / deferred) | operator approval -> the plan folder lands in `active/` |
 | **phase execution** | Writer, fresh context | subagent | brief = `Ticket: <REF>` + "read `tickets/<REF>.md` and the files its Code Map names" + the standing lines (no restating of goal, files or acceptance) -> diff + handoff | Gate 2 dispatch |
 | **phase audit** | the code pass (Codex, kept); the fact-check over the diff (one `sonnet` agent, kept - cheap); QA only for observable runtime behaviour | Codex / subagent | verdict + top findings in the handoff; the full text in a file, never in the COO's context | a word for every pass after the first |
 | **commit** | the Writer (code), the COO (`records/<REF>.md`, one file per ticket) | session | two commits: code, then record | native dialog each |
@@ -118,8 +119,12 @@ Kept unchanged: the four operator gates as native dialogs; the Writer as the onl
 Reviewer/QA read-only; one doctrine for PnP and the consumers; no runtime, no daemon; English in the
 tree, the operator's words verbatim in Bulgarian.
 
-Session rule: the COO session holds the plan index, the state and the verdicts - never a plan body or
-a review body; a readiness cycle starts in a fresh session; ~400k is a ticket boundary.
+Session rule: the COO session holds the plan index, the state and the verdicts; it reads the APPROVED
+tickets once (<= 3 x ~1,500 tokens) and never carries their revisions or a review body; a readiness
+cycle starts in a fresh session; ~400k is a ticket boundary. **Thin, not blind** (review 2026-10-17):
+the planner agent's handoff is structured - which `D-NN` lands in which ticket, which dependencies
+were checked, which risks remain, and pointers to the evidence - so the COO can open a proof on
+doubt; "PASS, all fine" is not a handoff.
 
 ## Proposed answers to the open questions (the operator confirms or corrects)
 
@@ -132,8 +137,10 @@ a review body; a readiness cycle starts in a fresh session; ~400k is a ticket bo
 5. Format: **the folder from the first new plan** (index, DECISIONS, RESEARCH, tickets/, records/;
    `readiness/<ABBR>/` as today); old monolith plans stay readable, no migration.
 6. First measured plan: **the next real plan in Silerax**, measured on: tokens idea -> approved plan,
-   correction rounds after implementation, COO session size at the end. The same three numbers for
-   the last plan under the old cycle, from its records, as the baseline.
+   correction rounds after implementation, COO session size at the end, and (review 2026-10-17) the
+   TOTAL spend of the cycle - every agent's tokens as the harness reports them plus the Codex tokens -
+   so a saving in the COO's context is not a cost moved to the planner. The same numbers for the
+   last plan under the old cycle, from its records, as the baseline.
 
 ## Tickets that build the cycle into PnP (COO proposal 2026-10-17; the cycle applied to itself: one
 ## roadmap entry, three plans of <= 3 tickets, written as folders by hand until A2 teaches the tools)
