@@ -178,8 +178,14 @@ doubt; "PASS, all fine" is not a handoff.
 - B3 the docs: `docs/WORKFLOW.md` § Plan readiness review, § Planning lock, § Durable development
   history (folder, records, ROADMAP), § Loop shape, § The transfer surface; `docs/REVIEW_CHECKLIST.md`
   § Plan readiness (the blocker contract); `docs/LOOP.md`; the session rule (400k boundary, fresh
-  session for readiness). Release **0.3.0**: bump + CHANGELOG block with `Retires local rules:` +
-  the one migration (A1's seed). Then the first measured plan in Silerax.
+  session for readiness). Release **0.3.0**: bump + CHANGELOG block whose `Retires local rules:` line
+  NAMES every project-local rule the new cycle makes dead or absorbs (readiness mechanics, chain-trace
+  in the evidence pack, "the plan is read by sections", "blockers of the previous ticket enter the next
+  brief", readiness symmetry, the checkpoint rules the session rule replaces) + the one migration
+  (A1's seed). PnP's own overrides § Loop shape is cleaned in B3 itself; each consumer deletes its
+  named rules in one sitting on its operator's word (operator question 2026-10-17: „ще трябва ли
+  отново да ревизираме всичко по проектите" - no: one list-driven pass per project, mostly deletions;
+  old active plans finish in the old format). Then the first measured plan in Silerax.
 
 **Plan C - after the measurement (each on its own word)**
 - C1 the measurement instruments: the three numbers written into `records/<REF>.md` by the closing
