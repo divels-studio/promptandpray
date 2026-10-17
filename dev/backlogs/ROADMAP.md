@@ -22,3 +22,12 @@ The COO writes the entries, one `##` per idea, in the format below; entries foll
 - Plans: PLAN_RBA (done 2026-10-17, archived as `012_PLAN_RBA_2026-10-17/`); PLAN_RBB (done 2026-10-17, release 0.3.0, archived as `013_PLAN_RBB_2026-10-17/`); PLAN_RBC (plan C, planned 2026-10-17, `active/RBC/`, operator word „имаш дума и за двете", approved „Одобрявам", no readiness pass: RBC-001 the measurement instruments + the chain-trace rule, RBC-002 the doctrine compaction - ahead of the first Silerax plan, the start measured at 130k after 0.3.0 - RBC-003 the two gate defects; the suites stay out) - RBC-003 is the plan gate's byte cap counting a ticket's `Status:` line (status belongs to the index table; arbitration note 2026-10-17, CANDIDATES § Ruling ledger) and the self-check's provenance walk skipping a root `.git` gitfile as it skips the `.git` directory, with a negative control (a worktree plugin root turns `/pnp:update --apply`'s embedded self-check red on a correct install; arbitration ruling 2026-10-17 on RBB-003's finding A, CANDIDATES § Ruling ledger)
 - Status: in progress
 - Born: 2026-10-17, operator word „да"
+
+## README - the public README for a cold visitor
+- Goal: a visitor who has never seen the loop understands what PnP is, installs it, runs one R2 ticket and takes an update from the root README.md alone
+- Why: „тоя план става сега история, тоя 11 отива някъде в обозримото бъдеще, предполагам мястото му е в новия роадмап"; the original ticket is HARD-011 in `archive/014_PLAN_HARD_2026-10-17.md` (§ HARD-011 (README-001))
+- Scope: in - the root `README.md`, § Status true per release, the command table, the macOS tier line (CANDIDATES § macOS support tier - re-examine folds in); out - the payload docs
+- Size: S
+- Plans: none yet; runs after REBUILD plan C's RBC-002 (the README describes the cut doctrine) and cuts 0.3.1
+- Status: idea
+- Born: 2026-10-17, operator word „тоя 11 отива ... в новия роадмап"
