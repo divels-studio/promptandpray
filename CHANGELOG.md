@@ -4,6 +4,54 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.3.0] - 2026-10-17
+
+The planning cycle is one skill, and the doctrine states it once: research, decisions, a planner, a
+mechanical gate, ONE readiness pass under a blocker contract, the COO's triage, the operator's
+approval, the landing.
+
+### Added
+
+- **`/pnp:plan` - the planning cycle as one skill (RBB-001)** - the roadmap entry, research by
+  scan-tier agents in a fresh context, `DECISIONS.md` with Open Questions that stop the cycle, the
+  planner dispatched as the `writer` agent type and writing only under `<plansDir>/drafts/<ABBR>/`,
+  `plan-gate --stamp` then `--check`, one readiness pass on the plan's standing word, triage into
+  `readiness/<ABBR>/round-N.md`, a second pass only on the operator's word (a reversed decision or a
+  named risk), the landing commit.
+- **`templates/briefs/` (RBB-001)** - the agent contracts as plain Markdown read at run time:
+  `research.md`, `planner.md`, `readiness-codex.md`, `writer-dispatch.md`; never rendered, never
+  managed.
+- **The `seed-file` op and migration `0025_roadmap-seed` (RBB-003)** - a file written only when
+  absent, kept byte for byte when present and never recorded; `0025` seeds `<plansDir>/ROADMAP.md`
+  and re-renders the `CLAUDE.md` region, `ORCHESTRATOR.md` and the Reviewer agent where the
+  installation has one. The example bump exercises all five op types.
+- **The session rule (RBB-002)** - a readiness cycle starts in a fresh session; about 400k tokens of
+  context is a ticket boundary and a guide; the COO carries no revision body and no review body.
+
+### Changed
+
+- **`/pnp:review` readiness mode is what `/pnp:plan` calls (RBB-002)** - the brief is `COVERED BY`,
+  `Class: plan`, `PLAN: <folder>` plus the shipped readiness brief; the verdict is one findings table
+  and a `BLOCKERS: <n> INFO: <m>` line; the fact-check gate runs over a diff only; a Claude-hosted
+  plan row reads the folder, takes no diff, and returns the same table.
+- **The docs state the cycle once (RBB-002)** - `WORKFLOW` § Plan readiness review, § Planning lock
+  and § Durable development history, `REVIEW_CHECKLIST`, `LOOP`, `OPERATOR_PROTOCOL`, the Codex
+  recipe, `READINESS_CLASSES`, `SESSION_BRIEF_RECIPE` and the pointer skills name no struck artifact;
+  the Writer brief is a ticket pointer (`templates/briefs/writer-dispatch.md`).
+- **The plan row's note in `/pnp:roles --show` (RBB-003)** - `second pass only on your word: a
+  reversed decision or a named risk`.
+
+### Removed
+
+- **The readiness artifacts of the old cycle (RBB-002)** - `/pnp:review` Steps 2a/2c/2d/2e (the
+  behavior ledger, the consequence scan, the COO's own pass, the artifact move), the `PASS` /
+  `NEEDS-FIX` plan verdict, and the single-file draft `drafts/PLAN_<ABBR>.draft.md`.
+
+Retires local rules: readiness mechanics (the delta consequence scan and the delta fact-check);
+chain-trace in the evidence pack; the plan is read by sections; the blockers of the previous ticket
+enter the next brief; readiness symmetry; a turn of its own is not a stop; the checkpoint rules the
+session rule replaces.
+
 ## [0.2.20] - 2026-10-17
 
 The update overwrites what it renders, and what it renders goes thin: the rules stay in the payload,

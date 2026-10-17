@@ -346,15 +346,13 @@ examples/           the committed example project + cycle data (payload; asserte
 dev/                the plugin's OWN development: this doc, answers.json, backlogs/{active,archive,drafts,readiness}
 .claude/ CLAUDE.md  the self-install (project layer rendered by /pnp:setup from dev/answers.json)
 .aiwf/              scratch (gitignored): ONLY the live loop mechanics - route-state.json,
-                    review-brief.txt, last-review-session.txt, checkpoint.md (HARD-024) - and the artifacts of the CURRENT
-                    ticket or readiness cycle. A plan draft lives in
-                    dev/backlogs/drafts/PLAN_<ABBR>.draft.md and leaves when the plan lands; the
-                    readiness history (ledger, consequence scan, own pass, fact-check, revisions)
-                    lands in dev/backlogs/readiness/<ABBR>/ with the plan's docs commit; an approved
-                    plan has no copy in .aiwf/. A readiness artifact is written to .aiwf/plan/<ABBR>/
-                    only while Gate 3 holds the main session out of dev/backlogs (an open R2/R3
-                    route) and moves to readiness/<ABBR>/ at the landing (/pnp:review Step 2e). A
-                    session that does not hold the tree writes nothing here (WORKFLOW § Branch policy).
+                    review-brief.txt, last-review-session.txt, readiness-round.txt, checkpoint.md
+                    (HARD-024) - and the artifacts of the CURRENT ticket. A plan is drafted as the
+                    untracked folder dev/backlogs/drafts/<ABBR>/ and moves to active/<ABBR>/ when it
+                    lands; its readiness history (stamp.json, round-N.md) lands in
+                    dev/backlogs/readiness/<ABBR>/ with the same commit; an approved plan has no copy
+                    in .aiwf/. A session that does not hold the tree writes nothing here (WORKFLOW
+                    § Branch policy).
 ```
 
 Default integration/base branch: `main`. It is not the only allowed
@@ -387,19 +385,14 @@ mechanics and are **not** editable here (see the payload doc `docs/WORKFLOW.md` 
   ceiling: the first on the ticket's standing word, each further one on the operator's own explicit
   word - one word per pass - and one more beyond the configured number is always available with
   that word. Independent of the cap above.
-- **Gate checkpoint and context ceiling** (operator rule 2026-10-14; HARD-024). The COO rewrites
+- **Gate checkpoint hook** (operator rule 2026-10-14; HARD-024). The COO rewrites
   `.aiwf/checkpoint.md` WHOLE (Write, not an append; <= 60 lines: state, operator decisions, live
   agents, next steps, "After compaction do") at every gate - dispatch, handoff, verdict, before a
   commit - and when the hook `.claude/hooks/context-gate.mjs` reports >= 950k tokens of context; at
-  >= 1000k IMMEDIATELY, after the current step. Automatic compaction is the operator's
-  (`/autocompact`); the hook takes no value and stays silent without the statusline's `~/.claude/ctx/`
-  files. After compaction the hook returns the checkpoint to the context; the COO reads only it and
-  the files it names. A long context alone is no reason for a new session - the session continues
-  through compaction; the ticket boundary is the session boundary, and a heavy ticket (code R2/R3, an
-  auditor pass, several Writers) starts in a fresh session when the operator says so.
-  **A title is not the text** (operator rule 2026-10-14): after compaction the summary carries the
-  rules only as titles; before a gate, a readiness step or a dispatch the COO rereads the text of the
-  rule, and for readiness `/pnp:review` is loaded first, before any scan agent.
+  >= 1000k IMMEDIATELY, after the current step. The hook takes no value and stays silent without the
+  statusline's `~/.claude/ctx/` files; after compaction it returns the checkpoint to the context, and
+  the COO reads only it and the files it names. The ticket and session boundary is the payload's
+  session rule (`docs/WORKFLOW.md` § Plan readiness review).
   *Expires* when the payload carries the mechanism (candidate: CANDIDATES § „Таван на контекста“).
 - **Dialogs only at the gates** (operator rule 2026-10-05). Agents work without dialogs: dialogs stay
   only at the gates (commit, push/merge/rebase, destructive or system-changing operations, the word
@@ -411,14 +404,6 @@ mechanics and are **not** editable here (see the payload doc `docs/WORKFLOW.md` 
   everything the ticket created under `.aiwf/` is deleted, with no chat question - the delete dialog
   is the gate; anything worth keeping moves to the documentation folder (`readiness/<ABBR>/` or the
   completion record) BEFORE the delete; `.aiwf/` holds only the live loop mechanics.
-- **Chain-trace in the evidence pack** (operator rule 2026-09-24; expires when the payload carries
-  it). Every code auditor pass (first and verification) gets in its evidence pack an ordered chain
-  entry point -> endpoint (`file:line`, checked against the tree before dispatch) for every behaviour
-  of the ticket's Outcome, framed adversarially; the auditor still reads the whole diff; links are
-  refreshed after every round that moves lines; not for plan or docs passes or R1.
-- **Blockers paid for on the previous ticket** (operator rule 2026-09-10) enter the next brief as
-  LITERAL requirements, and before the paid auditor pass the diff is mechanically checked against that
-  blocker list, beside the fact-check gate.
 - **A ticket born mid-work** (operator rule 2026-10-01) is written into the plan, its questions
   (auditor pass, product choice) are asked, and the plan is committed ONCE after the answers; if the
   answer does not come in the same session, commit with the question recorded as open.
@@ -426,16 +411,6 @@ mechanics and are **not** editable here (see the payload doc `docs/WORKFLOW.md` 
   to the operator with a proposed destination (a new ticket in the plan per guard (b), or the
   candidates), collected and asked at the ticket's end; the operator decides; nothing stays recorded
   only as "pre-existing".
-- **Readiness symmetry.** A promise over N surfaces needs N fixtures/asserts, not one sample; every
-  delete or edit of an entity in a plan or ticket checks who references it and what happens to those
-  references.
-- **Readiness mechanics** (operator rule 2026-10-02; expires when the payload carries it). No
-  separate agent or ledger refreshes pointers before the fact-check - the fact-check agent returns the
-  new line with every FALSE; the delta consequence scan and the delta fact-check run IN PARALLEL and
-  are never merged.
-- **A turn of its own is not a stop** (operator rule 2026-10-16). A step the doctrine puts "in a turn
-  of its own" is a separate step (plan re-read from disk) inside the same autonomous run; a turn ends
-  only at an operator gate, an operator stop or a stop condition.
 - **Paid passes are stated and priced** (operator rule 2026-10-03). A paid pass beyond the readiness
   passes and the one code pass over the diff is written into the plan with its scope and cost before
   it is spent; paid passes beyond that one pass are stated in the first sentence of the report (count
@@ -448,9 +423,6 @@ mechanics and are **not** editable here (see the payload doc `docs/WORKFLOW.md` 
   agents.
 - **The Writer's reply is short** (operator rule 2026-10-10): up to ~25 lines (blockers, deviations,
   failed checks, handoff path); details go in the handoff file.
-- **The plan is read by sections** (operator rule 2026-10-10; expires when the payload carries it). A
-  new session reads from the PLAN only the shared sections and its ticket's section; another section
-  only when the ticket cites it.
 
 ## Product boundary checks (rendered into the Reviewer)
 

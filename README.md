@@ -19,7 +19,7 @@ Born in a real production project, then extracted and genericized.
 
 ## Status
 
-**v0.2.20. Public since 0.2.0.**
+**v0.3.0. Public since 0.2.0.**
 
 What is here:
 
@@ -29,8 +29,8 @@ What is here:
   `/plugin marketplace update`, `/plugin update pnp@promptandpray`, `/reload-plugins` and
   `/pnp:update` inside the project - and `/pnp:roles` prints, on one screen, who audits what in
   the installation that took it.
-- **Twelve commands** as skills: `loop`, `brief`, `mission`, `work`, `review`, `qa`, `qal`, `roles`,
-  `arbiter`, `setup`, `update`, `selfcheck` - each opening with the same Step 0, because a skill
+- **Thirteen commands** as skills: `loop`, `brief`, `mission`, `work`, `plan`, `review`, `qa`, `qal`,
+  `roles`, `arbiter`, `setup`, `update`, `selfcheck` - each opening with the same Step 0, because a skill
   inside a plugin has no project of its own: resolve the project root, read the config, and stop
   against the version interlock if migrations are pending. `update` and `selfcheck` are the two
   documented exceptions - the command that applies the migrations and the diagnostic you need most
@@ -40,8 +40,8 @@ What is here:
   session out of code while an R2/R3 ticket is open - the dispatch gate, Gate 2, which puts the
   operator in the way of a Writer dispatch: a click on every one of them, or (per
   `enforcement.dispatchGate`) only on a dispatch whose `Ticket: <REF>` line names no ticket in an
-  active PLAN, and which denies a Claude-hosted plan-readiness pass whose readiness artifacts are
-  missing - and the git-verb guard, Gate 4, on both shell tools (matcher `Bash|PowerShell`): an
+  active PLAN, and which denies a Claude-hosted plan-readiness pass whose plan folder fails the
+  mechanical gate (its contract or its stamp) - and the git-verb guard, Gate 4, on both shell tools (matcher `Bash|PowerShell`): an
   ask-class git verb is denied
   to any subagent but the Writer, because a background agent's dialog reaches nobody, and for the
   session it raises a dialog on the git forms the `ask` rules never spell out - `git.exe` outside
@@ -195,7 +195,8 @@ node scripts/ci/run-example-cycle.mjs
 | `/pnp:brief` | composes the session brief that opens the next fresh session, by one recipe every time. |
 | `/pnp:mission` | resumes the active mission with no session brief - reconstructs state from the durable PLAN, memory and git, then waits for the operator's word. |
 | `/pnp:work` | an ad-hoc session under the full doctrine: loads it, checks the tree, asks for the task, routes it. |
-| `/pnp:review` | the Reviewer over the current diff, or a plan in plan-readiness mode. Read-only; returns pass / pass-with-notes / fail. |
+| `/pnp:plan` | the planning cycle for one durable plan: roadmap entry, research, decisions, the planner, the mechanical gate, ONE readiness pass with the COO's triage, the operator's approval, the landing commit. |
+| `/pnp:review` | the Reviewer over the current diff, or a plan folder in plan-readiness mode. Read-only; returns pass / pass-with-notes / fail for a diff, one findings table and a `BLOCKERS: <n> INFO: <m>` line for a plan. |
 | `/pnp:qa` | QA as an artifact judge over what an end-to-end run produced. Only for tickets with observable runtime behavior. |
 | `/pnp:qal` | the live agentic-browser exception: unsandboxed, Codex-only, disabled by default, and never invoked on the orchestrator's own initiative. |
 | `/pnp:roles` | the audit table on one screen - who audits what, on which engine, with how many passes - and the one command that changes it, without a re-interview. |
@@ -215,9 +216,9 @@ pass count and optionally its own engine and model. The review brief's `Class:` 
 `review.plan.passes` is the CEILING of readiness passes a plan may get - the first runs on the word
 you gave for the ticket, every further one, configured or the one beyond the ceiling, takes a word
 of its own. `/pnp:roles` prints the whole table and changes any of it. What is deliberately NOT in the
-table: the fact-check gate, which runs before every pass above the scan tier, over a diff or a plan -
-nor the readiness artifacts a plan-class pass does not start without: the consequence scan and the
-COO's own pass, files the brief names (`docs/WORKFLOW.md` § Plan readiness review).
+table: the fact-check gate, which runs before every diff pass above the scan tier - nor the
+mechanical plan gate, which keeps a plan-class pass from starting without a current stamp over a
+plan folder that meets its contract (`docs/WORKFLOW.md` § Plan readiness review).
 
 ## FAQ
 
@@ -225,8 +226,8 @@ COO's own pass, files the brief names (`docs/WORKFLOW.md` § Plan readiness revi
 
 Because of the output contract, not the packaging. That plugin's review verbs force a fixed JSON
 schema whose verdict is `approve` or `needs-attention`; this loop runs on `pass` /
-`pass-with-notes` / `fail` for implementation review and on `PASS` / `NEEDS-FIX` for plan
-readiness, and neither of those maps onto a binary. Its review slash command also ignores a custom
+`pass-with-notes` / `fail` for implementation review and on a findings table with a
+`BLOCKERS: <n> INFO: <m>` line for plan readiness, and neither of those maps onto a binary. Its review slash command also ignores a custom
 brief entirely - the adversarial variant takes a focus string, but still forces the schema - so the
 risk threshold and the stop condition, the two fields every R2/R3 brief is required to carry, would
 never reach the reviewer as a contract at all. And it ships a first-class write path
