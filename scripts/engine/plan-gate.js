@@ -1,47 +1,81 @@
 'use strict';
 /*
- * plan-gate.js - the readiness artifacts a plan-class review pass does not start without.
+ * plan-gate.js - the mechanical contract a plan FOLDER meets before a plan-class review pass starts.
  *
- * ONE CHECKER, TWO ENTRY POINTS. As a module it is required by Gate 2 (pretooluse-dispatch-gate.js)
- * for a Claude-hosted `reviewer` dispatch whose prompt carries the line `Class: plan`; as a CLI it is
- * run by the Codex review wrappers (scripts/native/{ps,sh}/codex-review.*) on every brief, and by the
- * COO to stamp the own pass (`--hash`). The shells forward only their own class flag (as
- * `--plan-class`); the recognition of a `Class: plan` LINE, the line grammar and the file formats
+ * ONE CHECKER, THREE ENTRY POINTS. As a CLI it is run by the COO to stamp a plan's final text
+ * (`--stamp <folder>`) and by anyone to check it (`--check <folder>`); the Codex review wrappers
+ * (scripts/native/{ps,sh}/codex-review.*) pipe every brief into its brief mode; as a module it is
+ * required by Gate 2 (pretooluse-dispatch-gate.js) for a Claude-hosted `reviewer` dispatch whose
+ * prompt carries the line `Class: plan`. The shells forward only their own class flag (as
+ * `--plan-class`); the recognition of a `Class: plan` LINE, the brief grammar and the folder contract
  * live HERE and nowhere else.
  *
- * WHAT IT CHECKS. A plan-readiness brief names, on five fixed lines starting at its first column,
- * the class (`Class: plan`), the plan file (`PLAN:`), the tickets this pass audits (`TICKETS:`), the
- * consequence scan (`CONSEQUENCE SCAN:`, /pnp:review Step 2c) and the COO's own pass (`OWN PASS:`,
- * Step 2d). The checker reads the three FILES - never a count the brief reports about them - and
- * returns every problem at once: a missing or duplicated line, a ref that is not a ticket heading of
- * the plan, a missing file, a scan table with a bad header, a malformed, incomplete or still-open
- * scan row, an audited ticket with no scan row or no own-pass row, an empty own-pass cell, a missing
- * `BLOCKERS FOUND:` line, an instrument whose broken run reads like its valid one, and an own pass
- * whose `PLAN SHA256:` is not the hash of the plan file as it is now.
+ * THE FOLDER. `<plansDir>/active/<ABBR>/` holds the index `PLAN_<ABBR>.md`, `DECISIONS.md` and
+ * `tickets/<ABBR>-NNN.md` - the frozen contract - plus `RESEARCH.md` and `records/`, which are NOT
+ * part of it. The stamp sits with the plan's readiness history: `<plansDir>/readiness/<ABBR>/
+ * stamp.json`, `<plansDir>` being the folder's grandparent.
  *
- * WHY `TICKETS`. The pass audits some tickets of a plan, not necessarily all of them: an extended
- * plan (a new ticket in an old plan) must not owe rows for tickets that closed long ago. So coverage
- * is demanded for exactly the refs the brief names, and each of them must be a ticket HEADING of the
- * plan under review (a heading whose first token is the ref, outside a fenced block) - a ref merely
- * mentioned in prose is not a ticket.
+ * WHAT IT CHECKS - every problem at once, one `plan-gate: <token> - <message>` line each:
+ *   index-missing                       no regular file PLAN_<ABBR>.md in the folder;
+ *   tickets-over-cap:<n>                more than 3 ticket files (names of the grammar <ABBR>-NNN.md -
+ *                                       any other file in tickets/ is not a ticket and not counted);
+ *   ticket-over-bytes:<file>            a ticket over 6,144 bytes of LF-normalised UTF-8;
+ *   field-missing:<file>:<field>        a ticket without one of the six column-0 headings `## Outcome`,
+ *                                       `## Scope`, `## Acceptance`, `## Risk threshold`,
+ *                                       `## Stop condition`, `## Verify` (case-sensitive);
+ *   decision-uncited:D-NN               a `- **D-NN**` bullet of DECISIONS.md whose `plan:` names THIS
+ *                                       plan and whose D-NN neither a ticket nor the index cites (a
+ *                                       bullet naming another plan, or none, is not demanded here; a
+ *                                       `<X>/D-NN` reference to ANOTHER plan cites that plan's
+ *                                       decision, not this one's);
+ *   decision-xref-unresolved:<X>/D-NN   a reference in the index, DECISIONS.md or a ticket to a plan
+ *                                       with no DECISIONS.md under active/<X>/ or archive/<NNN>_PLAN_<X>_*
+ *                                       (a reference to this plan resolves against this folder), or to
+ *                                       a D-NN that file has no bullet for;
+ *   tbd-found:<file>:<line>             a bare TBD, TODO or ??? outside code spans and fenced blocks
+ *                                       (a mention of the words goes in a code span);
+ *   codemap-path-missing:<file>:<path>  a backticked path in the first column of a ticket's `## Code Map`
+ *                                       table that does not exist under the project root (a directory
+ *                                       counts);
+ *   stamp-missing, stamp-mismatch,      --check and brief mode only: no stamp; a contract hash that
+ *   decision-xref-stale:<X>/D-NN        differs from the stamp's; a cross-referenced decision whose text
+ *                                       changed after the stamp.
+ * Brief mode adds line-missing:<name>, line-duplicate:<name>, class-not-plan and plan-folder-required
+ * (also on --check of a path that is not a plan folder).
  *
- * WHY A HASH. The own pass is the LAST act over the plan. Its file carries the SHA-256 of the plan's
- * text (UTF-8, CRLF normalised to LF, so a checkout that converts line endings is not an edit); any
- * edit after the stamp changes the hash and the pass refuses until the own pass is redone over the
- * text that will be dispatched. An mtime could not tell an edit from a touch.
+ * THE STAMP. `--stamp` runs every check but the three stamp checks and writes nothing while any
+ * problem stands. It records the SHA-256 of each contract file (the index, DECISIONS.md, every
+ * tickets/*.md), the contract hash over `<name>\n<text>\n` per file in sorted name order, and the
+ * SHA-256 of the bullet text (its `- **D-NN**` line up to the next decision or heading, trimmed) of
+ * every decision a cross-reference cites. Texts are UTF-8 with CRLF normalised to LF, so a checkout
+ * that converts line endings is not an edit; an mtime could not tell an edit from a touch.
+ * RESEARCH.md and records/ change after the stamp by design and are outside it.
  *
- * HONEST LIMIT. This proves presence, shape and that the own pass was stamped over the plan file the
- * brief names. It cannot prove the own pass was good, that it ran in a turn of its own, or that a
- * pass N+1 scan really covered the revision. A plan brief that carries neither the class flag nor
+ * THE PROJECT ROOT. Code Map paths are resolved against the process cwd on the CLI (`--check`,
+ * `--stamp`: run them from the project root) and against `--project-root` / Gate 2's
+ * CLAUDE_PROJECT_DIR in brief mode. The module calls take it as their second argument.
+ *
+ * BRIEF MODE. A plan-class brief carries, at column 0, `Class: plan` and
+ * `PLAN: <plansDir>/active/<ABBR>` - a folder, resolved against the project root; every other line is
+ * ignored. A missing or duplicated line, a class other than `plan` on a `--plan-class` run, and a PLAN
+ * that is not a directory named by the ABBR grammar (`plan-folder-required` - a plan FILE included)
+ * are problems; the folder is then checked exactly as by `--check`.
+ *
+ * HONEST LIMIT. This proves the folder's shape, its citations and that the contract is the text that
+ * was stamped. It cannot prove the plan is good, that a citation is meaningful, or that the stamp
+ * was taken by the COO over a text anyone read. A plan brief that carries neither the class flag nor
  * the `Class: plan` line is not recognised at all.
  *
- * FAIL DIRECTION. A non-plan brief is never checked: without `--plan-class` the CLI exits 0 before
- * any other work unless the brief carries `Class: plan`, and a brief that cannot even be read is
- * passed with one stderr line - a defect here must not refuse a code or docs pass. On the plan path
- * an unexpected error is `internal-error` and exit 2: refusing is the safe direction for a paid pass.
- * Gate 2 does not use the CLI; a throw from the module lands in its fail-to-ask wrapper.
+ * OUTPUT AND FAIL DIRECTION. `--check`/`--stamp` print their lines on stdout; the brief mode, run by
+ * the wrappers ahead of a paid engine, prints on stderr. A non-plan brief is never checked: without
+ * `--plan-class` the CLI exits 0 before any other work unless the brief carries `Class: plan`, and a
+ * brief that cannot even be read is passed with one stderr line - a defect here must not refuse a
+ * code or docs pass. On the plan path and on `--check`/`--stamp` an unexpected error is
+ * `internal-error` and exit 2: refusing is the safe direction. Gate 2 does not use the CLI; a throw
+ * from the module lands in its fail-to-ask wrapper. `--hash <file>` (one file's SHA-256 line) stays
+ * for the readers of monolith plans until they go.
  *
- * Zero dependencies beyond node core and ./aiwf-lib (readStdin, escapeRe).
+ * Zero dependencies beyond node core and ./aiwf-lib (readStdin, escapeRe, the plan-name grammars).
  */
 const fs = require('fs');
 const path = require('path');
@@ -50,36 +84,29 @@ const lib = require('./aiwf-lib');
 
 // The recognition line: column 0, the key exact, the value `plan` in any case, a trailing CR allowed.
 const CLASS_PLAN_LINE = /^Class:[ \t]*[Pp][Ll][Aa][Nn][ \t]*\r?$/m;
-const LINE_NAMES = ['Class', 'PLAN', 'TICKETS', 'CONSEQUENCE SCAN', 'OWN PASS'];
-const FILE_LINES = ['PLAN', 'CONSEQUENCE SCAN', 'OWN PASS'];
-// Gate 2's ticket-ref alphabet (TICKET_LINE in pretooluse-dispatch-gate.js) - older plans with other
-// prefixes stay admissible.
-const REF_ALPHABET = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
-const SCAN_HEADER = ['#', 'ticket', 'decision', 'surface', 'violation', 'closure'];
-const CHECKS_HEADER = ['ticket', 'repo-match', 'scope', 'discovery', 'order', 'acceptance', 'git'];
-const INSTRUMENTS_HEADER = ['instrument', 'valid input', 'broken input'];
-// A WHITE list: a closure is closed only when it starts with one of these; `later`, `n/a` or an
-// empty cell are open.
-const CLOSED_PREFIXES = ['plan:', 'no defect:'];
-const HASH_LINE = /^PLAN SHA256:[ \t]*([0-9a-fA-F]{64})[ \t]*\r?$/gm;
-const BLOCKERS_LINE = /^BLOCKERS FOUND:[ \t]*([0-9]+)[ \t]*\r?$/gm;
-const USAGE = 'usage: node plan-gate.js --project-root <root> [--plan-class]   (the brief on stdin)\n'
+const LINE_NAMES = ['Class', 'PLAN'];
+const MAX_TICKETS = 3;
+// A design constant standing for the ~1,500-token cap of one ticket.
+const MAX_TICKET_BYTES = 6144;
+const TICKET_FIELDS = ['Outcome', 'Scope', 'Acceptance', 'Risk threshold', 'Stop condition', 'Verify'];
+const XREF_RE = /\b([A-Z]{2,8})\/D-(\d{2})\b/g;
+const DECISION_LINE = /^- \*\*(D-\d{2})\*\*/;
+const DECISION_PLAN = /plan:\s*([A-Z]{2,8})/g;
+const TBD_RE = /\bTBD\b|\bTODO\b|\?\?\?/;
+const USAGE = 'usage: node plan-gate.js --check <folder> | --stamp <folder>   (run from the project root)\n'
+  + '       node plan-gate.js --project-root <root> [--plan-class]   (the brief on stdin)\n'
   + '       node plan-gate.js --hash <file>';
-const REFUSED = 'plan-gate: refused - see /pnp:review Steps 2c and 2d';
+const REFUSED = 'plan-gate: refused - the plan folder fails its mechanical contract (plan-gate --check <folder>)';
 
 /** True when the brief carries the `Class: plan` line at its first column. */
 function isPlanBrief(text) {
   return typeof text === 'string' && CLASS_PLAN_LINE.test(text);
 }
 
-/** Lowercase hex SHA-256 of the file's UTF-8 text with CRLF normalised to LF. Throws if unreadable. */
-function planHash(absPath) {
-  const text = fs.readFileSync(absPath, 'utf8').replace(/\r\n/g, '\n');
-  return crypto.createHash('sha256').update(text, 'utf8').digest('hex');
-}
-
 // ---- text helpers ------------------------------------------------------------
-const stripBom = (s) => s.replace(/^\uFEFF/, '');
+const lf = (text) => text.replace(/\r\n/g, '\n');
+const sha = (text) => crypto.createHash('sha256').update(text, 'utf8').digest('hex');
+const stripBom = (s) => (s.charCodeAt(0) === 0xFEFF ? s.slice(1) : s);
 const toLines = (text) => text.split('\n').map((l) => l.replace(/\r$/, ''));
 const allMatches = (re, text) => {
   const out = [];
@@ -89,6 +116,11 @@ const allMatches = (re, text) => {
   re.lastIndex = 0;
   return out;
 };
+
+/** Lowercase hex SHA-256 of the file's UTF-8 text with CRLF normalised to LF. Throws if unreadable. */
+function planHash(absPath) {
+  return sha(lf(fs.readFileSync(absPath, 'utf8')));
+}
 
 /** Every value of a `<NAME>: <value>` brief line that starts at column 0. */
 function briefLineValues(brief, name) {
@@ -100,7 +132,7 @@ function briefLineValues(brief, name) {
  * leading spaces, then three or more backticks or three or more tildes, an info string allowed.
  * Closing fence: up to three leading spaces, the SAME character, at least as many, nothing else but
  * spaces. A shorter fence inside a longer one does not close it; an unclosed fence runs to the end
- * of the file (the safe direction - nothing after it is counted).
+ * of the file (nothing after it is read as contract text).
  */
 function fencedMask(lines) {
   const mask = new Array(lines.length).fill(false);
@@ -118,16 +150,31 @@ function fencedMask(lines) {
   return mask;
 }
 
-/** The refs that are ticket HEADINGS of the plan: a heading whose first token is the ref, unfenced. */
-function ticketHeadings(lines) {
-  const mask = fencedMask(lines);
-  const refs = new Set();
-  for (let i = 0; i < lines.length; i++) {
-    if (mask[i]) continue;
-    const m = /^#{1,6}[ \t]+([A-Za-z0-9_-]+)/.exec(lines[i]);
-    if (m) refs.add(m[1]);
+/**
+ * The line with its code spans blanked: a run of N backticks opens a span that the next run of
+ * exactly N backticks closes; a run with no closing partner is literal text.
+ */
+function stripCodeSpans(line) {
+  let out = '';
+  let i = 0;
+  while (i < line.length) {
+    if (line[i] !== '`') { out += line[i]; i += 1; continue; }
+    let n = 0;
+    while (line[i + n] === '`') n += 1;
+    let close = -1;
+    let j = i + n;
+    while (j < line.length) {
+      if (line[j] !== '`') { j += 1; continue; }
+      let k = 0;
+      while (line[j + k] === '`') k += 1;
+      if (k === n) { close = j; break; }
+      j += k;
+    }
+    if (close === -1) { out += line.slice(i, i + n); i += n; continue; }
+    out += ' ';
+    i = close + n;
   }
-  return refs;
+  return out;
 }
 
 /** Markdown table cells: split on `|` except `\|`, unescape, trim, drop the outer empty cells. */
@@ -152,34 +199,309 @@ const isSeparator = (line, expectedCount) => {
   const cells = splitCells(line);
   return cells.length === expectedCount && cells.every((c) => /^:?-{3,}:?$/.test(c));
 };
-const sameHeader = (cells, expected) => cells.length === expected.length
-  && cells.every((c, i) => c.toLowerCase() === expected[i]);
 
-/**
- * Every table - a `|` header line followed by a separator row with the SAME number of cells - with
- * its data rows and 1-based lines. A header over a separator of another width is not a table.
- */
-function findTables(lines) {
-  const tables = [];
+/** The first table - a `|` header line over a separator row of the same width - and its data rows. */
+function firstTable(lines) {
   for (let i = 0; i + 1 < lines.length; i++) {
     if (!isRowLine(lines[i])) continue;
     const header = splitCells(lines[i]);
     if (!isSeparator(lines[i + 1], header.length)) continue;
     const rows = [];
-    let j = i + 2;
-    while (j < lines.length && isRowLine(lines[j])) { rows.push({ line: j + 1, cells: splitCells(lines[j]) }); j += 1; }
-    tables.push({ headerLine: i + 1, header, rows });
-    i = j - 1;
+    for (let j = i + 2; j < lines.length && isRowLine(lines[j]); j++) rows.push(splitCells(lines[j]));
+    return rows;
   }
-  return tables;
+  return [];
 }
 
-// ---- the check ---------------------------------------------------------------
+// ---- the folder --------------------------------------------------------------
+/** The text of a regular file, or null when it is absent or not a regular file. */
+function readFileText(abs) {
+  try {
+    return fs.statSync(abs).isFile() ? fs.readFileSync(abs, 'utf8') : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/** A contract file: its `/`-separated name in the folder, raw and LF text, lines and fence mask. */
+function contractFile(rel, raw) {
+  const text = lf(raw);
+  const lines = toLines(stripBom(text));
+  return { rel, raw, text, lines, mask: fencedMask(lines) };
+}
+
+/** Every `.md` regular file of a directory, sorted by name, as contract files named `<prefix>/<name>`. */
+function listMd(dir, prefix) {
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch (e) {
+    return [];
+  }
+  return entries.filter((e) => e.isFile() && e.name.endsWith('.md')).map((e) => e.name).sort()
+    .map((name) => Object.assign(contractFile(`${prefix}/${name}`, fs.readFileSync(path.join(dir, name), 'utf8')), { name }));
+}
+
+function readFolder(abs) {
+  const abbr = path.basename(abs);
+  const indexName = `PLAN_${abbr}.md`;
+  const indexRaw = readFileText(path.join(abs, indexName));
+  const decisionsRaw = readFileText(path.join(abs, 'DECISIONS.md'));
+  const ticketFiles = listMd(path.join(abs, 'tickets'), 'tickets');
+  return {
+    abs,
+    abbr,
+    plansDir: path.dirname(path.dirname(abs)),
+    indexName,
+    index: indexRaw === null ? null : contractFile(indexName, indexRaw),
+    decisions: decisionsRaw === null ? null : contractFile('DECISIONS.md', decisionsRaw),
+    // Every .md in tickets/ is in the stamp; only the names of the ticket grammar are tickets.
+    ticketFiles,
+    tickets: ticketFiles.filter((t) => lib.PLAN_TICKET_FILE_RE.test(t.name)),
+  };
+}
+
 /**
- * Checks a plan-readiness brief and the three files it names, resolved against projectRoot.
- * Returns { ok, problems: [{ token, message }] } with EVERY problem, in this order: the brief's lines,
- * TICKETS, the files, the scan, the own pass. A check that depends on a missing or duplicated line,
- * or on a missing file, is skipped rather than reported as a derived problem.
+ * The decisions of a DECISIONS.md: each unfenced `- **D-NN**` bullet, its text running to the next
+ * `- **D-` line or heading, and the plan its LAST `plan: <ABBR>` names (null when it names none).
+ */
+function parseDecisions(file) {
+  const out = [];
+  if (file === null) return out;
+  let cur = null;
+  const close = () => {
+    if (cur === null) return;
+    const text = cur.lines.join('\n').trim();
+    const plans = allMatches(DECISION_PLAN, text);
+    out.push({ id: cur.id, text, plan: plans.length > 0 ? plans[plans.length - 1] : null });
+    cur = null;
+  };
+  file.lines.forEach((line, i) => {
+    const unfenced = !file.mask[i];
+    if (unfenced && (/^- \*\*D-/.test(line) || /^#{1,6}[ \t]/.test(line))) close();
+    const m = unfenced ? DECISION_LINE.exec(line) : null;
+    if (m) { cur = { id: m[1], lines: [line] }; return; }
+    if (cur !== null) cur.lines.push(line);
+  });
+  close();
+  return out;
+}
+
+/** True when the file cites decision `id` of plan `abbr`: the bare D-NN, or `<abbr>/D-NN`. */
+function citesDecision(file, id, abbr) {
+  const text = file.lines.join('\n');
+  // The D-NN of a reference to ANOTHER plan cites that plan's decision.
+  const foreign = new Set();
+  for (const m of text.matchAll(XREF_RE)) {
+    if (m[1] !== abbr) foreign.add(m.index + m[1].length + 1);
+  }
+  const re = new RegExp('(?<![A-Za-z0-9-])' + lib.escapeRe(id) + '(?![0-9])', 'g');
+  for (const m of text.matchAll(re)) {
+    if (!foreign.has(m.index)) return true;
+  }
+  return false;
+}
+
+/** The DECISIONS.md a reference to plan `x` resolves to, or null. */
+function decisionsSourceOf(model, x) {
+  if (x === model.abbr) return path.join(model.abs, 'DECISIONS.md');
+  const active = path.join(model.plansDir, 'active', x, 'DECISIONS.md');
+  if (readFileText(active) !== null) return active;
+  const archive = path.join(model.plansDir, 'archive');
+  let dirs = [];
+  try {
+    dirs = fs.readdirSync(archive, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort();
+  } catch (e) {
+    dirs = [];
+  }
+  const named = new RegExp('^\\d+_PLAN_' + lib.escapeRe(x) + '_');
+  for (const d of dirs) {
+    if (!named.test(d)) continue;
+    const file = path.join(archive, d, 'DECISIONS.md');
+    if (readFileText(file) !== null) return file;
+  }
+  return null;
+}
+
+/** Every `<X>/D-NN` of the files, sorted, each resolved to { hash } or { why }. */
+function resolveXrefs(model, files) {
+  const keys = new Map();
+  for (const f of files) {
+    for (const m of f.lines.join('\n').matchAll(XREF_RE)) keys.set(`${m[1]}/D-${m[2]}`, { x: m[1], id: `D-${m[2]}` });
+  }
+  const sources = new Map();
+  const out = new Map();
+  for (const key of [...keys.keys()].sort()) {
+    const { x, id } = keys.get(key);
+    if (!sources.has(x)) {
+      const src = decisionsSourceOf(model, x);
+      const raw = src === null ? null : readFileText(src);
+      sources.set(x, raw === null ? null : parseDecisions(contractFile('DECISIONS.md', raw)));
+    }
+    const decisions = sources.get(x);
+    const hit = decisions === null ? null : decisions.find((d) => d.id === id);
+    if (decisions === null) out.set(key, { why: `plan ${x} has no DECISIONS.md under active/${x}/ or archive/<NNN>_PLAN_${x}_*/` });
+    else if (hit === undefined) out.set(key, { why: `the DECISIONS.md of plan ${x} has no "- **${id}**" bullet` });
+    else out.set(key, { hash: sha(hit.text) });
+  }
+  return out;
+}
+
+/** The backticked paths in the first column of the ticket's `## Code Map` table. */
+function codeMapPaths(ticket) {
+  const start = ticket.lines.findIndex((l, i) => !ticket.mask[i] && /^## Code Map[ \t]*$/.test(l));
+  if (start === -1) return [];
+  let end = ticket.lines.length;
+  for (let j = start + 1; j < ticket.lines.length; j++) {
+    if (!ticket.mask[j] && /^#{1,6}[ \t]/.test(ticket.lines[j])) { end = j; break; }
+  }
+  const paths = [];
+  for (const cells of firstTable(ticket.lines.slice(start + 1, end))) {
+    for (const span of (cells[0] || '').matchAll(/`([^`]+)`/g)) {
+      for (const p of span[1].split(', ')) if (p.trim() !== '') paths.push(p.trim());
+    }
+  }
+  return paths;
+}
+
+/** The stamp's content for the folder as it is now: per-file hashes, the contract hash, the xrefs. */
+function contractOf(model, resolved) {
+  const files = {};
+  if (model.index !== null) files[model.index.rel] = model.index.text;
+  if (model.decisions !== null) files[model.decisions.rel] = model.decisions.text;
+  for (const t of model.ticketFiles) files[t.rel] = t.text;
+  const names = Object.keys(files).sort();
+  const xrefs = {};
+  for (const [key, r] of resolved) if (r.hash) xrefs[key] = r.hash;
+  return {
+    contract: sha(names.map((n) => `${n}\n${files[n]}\n`).join('')),
+    files: Object.fromEntries(names.map((n) => [n, sha(files[n])])),
+    xrefs,
+  };
+}
+
+const stampPathOf = (model) => path.join(model.plansDir, 'readiness', model.abbr, 'stamp.json');
+
+/**
+ * Every problem of the folder, in this order: the folder itself, the index, the cap, each ticket's
+ * bytes and fields, decision coverage, cross-references, open items, Code Map paths, and - with
+ * `withStamp` - the stamp. A folder that is not one is the only problem reported.
+ */
+function examine(folderArg, root, withStamp) {
+  const problems = [];
+  const add = (token, message) => problems.push({ token, message });
+  const abs = path.resolve(root, folderArg);
+  let st = null;
+  try {
+    st = fs.statSync(abs);
+  } catch (e) {
+    st = null;
+  }
+  if (st === null || !st.isDirectory() || !lib.PLAN_ABBR_RE.test(path.basename(abs))) {
+    add('plan-folder-required', `${folderArg} is not a plan folder - a directory <plansDir>/active/<ABBR> named by the grammar [A-Z]{2,8} (a plan FILE is not accepted)`);
+    return { problems, model: null, contract: null };
+  }
+  const model = readFolder(abs);
+
+  if (model.index === null) add('index-missing', `the folder has no regular file ${model.indexName}`);
+  if (model.tickets.length > MAX_TICKETS) {
+    add(`tickets-over-cap:${model.tickets.length}`, `tickets/ holds ${model.tickets.length} ticket files - a plan carries at most ${MAX_TICKETS}; split it`);
+  }
+  for (const t of model.tickets) {
+    const bytes = Buffer.byteLength(t.text, 'utf8');
+    if (bytes > MAX_TICKET_BYTES) add(`ticket-over-bytes:${t.rel}`, `${t.rel} is ${bytes} bytes of LF-normalised UTF-8 - the cap is ${MAX_TICKET_BYTES}`);
+    const headings = new Set(t.lines.filter((l, i) => !t.mask[i]).map((l) => l.replace(/[ \t]+$/, '')));
+    for (const f of TICKET_FIELDS) {
+      if (!headings.has(`## ${f}`)) add(`field-missing:${t.rel}:${f}`, `${t.rel} has no "## ${f}" heading at its first column`);
+    }
+  }
+
+  const surface = [model.index, ...model.tickets].filter((f) => f !== null);
+  const demanded = new Set();
+  for (const d of parseDecisions(model.decisions)) {
+    if (d.plan !== model.abbr || demanded.has(d.id)) continue;
+    demanded.add(d.id);
+    if (!surface.some((f) => citesDecision(f, d.id, model.abbr))) {
+      add(`decision-uncited:${d.id}`, `${d.id} names plan ${model.abbr}, but no ticket file and no line of ${model.indexName} cites it`);
+    }
+  }
+
+  const scanned = [model.index, model.decisions, ...model.tickets].filter((f) => f !== null);
+  const resolved = resolveXrefs(model, scanned);
+  for (const [key, r] of resolved) if (r.why) add(`decision-xref-unresolved:${key}`, `${key} does not resolve: ${r.why}`);
+
+  for (const f of scanned) {
+    f.lines.forEach((line, i) => {
+      if (!f.mask[i] && TBD_RE.test(stripCodeSpans(line))) {
+        add(`tbd-found:${f.rel}:${i + 1}`, `${f.rel} line ${i + 1} carries a bare TBD, TODO or ??? - the frozen contract has no open item (a mention of the word goes in a code span)`);
+      }
+    });
+  }
+
+  for (const t of model.tickets) {
+    for (const p of codeMapPaths(t)) {
+      if (!fs.existsSync(path.resolve(root, p))) add(`codemap-path-missing:${t.rel}:${p}`, `the Code Map of ${t.rel} names ${p}, which does not exist under the project root`);
+    }
+  }
+
+  const contract = contractOf(model, resolved);
+  if (withStamp) {
+    const stampRel = `readiness/${model.abbr}/stamp.json`;
+    const raw = readFileText(stampPathOf(model));
+    if (raw === null) add('stamp-missing', `no ${stampRel} - stamp the plan's final text with plan-gate --stamp <folder>`);
+    else {
+      let s = null;
+      try {
+        s = JSON.parse(stripBom(raw));
+      } catch (e) {
+        s = null;
+      }
+      if (s === null || typeof s !== 'object' || Array.isArray(s) || typeof s.contract !== 'string') {
+        add('stamp-mismatch', `${stampRel} is not a stamp (unparseable, or no "contract" hash) - stamp the plan again`);
+      } else {
+        if (s.plan !== model.abbr || s.contract !== contract.contract) {
+          add('stamp-mismatch', `the contract is not the stamped text (stamped ${String(s.contract).slice(0, 12)}..., now ${contract.contract.slice(0, 12)}...) - re-stamp over the text that will be reviewed`);
+        }
+        const recorded = s.xrefs !== null && typeof s.xrefs === 'object' ? s.xrefs : {};
+        for (const [key, h] of Object.entries(contract.xrefs)) {
+          if (typeof recorded[key] === 'string' && recorded[key] !== h) {
+            add(`decision-xref-stale:${key}`, `the text of ${key} changed after the stamp - re-read it and re-stamp`);
+          }
+        }
+      }
+    }
+  }
+  return { problems, model, contract };
+}
+
+// ---- the module API ----------------------------------------------------------
+/** Checks a plan folder, stamp included. `root` (default: the cwd) resolves the folder and the Code Map. */
+function checkPlanFolder(folder, root) {
+  const r = examine(folder, typeof root === 'string' ? root : process.cwd(), true);
+  return { ok: r.problems.length === 0, problems: r.problems };
+}
+
+/** Stamps a plan folder that passes every check but the stamp's; writes nothing on a problem. */
+function stampPlanFolder(folder, root) {
+  const r = examine(folder, typeof root === 'string' ? root : process.cwd(), false);
+  if (r.problems.length > 0) return { ok: false, problems: r.problems, stampPath: null };
+  const stampPath = stampPathOf(r.model);
+  const stamp = {
+    plan: r.model.abbr,
+    contract: r.contract.contract,
+    files: r.contract.files,
+    xrefs: r.contract.xrefs,
+    stampedAt: new Date().toISOString(),
+  };
+  fs.mkdirSync(path.dirname(stampPath), { recursive: true });
+  fs.writeFileSync(stampPath, `${JSON.stringify(stamp, null, 2)}\n`);
+  return { ok: true, problems: [], stampPath };
+}
+
+/**
+ * Checks a plan-class brief: its `Class:` and `PLAN:` lines, then the folder PLAN names, resolved
+ * against projectRoot. Returns { ok, problems: [{ token, message }] } with EVERY problem; a missing
+ * or duplicated PLAN line skips the folder rather than reporting derived problems.
  */
 function checkPlanBrief(briefText, projectRoot) {
   const problems = [];
@@ -187,7 +509,6 @@ function checkPlanBrief(briefText, projectRoot) {
   const brief = stripBom(typeof briefText === 'string' ? briefText : '');
   const root = typeof projectRoot === 'string' ? projectRoot : '';
 
-  // 1. The five fixed lines.
   const vals = {};
   for (const name of LINE_NAMES) {
     vals[name] = briefLineValues(brief, name);
@@ -199,174 +520,16 @@ function checkPlanBrief(briefText, projectRoot) {
       add('class-not-plan', `the run is plan-class but the brief's class line reads "${vals[name][0]}"`);
     }
   }
-  const single = (name) => (vals[name].length === 1 ? vals[name][0] : null);
-
-  // The files are resolved and read up front; their problems are REPORTED after TICKETS below.
-  const files = {};
-  for (const name of FILE_LINES) {
-    const rel = single(name);
-    if (rel === null) { files[name] = null; continue; }
-    const abs = path.resolve(root, rel);
-    let text = null;
-    try {
-      if (fs.statSync(abs).isFile()) text = fs.readFileSync(abs, 'utf8');
-    } catch (e) {
-      text = null;
-    }
-    files[name] = { rel, abs, text };
-  }
-  const usable = (name) => files[name] !== null && files[name].text !== null;
-  const planText = usable('PLAN') ? stripBom(files.PLAN.text) : null;
-
-  // 2. TICKETS: the refs this pass audits.
-  let refs = null; // null = no usable TICKETS line, so no coverage check runs
-  const ticketsText = single('TICKETS');
-  if (ticketsText !== null) {
-    const parts = ticketsText.split(/[,\s]+/).filter(Boolean);
-    if (parts.length === 0) {
-      add('tickets-empty', 'the TICKETS line names no ref');
-    } else {
-      refs = [];
-      const planHeads = planText === null ? null : ticketHeadings(toLines(planText));
-      for (const p of parts) {
-        if (!REF_ALPHABET.test(p)) { add(`tickets-bad-ref:${p}`, `"${p}" is not a ticket ref ([A-Za-z0-9][A-Za-z0-9_-]*)`); continue; }
-        if (planHeads !== null) {
-          const inPlan = planHeads.has(p);
-          if (!inPlan) { add(`tickets-not-in-plan:${p}`, `${p} is not a ticket heading of ${files.PLAN.rel} (a heading whose first token is the ref, outside a fenced block)`); continue; }
-        }
-        if (!refs.includes(p)) refs.push(p);
-      }
-    }
-  }
-
-  // 3. The files.
-  for (const name of FILE_LINES) {
-    if (files[name] !== null && files[name].text === null) {
-      add(`file-missing:${name}`, `${files[name].rel} (resolved to ${files[name].abs}) is not a readable regular file`);
-    }
-  }
-
-  // 4. The consequence scan (Step 2c).
-  if (usable('CONSEQUENCE SCAN')) {
-    const lines = toLines(stripBom(files['CONSEQUENCE SCAN'].text));
-    const mask = fencedMask(lines);
-    const isScanHeaderCandidate = (i) => {
-      if (mask[i] || !isRowLine(lines[i])) return false;
-      const c = splitCells(lines[i]);
-      return c.length >= 2 && c[0].toLowerCase() === '#' && c[1].toLowerCase() === 'ticket';
-    };
-    const ticketCells = [];
-    let validTables = 0;
-    let badHeaders = 0;
-    let i = 0;
-    while (i < lines.length) {
-      if (!isScanHeaderCandidate(i)) { i += 1; continue; }
-      const headerOk = sameHeader(splitCells(lines[i]), SCAN_HEADER)
-        && i + 1 < lines.length && !mask[i + 1] && isSeparator(lines[i + 1], SCAN_HEADER.length);
-      if (!headerOk) {
-        badHeaders += 1;
-        add(`scan-bad-header:${i + 1}`, `line ${i + 1} opens a scan table whose header is not exactly "| # | ticket | decision | surface | violation | closure |" followed by a six-cell separator row - its rows are not checked`);
-        i += 1;
-        while (i < lines.length && !mask[i] && isRowLine(lines[i]) && !isScanHeaderCandidate(i)) i += 1;
-        continue;
-      }
-      validTables += 1;
-      i += 2;
-      while (i < lines.length && !mask[i] && isRowLine(lines[i]) && !isScanHeaderCandidate(i)) {
-        const lineNo = i + 1;
-        const cells = splitCells(lines[i]);
-        if (cells.length >= 2) ticketCells.push(cells[1]);
-        if (cells.length !== SCAN_HEADER.length) {
-          add(`scan-row-shape:${lineNo}`, `scan row at line ${lineNo} has ${cells.length} cells, the header has ${SCAN_HEADER.length} (write a "|" inside a cell as "\\|")`);
-        } else {
-          if (cells.slice(0, 5).some((c) => c === '')) {
-            add(`scan-empty-cell:${lineNo}`, `scan row at line ${lineNo} has an empty cell outside "closure" (a "none found" row writes "none" in its violation cell)`);
-          }
-          const closure = cells[5].toLowerCase();
-          if (!CLOSED_PREFIXES.some((p) => closure.startsWith(p))) {
-            add(`scan-open-row:${lineNo}`, `scan row at line ${lineNo} is open - its closure must start with "plan:" or "no defect:"`);
-          }
-        }
-        i += 1;
-      }
-      // A row the agent returned without its leading `|` ends the table silently in markdown; here it
-      // is a malformed row, not a quiet end.
-      if (i < lines.length && !mask[i] && /^\s*\d+\s*\|/.test(lines[i])) {
-        add(`scan-row-shape:${i + 1}`, `line ${i + 1} is a scan row without its leading "|" - every row is recorded with a leading and a trailing "|"`);
-      }
-    }
-    if (validTables === 0) {
-      if (badHeaders === 0) add('scan-no-table', `${files['CONSEQUENCE SCAN'].rel} carries no scan table ("| # | ticket | decision | surface | violation | closure |")`);
-    } else if (refs !== null) {
-      for (const ref of refs) {
-        if (!ticketCells.includes(ref)) add(`scan-ticket-missing:${ref}`, `the consequence scan has no row for ${ref}`);
-      }
-    }
-  }
-
-  // 5. The own pass (Step 2d).
-  if (usable('OWN PASS')) {
-    const ownText = stripBom(files['OWN PASS'].text);
-    const hashes = allMatches(HASH_LINE, ownText);
-    if (hashes.length !== 1) {
-      add('own-hash-missing', `the own pass must carry exactly one "PLAN SHA256: <64 hex>" line (found ${hashes.length})`);
-    } else if (usable('PLAN')) {
-      const ownHash = hashes[0].toLowerCase();
-      const currentHash = planHash(files.PLAN.abs);
-      if (ownHash !== currentHash) {
-        add('own-hash-mismatch', `the own pass was stamped over a different text of ${files.PLAN.rel} (stamped ${ownHash.slice(0, 12)}..., now ${currentHash.slice(0, 12)}...) - redo the own pass over the plan that will be dispatched`);
-      }
-    }
-    if (allMatches(BLOCKERS_LINE, ownText).length !== 1) {
-      add('own-blockers-missing', 'the own pass must carry exactly one "BLOCKERS FOUND: <n>" line');
-    }
-    const tables = findTables(toLines(ownText));
-    const checks = tables.filter((t) => sameHeader(t.header, CHECKS_HEADER));
-    if (checks.length === 0) {
-      add('own-checks-table-missing', 'the own pass has no "| ticket | repo-match | scope | discovery | order | acceptance | git |" table');
-    } else {
-      const ownTickets = [];
-      for (const row of checks.flatMap((t) => t.rows)) {
-        if (row.cells.length >= 1) ownTickets.push(row.cells[0]);
-        if (row.cells.length !== CHECKS_HEADER.length) {
-          add(`own-checks-row-shape:${row.line}`, `own-pass row at line ${row.line} has ${row.cells.length} cells, the header has ${CHECKS_HEADER.length}`);
-        } else if (row.cells.some((c) => c === '')) {
-          const who = row.cells[0] !== '' ? row.cells[0] : `line-${row.line}`;
-          add(`own-checks-empty-cell:${who}`, `own-pass row ${who} (line ${row.line}) has an empty cell - every one of the six checks is filled`);
-        }
-      }
-      if (refs !== null) {
-        for (const ref of refs) {
-          if (!ownTickets.includes(ref)) add(`own-ticket-missing:${ref}`, `the own pass has no row for ${ref}`);
-        }
-      }
-    }
-    const instrumentTables = tables.filter((t) => sameHeader(t.header, INSTRUMENTS_HEADER));
-    if (instrumentTables.every((t) => t.rows.length === 0)) {
-      add('own-instruments-missing', 'the own pass has no "| instrument | valid input | broken input |" table with at least one row');
-    } else {
-      // Rows are numbered within THEIR OWN table, from 1; the shape token names the file line.
-      for (const t of instrumentTables) {
-        t.rows.forEach((row, k) => {
-          if (row.cells.length !== INSTRUMENTS_HEADER.length) {
-            add(`own-instrument-shape:${row.line}`, `instrument row at line ${row.line} has ${row.cells.length} cells, the header has ${INSTRUMENTS_HEADER.length} (write a "|" inside a cell as "\\|")`);
-            return;
-          }
-          const [instrument, valid, broken] = row.cells;
-          if (instrument === '' || valid === '' || broken === '' || valid === broken) {
-            add(`own-instrument-cannot-fail:${k + 1}`, `instrument row ${k + 1} of the table at line ${t.headerLine} (file line ${row.line}) is empty or reads the same on broken input as on valid input - an instrument that cannot fail is a blocker, not a row`);
-          }
-        });
-      }
-    }
-  }
-
+  if (vals.PLAN.length === 1) problems.push(...examine(vals.PLAN[0], path.resolve(root), true).problems);
   return { ok: problems.length === 0, problems };
 }
 
 // ---- CLI ---------------------------------------------------------------------
 function parseArgs(argv) {
   if (argv.length === 2 && argv[0] === '--hash') return { mode: 'hash', file: argv[1] };
+  if (argv.length === 2 && (argv[0] === '--check' || argv[0] === '--stamp') && argv[1] !== '') {
+    return { mode: argv[0].slice(2), folder: argv[1] };
+  }
   let root = null;
   let planClass = false;
   for (let i = 0; i < argv.length; i++) {
@@ -374,7 +537,7 @@ function parseArgs(argv) {
     if (argv[i] === '--plan-class' && !planClass) { planClass = true; continue; }
     return null;
   }
-  return root === null ? null : { mode: 'check', root, planClass };
+  return root === null ? null : { mode: 'brief', root, planClass };
 }
 
 async function main(argv, state) {
@@ -394,6 +557,18 @@ async function main(argv, state) {
       return;
     }
     process.stdout.write(`PLAN SHA256: ${hex}\n`);
+    return;
+  }
+  if (args.mode === 'check' || args.mode === 'stamp') {
+    state.planPath = true;
+    const res = args.mode === 'check' ? checkPlanFolder(args.folder) : stampPlanFolder(args.folder);
+    if (res.ok) {
+      if (args.mode === 'stamp') process.stdout.write(`plan-gate: stamped ${path.relative(process.cwd(), res.stampPath).split(path.sep).join('/')}\n`);
+      return;
+    }
+    for (const p of res.problems) process.stdout.write(`plan-gate: ${p.token} - ${p.message}\n`);
+    process.stdout.write(`${REFUSED}\n`);
+    process.exitCode = 2;
     return;
   }
 
@@ -438,4 +613,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { checkPlanBrief, planHash, isPlanBrief };
+module.exports = { checkPlanFolder, stampPlanFolder, checkPlanBrief, isPlanBrief, planHash };

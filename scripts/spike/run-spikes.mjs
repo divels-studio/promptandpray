@@ -27,7 +27,6 @@
  * Exit 0 = every assertion passed. Exit 1 = at least one failed. Exit 2 = the spike could not run.
  */
 import { spawnSync } from 'node:child_process';
-import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -341,37 +340,29 @@ const gate2ModeCases = [
 ];
 
 // Gate 2's plan-pass branch: a `reviewer` dispatch whose prompt carries `Class: plan` does not start
-// without its readiness artifacts (scripts/engine/plan-gate.js). Each case carries its OWN project,
-// which gate2Cases cannot (they all run against one). The builder is this file's own, so the spike
-// stays self-contained: a plan with one ticket heading, a scan with one closed row, and an own pass
-// stamped with the SHA-256 of the plan's LF-normalised text - computed here, not by the checker.
+// on a plan folder that fails its mechanical contract (scripts/engine/plan-gate.js). Each case
+// carries its OWN project, which gate2Cases cannot (they all run against one): the same folder
+// `docs/backlogs/active/SPK/` (index, DECISIONS.md, one ticket with the six fields), once left
+// unstamped and once stamped by the REAL tool (`plan-gate.js --stamp`, run from the project root) -
+// never by a hash computed here. A stamp the tool refuses leaves G2 unstamped, so G2 fails loudly.
 const PLAN_PASS_BRIEF = [
   'Review the plan PLAN_SPK for execution readiness.', '',
   'Class: plan',
-  'PLAN: .aiwf/plan/SPK/PLAN_SPK.md',
-  'TICKETS: SPK-001',
-  'CONSEQUENCE SCAN: .aiwf/plan/SPK/consequence-scan.md',
-  'OWN PASS: .aiwf/plan/SPK/own-pass.md', '',
+  'PLAN: docs/backlogs/active/SPK', '',
 ].join('\n');
-const projectPlanPass = (name, withArtifacts) => {
+const projectPlanPass = (name, stamped) => {
   const root = path.join(tmpRoot, 'planpass-' + name);
-  const dir = path.join(root, '.aiwf', 'plan', 'SPK');
-  fs.mkdirSync(dir, { recursive: true });
-  if (withArtifacts) {
-    const plan = '# PLAN SPK\n\n## Decisions\n\n- D1. One spike decision.\n\n### SPK-001 - the spike ticket\n\nBody.\n';
-    fs.writeFileSync(path.join(dir, 'PLAN_SPK.md'), plan);
-    const hash = crypto.createHash('sha256').update(plan.replace(/\r\n/g, '\n'), 'utf8').digest('hex');
-    fs.writeFileSync(path.join(dir, 'consequence-scan.md'), [
-      '| # | ticket | decision | surface | violation | closure |', '|---|---|---|---|---|---|',
-      '| 1 | SPK-001 | D1 | none found - the spike tree | none | no defect: spike fixture |', '',
-    ].join('\n'));
-    fs.writeFileSync(path.join(dir, 'own-pass.md'), [
-      `PLAN SHA256: ${hash}`, 'BLOCKERS FOUND: 0', '',
-      '| ticket | repo-match | scope | discovery | order | acceptance | git |', '|---|---|---|---|---|---|---|',
-      '| SPK-001 | 0 - lines 1-9 read | in scope | none | gates walked | can fail | main, clean |', '',
-      '| instrument | valid input | broken input |', '|---|---|---|',
-      '| `node plan-gate.js --hash PLAN_SPK.md` | exit 0 | exit 2 on a missing file |', '',
-    ].join('\n'));
+  const dir = path.join(root, 'docs', 'backlogs', 'active', 'SPK');
+  fs.mkdirSync(path.join(dir, 'tickets'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'PLAN_SPK.md'), '# PLAN_SPK - the spike plan\n\n| ref | title |\n|---|---|\n| SPK-001 | the spike ticket |\n');
+  fs.writeFileSync(path.join(dir, 'DECISIONS.md'), '# DECISIONS - plan SPK\n\n- **D-01** One spike decision. plan: SPK\n');
+  fs.writeFileSync(path.join(dir, 'tickets', 'SPK-001.md'), [
+    '# SPK-001 - the spike ticket', '', 'Implements: D-01.', '',
+    ...['Outcome', 'Scope', 'Acceptance', 'Risk threshold', 'Stop condition', 'Verify'].flatMap((f) => [`## ${f}`, '', 'Spike.', '']),
+  ].join('\n'));
+  if (stamped) {
+    const r = spawnSync(process.execPath, [path.join(PLUGIN_HOOKS, 'plan-gate.js'), '--stamp', 'docs/backlogs/active/SPK'], { cwd: root, encoding: 'utf8' });
+    if (r.status !== 0) console.error(`spike: plan-gate --stamp refused the SPK fixture (exit ${r.status}): ${(r.stdout || '') + (r.stderr || '')}`);
   }
   return root;
 };
@@ -379,8 +370,8 @@ const planPassValid = projectPlanPass('valid', true);
 const planPassBare = projectPlanPass('bare', false);
 const reviewerBrief = (prompt) => agentEnvelope({ description: 'plan readiness pass', prompt, subagent_type: 'reviewer' });
 const gate2PlanCases = [
-  { name: 'gate2-plan-G1 reviewer + "Class: plan", no artifacts -> deny', projectDir: planPassBare, payload: reviewerBrief(PLAN_PASS_BRIEF), expect: 'deny' },
-  { name: 'gate2-plan-G2 reviewer + "Class: plan", artifacts in order -> silent', projectDir: planPassValid, payload: reviewerBrief(PLAN_PASS_BRIEF), expect: 'allow(passthrough)' },
+  { name: 'gate2-plan-G1 reviewer + "Class: plan", the plan folder unstamped -> deny', projectDir: planPassBare, payload: reviewerBrief(PLAN_PASS_BRIEF), expect: 'deny' },
+  { name: 'gate2-plan-G2 reviewer + "Class: plan", the plan folder stamped by plan-gate --stamp -> silent', projectDir: planPassValid, payload: reviewerBrief(PLAN_PASS_BRIEF), expect: 'allow(passthrough)' },
 ];
 
 // Gate 4: the Bash envelope. Same captured shape as above with the command varied; the gate reads

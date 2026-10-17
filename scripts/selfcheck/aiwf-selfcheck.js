@@ -3133,7 +3133,7 @@ function psResumeFindings(root, { execProbes = false, tmpDir = null } = {}) {
  */
 // `klass` - undefined keeps the historical ` -Class code` on the review wrapper, null passes NO
 // -Class at all, a string passes that class. `prepare(projectRoot)` runs before the wrapper (the
-// plan-gate probes write their readiness artifacts with it). `pathFor(bin)` replaces the PATH the
+// plan-gate probes write their plan folder with it). `pathFor(bin)` replaces the PATH the
 // wrapper sees (the node-less probe); by default the stub's bin is prepended to the inherited PATH.
 function runPsWrapperWithStub(root, wrapper, tmpDir,
   { brief = STUB_BRIEF, writeRollout = true, foreignRollout = false, seedState = null, readOnlyState = null, extraArgs = '',
@@ -3779,8 +3779,8 @@ const NUL_BYTE = String.fromCharCode(0);
  * newline), the stdin bytes, and the wrapper's own exit code. The stub exits with a distinctive
  * code so exit-propagation is proven by the same run.
  */
-// `prepare(projectRoot)` runs before the wrapper (the plan-gate probes write their readiness
-// artifacts into the probe's project with it).
+// `prepare(projectRoot)` runs before the wrapper (the plan-gate probes write their plan folder
+// into the probe's project with it).
 function runWrapperWithStub(root, wrapper, tmpDir, extraArgs = [],
   { seedState = null, writeRollout = true, secondRollout = null, brief = STUB_BRIEF, readOnlyState = null, prepare = null } = {}) {
   const home = fs.mkdtempSync(path.join(tmpDir, 'sh-exec-'));
@@ -4132,136 +4132,207 @@ function sectionShWrappers(tmpRoot) {
 }
 
 // ---------------------------------------------------------------------------
-// SECTION 5c - the plan gate: a plan-class pass does not start without its readiness artifacts
+// SECTION 5c - the plan gate: a plan-class pass does not start on a folder that fails its contract
 // ---------------------------------------------------------------------------
-// One checker (scripts/engine/plan-gate.js), three ways in: its own CLI (the M cases), the two Codex
-// review wrappers that run it on every brief (the W cases, on both channels, against the recording
-// stubs above), and Gate 2 on a Claude `reviewer` dispatch (the G cases).
+// One checker (scripts/engine/plan-gate.js), three ways in: its own CLI (the M cases - `--check`,
+// `--stamp`, `--hash` and the brief mode), the two Codex review wrappers that run it on every brief
+// (the W cases, on both channels, against the recording stubs above), and Gate 2 on a Claude
+// `reviewer` dispatch (the G cases).
 //
 // THE CONTROL MODEL. Every check has a passing and a refusing side over ONE fixture family: the
-// refusing M cases are the valid fixture of M1 with exactly the named damage (M7 and M17 name two),
-// so M1 is their passing
-// side, and each passing case has a named refusing twin - M18/M28 (an escaped `|` against a bare one),
-// M21/M22+M31, M23/M3 (an indented line against a second one at column 0), M24/M34, M37/M36+M42, and
-// M19/M20 for the --hash mode. The sabotage controls ctl-1..ctl-15 come ON TOP of that: they show a
-// token comes from the named branch rather than from a neighbouring check that happens to refuse, and
-// they cover the wiring in the wrappers and in Gate 2, which no pair of inputs can see. The ids are
-// written into the check names, because `check` has no id parameter.
+// refusing M cases are the valid, stamped folder of M1 with exactly the named damage, and each one
+// expects the EXACT token set it must produce (a damage to a contract file adds `stamp-mismatch`, and
+// that token is part of the set), so a neighbouring check that happens to refuse cannot stand in for
+// the named one. Passing twins: M8/M7 (6,144 LF bytes on CRLF against 6,145), M12/M13 (a decision of
+// another plan against the same decision of this one), M16/M11 (no `plan:` against `plan: FIX`),
+// M6/M5 (a file outside the ticket grammar against a fourth ticket), M37/M36, M38/M39, and M27/M28
+// for the stamp's own scope. The seven negative controls of the contract are M11 (a decision nothing
+// cites), M17 (a cross-reference that does not resolve), M12 (another plan's decision not demanded),
+// M26 (a stamp that does not match), M21 (a cited decision changed after the stamp), M5 (a fourth
+// ticket) and M7 (a ticket over the byte cap). The sabotage controls come ON TOP of that: each
+// patches ONE branch of a copy of the checker and its named case must turn red, and ctl-1/2/3/6 cover
+// the wiring in the wrappers and in Gate 2, which no pair of inputs can see. The ids are written into
+// the check names, because `check` has no id parameter.
 const PLAN_GATE = path.join(PLUGIN_ROOT, 'scripts', 'engine', 'plan-gate.js');
-const PG_REL = { plan: '.aiwf/plan/FIX/PLAN_FIX.md', scan: '.aiwf/plan/FIX/consequence-scan.md', own: '.aiwf/plan/FIX/own-pass.md' };
-const PG_FENCES = {
-  backtick: ['```text', '### FENCE-1 - a heading inside a fenced block', '```'],
-  tilde: ['~~~text', '### FENCE-1 - a heading inside a fenced block', '~~~'],
-  // A SHORTER fence inside a longer one does not close it.
-  nested: ['````text', '```', '### FENCE-1 - a heading inside a fenced block', '```', '````'],
+const PG_FOLDER = 'docs/backlogs/active/FIX';
+const PG_ARCHIVE = 'docs/backlogs/archive/001_PLAN_OLD_2026-01-01';
+const PG_STAMP = 'docs/backlogs/readiness/FIX/stamp.json';
+const PG_TICKET = `${PG_FOLDER}/tickets/FIX-001.md`;
+const PG_FIELDS = ['Outcome', 'Scope', 'Acceptance', 'Risk threshold', 'Stop condition', 'Verify'];
+// The index cites D-02 and nothing else; the ticket cites D-01 and the archived OLD/D-01;
+// DECISIONS.md cross-references FIX/D-01; D-03 belongs to plan OTH and nothing cites it.
+const pgIndexText = () => [
+  '# PLAN_FIX - the plan-gate fixture', '',
+  '## Tickets', '',
+  '| ref | title | status |', '|---|---|---|',
+  '| FIX-001 | the fixture ticket | open |', '',
+  '## FIX-001', '', 'The contract is `tickets/FIX-001.md`.', '',
+  '## Gates walked', '', 'No readiness pass on this fixture (D-02).', '',
+].join('\n');
+const PG_DECISIONS = [
+  '- **D-01** The fixture ticket implements this decision. plan: FIX',
+  '- **D-02** A process decision, cited by the index alone; it builds on FIX/D-01. plan: FIX',
+  '- **D-03** A decision another plan implements, so no ticket here owes it a citation. plan: OTH',
+];
+const pgDecisionsText = (bullets = PG_DECISIONS) => [
+  '# DECISIONS - plan FIX', '', 'A mention of an open item goes in a code span: `TODO`.', '',
+  '## Decisions', '', ...bullets, '',
+  '## Deferred', '', '- Nothing.', '',
+].join('\n');
+const PG_OLD_D01 = '- **D-01** The archived decision the fixture ticket cites. plan: OLD';
+const pgTicketText = ({ fields = PG_FIELDS, extra = [] } = {}) => [
+  '# FIX-001 - the fixture ticket', '',
+  'Implements: D-01. Background: OLD/D-01.', '',
+  ...fields.flatMap((f) => [`## ${f}`, '', 'Fixture.', '']),
+  'A mention of `TBD` in a code span is not an open item.', '',
+  ...extra,
+  '```text', 'TBD inside a fenced block is not an open item either', '```', '',
+  '## Code Map', '', '| path | role |', '|---|---|',
+  '| `src/fix.js`, `src/other.js` | the fixture sources, two in one cell |',
+  '| `docs/backlogs/active/FIX/` | the folder itself (a directory counts) |', '',
+].join('\n');
+/** The valid ticket padded to exactly `n` bytes of LF-normalised UTF-8. */
+const pgTicketOfBytes = (n) => {
+  const base = pgTicketText();
+  return `${base}${'p'.repeat(n - Buffer.byteLength(base, 'utf8') - 1)}\n`;
 };
-const pgPlanText = (fence = PG_FENCES.backtick) => [
-  '# PLAN FIX - the plan-gate fixture', '',
-  '## Decisions', '',
-  '- D1. One fixture decision; NOTE-9 is mentioned here, in prose only.', '',
-  '### FIX-001 - the ticket under review', '', 'Body.', '',
-  '### LEGACY-7 - a ticket with an older-style name', '', 'Body.', '',
-  ...fence, '',
-  '### AFTER-1 - a heading after a closed fence', '', 'Body.', '',
-  '### NOROW-1 - a ticket with no scan row and no own-pass row', '', 'Body.', '',
-].join('\n');
-const pgScanRow = (n, ref, { closure = 'no defect: fixture', surface = 'none found - the fixture tree' } = {}) =>
-  `| ${n} | ${ref} | D1 (plan line 5) | ${surface} | none | ${closure} |`;
-const PG_SCAN_HEADER = ['| # | ticket | decision | surface | violation | closure |', '|---|---|---|---|---|---|'];
-const PG_SCAN_ROWS = [pgScanRow(1, 'FIX-001'), pgScanRow(2, 'LEGACY-7'), pgScanRow(3, 'AFTER-1')];
-// Lines of the default scan: 1 title, 2 blank, 3 header, 4 separator, 5-7 FIX-001 / LEGACY-7 / AFTER-1.
-const pgScanText = ({ header = PG_SCAN_HEADER, rows = PG_SCAN_ROWS, tail = [] } = {}) =>
-  ['# Consequence scan - FIX', '', ...header, ...rows, ...tail, ''].join('\n');
-const pgOwnRow = (ref) => `| ${ref} | 0 - lines 1-25 read | in scope | none | gates walked | can fail | main, clean |`;
-const PG_INSTRUMENT = '| `node plan-gate.js --hash PLAN_FIX.md` | one PLAN SHA256 line, exit 0 | exit 2 on a missing file |';
-const pgOwnText = (hash, { checks = [pgOwnRow('FIX-001'), pgOwnRow('LEGACY-7'), pgOwnRow('AFTER-1')],
-  instruments = [PG_INSTRUMENT], hashLine = true, blockersLine = true, checksTable = true, instrumentsTable = true,
-  checksSeparator = '|---|---|---|---|---|---|---|', extraInstrumentTables = [] } = {}) => [
-  ...(hashLine ? [`PLAN SHA256: ${hash}`] : []),
-  ...(blockersLine ? ['BLOCKERS FOUND: 0'] : []),
-  '',
-  ...(checksTable ? ['| ticket | repo-match | scope | discovery | order | acceptance | git |', checksSeparator, ...checks, ''] : []),
-  ...(instrumentsTable ? ['| instrument | valid input | broken input |', '|---|---|---|', ...instruments, ''] : []),
-  ...extraInstrumentTables.flatMap((rows) => ['| instrument | valid input | broken input |', '|---|---|---|', ...rows, '']),
-].join('\n');
 const PG_BRIEF = [
   'Review the plan PLAN_FIX for execution readiness.', '',
   'Class: plan',
-  `PLAN: ${PG_REL.plan}`,
-  'TICKETS: FIX-001',
-  `CONSEQUENCE SCAN: ${PG_REL.scan}`,
-  `OWN PASS: ${PG_REL.own}`, '',
+  `PLAN: ${PG_FOLDER}`, '',
   'RISK THRESHOLD: block on a gap the Writer cannot execute.',
   'STOP CONDITION: stop once the whole plan is read.', '',
 ].join('\n');
 const pgSetLine = (brief, name, line) => brief.replace(new RegExp(`^${name}:.*$`, 'm'), line);
 const pgDropLine = (brief, name) => brief.replace(new RegExp(`^${name}:.*\\n`, 'm'), '');
 const pgLineOf = (text, needle) => text.split('\n').findIndex((l) => l.includes(needle)) + 1;
+const pgAt = (dir) => (rel) => path.join(dir, ...rel.split('/'));
+const pgPut = (dir) => (rel, text) => {
+  const file = pgAt(dir)(rel);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, text);
+};
 
 /**
- * Writes the plan-gate fixture into projectDir and returns the text of the VALID brief (the five
- * lines at column 0, `TICKETS: FIX-001`), or the brief the variant makes of it. The plan carries the
- * headings FIX-001, LEGACY-7, AFTER-1 (after a closed fence) and NOROW-1 (no rows anywhere), the ref
- * NOTE-9 in prose only, and FENCE-1 only inside a fenced block. The own pass is stamped with the
- * PAYLOAD checker's planHash. A variant names exactly one damage (M7 and M17 name two):
- *   plan: the plan text; scan: the scan text; own: options of pgOwnText; brief: (brief) => brief;
- *   planAfterStamp: (plan) => plan, rewritten AFTER the own pass was stamped.
+ * Writes the plan-gate fixture into projectDir and returns the VALID brief (`Class: plan` +
+ * `PLAN: docs/backlogs/active/FIX`). The project holds the folder (index, DECISIONS.md,
+ * tickets/FIX-001.md, RESEARCH.md, records/FIX-000.md), an ARCHIVED plan OLD whose D-01 the ticket
+ * cites, and the two sources the Code Map names. `before(put, at)` changes the tree BEFORE the stamp;
+ * `stamp: true` stamps the folder with the PAYLOAD checker (so a sabotaged copy under test moves only
+ * its own branch), and a fixture that payload checker refuses to stamp throws.
  */
-function writePlanFixture(projectDir, variant = {}) {
-  const at = (rel) => path.join(projectDir, ...rel.split('/'));
-  fs.mkdirSync(path.dirname(at(PG_REL.plan)), { recursive: true });
-  const plan = variant.plan !== undefined ? variant.plan : pgPlanText();
-  fs.writeFileSync(at(PG_REL.plan), plan);
-  const hash = require(PLAN_GATE).planHash(at(PG_REL.plan));
-  fs.writeFileSync(at(PG_REL.scan), variant.scan !== undefined ? variant.scan : pgScanText());
-  fs.writeFileSync(at(PG_REL.own), pgOwnText(hash, variant.own || {}));
-  if (variant.planAfterStamp) fs.writeFileSync(at(PG_REL.plan), variant.planAfterStamp(plan));
-  return variant.brief ? variant.brief(PG_BRIEF) : PG_BRIEF;
+function writePlanFixture(projectDir, { stamp = false, before = null } = {}) {
+  const put = pgPut(projectDir);
+  const at = pgAt(projectDir);
+  put(`${PG_FOLDER}/PLAN_FIX.md`, pgIndexText());
+  put(`${PG_FOLDER}/DECISIONS.md`, pgDecisionsText());
+  put(PG_TICKET, pgTicketText());
+  put(`${PG_FOLDER}/RESEARCH.md`, '# RESEARCH - plan FIX (outside the contract)\n');
+  put(`${PG_FOLDER}/records/FIX-000.md`, '# FIX-000 - a record (outside the contract)\n');
+  put(`${PG_ARCHIVE}/DECISIONS.md`, `# DECISIONS - plan OLD\n\n${PG_OLD_D01}\n`);
+  put('src/fix.js', "'use strict';\n");
+  put('src/other.js', "'use strict';\n");
+  if (before) before(put, at);
+  if (stamp) {
+    const r = require(PLAN_GATE).stampPlanFolder(at(PG_FOLDER), projectDir);
+    if (!r.ok) throw new Error(`the payload checker refused to stamp the fixture: ${r.problems.map((p) => p.token).join(', ')}`);
+  }
+  return PG_BRIEF;
 }
 
-/** The checker's CLI, as the wrappers run it. Tokens are read off `plan-gate: <token> - <message>`. */
-function pgCli(gatePath, args, input) {
-  const r = spawnSync(process.execPath, [gatePath, ...args], { input: input === undefined ? '' : input, encoding: 'utf8' });
+/**
+ * The checker's CLI, run from `cwd`. Tokens are read off `plan-gate: <token> - <message>` on EITHER
+ * stream: `--check`/`--stamp` print on stdout, the brief mode the wrappers run prints on stderr.
+ */
+function pgCli(gatePath, args, input, cwd) {
+  const r = spawnSync(process.execPath, [gatePath, ...args], { input: input === undefined ? '' : input, encoding: 'utf8', cwd: cwd || undefined });
+  const stdout = (r.stdout || '').replace(/\r/g, '');
   const stderr = (r.stderr || '').replace(/\r/g, '');
-  const tokens = stderr.split('\n').filter((l) => l.startsWith('plan-gate: ') && l.indexOf(' - ') !== -1)
+  const tokens = `${stdout}\n${stderr}`.split('\n').filter((l) => l.startsWith('plan-gate: ') && l.indexOf(' - ') !== -1)
     .map((l) => l.slice('plan-gate: '.length, l.indexOf(' - '))).filter((t) => t !== 'refused');
-  return { status: r.status, stdout: (r.stdout || '').replace(/\r/g, ''), stderr, tokens };
+  return { status: r.status, stdout, stderr, tokens };
 }
 
-/** The M matrix. A case either names a fixture variant + extra args + an expectation, or runs itself. */
+/**
+ * The M matrix. A case either runs itself (`run`), or names: `stamp` (default true - the fixture is
+ * stamped by the payload checker), `before`/`after(put, at, dir)` (the damage before / after the
+ * stamp), `args(dir)` (default `--check <folder>`, run FROM the project root), `input` (a brief: the
+ * brief mode, run from OUTSIDE the project so a Code Map path can only resolve against
+ * --project-root) and `expect(r, dir)`.
+ */
 function planGateCases() {
-  const valid = (r) => r.status === 0 && r.stderr === '';
+  const valid = (r) => r.status === 0 && r.stdout === '' && r.stderr === '';
   const has = (...tokens) => (r) => r.status === 2 && tokens.every((t) => r.tokens.includes(t));
   const exactly = (...tokens) => (r) => r.status === 2 && r.tokens.length === tokens.length && tokens.every((t) => r.tokens.includes(t));
-  const ownLines = pgOwnText('0'.repeat(64));
-  const fixRow = pgOwnRow('FIX-001');
-  const twoTables = (second) => pgScanText({ tail: ['', '## Delta scan - r2', '', ...second] });
-  const noClass = (b) => pgDropLine(b, 'Class');
+  const T = 'tickets/FIX-001.md';
+  const brief = (dir) => ['--project-root', dir];
+  const briefPlanClass = (dir) => ['--project-root', dir, '--plan-class'];
+  const noClass = pgDropLine(PG_BRIEF, 'Class');
+  const tbdTicket = pgTicketText({ extra: ['The rollback is TBD.', ''] });
+  const todoDecisions = pgDecisionsText([...PG_DECISIONS, '', 'TODO: one more decision.']);
+  const openIndex = `${pgIndexText()}Open: ???\n`;
+  const contractFiles = ['DECISIONS.md', 'PLAN_FIX.md', 'tickets/FIX-001.md'];
   return [
-    { id: 'M1', label: 'the valid fixture -> exit 0, empty stderr', expect: valid },
-    { id: 'M2', label: 'no OWN PASS line -> line-missing:OWN PASS', variant: { brief: (b) => pgDropLine(b, 'OWN PASS') }, expect: has('line-missing:OWN PASS') },
-    { id: 'M3', label: 'two PLAN lines at column 0 -> line-duplicate:PLAN', variant: { brief: (b) => b.replace(/^PLAN:.*$/m, (l) => `${l}\n${l}`) }, expect: has('line-duplicate:PLAN') },
-    { id: 'M4', label: 'TICKETS names XX-999, which the plan does not carry -> tickets-not-in-plan:XX-999', variant: { brief: (b) => pgSetLine(b, 'TICKETS', 'TICKETS: FIX-001, XX-999') }, expect: has('tickets-not-in-plan:XX-999') },
-    { id: 'M5', label: 'TICKETS: -bad -> tickets-bad-ref:-bad', variant: { brief: (b) => pgSetLine(b, 'TICKETS', 'TICKETS: -bad') }, expect: has('tickets-bad-ref:-bad') },
-    { id: 'M6', label: 'OWN PASS names a missing file -> file-missing:OWN PASS', variant: { brief: (b) => pgSetLine(b, 'OWN PASS', 'OWN PASS: .aiwf/plan/FIX/no-such-own-pass.md') }, expect: has('file-missing:OWN PASS') },
-    { id: 'M7', label: 'one scan row closed "later", another with an empty closure -> two scan-open-row with their file lines',
-      variant: { scan: pgScanText({ rows: [pgScanRow(1, 'FIX-001', { closure: 'later' }), pgScanRow(2, 'LEGACY-7', { closure: '' }), pgScanRow(3, 'AFTER-1')] }) },
-      expect: has('scan-open-row:5', 'scan-open-row:6') },
-    { id: 'M8', label: 'the scan has no row for FIX-001 -> scan-ticket-missing:FIX-001', variant: { scan: pgScanText({ rows: PG_SCAN_ROWS.slice(1) }) }, expect: has('scan-ticket-missing:FIX-001') },
-    { id: 'M9', label: 'the scan rows with no header -> scan-no-table', variant: { scan: pgScanText({ header: [] }) }, expect: has('scan-no-table') },
-    { id: 'M10', label: 'the plan edited after the own pass was stamped -> own-hash-mismatch', variant: { planAfterStamp: (p) => `${p}One more line, written after the stamp.\n` }, expect: has('own-hash-mismatch') },
-    { id: 'M11', label: 'the own pass without its PLAN SHA256 line -> own-hash-missing', variant: { own: { hashLine: false } }, expect: has('own-hash-missing') },
-    { id: 'M12', label: 'the own pass without BLOCKERS FOUND -> own-blockers-missing', variant: { own: { blockersLine: false } }, expect: has('own-blockers-missing') },
-    { id: 'M13', label: 'an empty own-pass cell -> own-checks-empty-cell:FIX-001', variant: { own: { checks: [fixRow.replace('| in scope |', '|  |'), pgOwnRow('LEGACY-7'), pgOwnRow('AFTER-1')] } }, expect: has('own-checks-empty-cell:FIX-001') },
-    { id: 'M14', label: 'no own-pass row for FIX-001 -> own-ticket-missing:FIX-001', variant: { own: { checks: [pgOwnRow('LEGACY-7'), pgOwnRow('AFTER-1')] } }, expect: has('own-ticket-missing:FIX-001') },
-    { id: 'M15', label: 'an instrument whose broken run reads like its valid one -> own-instrument-cannot-fail:1', variant: { own: { instruments: ['| `node check.js` | exit 0 | exit 0 |'] } }, expect: has('own-instrument-cannot-fail:1') },
-    { id: 'M16', label: 'the own pass without the instrument table -> own-instruments-missing', variant: { own: { instrumentsTable: false } }, expect: has('own-instruments-missing') },
-    { id: 'M17', label: 'two independent problems (no hash line, no scan row for FIX-001) -> both tokens in ONE run',
-      variant: { own: { hashLine: false }, scan: pgScanText({ rows: PG_SCAN_ROWS.slice(1) }) }, expect: has('own-hash-missing', 'scan-ticket-missing:FIX-001') },
-    { id: 'M18', label: 'an escaped \\| inside an instrument cell -> valid (the refusing twin is M28)', variant: { own: { instruments: ['| `grep -c "a\\|b" x` | 1 match | 0 matches |'] } }, expect: valid },
-    { id: 'M19', label: '--hash prints the SHA-256 of the LF-normalised text, and a CRLF copy of the same file prints the same hash (the refusing twin is M20)',
+    { id: 'M1', label: 'the valid folder, stamped -> --check exit 0, nothing printed (D-02 cited by the index alone, D-03 of plan OTH cited nowhere, a `TBD` in a code span, a TBD in a fenced block)', expect: valid },
+    { id: 'M2', label: 'the same folder never stamped -> exactly stamp-missing', stamp: false, expect: exactly('stamp-missing') },
+    { id: 'M3', label: '--stamp on the valid folder -> exit 0 and "plan-gate: stamped <path>", then --check exit 0; the stamp (2-space JSON, LF) holds exactly the three contract files, the two cross-references and the name-prefixed contract hash',
       run: (gate, dir) => {
-        const text = pgPlanText();
+        writePlanFixture(dir);
+        const s = pgCli(gate, ['--stamp', PG_FOLDER], '', dir);
+        const c = pgCli(gate, ['--check', PG_FOLDER], '', dir);
+        const raw = readText(pgAt(dir)(PG_STAMP));
+        const stamp = raw === null ? null : readJson(pgAt(dir)(PG_STAMP));
+        const texts = contractFiles.map((f) => fs.readFileSync(pgAt(dir)(`${PG_FOLDER}/${f}`), 'utf8').replace(/\r\n/g, '\n'));
+        const shape = isPlainObject(stamp) && raw === `${JSON.stringify(stamp, null, 2)}\n` && stamp.plan === 'FIX'
+          && isPlainObject(stamp.files) && JSON.stringify(Object.keys(stamp.files)) === JSON.stringify(contractFiles)
+          && contractFiles.every((f, i) => stamp.files[f] === sha256(texts[i]))
+          && stamp.contract === sha256(contractFiles.map((f, i) => `${f}\n${texts[i]}\n`).join(''))
+          && isPlainObject(stamp.xrefs) && JSON.stringify(Object.keys(stamp.xrefs)) === JSON.stringify(['FIX/D-01', 'OLD/D-01'])
+          && stamp.xrefs['OLD/D-01'] === sha256(PG_OLD_D01)
+          && typeof stamp.stampedAt === 'string' && !Number.isNaN(Date.parse(stamp.stampedAt));
+        return { ok: s.status === 0 && s.stdout === `plan-gate: stamped ${PG_STAMP}\n` && valid(c) && shape,
+          detail: `stamp exit ${s.status}: ${firstLine(s.stdout || s.stderr)}; check exit ${c.status}; stamp shape ${shape}`, tokens: [...s.tokens, ...c.tokens] };
+      } },
+    { id: 'M4', label: 'the index deleted after the stamp -> exactly index-missing, decision-uncited:D-02 (the index was its only citation) and stamp-mismatch',
+      after: (put, at) => fs.rmSync(at(`${PG_FOLDER}/PLAN_FIX.md`)), expect: exactly('index-missing', 'decision-uncited:D-02', 'stamp-mismatch') },
+    { id: 'M5', label: '(vi) a fourth ticket file -> exactly tickets-over-cap:4 and stamp-mismatch',
+      after: (put) => { for (const n of ['002', '003', '004']) put(`${PG_FOLDER}/tickets/FIX-${n}.md`, pgTicketText()); },
+      expect: exactly('tickets-over-cap:4', 'stamp-mismatch') },
+    { id: 'M6', label: 'three ticket files plus tickets/notes.md (outside the ticket grammar) -> exactly stamp-mismatch (not counted, not checked as a ticket, but inside the contract)',
+      after: (put) => { for (const n of ['002', '003']) put(`${PG_FOLDER}/tickets/FIX-${n}.md`, pgTicketText()); put(`${PG_FOLDER}/tickets/notes.md`, 'free notes\n'); },
+      expect: exactly('stamp-mismatch') },
+    { id: 'M7', label: '(vii) the ticket padded to 6,145 bytes -> exactly ticket-over-bytes:tickets/FIX-001.md and stamp-mismatch',
+      after: (put) => put(PG_TICKET, pgTicketOfBytes(6145)), expect: exactly(`ticket-over-bytes:${T}`, 'stamp-mismatch') },
+    { id: 'M8', label: 'the ticket at exactly 6,144 LF bytes, written with CRLF line endings (more bytes on disk), stamped -> valid (the passing twin of M7)',
+      before: (put) => put(PG_TICKET, pgTicketOfBytes(6144).replace(/\n/g, '\r\n')), expect: valid },
+    { id: 'M9', label: 'the "## Verify" heading removed -> exactly field-missing:tickets/FIX-001.md:Verify and stamp-mismatch',
+      after: (put) => put(PG_TICKET, pgTicketText({ fields: PG_FIELDS.filter((f) => f !== 'Verify') })),
+      expect: exactly(`field-missing:${T}:Verify`, 'stamp-mismatch') },
+    { id: 'M10', label: '"## Risk Threshold" (another case) -> exactly field-missing:tickets/FIX-001.md:Risk threshold and stamp-mismatch (the headings are case-sensitive)',
+      after: (put) => put(PG_TICKET, pgTicketText({ fields: PG_FIELDS.map((f) => (f === 'Risk threshold' ? 'Risk Threshold' : f)) })),
+      expect: exactly(`field-missing:${T}:Risk threshold`, 'stamp-mismatch') },
+    { id: 'M11', label: '(i) a decision D-04 of this plan that no ticket and no index line cites -> exactly decision-uncited:D-04 and stamp-mismatch',
+      after: (put) => put(`${PG_FOLDER}/DECISIONS.md`, pgDecisionsText([...PG_DECISIONS, '- **D-04** A decision nothing cites. plan: FIX'])),
+      expect: exactly('decision-uncited:D-04', 'stamp-mismatch') },
+    { id: 'M12', label: '(iii) D-03 carries "plan: OTH" and nothing cites it -> NOT demanded of this plan: exit 0, no decision-uncited:D-03',
+      expect: (r) => valid(r) && !r.tokens.includes('decision-uncited:D-03') },
+    { id: 'M13', label: 'the same D-03 re-scoped to "plan: FIX" -> exactly decision-uncited:D-03 and stamp-mismatch (the refusing twin of M12)',
+      after: (put) => put(`${PG_FOLDER}/DECISIONS.md`, pgDecisionsText(PG_DECISIONS.map((d) => d.replace('plan: OTH', 'plan: FIX')))),
+      expect: exactly('decision-uncited:D-03', 'stamp-mismatch') },
+    { id: 'M14', label: 'the ticket names D-01 only inside "OLD/D-01" -> exactly decision-uncited:D-01 and stamp-mismatch (a reference to another plan cites THAT plan\'s decision)',
+      after: (put) => put(PG_TICKET, pgTicketText().replace('Implements: D-01. ', '')), expect: exactly('decision-uncited:D-01', 'stamp-mismatch') },
+    { id: 'M15', label: 'the index line citing D-02 removed -> exactly decision-uncited:D-02 and stamp-mismatch',
+      after: (put) => put(`${PG_FOLDER}/PLAN_FIX.md`, pgIndexText().replace(' (D-02)', '')), expect: exactly('decision-uncited:D-02', 'stamp-mismatch') },
+    { id: 'M16', label: 'a decision D-04 with no "plan:" at all, cited nowhere -> exactly stamp-mismatch (it is demanded of no plan; the passing twin of M11)',
+      after: (put) => put(`${PG_FOLDER}/DECISIONS.md`, pgDecisionsText([...PG_DECISIONS, '- **D-04** A decision without a plan line.'])),
+      expect: exactly('stamp-mismatch') },
+    { id: 'M17', label: '(ii) the ticket cites OLD/D-07, which the archived plan does not carry -> exactly decision-xref-unresolved:OLD/D-07 and stamp-mismatch',
+      after: (put) => put(PG_TICKET, pgTicketText().replace('OLD/D-01', 'OLD/D-07')), expect: exactly('decision-xref-unresolved:OLD/D-07', 'stamp-mismatch') },
+    { id: 'M18', label: 'the archived plan\'s directory renamed outside the archive grammar (no number) -> exactly decision-xref-unresolved:OLD/D-01 (not a contract file: no stamp-mismatch)',
+      after: (put, at) => fs.renameSync(at(PG_ARCHIVE), at('docs/backlogs/archive/PLAN_OLD_2026-01-01')), expect: exactly('decision-xref-unresolved:OLD/D-01') },
+    { id: 'M19', label: '--hash prints the SHA-256 of the LF-normalised text, and a CRLF copy of the same file prints the same hash (kept for the monolith readers; the refusing twin is M20)',
+      run: (gate, dir) => {
+        const text = pgIndexText();
         fs.writeFileSync(path.join(dir, 'lf.md'), text);
         fs.writeFileSync(path.join(dir, 'crlf.md'), text.replace(/\n/g, '\r\n'));
         const a = pgCli(gate, ['--hash', path.join(dir, 'lf.md')]);
@@ -4271,100 +4342,123 @@ function planGateCases() {
       } },
     { id: 'M20', label: '--hash on a missing file -> exit 2',
       run: (gate, dir) => { const r = pgCli(gate, ['--hash', path.join(dir, 'no-such-plan.md')]); return { ok: r.status === 2 && r.stdout === '', detail: `exit ${r.status}` }; } },
-    { id: 'M21', label: 'a brief with no Class line and no --plan-class -> exit 0, empty stderr (a non-plan brief is not checked)', variant: { brief: noClass }, expect: valid },
-    { id: 'M22', label: 'the same brief WITH --plan-class -> exit 2 with line-missing', variant: { brief: noClass }, extraArgs: ['--plan-class'],
-      expect: (r) => r.status === 2 && r.tokens.some((t) => t.startsWith('line-missing:')) },
-    { id: 'M23', label: 'an indented "  PLAN: x" beside the valid lines -> valid (it is not a duplicate; the refusing twin is M3)', variant: { brief: (b) => `  PLAN: x\n${b}` }, expect: valid },
-    { id: 'M24', label: 'TICKETS: FIX-001, LEGACY-7 (an older-style ref with its heading and rows) -> valid (the refusing twin is M34)', variant: { brief: (b) => pgSetLine(b, 'TICKETS', 'TICKETS: FIX-001, LEGACY-7') }, expect: valid },
-    { id: 'M25', label: 'TICKETS: , -> tickets-empty', variant: { brief: (b) => pgSetLine(b, 'TICKETS', 'TICKETS: ,') }, expect: has('tickets-empty') },
-    { id: 'M26', label: 'a scan row with one cell too many -> scan-row-shape:5',
-      variant: { scan: pgScanText({ rows: [PG_SCAN_ROWS[0].replace(/ \|$/, ' | extra |'), ...PG_SCAN_ROWS.slice(1)] }) }, expect: has('scan-row-shape:5') },
-    { id: 'M27', label: 'an own-pass row with one cell too few -> own-checks-row-shape:<line>',
-      variant: { own: { checks: [fixRow.replace('| main, clean |', '|'), pgOwnRow('LEGACY-7'), pgOwnRow('AFTER-1')] } }, expect: has(`own-checks-row-shape:${pgLineOf(ownLines, '| FIX-001 |')}`) },
-    { id: 'M28', label: 'an instrument row with a bare | inside a cell -> own-instrument-shape:<line>',
-      variant: { own: { instruments: ['| `grep -c "a|b" x` | 1 match | 0 matches |'] } }, expect: has(`own-instrument-shape:${pgLineOf(ownLines, '| `node plan-gate.js')}`) },
-    { id: 'M29', label: 'the own pass without the six-check table -> own-checks-table-missing', variant: { own: { checksTable: false } }, expect: has('own-checks-table-missing') },
-    { id: 'M30', label: 'a scan row with an empty surface cell -> scan-empty-cell:5',
-      variant: { scan: pgScanText({ rows: [pgScanRow(1, 'FIX-001', { surface: '' }), ...PG_SCAN_ROWS.slice(1)] }) }, expect: has('scan-empty-cell:5') },
-    { id: 'M31', label: '--plan-class and a brief with no Class line -> exactly line-missing:Class', variant: { brief: noClass }, extraArgs: ['--plan-class'], expect: exactly('line-missing:Class') },
-    { id: 'M32', label: '--plan-class and Class: code -> class-not-plan', variant: { brief: (b) => pgSetLine(b, 'Class', 'Class: code') }, extraArgs: ['--plan-class'], expect: has('class-not-plan') },
-    { id: 'M33', label: 'two TICKETS lines (FIX-001, NOROW-1) -> line-duplicate:TICKETS and NO derived scan-ticket-missing / own-ticket-missing',
-      variant: { brief: (b) => b.replace(/^TICKETS:.*$/m, 'TICKETS: FIX-001\nTICKETS: NOROW-1') },
-      expect: (r) => has('line-duplicate:TICKETS')(r) && !r.tokens.some((t) => t.startsWith('scan-ticket-missing') || t.startsWith('own-ticket-missing')) },
-    { id: 'M34', label: 'TICKETS: NOTE-9 (a ref in prose, not a heading) -> tickets-not-in-plan:NOTE-9', variant: { brief: (b) => pgSetLine(b, 'TICKETS', 'TICKETS: NOTE-9') }, expect: has('tickets-not-in-plan:NOTE-9') },
-    { id: 'M35', label: 'a four-column scan table as the only one -> exactly scan-bad-header:3',
-      variant: { scan: pgScanText({ header: ['| # | ticket | decision | closure |', '|---|---|---|---|'], rows: ['| 1 | FIX-001 | D1 | later |'] }) }, expect: exactly('scan-bad-header:3') },
-    { id: 'M36', label: 'TICKETS: FENCE-1 (its heading only inside a ```text block) -> tickets-not-in-plan:FENCE-1', variant: { brief: (b) => pgSetLine(b, 'TICKETS', 'TICKETS: FENCE-1') }, expect: has('tickets-not-in-plan:FENCE-1') },
-    { id: 'M36', label: 'the same with a ~~~ fence -> tickets-not-in-plan:FENCE-1', variant: { plan: pgPlanText(PG_FENCES.tilde), brief: (b) => pgSetLine(b, 'TICKETS', 'TICKETS: FENCE-1') }, expect: has('tickets-not-in-plan:FENCE-1') },
-    { id: 'M36', label: 'the same inside a ```` fence holding a shorter ``` (which does not close it) -> tickets-not-in-plan:FENCE-1', variant: { plan: pgPlanText(PG_FENCES.nested), brief: (b) => pgSetLine(b, 'TICKETS', 'TICKETS: FENCE-1') }, expect: has('tickets-not-in-plan:FENCE-1') },
-    { id: 'M37', label: 'TICKETS: AFTER-1 (a heading AFTER a closed fence) -> valid (the passing side of M36)', variant: { brief: (b) => pgSetLine(b, 'TICKETS', 'TICKETS: AFTER-1') }, expect: valid },
-    { id: 'M38', label: 'two scan tables with the same header, an open row in the second -> scan-open-row:13',
-      variant: { scan: twoTables([...PG_SCAN_HEADER, '| 4 | FIX-001 | D2 (plan line 9) | none found - the fixture tree | none | later |']) }, expect: has('scan-open-row:13') },
-    { id: 'M39', label: 'a row "7 | FIX-001 | ..." without its leading | inside the scan table -> scan-row-shape:6',
-      variant: { scan: pgScanText({ rows: [PG_SCAN_ROWS[0]], tail: ['7 | FIX-001 | D1 | none found | none | no defect: x |', ...PG_SCAN_ROWS.slice(1)] }) }, expect: has('scan-row-shape:6') },
+    { id: 'M21', label: '(v) the archived decision OLD/D-01 rewritten after the stamp -> exactly decision-xref-stale:OLD/D-01',
+      after: (put) => put(`${PG_ARCHIVE}/DECISIONS.md`, `# DECISIONS - plan OLD\n\n${PG_OLD_D01} Amended.\n`), expect: exactly('decision-xref-stale:OLD/D-01') },
+    { id: 'M22', label: 'this plan\'s own D-01 (cross-referenced as FIX/D-01) rewritten after the stamp -> exactly decision-xref-stale:FIX/D-01 and stamp-mismatch',
+      after: (put) => put(`${PG_FOLDER}/DECISIONS.md`, pgDecisionsText(PG_DECISIONS.map((d) => d.replace('implements this decision', 'implements this amended decision')))),
+      expect: exactly('decision-xref-stale:FIX/D-01', 'stamp-mismatch') },
+    { id: 'M23', label: 'a bare TBD in the ticket -> exactly tbd-found:tickets/FIX-001.md:<its line> and stamp-mismatch',
+      after: (put) => put(PG_TICKET, tbdTicket), expect: exactly(`tbd-found:${T}:${pgLineOf(tbdTicket, 'The rollback is TBD.')}`, 'stamp-mismatch') },
+    { id: 'M24', label: 'a bare TODO in DECISIONS.md and ??? in the index -> exactly their two tbd-found tokens and stamp-mismatch',
+      after: (put) => { put(`${PG_FOLDER}/DECISIONS.md`, todoDecisions); put(`${PG_FOLDER}/PLAN_FIX.md`, openIndex); },
+      expect: exactly(`tbd-found:DECISIONS.md:${pgLineOf(todoDecisions, 'TODO: one')}`, `tbd-found:PLAN_FIX.md:${pgLineOf(openIndex, 'Open: ???')}`, 'stamp-mismatch') },
+    { id: 'M25', label: 'src/other.js (the SECOND path of one Code Map cell) deleted -> exactly codemap-path-missing:tickets/FIX-001.md:src/other.js',
+      after: (put, at) => fs.rmSync(at('src/other.js')), expect: exactly(`codemap-path-missing:${T}:src/other.js`) },
+    { id: 'M26', label: '(iv) one byte appended to the ticket after the stamp -> exactly stamp-mismatch',
+      after: (put, at) => fs.appendFileSync(at(PG_TICKET), 'x'), expect: exactly('stamp-mismatch') },
+    { id: 'M27', label: 'RESEARCH.md and records/ rewritten after the stamp, a second record added -> valid (both lie outside the contract)',
+      after: (put) => {
+        put(`${PG_FOLDER}/RESEARCH.md`, '# RESEARCH - rewritten after the stamp\n');
+        put(`${PG_FOLDER}/records/FIX-000.md`, '# FIX-000 - rewritten after the stamp\n');
+        put(`${PG_FOLDER}/records/FIX-001.md`, '# FIX-001 - the record of the ticket\n');
+      }, expect: valid },
+    { id: 'M28', label: 'every contract file rewritten with CRLF line endings after the stamp -> valid (a checkout that converts line endings is not an edit)',
+      after: (put, at) => { for (const f of contractFiles) put(`${PG_FOLDER}/${f}`, fs.readFileSync(at(`${PG_FOLDER}/${f}`), 'utf8').replace(/\n/g, '\r\n')); },
+      expect: valid },
+    { id: 'M29', label: '--stamp on a folder with a problem (no index) -> exit 2 with index-missing, and NO stamp file is written',
+      stamp: false, after: (put, at) => fs.rmSync(at(`${PG_FOLDER}/PLAN_FIX.md`)), args: () => ['--stamp', PG_FOLDER],
+      expect: (r, dir) => has('index-missing')(r) && !fs.existsSync(pgAt(dir)(PG_STAMP)) && !/stamped/.test(r.stdout) },
+    { id: 'M30', label: '--check on a folder that does not exist -> exactly plan-folder-required',
+      stamp: false, args: () => ['--check', 'docs/backlogs/active/NONE'], expect: exactly('plan-folder-required') },
+    { id: 'M31', label: 'brief mode: Class: plan + PLAN: <the stamped folder>, run from OUTSIDE the project -> exit 0, nothing printed (the Code Map resolves against --project-root)',
+      args: brief, input: PG_BRIEF, expect: valid },
+    { id: 'M32', label: 'brief mode over the unstamped folder -> exactly stamp-missing', stamp: false, args: brief, input: PG_BRIEF, expect: exactly('stamp-missing') },
+    { id: 'M33', label: 'brief mode, PLAN names a regular FILE with a grammar-shaped name -> exactly plan-folder-required',
+      after: (put) => put('docs/backlogs/active/NOTDIR', 'a file, not a folder\n'), args: brief,
+      input: pgSetLine(PG_BRIEF, 'PLAN', 'PLAN: docs/backlogs/active/NOTDIR'), expect: exactly('plan-folder-required') },
+    { id: 'M34', label: 'brief mode, PLAN names a directory outside the ABBR grammar (fix-1) -> exactly plan-folder-required',
+      after: (put, at) => fs.mkdirSync(at('docs/backlogs/active/fix-1'), { recursive: true }), args: brief,
+      input: pgSetLine(PG_BRIEF, 'PLAN', 'PLAN: docs/backlogs/active/fix-1'), expect: exactly('plan-folder-required') },
+    { id: 'M35', label: 'brief mode with no PLAN line -> exactly line-missing:PLAN', args: brief, input: pgDropLine(PG_BRIEF, 'PLAN'), expect: exactly('line-missing:PLAN') },
+    { id: 'M36', label: 'brief mode with two PLAN lines at column 0 -> exactly line-duplicate:PLAN', args: brief,
+      input: PG_BRIEF.replace(/^PLAN:.*$/m, (l) => `${l}\n${l}`), expect: exactly('line-duplicate:PLAN') },
+    { id: 'M37', label: 'an indented "  PLAN: x" beside the valid lines -> valid (it is not a duplicate; the refusing twin is M36)',
+      args: brief, input: `  PLAN: x\n${PG_BRIEF}`, expect: valid },
+    { id: 'M38', label: 'a brief with no Class line and no --plan-class, over the UNSTAMPED folder -> exit 0, nothing printed (a non-plan brief is not checked)',
+      stamp: false, args: brief, input: noClass, expect: valid },
+    { id: 'M39', label: 'the same brief WITH --plan-class, over the stamped folder -> exactly line-missing:Class (the refusing twin of M38)',
+      args: briefPlanClass, input: noClass, expect: exactly('line-missing:Class') },
     { id: 'M40', label: 'an unknown CLI argument -> exit 2 with the usage',
       run: (gate, dir) => { const r = pgCli(gate, ['--project-root', dir, '--bogus'], PG_BRIEF); return { ok: r.status === 2 && /usage:/.test(r.stderr), detail: `exit ${r.status}: ${firstLine(r.stderr)}` }; } },
-    { id: 'M41', label: 'the valid six-column table plus a second "# | ticket | decision | closure" table with an open row -> exactly scan-bad-header:11 (its rows are not checked)',
-      variant: { scan: twoTables(['| # | ticket | decision | closure |', '|---|---|---|---|', '| 4 | FIX-001 | D2 | later |']) }, expect: exactly('scan-bad-header:11') },
-    { id: 'M42', label: 'the fence closed by "```" plus ONE TAB stays open to the end of the plan, so TICKETS: AFTER-1 -> tickets-not-in-plan:AFTER-1 (the refusing twin of M37)',
-      variant: { plan: pgPlanText(['```text', '### FENCE-1 - a heading inside a fenced block', '```\t']), brief: (b) => pgSetLine(b, 'TICKETS', 'TICKETS: AFTER-1') },
-      expect: has('tickets-not-in-plan:AFTER-1') },
-    { id: 'M43', label: 'the six-column scan header over a one-cell "|---|" separator, as the only table -> exactly scan-bad-header:3 (the passing side is M1)',
-      variant: { scan: pgScanText({ header: [PG_SCAN_HEADER[0], '|---|'] }) }, expect: exactly('scan-bad-header:3') },
-    { id: 'M44', label: 'the six-check table over a one-cell "|---|" separator is not a table -> own-checks-table-missing (the passing side is M1)',
-      variant: { own: { checksSeparator: '|---|' } }, expect: has('own-checks-table-missing') },
-    { id: 'M45', label: 'a SECOND instrument table whose first row cannot fail -> own-instrument-cannot-fail:1 and not :2 (rows numbered within their own table; the passing side is M18)',
-      variant: { own: { extraInstrumentTables: [['| `node again.js` | exit 0 | exit 0 |']] } },
-      expect: (r) => has('own-instrument-cannot-fail:1')(r) && !r.tokens.includes('own-instrument-cannot-fail:2') },
+    { id: 'M41', label: '--plan-class and Class: code, over the stamped folder -> exactly class-not-plan',
+      args: briefPlanClass, input: pgSetLine(PG_BRIEF, 'Class', 'Class: code'), expect: exactly('class-not-plan') },
+    { id: 'M42', label: 'brief mode, PLAN names the index FILE of the folder -> exactly plan-folder-required',
+      args: brief, input: pgSetLine(PG_BRIEF, 'PLAN', `PLAN: ${PG_FOLDER}/PLAN_FIX.md`), expect: exactly('plan-folder-required') },
   ];
 }
 
 /** Runs one M case against a checker file; a fresh project dir per case. */
 function pgRunCase(c, gatePath, tmpRoot) {
   const dir = fs.mkdtempSync(path.join(tmpRoot, `pg-${c.id}-`));
-  if (c.run) return c.run(gatePath, dir);
-  const brief = writePlanFixture(dir, c.variant || {});
-  const r = pgCli(gatePath, ['--project-root', dir, ...(c.extraArgs || [])], brief);
-  return { ok: c.expect(r), detail: `exit ${r.status}; tokens ${r.tokens.join(', ') || '(none)'}`, tokens: r.tokens };
+  try {
+    if (c.run) return c.run(gatePath, dir);
+    writePlanFixture(dir, { stamp: c.stamp !== false, before: c.before || null });
+    if (c.after) c.after(pgPut(dir), pgAt(dir), dir);
+  } catch (e) {
+    return { ok: false, detail: `the case could not be built: ${e && e.message ? e.message : String(e)}`, tokens: [] };
+  }
+  const r = pgCli(gatePath, c.args ? c.args(dir) : ['--check', PG_FOLDER], c.input, c.input !== undefined ? path.dirname(dir) : dir);
+  return { ok: c.expect(r, dir), detail: `exit ${r.status}; tokens ${r.tokens.join(', ') || '(none)'}`, tokens: r.tokens };
 }
 
 // The W probes. `brief` and `prepare` describe the probe's project; `ps`/`sh` are the extra wrapper
 // arguments per channel, `klass` the PowerShell -Class (null = none). Each expects either a refusal
-// (exit 2, a line-missing token, the stub never invoked) or a run that reached the stub.
+// (exit 2, the token `refused` names, the stub never invoked) or a run that reached the stub.
 const PG_NO_LINES = STUB_BRIEF;
+const pgUnstamped = (p) => writePlanFixture(p);
+const pgStamped = (p) => writePlanFixture(p, { stamp: true });
 const PG_W = [
-  { id: 'W1', label: 'plan class + a brief without the readiness lines -> exit 2, line-missing, codex never invoked',
-    brief: PG_NO_LINES, klass: 'plan', ps: '', sh: ['--class', 'plan'], refused: true },
-  { id: 'W2', label: 'plan class + the valid brief with its artifacts in the project -> codex invoked, its exit code propagated',
-    brief: PG_BRIEF, prepare: (p) => writePlanFixture(p), klass: 'plan', ps: '', sh: ['--class', 'plan'], refused: false, planArgv: true },
-  { id: 'W3', label: 'plan class + a resume with an EXPLICIT id + a brief without the lines -> exit 2, line-missing, codex never invoked',
-    brief: PG_NO_LINES, klass: 'plan', ps: '-ResumeId pnp-plan-gate-w3', sh: ['--class', 'plan', '--resume', 'pnp-plan-gate-w3'], refused: true },
-  { id: 'W4', label: 'code class + a brief without the lines -> codex invoked (a non-plan pass is untouched)',
-    brief: PG_NO_LINES, klass: 'code', ps: '', sh: ['--class', 'code'], refused: false },
-  { id: 'W5', label: 'plan class + a resume with an explicit id + the valid brief -> codex invoked',
-    brief: PG_BRIEF, prepare: (p) => writePlanFixture(p), klass: 'plan', ps: '-ResumeId pnp-plan-gate-w5', sh: ['--class', 'plan', '--resume', 'pnp-plan-gate-w5'], refused: false },
-  { id: 'W6', label: 'NO class + a brief carrying "Class: plan" at column 0 and no artifacts -> exit 2, codex never invoked',
-    brief: `Class: plan\n${PG_NO_LINES}`, klass: null, ps: '', sh: [], refused: true },
-  { id: 'W7', label: 'code class + a brief with an INDENTED "  Class: plan" and no artifacts -> codex invoked',
-    brief: `  Class: plan\n${PG_NO_LINES}`, klass: 'code', ps: '', sh: ['--class', 'code'], refused: false },
-  { id: 'W8', label: 'code class + a brief carrying "Class: plan" at column 0 and no artifacts -> exit 2, codex never invoked',
-    brief: `Class: plan\n${PG_NO_LINES}`, klass: 'code', ps: '', sh: ['--class', 'code'], refused: true },
+  { id: 'W1', label: 'plan class + a brief naming an UNSTAMPED plan folder -> exit 2, stamp-missing, codex never invoked',
+    brief: PG_BRIEF, prepare: pgUnstamped, klass: 'plan', ps: '', sh: ['--class', 'plan'], refused: /stamp-missing/ },
+  { id: 'W2', label: 'plan class + a brief naming the STAMPED plan folder -> codex invoked, its exit code propagated',
+    brief: PG_BRIEF, prepare: pgStamped, klass: 'plan', ps: '', sh: ['--class', 'plan'], refused: null, planArgv: true },
+  { id: 'W3', label: 'plan class + a resume with an EXPLICIT id + a brief naming a plan folder that does not exist -> exit 2, plan-folder-required, codex never invoked',
+    brief: PG_BRIEF, klass: 'plan', ps: '-ResumeId pnp-plan-gate-w3', sh: ['--class', 'plan', '--resume', 'pnp-plan-gate-w3'], refused: /plan-folder-required/ },
+  { id: 'W4', label: 'code class + a brief without the plan lines -> codex invoked (a non-plan pass is untouched)',
+    brief: PG_NO_LINES, klass: 'code', ps: '', sh: ['--class', 'code'], refused: null },
+  { id: 'W5', label: 'plan class + a resume with an explicit id + a brief naming the stamped folder -> codex invoked',
+    brief: PG_BRIEF, prepare: pgStamped, klass: 'plan', ps: '-ResumeId pnp-plan-gate-w5', sh: ['--class', 'plan', '--resume', 'pnp-plan-gate-w5'], refused: null },
+  { id: 'W6', label: 'NO class + a brief carrying "Class: plan" at column 0 and no PLAN line -> exit 2, line-missing:PLAN, codex never invoked',
+    brief: `Class: plan\n${PG_NO_LINES}`, klass: null, ps: '', sh: [], refused: /line-missing:PLAN/ },
+  { id: 'W7', label: 'code class + a brief with an INDENTED "  Class: plan" and no PLAN line -> codex invoked',
+    brief: `  Class: plan\n${PG_NO_LINES}`, klass: 'code', ps: '', sh: ['--class', 'code'], refused: null },
+  { id: 'W8', label: 'code class + a brief carrying "Class: plan" at column 0 and no PLAN line -> exit 2, line-missing:PLAN, codex never invoked',
+    brief: `Class: plan\n${PG_NO_LINES}`, klass: 'code', ps: '', sh: ['--class', 'code'], refused: /line-missing:PLAN/ },
 ];
+// A probe whose project could not even be prepared is a FAIL with its reason, never a crash of the run.
+const pgProbeFailed = (e) => ({ ok: false, detail: `the probe could not be built: ${e && e.message ? e.message : String(e)}`,
+  probe: { status: null, stubInvoked: false }, err: '' });
 
 function pgPsProbe(root, w, tmpRoot, pathFor = null) {
-  const probe = runPsWrapperWithStub(root, 'codex-review.ps1', tmpRoot,
-    { brief: w.brief, klass: w.klass, extraArgs: w.ps, prepare: w.prepare || null, pathFor });
+  let probe;
+  try {
+    probe = runPsWrapperWithStub(root, 'codex-review.ps1', tmpRoot,
+      { brief: w.brief, klass: w.klass, extraArgs: w.ps, prepare: w.prepare || null, pathFor });
+  } catch (e) { return pgProbeFailed(e); }
   const err = probe.stderrText.replace(/\x1b\[[0-9;]*m/g, '');
   const ok = w.refused
-    ? probe.status === 2 && /line-missing/.test(err) && !probe.stubInvoked
+    ? probe.status === 2 && w.refused.test(err) && !probe.stubInvoked
     : probe.stubInvoked && probe.status === STUB_EXIT;
-  return { ok, detail: `exit ${probe.status}; codex ${probe.stubInvoked ? 'invoked' : 'never invoked'}${w.refused ? `; line-missing ${/line-missing/.test(err)}` : ''}`, probe, err };
+  return { ok, detail: `exit ${probe.status}; codex ${probe.stubInvoked ? 'invoked' : 'never invoked'}${w.refused ? `; ${w.refused.source} ${w.refused.test(err)}` : ''}`, probe, err };
 }
 
 function pgShProbe(root, w, tmpRoot) {
-  const probe = runWrapperWithStub(root, 'codex-review.sh', tmpRoot, w.sh, { brief: w.brief, prepare: w.prepare || null });
+  let probe;
+  try {
+    probe = runWrapperWithStub(root, 'codex-review.sh', tmpRoot, w.sh, { brief: w.brief, prepare: w.prepare || null });
+  } catch (e) { return pgProbeFailed(e); }
   let ok = w.refused
-    ? probe.status === 2 && /line-missing/.test(probe.stderr) && probe.atoms === null
+    ? probe.status === 2 && w.refused.test(probe.stderr) && probe.atoms === null
     : probe.atoms !== null && probe.status === STUB_EXIT;
   if (ok && w.planArgv) {
     // The locked argv on the plan row: the gate adds nothing to what codex is handed.
@@ -4421,11 +4515,9 @@ function pgPatch(file, from, to) {
 
 // The contract's tokens. Every one of them is produced by at least one M case - except
 // internal-error, which no input can provoke from a working checker (stated as a NOTE below).
-const PG_CONTRACT_TOKENS = ['line-missing', 'line-duplicate', 'class-not-plan', 'tickets-empty', 'tickets-bad-ref',
-  'tickets-not-in-plan', 'file-missing', 'scan-no-table', 'scan-bad-header', 'scan-row-shape', 'scan-empty-cell',
-  'scan-open-row', 'scan-ticket-missing', 'own-hash-missing', 'own-hash-mismatch', 'own-blockers-missing',
-  'own-checks-table-missing', 'own-checks-row-shape', 'own-checks-empty-cell', 'own-ticket-missing',
-  'own-instruments-missing', 'own-instrument-shape', 'own-instrument-cannot-fail'];
+const PG_CONTRACT_TOKENS = ['index-missing', 'tickets-over-cap', 'ticket-over-bytes', 'field-missing',
+  'decision-uncited', 'decision-xref-unresolved', 'decision-xref-stale', 'tbd-found', 'codemap-path-missing',
+  'stamp-missing', 'stamp-mismatch', 'plan-folder-required', 'line-missing', 'line-duplicate', 'class-not-plan'];
 
 function sectionPlanGate(tmpRoot) {
   section('PLAN GATE - the checker (scripts/engine/plan-gate.js) executed through its CLI');
@@ -4456,11 +4548,11 @@ function sectionPlanGate(tmpRoot) {
       check(`[plan-gate-${w.id}-ps] ${w.label}`, r.ok, r.detail);
     }
     if (nodeless.why) {
-      note('plan-gate-W9-ps (plan class + no readiness lines, with NO node on the PATH -> exit 2 and "plan-class pass refused")', nodeless.why);
+      note('plan-gate-W9-ps (plan class + no plan lines, with NO node on the PATH -> exit 2 and "plan-class pass refused")', nodeless.why);
     } else {
       const r = pgPsProbe(PLUGIN_ROOT, { brief: PG_NO_LINES, klass: 'plan', ps: '' }, tmpRoot, nodeless.pathFor);
       const ok = r.probe.status === 2 && /plan-class pass refused/.test(r.err);
-      check('[plan-gate-W9-ps] plan class + a brief without the lines, with NO node on the PATH -> exit exactly 2 and "plan-class pass refused" (a node that cannot start refuses, never passes)',
+      check('[plan-gate-W9-ps] plan class + a brief without the plan lines, with NO node on the PATH -> exit exactly 2 and "plan-class pass refused" (a node that cannot start refuses, never passes)',
         ok, `exit ${r.probe.status}; refusal line ${/plan-class pass refused/.test(r.err)}`);
     }
   }
@@ -4477,19 +4569,28 @@ function sectionPlanGate(tmpRoot) {
   section('PLAN GATE - Gate 2 on a Claude reviewer dispatch (deny on a readable brief, ask on an error)');
   {
     const bare = fs.mkdtempSync(path.join(tmpRoot, 'pg-g2-bare-'));
-    const fixture = fs.mkdtempSync(path.join(tmpRoot, 'pg-g2-fix-'));
-    const brief = writePlanFixture(fixture);
+    const unstamped = fs.mkdtempSync(path.join(tmpRoot, 'pg-g2-unstamped-'));
+    const stamped = fs.mkdtempSync(path.join(tmpRoot, 'pg-g2-stamped-'));
+    let built = true;
+    try { writePlanFixture(unstamped); writePlanFixture(stamped, { stamp: true }); } catch (e) {
+      built = false;
+      check('[gate2-plan-G1/G2] the two plan-folder fixtures could be built', false, String(e && e.message ? e.message : e));
+    }
     const silent = (r) => r.decision === 'allow(passthrough)' && r.exit === 0;
-    const g1 = pgGate2(GATE2, PG_PLAN_PROMPT, bare);
-    check('[gate2-plan-G1] reviewer + "Class: plan" + no artifacts -> DENY naming the problems, tagged [AIWF gate 2: plan pass]',
-      g1.decision === 'deny' && g1.exit === 0 && g1.reason.includes('[AIWF gate 2: plan pass]') && g1.reason.includes('line-missing'),
-      `${g1.decision}: ${g1.reason.slice(0, 90)}`);
-    const g2 = pgGate2(GATE2, brief, fixture);
-    check('[gate2-plan-G2] the same with valid artifacts (CLAUDE_PROJECT_DIR = the fixture) -> silent passthrough', silent(g2), `${g2.decision}: ${g2.reason.slice(0, 90)}`);
+    if (built) {
+      const g1 = pgGate2(GATE2, PG_BRIEF, unstamped);
+      check('[gate2-plan-G1] reviewer + "Class: plan" + PLAN naming an UNSTAMPED folder -> DENY naming stamp-missing and pointing at plan-gate --check, tagged [AIWF gate 2: plan pass]',
+        g1.decision === 'deny' && g1.exit === 0 && g1.reason.includes('[AIWF gate 2: plan pass]') && g1.reason.includes('stamp-missing')
+          && g1.reason.includes('plan-gate --check'),
+        `${g1.decision}: ${g1.reason.slice(0, 120)}`);
+      const g2 = pgGate2(GATE2, PG_BRIEF, stamped);
+      check('[gate2-plan-G2] the same brief over the STAMPED folder (CLAUDE_PROJECT_DIR = the fixture) -> silent passthrough', silent(g2), `${g2.decision}: ${g2.reason.slice(0, 120)}`);
+    }
     const g3 = pgGate2(GATE2, 'Class: code\n\nReview the diff.\n', bare);
     check('[gate2-plan-G3] reviewer + "Class: code" -> silent passthrough (a non-plan reviewer dispatch is untouched)', silent(g3), g3.decision);
     const g4 = pgGate2(GATE2, 'Class: Plan\n\nReview the plan.\n', bare);
-    check('[gate2-plan-G4] reviewer + "Class: Plan" (value in another case) + no artifacts -> DENY', g4.decision === 'deny' && g4.exit === 0, g4.decision);
+    check('[gate2-plan-G4] reviewer + "Class: Plan" (value in another case) + no PLAN line -> DENY naming line-missing:PLAN',
+      g4.decision === 'deny' && g4.exit === 0 && g4.reason.includes('line-missing:PLAN'), `${g4.decision}: ${g4.reason.slice(0, 90)}`);
     const g5 = pgGate2(GATE2, PG_PLAN_PROMPT, null);
     check('[gate2-plan-G5] reviewer + "Class: plan" with NO CLAUDE_PROJECT_DIR -> ASK (the paths cannot be resolved), never deny',
       g5.decision === 'ask' && g5.exit === 0 && g5.reason.includes('CLAUDE_PROJECT_DIR'), `${g5.decision}: ${g5.reason.slice(0, 90)}`);
@@ -4503,18 +4604,40 @@ function sectionPlanGate(tmpRoot) {
 
   section('PLAN GATE CONTROLS - each sabotage turns its named check red');
   const byId = (id) => cases.find((c) => c.id === id);
+  // One control per check group at least (index, cap, bytes, fields, uncited, xref, tbd, codemap,
+  // stamp, folder, brief), each patching exactly one branch.
+  const TBD_LINE = 'if (!f.mask[i] && TBD_RE.test(stripCodeSpans(line)))';
+  const SURFACE = 'const surface = [model.index, ...model.tickets]';
+  const FIELD = 'if (!headings.has(`## ${f}`))';
+  const FOLDER = 'if (st === null || !st.isDirectory() || !lib.PLAN_ABBR_RE.test(path.basename(abs))) {';
+  const CODEMAP = 'if (!fs.existsSync(path.resolve(root, p)))';
   const controls = [
-    { id: 'ctl-4', target: 'M10', label: 'the hash comparison disabled', from: 'if (ownHash !== currentHash) {', to: 'if (false) {' },
-    { id: 'ctl-5', target: 'M15', label: 'the "valid == broken" instrument check disabled', from: " || valid === '' || broken === '' || valid === broken)", to: " || valid === '' || broken === '')" },
-    { id: 'ctl-7', target: 'M34', label: 'the ticket-heading rule replaced by "mentioned anywhere in the plan"', from: 'const inPlan = planHeads.has(p);', to: 'const inPlan = lib.refRegex(p).test(planText);' },
-    { id: 'ctl-8', target: 'M30', label: 'scan-empty-cell disabled', from: "if (cells.slice(0, 5).some((c) => c === '')) {", to: 'if (false) {' },
-    { id: 'ctl-9', target: 'M7', label: 'the closure white list replaced by "not empty"', from: 'if (!CLOSED_PREFIXES.some((p) => closure.startsWith(p))) {', to: "if (closure === '') {" },
-    { id: 'ctl-10', target: 'M32', label: 'class-not-plan disabled', from: "} else if (name === 'Class' && vals[name][0].toLowerCase() !== 'plan') {", to: '} else if (false) {' },
-    { id: 'ctl-11', target: 'M33', label: 'the skip on a duplicated TICKETS line replaced by "use every TICKETS line"', from: "const ticketsText = single('TICKETS');", to: "const ticketsText = vals.TICKETS.length ? vals.TICKETS.join(',') : null;" },
-    { id: 'ctl-12', target: 'M41', label: 'the scan-bad-header check disabled (only an exact header opens a scan table again)', from: "return c.length >= 2 && c[0].toLowerCase() === '#' && c[1].toLowerCase() === 'ticket';", to: 'return sameHeader(c, SCAN_HEADER);' },
-    { id: 'ctl-13', target: 'M42', label: 'the closing-fence rule widened back to spaces OR tabs', from: '/^ {0,3}(`{3,}|~{3,}) *$/', to: '/^ {0,3}(`{3,}|~{3,})[ \\t]*$/' },
-    { id: 'ctl-14', target: 'M43', label: 'the separator cell-count check disabled', from: 'return cells.length === expectedCount && ', to: 'return cells.length > 0 && ' },
-    { id: 'ctl-15', target: 'M45', label: 'the per-table instrument numbering replaced by one flattened count', from: 'for (const t of instrumentTables) {', to: 'for (const t of [{ rows: instrumentTables.flatMap((x) => x.rows), headerLine: 0 }]) {' },
+    { id: 'ctl-4', target: 'M4', label: 'the index check disabled', from: "if (model.index === null) add('index-missing'", to: "if (false) add('index-missing'" },
+    { id: 'ctl-5', target: 'M5', label: 'the ticket cap raised from 3 to 4', from: 'const MAX_TICKETS = 3;', to: 'const MAX_TICKETS = 4;' },
+    { id: 'ctl-7', target: 'M7', label: 'the byte cap raised to 1 MiB', from: 'const MAX_TICKET_BYTES = 6144;', to: 'const MAX_TICKET_BYTES = 1048576;' },
+    { id: 'ctl-8', target: 'M8', label: 'the byte cap measured on the raw (CRLF) text instead of the LF-normalised one', from: "Buffer.byteLength(t.text, 'utf8')", to: "Buffer.byteLength(t.raw, 'utf8')" },
+    { id: 'ctl-9', target: 'M9', label: 'the six-field check disabled', from: FIELD, to: 'if (false)' },
+    { id: 'ctl-10', target: 'M10', label: 'the field headings compared case-insensitively', from: FIELD, to: 'if (![...headings].some((h) => h.toLowerCase() === `## ${f}`.toLowerCase()))' },
+    { id: 'ctl-11', target: 'M11', label: 'DECISIONS.md counted as a citation of its own decisions', from: SURFACE, to: 'const surface = [model.index, model.decisions, ...model.tickets]' },
+    { id: 'ctl-12', target: 'M12', label: 'the "plan:" filter removed (every decision demanded of this plan)', from: 'if (d.plan !== model.abbr || demanded.has(d.id)) continue;', to: 'if (demanded.has(d.id)) continue;' },
+    { id: 'ctl-13', target: 'M1', label: 'the index dropped from the citation surface (D-02 is cited there alone)', from: SURFACE, to: 'const surface = [...model.tickets]' },
+    { id: 'ctl-14', target: 'M14', label: 'a reference to another plan counted as a citation of this plan\'s decision', from: 'if (m[1] !== abbr) foreign.add(', to: 'if (false) foreign.add(' },
+    { id: 'ctl-15', target: 'M17', label: 'a cross-reference resolved by its file alone (the D-NN bullet not looked up)', from: 'const hit = decisions === null ? null : decisions.find((d) => d.id === id);', to: "const hit = decisions === null ? null : (decisions.find((d) => d.id === id) || { text: '' });" },
+    { id: 'ctl-16', target: 'M18', label: 'the archive directory grammar loosened (no number required)', from: "'^\\\\d+_PLAN_'", to: "'_?PLAN_'" },
+    { id: 'ctl-17', target: 'M21', label: 'the cross-reference staleness comparison disabled', from: "if (typeof recorded[key] === 'string' && recorded[key] !== h)", to: 'if (false)' },
+    { id: 'ctl-18', target: 'M23', label: 'the TBD check disabled', from: TBD_LINE, to: 'if (false)' },
+    { id: 'ctl-19', target: 'M1', label: 'code spans no longer stripped before the TBD check', from: TBD_LINE, to: 'if (!f.mask[i] && TBD_RE.test(line))' },
+    { id: 'ctl-20', target: 'M1', label: 'fenced blocks no longer skipped by the TBD check', from: TBD_LINE, to: 'if (TBD_RE.test(stripCodeSpans(line)))' },
+    { id: 'ctl-21', target: 'M25', label: 'the Code Map existence check disabled', from: CODEMAP, to: 'if (false)' },
+    { id: 'ctl-22', target: 'M31', label: 'the Code Map resolved against the cwd instead of the project root', from: CODEMAP, to: 'if (!fs.existsSync(path.resolve(p)))' },
+    { id: 'ctl-23', target: 'M26', label: 'the contract hash comparison disabled', from: 'if (s.plan !== model.abbr || s.contract !== contract.contract)', to: 'if (false)' },
+    { id: 'ctl-24', target: 'M2', label: 'the stamp-missing branch disabled', from: "if (raw === null) add('stamp-missing'", to: "if (false) add('stamp-missing'" },
+    { id: 'ctl-25', target: 'M27', label: 'records/ folded into the contract', from: 'for (const t of model.ticketFiles) files[t.rel] = t.text;', to: "for (const t of [...model.ticketFiles, ...listMd(path.join(model.abs, 'records'), 'records')]) files[t.rel] = t.text;" },
+    { id: 'ctl-26', target: 'M28', label: 'the LF normalisation removed', from: "const lf = (text) => text.replace(/\\r\\n/g, '\\n');", to: 'const lf = (text) => text;' },
+    { id: 'ctl-27', target: 'M29', label: '--stamp writing although a problem stands', from: 'if (r.problems.length > 0) return { ok: false, problems: r.problems, stampPath: null };', to: 'if (r.model === null) return { ok: false, problems: r.problems, stampPath: null };' },
+    { id: 'ctl-28', target: 'M33', label: 'the directory test removed from plan-folder-required', from: FOLDER, to: 'if (st === null || !lib.PLAN_ABBR_RE.test(path.basename(abs))) {' },
+    { id: 'ctl-29', target: 'M34', label: 'the ABBR grammar removed from plan-folder-required', from: FOLDER, to: 'if (st === null || !st.isDirectory()) {' },
+    { id: 'ctl-30', target: 'M41', label: 'class-not-plan disabled', from: "} else if (name === 'Class' && vals[name][0].toLowerCase() !== 'plan') {", to: '} else if (false) {' },
   ];
   // The checker controls: plan-gate.js copied beside aiwf-lib.js, sabotaged, and the target case run
   // against the copy. The fixture is still stamped by the PAYLOAD checker, so only the branch moved.
@@ -4575,8 +4698,12 @@ function sectionPlanGate(tmpRoot) {
       gate = path.join(pgEngineCopy(tmpRoot, 'ctl-3', ['pretooluse-dispatch-gate.js', 'aiwf-lib.js', 'plan-gate.js']), 'pretooluse-dispatch-gate.js');
       pgPatch(gate, "if (ti.subagent_type === REVIEWER_AGENT_TYPE && typeof ti.prompt === 'string') {", 'if (false) {');
     } catch (e) { gate = null; check('[plan-gate-ctl-3] control could be applied: the plan branch removed from Gate 2', false, String(e.message)); }
+    const unstamped = fs.mkdtempSync(path.join(tmpRoot, 'pg-ctl-3-unstamped-'));
     if (gate) {
-      const r = pgGate2(gate, PG_PLAN_PROMPT, fs.mkdtempSync(path.join(tmpRoot, 'pg-ctl-3-bare-')));
+      try { writePlanFixture(unstamped); } catch (e) { gate = null; check('[plan-gate-ctl-3] the unstamped fixture could be built', false, String(e.message)); }
+    }
+    if (gate) {
+      const r = pgGate2(gate, PG_BRIEF, unstamped);
       const g1ok = r.decision === 'deny' && r.reason.includes('[AIWF gate 2: plan pass]');
       check('[plan-gate-ctl-3] sabotage detected: the plan branch removed from Gate 2 -> gate2-plan-G1 turns red', g1ok === false,
         g1ok ? 'still PASS - the check is vacuous' : `FAIL as required (${r.decision})`);

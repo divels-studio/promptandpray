@@ -10,8 +10,9 @@
  *     no OS cell); the hard OS `--sandbox read-only` cell applies only on the codex review path.
  *   - pretooluse-dispatch-gate.js (Gate 2, AIWF-G2): raises a native Yes/No dialog when a `writer`
  *     subagent dispatch cannot be traced to a ticket that exists in an active Mission PLAN, and
- *     denies a `reviewer` dispatch whose brief carries `Class: plan` while plan-gate.js finds its
- *     readiness artifacts missing or incomplete - a decision on a readable brief, not an error path.
+ *     denies a `reviewer` dispatch whose brief carries `Class: plan` while the plan folder its
+ *     `PLAN:` line names fails plan-gate.js --check - a decision on a readable brief, not an error
+ *     path.
  *   - pretooluse-git-verb-guard.js (Gate 4, AIWF-G4): on BOTH shell tools (matcher
  *     `Bash|PowerShell`, mirroring the `Bash(<X>)` / `PowerShell(<X>)` rule pairs in the ruleset).
  *     DENIES an ask-class git verb
@@ -95,7 +96,7 @@ function denyPreTool(reason) {
 // Gate 2's emitter: a visible native Yes/No dialog on a matching call (operator-confirmed on an
 // `Agent` dispatch during the AIWF-G2 spike). Same envelope as denyPreTool, different decision.
 // (Gate 2 also uses denyPreTool, for exactly one decision: a plan-class reviewer dispatch whose
-// readable brief names readiness artifacts that are missing or incomplete. Its errors still ask.)
+// readable brief names a plan folder that fails plan-gate --check. Its errors still ask.)
 function askPreTool(reason) {
   process.stdout.write(JSON.stringify({
     hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'ask', permissionDecisionReason: reason },

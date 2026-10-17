@@ -28,8 +28,8 @@
   row of the audit table (`review.<class>` in roles.json) instead of the Reviewer role's own
   triple; /pnp:review passes the ticket's class on every invocation. Without it the wrapper behaves
   exactly as it always did. Every brief also passes through the plan gate
-  (scripts/engine/plan-gate.js): with class `plan`, or a brief carrying a `Class: plan` line, missing
-  or incomplete readiness artifacts are exit 2 before codex starts.
+  (scripts/engine/plan-gate.js): with class `plan`, or a brief carrying a `Class: plan` line, a
+  plan folder (the brief's `PLAN:` line) that fails plan-gate --check is exit 2 before codex starts.
 
 .PARAMETER Resume
   Resume the Reviewer's LAST recorded codex session instead of starting a cold one. Without
@@ -212,21 +212,21 @@ if ([string]::IsNullOrWhiteSpace($Prompt)) {
   exit 2
 }
 
-# THE PLAN GATE - a plan-class pass does not start without its readiness artifacts (/pnp:review
-# Steps 2c and 2d). It sits HERE because this is where the brief is in hand and the paid engine has
+# THE PLAN GATE - a plan-class pass does not start on a plan folder that fails plan-gate
+# --check. It sits HERE because this is where the brief is in hand and the paid engine has
 # not started yet. Every brief goes through scripts/engine/plan-gate.js: whether the BRIEF is
 # plan-class is the checker's decision (it reads the `Class: plan` line); this shell only forwards
 # its own -Class flag as --plan-class, and carries no copy of the line grammar or the file formats.
 # A non-plan brief passes untouched.
 # node is a prerequisite of this plugin - every hook runs on it - and a node that cannot start is a
 # REFUSAL here, never a pass: `-not $?` catches the command that never ran, because $LASTEXITCODE
-# alone would still hold the resolver's 0. What the gate does not prove: that the own pass was good,
-# that it ran in a turn of its own, or that a later scan covered the revision.
+# alone would still hold the resolver's 0. What the gate does not prove: that the plan is good, or
+# that the stamp was taken over a text anyone read.
 $planGateArgs = @('--project-root', $PlanGateRoot)
 if ($HasClass -and $Class -eq 'plan') { $planGateArgs += '--plan-class' }
 $Prompt | & node (Join-Path $PSScriptRoot '..\..\engine\plan-gate.js') @planGateArgs
 if (-not $? -or $LASTEXITCODE -ne 0) {
-  Write-Error 'plan-class pass refused: the readiness artifacts are missing or incomplete (see plan-gate output above).'
+  Write-Error 'plan-class pass refused: the plan folder fails plan-gate --check (see its output above).'
   exit 2
 }
 

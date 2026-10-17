@@ -25,9 +25,10 @@
  *     ONE exception, the plan-pass branch below.
  *
  * THE PLAN-PASS BRANCH (independent of the mode). A `reviewer` dispatch whose prompt carries the
- * line `Class: plan` at column 0 is a Claude-hosted plan-readiness pass, and it does not start
- * without its readiness artifacts: the prompt is handed to plan-gate.js, which reads the files its
- * fixed lines name (the plan, the consequence scan, the own pass). Problems -> DENY, naming every
+ * line `Class: plan` at column 0 is a Claude-hosted plan-readiness pass, and it does not start on a
+ * plan folder that fails its mechanical contract: the prompt is handed to plan-gate.js, which checks
+ * the folder its `PLAN:` line names (caps, the six fields, decision coverage, cross-plan references,
+ * no open items, Code Map paths, the SHA stamp - `plan-gate --check`). Problems -> DENY, naming every
  * one; none -> passthrough; any other reviewer prompt -> passthrough, as before. The deny is a
  * decision on a READABLE brief, not an error path: an unset CLAUDE_PROJECT_DIR (the brief's paths
  * cannot be resolved) asks, and a throw inside the check - plan-gate.js missing included - is
@@ -261,9 +262,9 @@ if (require.main === module) {
       );
     }
 
-    // The plan-pass branch: a Claude-hosted plan-readiness pass does not start without its readiness
-    // artifacts. Only a `reviewer` dispatch whose prompt carries `Class: plan` at column 0 enters it;
-    // every other reviewer dispatch falls through to the passthrough below, exactly as before.
+    // The plan-pass branch: a Claude-hosted plan-readiness pass does not start on a plan folder that
+    // fails plan-gate --check. Only a `reviewer` dispatch whose prompt carries `Class: plan` at
+    // column 0 enters it; every other reviewer dispatch falls through to the passthrough below.
     if (ti.subagent_type === REVIEWER_AGENT_TYPE && typeof ti.prompt === 'string') {
       // Required HERE, not at the top of the file: a load failure is then a throw inside
       // runFailAsk -> ask, never a crash before any decision and never a deny.
@@ -283,7 +284,7 @@ if (require.main === module) {
         const list = res.problems.map((p) => `${p.token}: ${p.message}`).join('; ');
         return lib.denyPreTool(
           `Plan-readiness pass refused: ${res.problems.length} problem(s) - ${list}. Fix them ` +
-          `(see /pnp:review Steps 2c and 2d) and dispatch again. ${PLAN_TAG}`
+          `(see plan-gate --check) and dispatch again. ${PLAN_TAG}`
         );
       }
     }
