@@ -158,7 +158,11 @@ doubt; "PASS, all fine" is not a handoff.
   tickets, ticket size), the six fields per ticket, every `D-NN` cited by a ticket, no TBD, every Code
   Map path exists, SHA stamp of the folder; Gate 2's `Class: plan` branch and the Codex wrappers'
   exit-2 check require THIS stamp and nothing else (ledger / scan / own-pass requirements deleted).
-  Self-check PLAN GATE section follows.
+  Self-check PLAN GATE section follows. Two implementation notes (review 2026-10-17): the stamp's
+  manifest also records the text hash of every decision cited ACROSS plans (`<ABBR>/D-NN`), so a change
+  in the source decision is detected by the gate; and the coverage check ships with negative tests for
+  (i) a current-plan decision no ticket cites, (ii) an invalid cross-plan reference, (iii) a
+  `deferred` decision wrongly demanded of the current tickets.
 
 **Plan B - the cycle as a skill and as doctrine (prose; the COO, R1)**
 - B1 `/pnp:plan` - a new skill that IS stages 1-6: the roadmap entry -> research agents (brief
