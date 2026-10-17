@@ -180,8 +180,9 @@ for the full model.
   `cd D:\promptandpray && claude --plugin-dir D:\pnp-live` and enter with `/pnp:mission`. The plugin
   loads from `D:\pnp-live`, a detached git worktree of `main`, never from this repo itself: with
   `--plugin-dir` pointing at the working directory, auto mode returns "no verdict" on every in-repo
-  write (measured 2026-09-23). After every commit on `main`, refresh the live copy:
-  `git -C D:\pnp-live checkout --detach main`. Plans live in `dev/backlogs/`, the project's
+  write (measured 2026-09-23). After every commit on `main`, refresh the live copy - no `-C`, no
+  `cd` (operator rule 2026-10-17): `Start-Process git -ArgumentList 'checkout','--detach','main'
+  -WorkingDirectory 'D:\pnp-live' -NoNewWindow -Wait`. Plans live in `dev/backlogs/`, the project's
   identity and hard rules in `dev/PROJECT_OVERRIDES.md` (read it first - `dev/README.md` is the map).
 - The payload is code: any change under `skills/ docs/ templates/ scripts/ schema/ hooks/
   migrations/ examples/ .claude-plugin/` is R2 through the Writer; the auditor is the audit table's
