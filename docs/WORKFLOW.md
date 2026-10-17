@@ -30,7 +30,7 @@ overrides") - not every ticket is a ceremony.
   R2/R3 cycle is doctrine, not a hook. Gate 2, the dispatch gate, puts the operator in the way
   of a Writer dispatch - a native Yes/No dialog on every one of them, or only on one whose
   `Ticket: <REF>` line names no ticket in an active PLAN, per `enforcement.dispatchGate`. The same
-  hook denies a Claude-hosted plan-readiness pass whose readiness artifacts are missing (§ Plan
+  hook denies a Claude-hosted plan-readiness pass whose plan folder fails the mechanical gate (§ Plan
   readiness review). Gate 4,
   the git-verb guard on both shell tools (matcher `Bash|PowerShell`), denies an ask-class git verb
   to any subagent that is not
@@ -149,12 +149,12 @@ not the Writer's half of it. Blockers cluster precisely where COO-written prose 
 A wrong path, a wrong line number, a wrong count, a command that does not exist, a claim about
 how an engine or a hook behaves - those are checkable against the tree by anything that can read
 it, and paying a review pass to find them buys at the most expensive tier what the cheapest one
-proves. They are caught by the **fact-check gate** (`/pnp:review` Step 2b): cheap read-only scan
-agents over the prose - one agent over a diff; over a plan, one agent per ticket section plus one
-for the shared sections - run BEFORE every reviewer pass above the scan tier, each returning a
-per-claim ledger - every claim verified, false or unverifiable, with `file:line` and a count line -
-and, before a readiness pass, the gaps list of § Plan readiness review beside it.
-The COO fixes those, and only then dispatches the review. The gate guards the EXPENSIVE pass,
+proves. They are caught by the **fact-check gate** (`/pnp:review` Step 2b): one cheap read-only
+scan agent over the prose of a diff, run BEFORE every diff pass above the scan tier, returning a
+per-claim ledger - every claim verified, false or unverifiable, with `file:line` and a count line.
+A plan gets no fact-check agent: its facts are the research's pointers, and its pass is guarded by
+the mechanical gate (§ Plan readiness review). The COO fixes those, and only then dispatches the
+review. The gate guards the EXPENSIVE pass,
 whichever engine hosts it: a Claude reviewer on `opus`/`fable` costs top-tier tokens exactly as a
 Codex pass costs external quota, and only a reviewer that itself runs on a scan-tier model
 (`haiku`/`sonnet`) has nothing more expensive than the gate to protect. That skip is read off the
@@ -243,11 +243,11 @@ change of COO model, and each of these was learned from an observed violation.
   Read/check that the state already present does not cover it. A demand that one Read would have
   cancelled is a workflow defect.
 - **(e) An approved plan lands in the repo immediately.** At the moment of approval, in the same
-  session, unprompted: the plan lands in `<plansDir>/active/PLAN_<ABBR>.md`, or as a folder
-  `<plansDir>/active/<ABBR>/` with the index `PLAN_<ABBR>.md` (the Git canon) - moved there from
-  `<plansDir>/drafts/PLAN_<ABBR>.draft.md`, where it was an untracked draft - its readiness history
-  under `<plansDir>/readiness/<ABBR>/` is added in the same commit, and any plan-mode file outside
-  the repo becomes a pointer to it. The principle "durable
+  session, unprompted: the plan folder lands in `<plansDir>/active/<ABBR>/`, with the index
+  `PLAN_<ABBR>.md` (the Git canon) - moved there by the shell from `<plansDir>/drafts/<ABBR>/`, where
+  it was an untracked draft - its readiness history under `<plansDir>/readiness/<ABBR>/` and the
+  roadmap entry are added in the same commit, and any plan-mode file outside the repo becomes a
+  pointer to it. The principle "durable
   knowledge lives in Git" already existed; what had never been written down was the mechanical
   moment of approval.
 - **(f) Host-directive precedence.** A host - the CLI, an editor integration, a wrapper around the
@@ -315,14 +315,14 @@ alone and INHERITS the Reviewer role whole (engine, model and effort together), 
 host. The factory table is `plan 2`, `code 1`, `docs 1`, all three inheriting the Reviewer. Who
 audits what, on which engine, with how many passes is therefore a value the operator reads and
 changes - not a sentence in this document. What the table does NOT contain is the fact-check gate -
-it runs before every pass above the scan tier, over a diff or a plan - nor the plan gate, which
-keeps a plan-class pass from starting without its readiness artifacts (§ Plan readiness review);
-neither is configurable.
+it runs before every diff pass above the scan tier - nor the mechanical plan gate, which keeps a
+plan-class pass from starting without a current stamp (§ Plan readiness review); neither is
+configurable.
 
 Not configurable, and enforced here regardless of the project:
 
-- **A plan-class pass does not start without its readiness artifacts** - the consequence scan and
-  the COO's own pass, files the brief names (§ Plan readiness review).
+- **A plan-class pass does not start without a current stamp** over a folder that meets its
+  mechanical contract (§ Plan readiness review).
 - **Only the operator lifts the correction-round cap.** After the cap without a passable result,
   stop and summarize to the operator. A round beyond the cap requires an explicit word in chat
   *before* the re-dispatch, granted one extension at a time and recorded in the ticket's PLAN
@@ -367,21 +367,24 @@ must not:
 - dispatch or advance an **implementation** brief for execution, or commit a change to the
   Git-tracked PLAN - these wait for execution approval. Composing the concrete draft plan and a
   read-only plan-readiness brief (each carrying its risk threshold + stop condition) is **explicitly
-  permitted** by the readiness exception below - the draft and its readiness artifacts are the
-  planning's own files, `<plansDir>/drafts/PLAN_<ABBR>.draft.md` and `<plansDir>/readiness/<ABBR>/`,
+  permitted** by the readiness exception below - the draft and its readiness history are the
+  planning's own files, the folder `<plansDir>/drafts/<ABBR>/` and `<plansDir>/readiness/<ABBR>/`,
   written UNTRACKED under the lock and committed only at the landing, which is not the repository
   edit this lock forbids; an extension of a plan that has already landed is drafted the same way,
-  as an UNCOMMITTED edit of the active plan and of its `<plansDir>/readiness/<ABBR>/`, and lands
-  with the extension's own docs commit (`/pnp:review` Step 2e);
-- delegate to the Writer subagent, QA, or another implementation run;
+  as an UNCOMMITTED edit of `<plansDir>/active/<ABBR>/` and of its `<plansDir>/readiness/<ABBR>/`,
+  and lands with the extension's own docs commit;
+- delegate to the Writer subagent, QA, or another implementation run - the planner excepted: it is
+  dispatched as the `writer` agent type with the planner brief, writes only under
+  `<plansDir>/drafts/<ABBR>/`, and implements nothing (`/pnp:plan`);
 - edit the repository, agent/tooling configuration, or other project state - the planning's own
-  files excepted: the untracked draft under `<plansDir>/drafts/`, `<plansDir>/readiness/<ABBR>/`,
-  and the uncommitted edit of an active plan that an extension is;
+  files excepted: `<plansDir>/drafts/<ABBR>/`, `<plansDir>/readiness/<ABBR>/`, the roadmap
+  entry, and the uncommitted edit of an active plan that an extension is;
 - stage, commit, switch/create branches, merge, push, or perform another Git mutation.
 
 The sole orchestration exception is a read-only plan-readiness review by the Reviewer - run
-through the **plan-readiness mode of `/pnp:review`** (the `PASS`/`NEEDS-FIX` readiness branch)
-under the rules below. It does not release the planning lock or authorize implementation.
+through the **plan-readiness mode of `/pnp:review`** (the findings-table readiness branch), which
+`/pnp:plan` calls, under the rules below. It does not release the planning lock or authorize
+implementation.
 
 Selecting an option (for example `A`, `B`, or `C`) chooses direction and refines the plan; it is
 not by itself approval to execute. Execution approval applies to the presented plan only.
@@ -392,151 +395,62 @@ plan mode does not replace these human authority rules.
 
 Plans for durable R2 work and all R3 work receive an independent read-only review before the COO
 presents the final plan for execution approval. Small R1 and non-durable R2 work do not receive
-this ceremony. The Planner/COO may not approve its own plan.
+this ceremony. Neither the planner nor the COO approves its own plan. `/pnp:plan` runs the cycle;
+this section is its doctrine. The COO owns the routine engineering choices inside it and asks the
+operator only when an unresolved alternative would materially change product intent, an
+architecture boundary, security/external risk or cost, or an irreversible outcome.
 
-Once the COO has a concrete draft, it starts this readiness review automatically: the FIRST pass
-rides the ticket's standing word and needs no intermediate human permission. That licence covers
-pass 1 and nothing else - every further pass of the cycle, configured or beyond the ceiling, is
-dispatched only on the operator's own explicit word, one word per pass. The COO also owns routine
-engineering choices such as
-policy-required tests, file/directory naming, local module boundaries, and step sequencing. It
-asks the operator before readiness only when missing authority or an unresolved alternative would
-materially change product intent, an architecture boundary, security/external risk or cost, or an
-irreversible outcome and cannot be resolved from the repo.
+**The cycle.** One roadmap entry per idea (`<plansDir>/ROADMAP.md`) -> research by one or two
+scan-tier agents in a fresh context, BEFORE the first sentence of the plan: the Code Map, what the
+code does today, and the consumers and adjacent contracts of every touched surface, as pointers ->
+`DECISIONS.md`: numbered decisions, a Deferred list and Open Questions; an open question stops the
+cycle until the operator answers, and an unknown is never written down as an assumption -> the
+planner agent writes the folder `<plansDir>/drafts/<ABBR>/` (the index, at most 3 tickets with
+their six fields and a Code Map, the gates each ticket passes in order) and returns a structured
+handoff - which decision lands in which ticket, the dependencies checked, the risks left, the
+evidence pointers; the COO reads the files and does not write the plan -> the mechanical gate ->
+ONE readiness pass -> the COO's triage -> at most 2 revisions -> the operator's approval -> the
+landing (guard (e)).
 
-**Readiness runs on the `review.plan` row.** Which engine and model audits a plan is the audit
-table's answer, not this document's: `/pnp:review` resolves `review.plan` through the role
-resolver's `-Class plan` and dispatches that host, and `/pnp:roles` shows it and changes it. The
-fact-check gate runs before every one of these passes above the scan tier, over the plan as it runs
-over a diff - split into one agent per ticket section plus one for the shared sections - and is
-skipped only when the reviewer itself runs on a scan-tier model - it returns no verdict and it is
-never one of the passes.
+**The mechanical gate.** `scripts/engine/plan-gate.js --stamp <folder>` checks the folder contract -
+the index, at most 3 tickets, 6,144 bytes per ticket, the six headings, every decision of this plan
+cited, cross-references resolved, no bare open item, Code Map paths that exist - and writes the
+SHA-256 stamp to `<plansDir>/readiness/<ABBR>/stamp.json`; `--check` confirms it, and every
+revision is stamped again. A plan-class pass does not start without a current stamp: the Codex
+review wrapper refuses it (exit 2) and Gate 2 denies a Claude reviewer dispatch whose brief carries
+`Class: plan`. Honest limit: the gate proves shape, citations and that the text is the stamped one;
+it cannot prove the plan is good.
 
-**The inventory comes before the draft.** § COO owns broad scans puts discovery before a ticket
-brief ("Discovery precedes dispatch"); a durable plan gets the same move one step earlier, ahead of
-its own first sentence - before the first draft, a consumer-inventory scan: for every touched
-column, permission, command or contract, the consumers and adjacent contracts, harvested at scan
-tier. One `sonnet` agent (the evidence-gathering tier of that section) returns them as `file:line`
-pointers, and the draft addresses them BEFORE the first paid pass. The reason is where the defects
-sit: in a measured readiness cycle the auditor's blockers were dominated by integration defects - a
-consumer the draft had never opened, an adjacent contract that had to move with the change - and
-each of them was a grep away. A paid pass that discovers them buys at the most expensive tier what
-the cheapest one proves.
-What the draft then carries of those pointers follows one discipline: `file:line` where the Writer
-acts or an acceptance check reads - the worklist, the guards, the commands - and section and symbol
-everywhere else, because a line number in context is re-verified by the fact-check gate at every
-revision and invalidated by the next commit; on one consumer's plan
-629 pointers opened by agents in the own pass yielded 4 FALSE after the gate had already run, while
-the auditor's blockers were mostly design and concurrency.
+**The pass and the blocker contract.** The pass runs on the `review.plan` row (`/pnp:roles`). Its
+brief is the `COVERED BY:` line, `Class: plan`, `PLAN: <folder>` and the shipped readiness brief.
+The auditor reads the complete folder against the tree and returns every material gap at once: one
+findings table and one `BLOCKERS: <n> INFO: <m>` line, distinct from the implementation
+`pass`/`pass-with-notes`/`fail` verdict. A BLOCKER names a required property the plan lacks plus
+its evidence; INFO never causes a revision; wording, formatting and `file:line` precision in
+explaining context are out of scope; the fix is a hint, never the finding.
 
-**A decision is also read from the tree's side.** The behavior ledger and the fact-check gate read
-what the plan SAYS; neither can find a rule the plan never wrote down. Before every paid readiness
-pass, a scan-tier agent per ticket - before the first pass the Step 2a agent,
-the same context that writes the behavior ledger, in the same dispatch; before a further pass a
-dispatch of its own (`/pnp:review` Step 2c) - takes every decision, invariant and
-risk-threshold line of the ticket and searches the tree for a surface that can VIOLATE it - a
-screen, an action, a query, an import, a bulk path, another command - and for every other path that
-writes what the plan locks. Each finding is one numbered row in a file, and the COO closes every row
-before the pass: a plan change, or a reason the surface is no defect. Before every further readiness
-pass the scan runs again over the decisions the revision changed or added, because the revision is
-where new surface is born (`docs/READINESS_CLASSES.md` class 14). Measured on a consumer: five
-consecutive plans returned 10 to 13 author-side blockers on pass 1 with the behavior ledger and the
-per-claim fact-check already applied, and those blockers were mostly missing rules rather than false
-claims; one scan over one revised plan returned 102 rows, 4 of them critical defects the revision
-itself had introduced. Its suppression dual is the behavior ledger's: owed exactly when the ledger
-is owed, and small R1 and non-durable R2 work owe nothing.
+**Triage and the round file.** The COO disposes of every finding - fixed / rejected with a
+refutation / deferred / asked - in `<plansDir>/readiness/<ABBR>/round-<N>.md`: the table verbatim
+plus a disposition column. A finding that disputes a recorded decision goes to the operator, not
+into a revision. The planner writes the fix. A revision closes the blockers it was handed and adds
+nothing new: a change that opens new surface is a candidate for the next plan. A revision that does
+not reduce the BLOCKER count stops the cycle and goes to the operator.
 
-**The COO's own pass comes before every counted pass, and it is not one of them.** The own pass reads the
-behavior ledger (`/pnp:review` Step 2a) - what each link does with the plan's input, read by a
-second context - not the pointers alone. The ledger's honest limit: it proves that a second context
-read the link, not that the COO acted on it - the plan lines that changed are where acting is
-visible. The own pass is the LAST act over the plan before an auditor is
-dispatched - after the consequence scan and the fact-check gate are closed - and the COO does it in
-a SEPARATE turn against the six readiness checks below: every pointer the Writer acts on opened - the
-worklist, the guards, the commands - while the pointers that only explain are the fact-check gate's (a
-FALSE row carries the correct value); the ledger rows read as behavior, not as pointers; every
-instrument executable on the OS channel the plan records and run on the real tree with valid AND
-broken input, never on a stub (an instrument proven on a stub has not been made to fail where it
-will run - tripwire 4 of § COO owns broad scans); not one "if the Writer finds ..."; every promise of
-a guarantee checked against the code that gives it. Each fact-check agent over the plan is
-dispatched with three extra instructions alongside its standing task - "every acceptance command
-exists and can fail", "verify the behavior ledger - every link resolves and its DOES cell matches
-the code", and the six readiness checks applied adversarially, returned as a second list
-of gaps beside the claims ledger (A - the Writer cannot execute, or the check cannot fail or cannot
-pass; B - a false or unverifiable claim; C - consistency) with no verdict, every A and B closed by
-the COO before the pass; that list is not the COO's own pass and does not stand in for it, and it
-is never counted as a pass. This is not ceremony: on the plan
-that introduced the audit table, the first readiness pass returned 10 blockers of which 8 were the
-author's own (shortcuts, a decision left open, code not read), and the pass after it returned 14, of
-which 11 had been visible in the first. A paid pass verifies decisions; precision is paid for on the
-COO's own account.
+**Pass economy.** Pass 1 rides the plan's standing word. A second pass runs only on the operator's
+own explicit word, and only when pass 1 returned a BLOCKER that reverses a recorded decision, or
+the COO names a risk - security, tenancy, concurrency, transactions - after a substantive revision;
+its brief carries `round-1.md` verbatim (§ Fail aggregation). `review.plan.passes` is the ceiling
+(factory 2) and no pass runs beyond it without the operator's explicit word; at `0` the plan gets no
+auditor, a configuration `/pnp:roles` prints as `no auditor`, never a shortcut taken silently.
 
-**The own pass leaves a file, and a plan-class pass does not start without it.** A rule the
-operator would have to read artifacts to enforce is not enforced: on the same consumer the own pass
-was skipped or folded into the writing flow in five readiness cycles out of five, and the one time
-it was forced into a turn of its own it found 14 author blockers on a plan already revised twice. So
-the own pass is written down (`/pnp:review` Step 2d): one row per audited ticket against the six
-checks, every instrument with what it returns on valid and on broken input, a `BLOCKERS FOUND:`
-count, and the SHA-256 of the plan file it read. The readiness brief names the plan, the audited
-tickets, the consequence scan and the own pass on fixed lines, and `scripts/engine/plan-gate.js`
-checks them before the pass is spent - the Codex review wrapper refuses a plan-class run (exit 2),
-by its class flag or by the brief's `Class: plan` line, and Gate 2 denies a Claude reviewer dispatch
-whose brief carries that line - when a file is
-missing, a scan row is open, an audited ticket has no row, an instrument returns the same on broken
-input as on valid, or the plan changed after the own pass was stamped. Its honest limit, in the same
-breath: the gate proves presence, shape and that the own pass was stamped over the plan file the
-brief names; it cannot prove the pass was good, that it ran in a turn of its own, or that a pass N+1
-scan covered the revision - and at `review.plan.passes: 0` nothing is dispatched, so there the duty
-stays doctrine.
+**The session rule.** A readiness cycle starts in a fresh session. The COO session holds the plan
+index, the state and the verdict lines; it reads the approved tickets once and carries no revision
+body and no review body. About 400k tokens of context is a ticket boundary and a guide, not a
+target: there the COO finishes the current ticket - commit and record - and the next ticket starts
+in a new session. A context checkpoint is a project's own addition; the payload ships none.
 
-**The PROCESS gets its own dry run, and it is the half the fact-check gate
-can read but cannot walk.** The pass above reads what the plan SAYS; this one walks what executing
-it would DO: before every paid readiness pass, a dry process trace of the ticket's PROCESS against
-the gates - commit/push/QA order, the state of the tree - because the fact-check gate's gaps list
-names the gates and orders the plan omits, while only a trace walks the sequence as it will
-actually run. The
-trace walks the gates in the order the ticket will hit them: the operator's word that starts the
-ticket, the branch and tree state its commands assume, each review pass and which of them needs a
-word of its own, the QA pass when the ticket declares observable behavior, the commit click, and
-the tag and push words when the ticket carries a release. A defect there is an ORDER rather than
-a claim - a tag before the commit that carries it, a diff guard anchored to a tree the Writer will
-not be standing on, an acceptance step assuming a clean tree the previous ticket leaves dirty - and
-every sentence around it can be true while the sequence is wrong - a gap the gate's third
-instruction can NAME when the plan omits a gate or misplaces a step, and only the trace can PROVE
-by walking it.
-
-The same Reviewer performs `review.plan.passes` full passes, and it is a CYCLE rather than a fixed
-pair: each pass adversarially reads the COMPLETE plan - not only the lines that changed - and
-returns all visible material gaps at once; the COO revises between passes. The revision after a
-pass closes the blockers it was handed and adds nothing new: a change that opens new surface is a
-candidate for the next plan, not a line in this one - the next pass would only find what the
-revision created. This repeats until `review.plan.passes` is exhausted. The FIRST of those
-configured passes runs on the ticket's standing word; EVERY further one - configured or not - is
-dispatched only on the operator's own explicit word, one word per pass, whatever the number is.
-With the factory value of 2 the cycle is exactly:
-
-1. adversarially review the complete draft and return all visible material gaps at once;
-2. after the COO revises the plan, review the complete plan again - not only the changed lines.
-
-The brief of pass N+1 carries pass N's blocker list into the next pass, with the origin duty that
-comes with it (§ Fail aggregation) - the later pass is handed the earlier result, never asked to
-remember it.
-
-That numbered pair is the factory-2 illustration, not the contract - and the second of the two is
-already a pass the operator is asked for. At `review.plan.passes: 3` one further configured pass
-is available on a word of its own; at `1` only the first runs; at `0` the plan gets no auditor at
-all and the consequence scan, the fact-check gate and the COO's own pass over the behavior ledger
-are the whole contract - a configuration `/pnp:roles` prints as `no auditor`, never a shortcut taken silently.
-
-Only once the CONFIGURED passes are exhausted and blockers remain may the COO revise once more and -
-with the **operator's explicit permission**, requested before dispatch - run one final extra pass. A
-review pass beyond `review.plan.passes` is a budget/limits-gated operator decision regardless of the
-engine hosting the Reviewer, so `review.plan.passes` + 1 is the hard maximum; if the plan still does
-not pass there, stop and return the unresolved blockers to the operator. Each pass returns only
-`PASS` or `NEEDS-FIX` with concise, actionable blockers (this is the plan-readiness branch of
-`/pnp:review`, distinct
-from the implementation `pass`/`pass-with-notes`/`fail` verdict). No separate audit backlog,
-handoff file, narrative report, universal DoR, or universal DoD is created.
+No separate audit backlog, handoff file, narrative report, universal DoR, or universal DoD is
+created: the stamp and the round files are the readiness history.
 
 The readiness review checks only:
 
@@ -550,8 +464,7 @@ The readiness review checks only:
    runnable as written rather than described, with a named output that would mean "broken";
 6. branch, worktree, and Git prerequisites are valid.
 
-The readiness review is live orchestration state only, not a Git document. The approved plan
-remains the durable Git authority after the operator approves execution.
+The approved plan is the durable Git authority after the operator approves execution.
 
 ## Ticket brief contract (R2/R3)
 
@@ -597,8 +510,8 @@ Writer is never affected in either case. A present-but-unusable state (a route t
 R2/R3, a non-string route, malformed JSON) denies by design, and is self-healing because
 `.aiwf/**` stays writable; an unusable state never opens the transfer surface or the roadmap. A `paths.plansDir`
 under neither `docs/` nor `.aiwf/` puts the plan's own draft and readiness files behind this guard
-while a route is open - all except the transfer surface and the roadmap under it, which stay writable;
-`/pnp:review` Step 2e says what stands in for them. Two honest limits, stated in the same breath:
+while a route is open - all except the transfer surface and the roadmap under it, which stay writable -
+so `/pnp:plan` runs while no route is open. Two honest limits, stated in the same breath:
 the guard covers the **Edit/Write tool class only**, so a main-session mutation performed through a
 shell command is not caught and remains doctrine; and it only bites if the COO actually writes the file at
 dispatch - a convention, not an enforcement. The paths and the state-file location are fixed in
@@ -625,8 +538,8 @@ Six brief-authoring failures each cost a correction round:
   source before writing a factual claim it acts on produces zero factual errors.
   Where the pointer is owed is where the Writer ACTS or an acceptance check READS - a worklist line,
   a guard, a command; context that only explains cites the section and the symbol, because a line
-  number in prose goes stale with the next commit and costs the fact-check gate a re-verification at
-  every revision for nothing anyone acts on.
+  number in prose goes stale with the next commit and has to be verified again for nothing anyone
+  acts on.
 - **A scope or diff guard is anchored to HEAD at dispatch, never to an older commit.** A
   guard that asks "what did this ticket touch" must diff against the tree the Writer started
   from (`git rev-parse HEAD` at the moment of dispatch, written into the brief as a literal
@@ -703,7 +616,8 @@ tickets. Do not create a separate active BACKLOG file. The PLAN keeps:
    quoted in its COVERED BY line;
 4. after each ticket is accepted, its durable completion record: actual changes, material
    decisions/deviations, verification results, Reviewer/QA conclusion, commit hash, and remaining
-   debt. The COO writes this record **immediately after the ticket's commit, in the same session,
+   debt - in a folder plan the file `records/<REF>.md`, with the index's ticket row closed. The COO
+   writes this record **immediately after the ticket's commit, in the same session,
    unprompted** - a ticket is not closed without it, and tracking it is never the operator's job.
    Two acts ride the record. The scratch directory goes back to the live loop mechanics: evidence
    worth keeping moves into the record or the plan's `readiness/<ABBR>/`, and what is left to
@@ -764,27 +678,23 @@ PLAN. Preserve accepted engineering context, not runtime noise.
 Use the configured paths (`paths.plansDir`):
 
 ```text
-<plansDir>/drafts/PLAN_<ABBR>.draft.md       the draft, untracked, while the plan is one
-<plansDir>/readiness/<ABBR>/                  its readiness history, committed at landing, kept
-<plansDir>/active/PLAN_<ABBR>.md
-<plansDir>/active/<ABBR>/PLAN_<ABBR>.md       or a folder plan: this index + tickets/, records/
+<plansDir>/ROADMAP.md                         one entry per idea, its plans listed under it
+<plansDir>/drafts/<ABBR>/                     the draft folder, untracked, while the plan is one
+<plansDir>/readiness/<ABBR>/                  stamp.json + round-<N>.md, committed at landing, kept
+<plansDir>/active/<ABBR>/PLAN_<ABBR>.md       the index + DECISIONS.md, RESEARCH.md, tickets/, records/
+<plansDir>/active/PLAN_<ABBR>.md              an older single-file plan, still read
 <plansDir>/archive/
 ```
 
 A draft lives in the repository while the plan is one, its readiness history lands beside it, and the
-scratch directory carries the live loop mechanics only (`/pnp:review` Step 2e names the files and the
-one case in which `<scratchDir>/plan/<ABBR>/` stands in). The reason is where the evidence went: on
-this repository and, as its operator reported, on two consumer installations the readiness
-artifacts - the behavior ledger, the consequence scan, the own pass, the fact-check ledgers, the
-revisions - were written to the scratch directory, which git ignores, so a plan's proof disappeared
-with it, and both consumers wrote a local rule for the same thing. One `<ABBR>` is one plan for
-good: its `readiness/<ABBR>/` stays after archiving, and a later plan with the same letters would
-write over it.
+scratch directory carries the live loop mechanics only - a plan's proof written there would
+disappear with it, because git ignores it. One `<ABBR>` is one plan for good: its `readiness/<ABBR>/`
+stays after archiving, and a later plan with the same letters would write over it.
 
 The approved PLAN is written to Git only after the planning lock is released - and then
 immediately, by the COO itself (docs class, per the write boundary above and guard (e)), before
 production-code changes begin - the landing commit, which also takes the readiness history that
-has sat untracked beside the draft since the cycle began. Rough personal notes are inputs, never
+has sat untracked beside the draft since the cycle began (`/pnp:plan` Step 6). Rough personal notes are inputs, never
 implementation authority.
 When a durable record is warranted:
 
@@ -985,15 +895,13 @@ Reviewer and QA must return ALL visible material problems in a single round - no
 cycle. A later round may not raise a blocker that was already visible earlier.
 
 **In the plan-readiness cycle that ban is instrumented rather than trusted, and the mechanism is
-HANDING the list:** the pass N+1 brief carries pass N's blocker list verbatim, and every NEW blocker
-declares why it was not visible on the previous pass - a blocker with no declaration is a contract
-violation, reported separately from the verdict. The declaration is an origin, not an apology
-(born of the revision between the passes, or a fact the previous pass could not see). Why a
-mechanism and not the ban alone: the ban alone was measured to fail twice - a readiness cycle on a
-real consumer that still ran to 9 blockers, and a fifth blocker raised a round late on the very plan
-that introduced the audit table, with the ban above already written. A pass that is handed the
-previous list cannot re-derive it from scratch, and the COO sees which blockers the revision
-created.
+HANDING the list:** the pass-2 brief carries `<plansDir>/readiness/<ABBR>/round-1.md` verbatim -
+the findings and the COO's dispositions - and every NEW finding declares why it was not visible on
+pass 1 - a finding with no declaration is a contract violation, reported separately from the table.
+The declaration is an origin, not an apology (born of the revision between the passes, or a fact
+pass 1 did not open). A pass that is handed the previous list cannot re-derive it from scratch, and
+the COO sees which blockers the revision created. A verification pass after a code correction round
+carries the previous pass's blockers the same way.
 
 ## Escalation and the arbiter
 

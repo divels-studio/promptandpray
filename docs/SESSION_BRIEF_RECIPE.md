@@ -29,8 +29,8 @@ and pastes it. That way every session starts from ONE recipe instead of being im
 3. **Domain gate.** Which document is the operator's final decision on the domain vocabulary; the
    brief to the Writer carries it verbatim, with no engineering "improvements"; on a NEW domain
    question - STOP and ask (memory seed: `domain-review-gate`).
-4. **Task.** Ticket ID + [R-class] + the scope condensed into lettered items (a/b/c/d) from the PLAN
-   section; risk threshold / stop condition / VERIFY - "from the PLAN, verbatim in the brief".
+4. **Task.** Ticket ID + [R-class] + the pointer to its ticket file (`tickets/<REF>.md` of the plan
+   folder) - the scope, risk threshold, stop condition and VERIFY live there and are not copied.
 5. **Machine-local facts.** Everything that has already cost a lost pass: environment quirks + the
    **working commands VERBATIM** (copy-paste ready, marked where they are the operator's to run,
    including why). An explicit order: "do not rediscover these".
@@ -40,8 +40,8 @@ and pastes it. That way every session starts from ONE recipe instead of being im
    merge - not at all without an explicit word in chat AND their own dialog; docs checkpoint - the
    completion record in the PLAN ledger IMMEDIATELY after the commit, same session, without a
    reminder.
-7. **Loop.** The Writer's model pin (and "NEVER pass `model` when dispatching it"); the requirement
-   of an **exhaustive Writer brief on the first try** (the checklist below); the review path
+7. **Loop.** The Writer's model pin (and "NEVER pass `model` when dispatching it"); the Writer brief
+   as a pointer to the ticket (below); the review path
    (`/pnp:review`, the brief at the fixed path `<scratchDir>/review-brief.txt`, the wrapper in the
    background); the correction-round cap; extra review passes - only with the operator's word BEFORE
    the dispatch; QA yes/no and why.
@@ -56,11 +56,17 @@ and pastes it. That way every session starts from ONE recipe instead of being im
 9. **Memory pointers.** Which memory entries carry the resume point and the domain/machine-local
    rules (names only, not contents).
 
-## The Writer-brief recipe - what "exhaustive on the first try" means
+## The Writer brief - a pointer to a frozen ticket
 
-The goal is **zero correction rounds and a review pass in the first round**. Correction rounds and
-repeat reviews are the most expensive part of the cycle; the brief to the Writer removes them in
-advance:
+The Writer brief is `templates/briefs/writer-dispatch.md`: the `Ticket: <REF>` line, "read
+`tickets/<REF>.md` and the files its Code Map names", and the project's standing lines - it does not
+restate the goal, the files, the decisions, the scope or the VERIFY commands. A handover brief
+carries that ticket pointer, never a copy of the ticket. A new durable plan goes through
+`/pnp:plan`.
+
+The goal is still **zero correction rounds and a review pass in the first round**, and "exhaustive on
+the first try" is now a property of the TICKET - written by the planner, audited by the readiness
+pass. A plan ticket, or the brief of a non-durable R2 that has no plan ticket, carries:
 
 - ticket + branch + working directory;
 - the authority documents that BIND it, plus the order: approved fields/semantics are not to be

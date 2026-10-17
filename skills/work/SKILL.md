@@ -44,9 +44,9 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
    out of scope, any constraints. One round of questions, then work.
 4. **Classify and route.** R1 -> execute directly in this session and report. R2/R3 -> requires a
    ticket in a plan under `{{config.paths.plansDir}}/active/` (plansDir is the PARENT of `active/`,
-   `archive/`, `drafts/` and `readiness/`): author or extend a PLAN with the ticket brief
-   (risk threshold + stop condition), state the routing as a decision with a one-line why, then STOP
-   and wait for the operator's word before dispatching. One prefix per plan: a new plan is
+   `archive/`, `drafts/` and `readiness/`): extend a PLAN with the ticket brief (risk threshold +
+   stop condition) - a NEW durable plan goes through `/pnp:plan` - state the routing as a decision
+   with a one-line why, then STOP and wait for the operator's word before dispatching. One prefix per plan: a new plan is
    `PLAN_<ABBR>.md` (or a folder `active/<ABBR>/` whose index is `PLAN_<ABBR>.md`) and its tickets
    are `<ABBR>-<NNN>`, sequential and never reused, so the ref is the address of its plan file rather
    than a description of the work.

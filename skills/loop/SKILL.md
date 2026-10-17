@@ -59,12 +59,14 @@ and `docs/LOOP.md` (the one-page native mapping).
 ## The sequence
 
 1. **PLAN.** Classify the work R1/R2/R3 (`docs/WORKFLOW.md`). R1 = direct in this session, no
-   subagents/Reviewer/QA - skip the rest of this loop. Durable R2/R3 -> the plan-readiness
-   review and the living PLAN under `{{config.paths.plansDir}}/active/` (`PLAN_<ABBR>.md` or
-   `active/<ABBR>/`) apply before implementation.
+   subagents/Reviewer/QA - skip the rest of this loop. Durable R2/R3 -> the plan is made by
+   `/pnp:plan` (research, decisions, the planner, the gate, one readiness pass) and lives under
+   `{{config.paths.plansDir}}/active/<ABBR>/` before implementation.
 2. **Writer implements.** Delegate the concrete ticket to the `writer` subagent (Agent tool,
-   `subagent_type: "writer"`). Give it the outcome, scope, acceptance criteria, risk threshold,
-   and stop condition. Tests are part of implementation, not polish. The Writer returns
+   `subagent_type: "writer"`) with the brief `${CLAUDE_PLUGIN_ROOT}/templates/briefs/writer-dispatch.md`:
+   the `Ticket:` line, the pointer to `tickets/<REF>.md` and its Code Map, the standing lines - the
+   ticket file carries the outcome, scope, acceptance, risk threshold and stop condition, so the
+   brief does not restate them. Tests are part of implementation, not polish. The Writer returns
    `DONE` (+ diff + tests + VERIFY output with exact exit codes) or `BLOCKED: <reason>`.
    Carry `Ticket: <REF>` on a line of its own in the brief. Gate 2 then decides in the project's
    configured mode (`enforcement.dispatchGate`): `always` = every dispatch surfaces a native

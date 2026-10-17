@@ -8,7 +8,8 @@ allowed-tools: Read, Grep, Glob, Bash
 
 Compose the **session brief** the operator will use to open the next fresh session.
 The authority for the recipe is the plugin's **`docs/SESSION_BRIEF_RECIPE.md`** - read it and follow
-its structure exactly (the nine mandatory sections, the Writer-brief checklist, the anti-patterns).
+its structure exactly (the nine mandatory sections, the Writer brief as a ticket pointer, the
+anti-patterns).
 The principle: *maximum quality at minimum cost / context / tokens.*
 
 Argument: the next ticket or focus; empty = the next open ticket in the active plan.
@@ -33,8 +34,8 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
 - `git status --short` + `git log --oneline -5` -> branch, **HEAD SHA**, clean/dirty tree.
 - The active plan under `{{config.paths.plansDir}}/active/` - `PLAN_<ABBR>.md`, or `active/<ABBR>/`
   with its ticket file (plansDir is the PARENT of `active/`, `archive/`, `drafts/` and
-  `readiness/`) -> the target ticket's section (scope, risk threshold, stop condition, VERIFY) and
-  the ledger entries -> which tickets are CLOSED.
+  `readiness/`) -> the target ticket's file or section, which the brief POINTS at rather than
+  copies, and the ledger entries -> which tickets are CLOSED.
 - Your memory tool -> the resume point, machine-local facts, any recorded operator gates.
 - Everything THIS session learned the hard way (environment quirks, commands that actually work,
   decisions taken) - that goes into the brief VERBATIM, so it is not rediscovered.
@@ -45,7 +46,7 @@ Write nothing and commit nothing in this skill - the output is text for the oper
 
 - Language: `{{config.operator.language}}` (the operator channel), technical terms in English.
   Dense; about a screen and a half is the target.
-- All nine sections from the recipe, in order. Section 7 (Loop + the exhaustive Writer brief) and
+- All nine sections from the recipe, in order. Section 7 (Loop + the Writer brief as a pointer to the ticket) and
   section 8 (the verbatim subagent-model clause) are MANDATORY - they never drop out; they are what
   removes correction rounds and wasted passes in advance.
 - Facts and pointers, not file contents; commands copy-paste ready, marked where they are the

@@ -115,7 +115,7 @@ qa            codex   gpt-5.6-sol        high    -       runtime/UI tickets only
 qal           off     -                  -       -       operator-gated
 
 -- review classes (what gets audited, how many passes) --
-plan          codex   gpt-5.6-sol        high    2       +1 with your word; fact-check before each pass
+plan          codex   gpt-5.6-sol        high    2       second pass only on your word: a reversed decision or a named risk
 code (R2/R3)  codex   gpt-5.6-sol        high    1       correction rounds cap 2; fact-check before each pass
 docs (R2)     codex   gpt-5.6-sol        high    1       fact-check before each pass
 
@@ -130,8 +130,8 @@ R1            -       -                  -       0       no auditor
   the whole host - engine, model and effort together - comes from `roles.reviewer`.
 - `passes`: the class's configured pass CEILING. Pass 1 runs on the ticket's standing word; every
   further pass is dispatched only on the operator's own explicit word - one word per pass. For
-  `plan`, one MORE beyond the configured number is always available with that word, so
-  `passes + 1` is the hard maximum. For
+  `plan`, a second pass is asked for only when pass 1 returned a BLOCKER that reverses a recorded
+  decision, or the COO names a risk after a substantive revision (`/pnp:plan`). For
   `code` and `docs`: `1` = one Reviewer pass, `2` = a second full pass available after the first
   returns `pass`, `0` = no auditor. Correction rounds stay capped by `loop.correctionRoundsCap`.
 - `(the Reviewer's)` after an effort means the row is Claude-hosted and shares the reviewer agent
@@ -143,8 +143,8 @@ R1            -       -                  -       0       no auditor
   marked**, because QA compares artifacts against acceptance criteria rather than auditing
   decisions, so a mid-tier QA is an ordinary choice.
 - The **fact-check** row and the **R1** row are there so the picture is complete. Neither is
-  configurable: the fact-check gate runs before every pass, over a diff or over a plan, and R1 has
-  no auditor by definition.
+  configurable: the fact-check gate runs before every CODE or docs pass over a diff - a plan pass has
+  the mechanical plan gate instead - and R1 has no auditor by definition.
 
 ## Step 1 - Report
 

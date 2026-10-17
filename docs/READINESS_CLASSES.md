@@ -6,9 +6,10 @@ fourteenth was measured between passes, on the blockers a revision itself create
 a second pass, where two of the four blockers born of the revision were a race or a lock decision the
 plan had left as an accepted residual.
 
-`/pnp:review` Step 2b hands this file to the fact-check agent; a class present in a plan is a gap,
-named by number. Step 2c's consequence scan asks classes 1, 10 and 14 from the other side - from
-each decision of the plan out to the tree. The list grows with a release, never with a session.
+The readiness brief `/pnp:plan` sends (`templates/briefs/readiness-codex.md`) cites this file: the
+auditor names the class of every finding by number. Classes 1, 10 and 14 are also what the research
+before a plan looks for - the consumers and adjacent contracts of every touched surface. The list
+grows with a release, never with a session.
 
 | # | class | the question to ask of every ticket |
 |---|---|---|

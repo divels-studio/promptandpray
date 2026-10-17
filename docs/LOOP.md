@@ -27,10 +27,10 @@ project's rendered `reviewer` agent (`subagent_type: "reviewer"`), passing the r
 `model` when it is a tier alias and omitting it for an exact model id, whose run is the agent file's
 own pin (§ Role boundaries, the dispatch contract); that file is rendered whenever the Reviewer role
 OR any row is Claude-hosted, so there is no ad-hoc reviewer and no model pinned in a document.
-Before every reviewer pass above the scan tier - a Codex pass, or a Claude reviewer on anything but
+Before every diff pass above the scan tier - a Codex pass, or a Claude reviewer on anything but
 a scan-tier alias (`haiku`/`sonnet`): `opus`, `fable` or any exact model id, which PnP does not
-rank - `/pnp:review` Step 2b runs the cheap fact-check gate over the prose of the diff, or of the
-plan.
+rank - `/pnp:review` Step 2b runs the cheap fact-check gate over the prose of the diff. A plan pass
+has the mechanical plan gate instead; the planning cycle around it is `/pnp:plan`.
 
 `/pnp:loop` states this sequence as a convention. There is **no runtime state machine and no
 counters** - the loop is convention + the native click-based permission gates only.
@@ -72,7 +72,8 @@ counters** - the loop is convention + the native click-based permission gates on
   `-Class` / `--class`) **or** the `reviewer` Claude subagent (`Read/Grep/Glob` only).
   Adversarial code/design review; reports
   `pass` / `pass-with-notes` / `fail` (per
-  `docs/REVIEW_CHECKLIST.md`; `PASS`/`NEEDS-FIX` is reserved for plan-readiness); never edits.
+  `docs/REVIEW_CHECKLIST.md`; a plan-readiness pass returns a findings table and a `BLOCKERS:` line
+  instead); never edits.
 - **QA** - read-only, **engine-neutral** (Codex or Claude per `roles.json`). `/pnp:qa` resolves the
   host once and dispatches either the Codex wrapper (`scripts/native/ps/codex-qa.ps1` /
   `scripts/native/sh/codex-qa.sh`) **or** the `qa` Claude subagent,
@@ -105,7 +106,14 @@ counters** - the loop is convention + the native click-based permission gates on
 
 The Writer-only-write rule and "the COO does not write implementation code" are invariants of the
 **R2/R3 cycle**. In **R1** the main session implements directly - no loop, no subagents, no
-Reviewer/QA - so R1 is the deliberate exception, not a violation.
+Reviewer/QA - so R1 is the deliberate exception, not a violation. The planner of `/pnp:plan` runs as
+the `writer` agent type and writes only its plan folder under `<plansDir>/drafts/<ABBR>/`.
+
+**The session rule.** A readiness cycle starts in a fresh session. The COO session holds the plan
+index, the state and the verdict lines; it reads the approved tickets once and carries no revision
+body and no review body. About 400k tokens of context is a ticket boundary and a guide, not a
+target: there the COO finishes the current ticket - commit and record - and the next ticket starts
+in a new session (`docs/WORKFLOW.md` § Plan readiness review).
 
 **Reading is not a shell job (all roles).** Read or inspect files and config with the Read/Grep/Glob
 tools, not shell commands (`cat`/`head`/`node -e`/shell loops) - the shell is for execution
@@ -151,8 +159,8 @@ and `Agent` is the empirically correct matcher).
 
 **A Claude-hosted plan-readiness pass goes through the same hook.** On an `Agent` dispatch of
 `reviewer` whose prompt carries the line `Class: plan`, Gate 2 runs `scripts/engine/plan-gate.js`
-over the prompt and DENIES the dispatch while the readiness artifacts the brief names are missing or
-incomplete (`docs/WORKFLOW.md` § Plan readiness review); with the artifacts in order it stays silent,
+over the prompt and DENIES the dispatch while the plan folder the brief names fails `--check` - its
+mechanical contract or its stamp (`docs/WORKFLOW.md` § Plan readiness review); with a passing check it stays silent,
 and every other reviewer dispatch is untouched. The deny is a decision on a readable brief, not an
 error path: an unreadable payload, a throw inside the check, or a session with no
 `CLAUDE_PROJECT_DIR` to resolve the brief's paths against still resolves to ask. The Codex host gets

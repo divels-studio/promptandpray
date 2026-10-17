@@ -14,7 +14,7 @@ it lives in the generated project overrides document (`paths.overridesDoc`).
 - `OPERATOR_PROTOCOL.md` - the operator's entry page: the three doors and what the gates guarantee.
 - `SESSION_BRIEF_RECIPE.md` - the recipe `/pnp:brief` applies.
 - `READINESS_CLASSES.md` - the blocker classes a readiness pass keeps finding, one question per
-  class; the fact-check gate applies them to every ticket before the paid pass.
+  class; the readiness brief of `/pnp:plan` cites them, and the auditor names one per finding.
 
 Development of the plugin itself lives in `dev/` at the repo root - not payload, not shipped, and
 outside the provenance scan. A project installs the plugin from the GitHub marketplace

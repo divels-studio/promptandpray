@@ -178,7 +178,7 @@ so the argv-injection surface is smaller by construction - `bash scripts/native/
 
 Adversarial code/design review of the Writer's diff. Read-only; reports, never fixes. Give it the
 ticket's **risk threshold** and **stop condition** (mandatory) and the diff scope. It returns `pass`,
-`pass-with-notes`, or `fail` (or `PASS`/`NEEDS-FIX` for a plan-readiness pass), with all visible
+`pass-with-notes`, or `fail` (or, for a plan-readiness pass, a findings table and a `BLOCKERS:` line), with all visible
 material blockers in one round.
 
 ```powershell
@@ -199,8 +199,8 @@ Reviewer role's own triple. Without the flag the wrapper behaves exactly as it a
 that resolves to the `claude` engine makes the wrapper exit 2, the same way a claude-hosted
 Reviewer does - that pass belongs to the Claude Agent branch. The review wrapper passes every brief
 through `scripts/engine/plan-gate.js`: a `plan`-class run, or a brief carrying a `Class: plan` line
-at its first column, is refused (exit 2) while its readiness artifacts are missing or incomplete
-(`/pnp:review` Step 2d).
+at its first column, is refused (exit 2) while the plan folder its `PLAN:` line names fails
+`plan-gate.js --check` - the mechanical contract or the stamp (`/pnp:review` § Plan-readiness mode).
 
 ```powershell
 Get-Content .\review-brief.txt -Raw | scripts\native\ps\codex-review.ps1 -ProjectRoot <root> -Class docs

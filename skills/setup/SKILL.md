@@ -74,7 +74,7 @@ Three constraints worth stating before the operator answers:
   claude-hosted review row shares the ONE reviewer agent file, so it takes a tier alias or exactly
   the Reviewer's own model;
 - `paths.plansDir` is the **parent** of `active/`, `archive/`, `drafts/` and `readiness/`; setup
-  creates all four;
+  creates all four (`drafts/<ABBR>/` and `readiness/<ABBR>/` are filled by `/pnp:plan`);
 - `enforcement.dispatchGate` has exactly two values. `always` (the factory one) raises the Yes/No
   dialog on **every** Writer dispatch. `off-plan` raises it only when the brief's `Ticket: <REF>`
   line names no ticket in `<plansDir>/active/PLAN_*.md` or `active/<ABBR>/` - quieter, and it only
@@ -94,7 +94,8 @@ then whatever is typed - and each can print one warning line:
 - `<overridesDoc> already exists - setup seeds that document once and never rewrites it ...` - the
   install is correct and writes nothing there, which is invisible unless it is said.
 - `paths.plansDir` under the scratch directory - a plan canon there is outside git wherever the
-  scratch directory is ignored (/pnp:review Step 2e); the generator repeats it as a note.
+  scratch directory is ignored (`docs/WORKFLOW.md` § Durable development history); the generator
+  repeats it as a note.
 
 None is a blocker: all three describe a project an operator may want exactly as it is. The
 existing-plans one is repeated by the generator as a `note` line in the plan and the report, so

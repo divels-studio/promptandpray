@@ -15,25 +15,27 @@ ticket-brief contract live in `docs/WORKFLOW.md`; the native mapping is `docs/LO
 
 ## Plan readiness (before implementation)
 
-For durable R2 and all R3 plans, the Reviewer performs `review.plan.passes` full read-only passes
-before execution approval - the plan row of the audit table, factory 2, shown and changed by
-`/pnp:roles`. It is a CYCLE, not a fixed pair: each pass reads the complete plan and returns all
-visible material gaps at once, the COO revises between passes, and this repeats until
-`review.plan.passes` is exhausted. The FIRST of those passes runs on the ticket's standing word;
-every further one - configured or beyond that number - needs the **operator's explicit permission,
-requested before the dispatch**, one word per pass. A pass BEYOND the configured number is on top
-of that a budget/limits-gated operator decision, whatever engine hosts the Reviewer - so
-`review.plan.passes` + 1 is the hard maximum; if the plan still does not pass there, stop and return
-the unresolved blockers to the operator. The Planner/COO never approves its own plan, and the
-fact-check gate runs before every one of these passes above the scan tier - it is skipped only when
-the reviewer itself runs on a scan-tier model.
+For durable R2 and all R3 plans, the Reviewer performs ONE read-only pass over the plan folder
+before execution approval, on the plan row of the audit table (`/pnp:roles`). The pass rides the
+plan's standing word; a second pass runs only on the operator's explicit word, requested before the
+dispatch, when pass 1 returned a BLOCKER that reverses a recorded decision or the COO names a risk
+after a substantive revision; `review.plan.passes` is the ceiling. The planner and the COO never
+approve their own plan. No fact-check agent runs before a plan pass; the mechanical plan gate does
+(`docs/WORKFLOW.md` § Plan readiness review).
 
-Check only that the plan matches the repository, has clear scope, contains no hidden discovery or
-unresolved architecture (for every write, the lock and what runs beside it - class 15), sequences
-executable work correctly, uses real acceptance/verification, and
-has valid branch/worktree/Git prerequisites. Return only `PASS` or `NEEDS-FIX` with concise
-actionable blockers. Do not require a universal DoR/DoD, create an audit document, or review
-formatting for its own sake.
+Read the complete folder against the tree and check only that the plan matches the repository, has
+clear scope, contains no hidden discovery or unresolved architecture (for every write, the lock and
+what runs beside it - class 15), sequences executable work correctly, uses real
+acceptance/verification, and has valid branch/worktree/Git prerequisites - the classes of
+`docs/READINESS_CLASSES.md`.
+
+**The blocker contract.** A BLOCKER is a required property the plan lacks plus the evidence
+(`file:line`, opened). INFO never causes a revision. Wording, formatting, `file:line` precision in
+explaining context and the design choices the decisions record as the operator's are out of scope;
+the hint is a hint, never the finding. The output is one findings table
+`| id | class | property the plan must have | evidence | hint |` and one line
+`BLOCKERS: <n> INFO: <m>`, nothing else (pass 2 adds `CLOSED: <k> OPEN: <j>`). Do not require a
+universal DoR/DoD, create an audit document, or review formatting for its own sake.
 
 ## Given per brief: risk threshold + stop condition
 
@@ -45,8 +47,8 @@ Every R2/R3 brief hands the Reviewer and QA:
 
 Neither role is obligated to invent findings; absence of defects at the given threshold is a valid
 `pass`. Stop when the stop condition is met - do not keep digging. The implementation loop is capped
-at `loop.correctionRoundsCap` correction rounds; plan readiness follows its separate
-`review.plan.passes` contract above.
+at `loop.correctionRoundsCap` correction rounds; plan readiness follows its separate pass economy
+above.
 
 ---
 
@@ -213,13 +215,14 @@ serialize fail reasons across rounds; a later round may not raise a "new" blocke
 visible. For each blocker: name the exact failing surface and require proof on that exact surface;
 forbid proxy closure (adapter-only, type-only, unit-only, prose-only, generic green test).
 
-**On pass 2 and later of a plan-readiness cycle the Reviewer is handed the previous list and owes a
-declaration for anything outside it:** the pass N+1 brief carries pass N's blocker list verbatim,
-and every NEW blocker declares why it was not visible on the previous pass - a blocker with no
-declaration is a contract violation, reported separately from the verdict. Name the origin in one
-clause (born of the revision between the passes, or a fact the previous pass could not see); if the
-brief arrived WITHOUT the previous list, say so as a precondition and review anyway - a missing list
-is the COO's contract violation, not a reason to withhold blockers.
+**On a pass 2 the Reviewer is handed the previous list and owes a declaration for anything outside
+it:** a plan's pass-2 brief carries `round-1.md` verbatim - findings and dispositions - and a
+verification pass after a correction round carries the previous pass's blockers; every NEW blocker
+declares why it was not visible on the previous pass - a blocker with no declaration is a contract
+violation, reported separately from the verdict. Name the origin in one clause (born of the revision
+between the passes, or a fact the previous pass did not open); if the brief arrived WITHOUT the
+previous list, say so as a precondition and review anyway - a missing list is the COO's contract
+violation, not a reason to withhold blockers.
 
 ## Verdict (both roles)
 

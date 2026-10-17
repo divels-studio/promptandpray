@@ -44,7 +44,8 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
    plan file; older names are not renamed. Pick the plan
    matching the current git branch; if that is ambiguous (several plans, or the branch matches
    none), ask the operator which mission - that is the ONLY clarifying question this skill is
-   allowed before reporting.
+   allowed before reporting. No active plan, and the operator names a new durable goal: that goal
+   is planned through `/pnp:plan`, on the operator's word.
 3. **Reconstruct state.** From the chosen PLAN: mission status, the ticket ledger, the completion
    records, the execution order, any recorded operator gates. From memory: the resume point and
    machine-local facts. The resume point is a status of at most ~10 lines, rewritten WHOLE

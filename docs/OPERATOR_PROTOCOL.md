@@ -44,13 +44,11 @@ The rules do not rely on the session "remembering" them - they are enforced mech
   own docs edits are main-session work and do not raise this dialog - Gate 3 below is what bounds
   them while a ticket is open.
 - **Plan readiness (wrapper + Gate 2)** - a paid readiness pass over a plan does not start until the
-  COO's own pass and the consequence scan exist as files the brief names: the Codex review wrapper
-  refuses the run, and Gate 2 denies a Claude reviewer dispatch, while one is missing, a scan row is
-  still open, or the plan changed after the own pass was stamped. It checks that both files exist,
-  that every scan row is closed and every audited ticket has its rows, and that the own pass was
-  stamped over the plan file the brief names - not how good either is,
-  and not that the scan covered the latest revision - so the step happens without you reading those
-  files.
+  plan folder meets its mechanical contract and carries a current stamp: the Codex review wrapper
+  refuses the run, and Gate 2 denies a Claude reviewer dispatch, while a ticket is over its size,
+  a heading or a decision citation is missing, a Code Map path does not exist, or the plan changed
+  after it was stamped. It checks the shape and that the text is the stamped one - not how good the
+  plan is - so the step happens without you reading the folder. `/pnp:plan` runs the whole cycle.
 - **Gate 3 (hook)** - while a ticket is dispatched, the main session cannot edit code: with an open
   R2/R3 route recorded in `.aiwf/route-state.json` it may write only `docs/**`, `.aiwf/**` and
   root-level `*.md`, plus the transfer surface (the one file where incident rows are recorded) and
@@ -99,14 +97,15 @@ one hard boundary in the system is the OS sandbox on the Codex review path.
 
 `/pnp:roles` prints the **audit table**: every role and every review class on one screen, with the
 engine, the model, the effort and the number of passes each one gets, plus the two lines that are
-not configurable at all - the fact-check gate (always, before every pass above the scan tier) and
+not configurable at all - the fact-check gate (always, before every diff pass above the scan tier) and
 R1 (no auditor by design). `/pnp:mission`, `/pnp:work` and `/pnp:setup` print it in their reports,
 so you see who will audit the work before you decide what to ask for.
 
 The same command changes it, with no re-interview: `/pnp:roles --set docs.engine=claude` gives
 documentation diffs their own Claude host, `/pnp:roles --set plan.passes=3` raises the CEILING of
-readiness passes a plan may get (the first runs on your word for the ticket, each further one on a
-word of its own - one word per pass), `/pnp:roles --reset docs` puts a class back on the Reviewer.
+readiness passes a plan may get (the first runs on your word for the plan; a second only on a word
+of its own, for a reversed decision or a named risk), `/pnp:roles --reset docs` puts a class back on
+the Reviewer.
 It refuses rather than guesses - a result your schema rejects, a malformed project additions block, a
 stale agent file without `--confirm-remove-stale` - and a refusal leaves the project exactly as it
 was. What it re-renders it overwrites; a rendered agent file keeps its project additions block.
