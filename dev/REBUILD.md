@@ -206,7 +206,10 @@ Silerax plan, because every new plan pays it.
 Order: A -> B -> 0.3.0 -> (start measured; C2 first if > ~100k) -> Silerax plan measured -> C. Each ticket on its own word; A's code gets a
 Codex pass only if the operator asks. COO routing (overrides § Loop shape, the four checks): A1, A2,
 A3 `COO: top (Fable) - because check 1` (a migration, Gate 2's lookup, the gate's enforcement code);
-B1, B2, B3 `COO: cheap (Opus) - all four no` (prose); C1, C2, C3 `COO: cheap (Opus) - all four no`.
+B1, B2 `COO: cheap (Opus) - all four no` (prose); B3 `COO: top (Fable) - because check 1` (the
+release ticket writes migration 0025 - corrected by the arbitration ruling of 2026-10-17 on plan RBB's
+readiness pass 1, CANDIDATES § Ruling ledger; the earlier "B3 cheap" was an estimate made before the
+ticket's contract existed); C1, C2, C3 `COO: cheap (Opus) - all four no`.
 Nine tickets, six before 0.3.0.
 
 ## Inputs (data, not canon)

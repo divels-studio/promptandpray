@@ -19,6 +19,6 @@ The COO writes the entries, one `##` per idea, in the format below; entries foll
 - Why: „не искам да гася пожара, а да го предотвратя"
 - Scope: in - the cycle, its gate, its skill, its docs, the measurement; out - the suites, the public README
 - Size: M
-- Plans: PLAN_RBA (done 2026-10-17, archived as `012_PLAN_RBA_2026-10-17/`); plan B, plan C not yet
+- Plans: PLAN_RBA (done 2026-10-17, archived as `012_PLAN_RBA_2026-10-17/`); PLAN_RBB (`active/RBB/`, approved 2026-10-17 after one cold + one resumed Codex pass, in progress); plan C not yet
 - Status: in progress
 - Born: 2026-10-17, operator word „да"

@@ -1,0 +1,18 @@
+{
+  "plan": "RBB",
+  "contract": "c607d8d1858a12d295c97867e837c627f75be8ab963459bdd73d10999c428ea9",
+  "files": {
+    "DECISIONS.md": "53749fa22218720cad63ae528e0f7d4eb7aea36bd7f27bf22b989aba64bed930",
+    "PLAN_RBB.md": "31712e53245261a42aaa471080685e37821565d962d524a92cc533e2a5241ff4",
+    "tickets/RBB-001.md": "415219edea9651124c578723dedc8ca69bb508b18b961ae15c7d3c51772b9063",
+    "tickets/RBB-002.md": "38d5bfd82860bd4437bbaede9bb096ae433ddb0c93937f7a7e3230eb8082c470",
+    "tickets/RBB-003.md": "2aeae85d3f9a5fb12b10a1394100282f17a5ca17c99bc19271110b85782d166e"
+  },
+  "xrefs": {
+    "RBA/D-04": "7dc19bda840abf82fdcc3aa5cee50c813cfec92ff02fe361e779293ba601754a",
+    "RBA/D-13": "d0582e8cceb305987de7e9f2515141cc956c6431c6995b5e70b1bbe907c90d8d",
+    "RBA/D-14": "22c3eee5b43a719dde2ad3ad04327d849819d3ef4057953043e94d483792ad29",
+    "RBA/D-15": "7bee7c556ac246c3f1e190deee029579352a6b30245ad813cb9aab45b423ab3e"
+  },
+  "stampedAt": "2026-10-17T13:07:05.240Z"
+}
