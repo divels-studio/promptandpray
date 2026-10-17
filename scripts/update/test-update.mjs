@@ -10,9 +10,9 @@
  *
  * WHAT IT ASSERTS
  *   1. an already-current project is a zero-diff no-op, and the interlock says so;
- *   2. a real 0.1.0 -> 0.2.0 upgrade applies all four op types, prints the CHANGELOG blocks before
- *      the first operation and the note's text, and stamps the payload version; a FRESH install
- *      from that payload stamps its last manifest entry;
+ *   2. a real 0.1.0 -> 0.2.0 upgrade applies every op type but seed-file (15b), prints the
+ *      CHANGELOG blocks before the first operation and the note's text, and stamps the payload
+ *      version; a FRESH install from that payload stamps its last manifest entry;
  *   3. the interlock stops a stale project, and every non-exception skill really runs it;
  *   4. an update OVERWRITES: an edited whole file, an edited `aiwf-core` region (every byte outside
  *      the markers kept) and a deleted file all end as the payload render, with no question;
@@ -194,7 +194,7 @@ const askRules = (projectDir) => ((readJson(at(projectDir, SETTINGS_REL)) || {})
 const has = (obj, key) => Object.prototype.hasOwnProperty.call(obj || {}, key);
 
 // ---- payload builder -------------------------------------------------------
-const FIXTURE_NOTE = { op: 'note', id: 'fixture-note', text: 'The fixture migration exercises every operation type.', docRefs: ['docs/LOOP.md#commit-gate'] };
+const FIXTURE_NOTE = { op: 'note', id: 'fixture-note', text: 'The fixture migration exercises every operation type but seed-file.', docRefs: ['docs/LOOP.md#commit-gate'] };
 const ALL_OPS = [
   { op: 'add-config-key', path: 'enforcement.exampleToggle', default: true, askOperator: true, question: 'Keep the example toggle this fixture release introduces?' },
   { op: 'rerender-managed-region', file: 'CLAUDE.md', region: 'aiwf-core', template: 'templates/CLAUDE.md.tmpl#aiwf-core' },
@@ -269,8 +269,8 @@ function makePayload(name, { version, migrations, tweak = null }) {
 // The payload every project here is INSTALLED from: the shipped plugin at its baseline migration.
 const BASE = makePayload('base', { version: BASELINE.targetPluginVersion, migrations: [] });
 
-// The payload every "real upgrade" case runs against: 0.2.0, one migration, all four op types, and
-// templates + ruleset that really changed.
+// The payload every "real upgrade" case runs against: 0.2.0, one migration, every op type but
+// seed-file (section 15b has its own payload), and templates + ruleset that really changed.
 const P020 = makePayload('020', {
   version: '0.2.0',
   migrations: [{ id: '0002_fixture', version: '0.2.0', ops: ALL_OPS }],
@@ -310,7 +310,7 @@ section('1 - an already-current project: the interlock says so and --apply is a 
 }
 
 // ---------------------------------------------------------------------------
-section('2 - a real 0.1.0 -> 0.2.0 upgrade: all four op types, the CHANGELOG, the note, the stamps');
+section('2 - a real 0.1.0 -> 0.2.0 upgrade: every op type but seed-file, the CHANGELOG, the note, the stamps');
 const upgraded = project('upgrade');
 {
   check('install at 0.1.0 exits 0', install(upgraded).status === 0);

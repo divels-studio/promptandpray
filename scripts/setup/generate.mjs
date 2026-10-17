@@ -730,9 +730,9 @@ export function existingPlansWarning({ projectRoot, plansDir }) {
 
 /**
  * One warning line, or null: paths.plansDir lies under the scratch directory. A plan canon there
- * is outside git wherever the scratch directory is ignored (/pnp:review Step 2e). A warning, never a
- * refusal - the schema admits any string and the operator may mean exactly this. Pure and lexical:
- * "." and ".." segments are folded; on a project whose `os` is windows (windowsPaths) backslashes
+ * is outside git wherever the scratch directory is ignored (docs/WORKFLOW.md "Durable development
+ * history"). A warning, never a refusal - the schema admits any string and the operator may mean
+ * exactly this. Pure and lexical: "." and ".." segments are folded; on a project whose `os` is windows (windowsPaths) backslashes
  * are separators and case is folded, as that file system and git's ignore matching fold them
  * there; on linux and macos the paths are compared as written (a volume's case rule is not in the
  * config, and a lexical test does not guess it); nothing is resolved against the file system. The
@@ -748,7 +748,7 @@ export function plansDirUnderScratchWarning({ plansDir, scratchDir = '.aiwf', wi
   const b = norm(scratchDir);
   if (!a || !b || a === '.' || b === '.') return null;
   if (a !== b && !a.startsWith(b + '/')) return null;
-  return `paths.plansDir ${plansDir} is under the scratch directory ${scratchDir} - a plan canon there is outside git wherever the scratch directory is ignored; pick a tracked path (/pnp:review Step 2e)`;
+  return `paths.plansDir ${plansDir} is under the scratch directory ${scratchDir} - a plan canon there is outside git wherever the scratch directory is ignored; pick a tracked path (docs/WORKFLOW.md "Durable development history")`;
 }
 
 /**

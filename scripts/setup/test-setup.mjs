@@ -730,10 +730,10 @@ section('12b - a project that already has plans is WARNED about, on both paths, 
 section('12c - a plansDir under the scratch directory is WARNED about, on both paths, and never blocked');
 {
   // A plan canon under the scratch directory is outside git wherever the scratch directory is
-  // ignored (/pnp:review Step 2e). The schema admits the path and the operator may mean exactly
-  // this, so setup says it - at the plans question and as a note in the plan/report - and refuses
-  // nothing. A project of its own: the 12b project is already installed and does not serve a new
-  // dry-run.
+  // ignored (docs/WORKFLOW.md "Durable development history"). The schema admits the path and the
+  // operator may mean exactly this, so setup says it - at the plans question and as a note in the
+  // plan/report - and refuses nothing. A project of its own: the 12b project is already installed
+  // and does not serve a new dry-run.
   const p3 = project('under-scratch');
 
   // (a) the pure helper on ten inputs, each with one answer on every platform: nothing reads
@@ -1438,6 +1438,15 @@ section('22 - the audit table: a fresh install gets it without being asked, and 
     ], { encoding: 'utf8' });
     return { status: rr.status, out: (rr.stdout || '') + (rr.stderr || '') };
   };
+  // The plan row's note is the pass economy: one readiness pass on the plan's standing word, a
+  // second only on the operator's word - no "+1", and no fact-check gate for a plan.
+  {
+    const s = roleCmd(['--show']);
+    const planRow = (s.out.split('\n').find((l) => l.startsWith('plan ')) || '').trimEnd();
+    check('/pnp:roles --show: the plan row says a second pass only on the word, with no "+1" and no fact-check',
+      s.status === 0 && planRow.endsWith('second pass only on your word: a reversed decision or a named risk')
+      && !planRow.includes('+1') && !planRow.includes('fact-check'), `exit ${s.status}: ${planRow}`);
+  }
   // Moving the Reviewer to codex makes its Claude agent file stale, and deleting a file is a
   // destructive step: the run must refuse first and say which file it wants to remove.
   const a = roleCmd(['--set', 'reviewer.engine=codex', '--set', 'reviewer.model=codex-atom-2', '--set', 'reviewer.effort=high']);

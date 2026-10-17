@@ -101,7 +101,7 @@ exit 0 - and the project is byte-identical afterwards
 }
 ```
 
-One record for five operations: the value of a new config key is the only thing an update asks.
+One record for six operations: the value of a new config key is the only thing an update asks.
 Everything it renders it overwrites.
 
 ```

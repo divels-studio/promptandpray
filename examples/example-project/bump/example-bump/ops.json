@@ -20,7 +20,7 @@
     {
       "op": "note",
       "id": "example-bump",
-      "text": "This migration exists so a reader can see all four operation types in one place, in a run they can execute themselves.",
+      "text": "This migration exists so a reader can see all five operation types in one place, in a run they can execute themselves.",
       "docRefs": ["docs/LOOP.md", "migrations/README.md"]
     },
     {
@@ -28,6 +28,11 @@
       "file": ".claude/agents/writer.md",
       "region": null,
       "template": "templates/agents/writer.md.tmpl"
+    },
+    {
+      "op": "seed-file",
+      "template": "templates/ROADMAP.md.tmpl",
+      "target": "<plansDir>/ROADMAP.md"
     }
   ]
 }

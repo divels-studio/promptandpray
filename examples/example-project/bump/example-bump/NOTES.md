@@ -1,7 +1,7 @@
 # example-bump
 
 The simulated version bump of the example cycle: the payload it is built into -> that payload's next
-minor version, five operations - one of each operation type the migration format has, plus a second
+minor version, six operations - one of each operation type the migration format has, plus a second
 `rerender-managed-region` over a whole file that carries the project's own additions block.
 
 | # | op | what it does here |
@@ -11,6 +11,7 @@ minor version, five operations - one of each operation type the migration format
 | 2 | `reconcile-ask-ruleset` | reconciles `.claude/settings.json` against the payload ruleset. The project's own foreign rule is never touched, and no rule this installation did not insert is ever removed. |
 | 3 | `note` | text with `docRefs`, which the runner prints. It applies nothing; it is how a release tells the operator what to re-read. |
 | 4 | `rerender-managed-region` | re-renders `.claude/agents/writer.md`. The bumped payload changes that template, so the render really is different; the cycle has put a project additions block into the file, and the update writes the render and **carries that block verbatim**. Operation 1 and this one are the two halves of the same rule: what the payload renders is overwritten, the project's own text lives in the additions block. |
+| 5 | `seed-file` | seeds `<plansDir>/ROADMAP.md` from `templates/ROADMAP.md.tmpl` only when the file is absent. Setup already seeded the roadmap at install, so here the update **keeps** the project's file byte for byte and prints `(kept)`; a seed is never recorded. |
 
 **Why this one is appended at the end.** The cycle addresses operation 0 by index
 (`<NNNN>_example-bump/0/...`) in its resolution file. A new operation inserted anywhere else would

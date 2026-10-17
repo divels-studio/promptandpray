@@ -5963,14 +5963,14 @@ function projectLayerFindings(projectRoot, pluginRoot, opts) {
   addObservation('scratch-ignored', 'scratchDir ignored by git (observed)',
     typeof paths.scratchDir !== 'string' ? 'config paths unusable - nothing to observe' : scratchIgnored(projectRoot, paths.scratchDir));
   // A plansDir under the scratch directory is outside git wherever the scratch directory is ignored
-  // (/pnp:review Step 2e). A lexical prefix test over the configured paths; case and backslashes fold
-  // on a project whose `os` is windows. An os outside the schema's enum reads "unusable" here and
-  // fails config-schema-valid below - it never reads "outside".
+  // (docs/WORKFLOW.md "Durable development history"). A lexical prefix test over the configured
+  // paths; case and backslashes fold on a project whose `os` is windows. An os outside the schema's
+  // enum reads "unusable" here and fails config-schema-valid below - it never reads "outside".
   addObservation('plans-under-scratch', 'plansDir under scratchDir (observed)',
     typeof paths.plansDir !== 'string' || typeof paths.scratchDir !== 'string' || !['windows', 'linux', 'macos'].includes(cfg.os)
       ? 'config paths or os unusable - nothing to observe'
       : plansDirUnderScratch(paths.plansDir, paths.scratchDir, cfg.os === 'windows')
-        ? `under the scratch directory ${paths.scratchDir} - nothing there is the Git canon while the scratch directory is ignored (/pnp:review Step 2e)`
+        ? `under the scratch directory ${paths.scratchDir} - nothing there is the Git canon while the scratch directory is ignored (docs/WORKFLOW.md "Durable development history")`
         : 'outside the scratch directory');
   // An E2E output directory inside an app root whose build traces its files. Added ONLY when the
   // predicate answers true - an untraced project, or a predicate that could not answer, prints nothing.
@@ -7325,7 +7325,7 @@ function sectionProvenance(tmpRoot) {
 // no number of its own: the build check below numbers it against whichever payload it runs over.
 const EXAMPLE_REL = 'examples/example-project';
 const exAt = (root, ...rel) => path.join(root, 'examples', 'example-project', ...rel);
-const OP_TYPES = ['add-config-key', 'rerender-managed-region', 'reconcile-ask-ruleset', 'note'];
+const OP_TYPES = ['add-config-key', 'rerender-managed-region', 'reconcile-ask-ruleset', 'note', 'seed-file'];
 const BUMP_SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const VERSION_RE = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/;
 
@@ -7545,7 +7545,7 @@ function exampleFixtureFindings(root, tmpDir, { guardProbes = true } = {}) {
   const opList = (isPlainObject(ops) && Array.isArray(ops.operations)) ? ops.operations : [];
   const usedTypes = new Set(opList.filter(isPlainObject).map((o) => o.op));
   const missingTypes = OP_TYPES.filter((t) => !usedTypes.has(t));
-  add('example-bump-ops-types', 'the example migration exercises ALL FOUR operation types, so a reader sees the whole vocabulary',
+  add('example-bump-ops-types', 'the example migration exercises ALL FIVE operation types, so a reader sees the whole vocabulary',
     missingTypes.length === 0, missingTypes.length ? `missing ${missingTypes.join(', ')}` : `${opList.length} operations`);
 
   // --- the bump BUILDS as the NEXT release of this payload --------------------------------------
@@ -8465,7 +8465,7 @@ function main() {
   console.log('examples/example-project/ - is asserted as data that cannot rot: the answers really satisfy the');
   console.log('shipped schema (at the validator\'s own entrypoint), the bump template carries no number and');
   console.log('its builder is EXECUTED to prove it lands as the payload\'s next migration and a higher version,');
-  console.log('the migration demonstrates all four op types, and the');
+  console.log('the migration demonstrates all five op types, and the');
   console.log('README, the cycle driver and the CI workflow are compared against each other in both directions.');
   console.log('Every one of those assertions has its own negative control on a sabotaged payload copy.');
   console.log('The cycle driver is also EXECUTED there: it is spawned with a --work-dir inside the repository,');

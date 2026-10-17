@@ -1,0 +1,10 @@
+{
+  "migration": "0025_roadmap-seed",
+  "targetPluginVersion": "0.3.0",
+  "operations": [
+    { "op": "seed-file", "template": "templates/ROADMAP.md.tmpl", "target": "<plansDir>/ROADMAP.md" },
+    { "op": "rerender-managed-region", "file": "CLAUDE.md", "region": "aiwf-core", "template": "templates/CLAUDE.md.tmpl#aiwf-core" },
+    { "op": "rerender-managed-region", "file": ".claude/aiwf-native/ORCHESTRATOR.md", "region": null, "template": "templates/ORCHESTRATOR.md.tmpl" },
+    { "op": "rerender-managed-region", "file": ".claude/agents/reviewer.md", "region": null, "template": "templates/agents/reviewer.md.tmpl", "ifRecorded": true }
+  ]
+}

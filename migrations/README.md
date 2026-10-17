@@ -30,7 +30,7 @@ document and in the project additions block of each rendered Markdown file, whic
 { "migration": "0002_<slug>", "targetPluginVersion": "0.2.0", "operations": [ ] }
 ```
 
-`migration` equals the directory name and `targetPluginVersion` equals the manifest entry. The four
+`migration` equals the directory name and `targetPluginVersion` equals the manifest entry. The five
 operation types and their exact field sets:
 
 | op | fields |
@@ -39,6 +39,7 @@ operation types and their exact field sets:
 | `rerender-managed-region` | `file` (project-relative), `region` (marker id, or `null` for a whole-file managed artifact), `template` (payload ref, optionally `#region`), `ifRecorded` (optional boolean), `createIfAbsent` (optional boolean) |
 | `reconcile-ask-ruleset` | `ruleset` (payload ref to the new desired set) |
 | `note` | `id`, `text`, `docRefs` (list), `supersedes` (optional list of ids this release retires) |
+| `seed-file` | `template` (payload ref to a whole template, no `#region`), `target` (project-relative; `<plansDir>` allowed as its first segment) - written only when absent, never recorded |
 
 Unknown op types and unknown fields are rejected. `file` paths are project-relative with no absolute
 form and no `..`; `template`/`ruleset` references are payload-relative under `templates/` and must
