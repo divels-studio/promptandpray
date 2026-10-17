@@ -30,10 +30,11 @@
  *                                `docs/**`, `.aiwf/**` and root-level `*.md`, plus the transfer surface
  *                                (`paths.transferSurface`, else `<plansDir>/PNP_CANDIDATES.md` - one
  *                                file, and only when it is contained, ends in `.md` and is not under
- *                                `.claude`); anything else DENIES.
+ *                                `.claude`) and the roadmap `<plansDir>/ROADMAP.md` on the same
+ *                                terms; anything else DENIES.
  *   - present but unreadable / not JSON / not an object / `route` present with any other value
  *                             -> guard ACTIVE under the SAME fixed allowlist (never the transfer
- *                                surface), denying with an "unusable state" reason. We cannot tell
+ *                                surface or the roadmap), denying with an "unusable state" reason. We cannot tell
  *                                whether a ticket is open, and this gate's direction is FAIL-CLOSED. Keeping the allowlist (rather than
  *                                denying everything) is what makes it self-healing instead of a trap:
  *                                `.aiwf/**` stays writable, so the fix is ONE allowed write.
@@ -151,6 +152,14 @@ const FOLD_CASE = process.platform === 'win32' || process.platform === 'darwin';
 const TRANSFER_SURFACE_BASENAME = 'PNP_CANDIDATES.md';
 const DEFAULT_PLANS_DIR = 'docs/backlogs'; // the schema default of paths.plansDir
 
+// `<plansDir>/<basename>`: the trimmed `paths.plansDir` when it is a non-blank string, else the
+// schema default.
+function plansDirFile(paths, basename) {
+  const plansDir = typeof paths.plansDir === 'string' && paths.plansDir.trim() !== ''
+    ? paths.plansDir.trim() : DEFAULT_PLANS_DIR;
+  return plansDir.replace(/[\\/]+$/, '') + '/' + basename;
+}
+
 // The transfer surface: the configured `paths.transferSurface` (trimmed) when it is a non-blank
 // string, else `<plansDir>/PNP_CANDIDATES.md` - the rule of `resolveTransferSurface` in
 // scripts/setup/generate.mjs, copied rather than imported: this hook loads nothing but aiwf-lib.js,
@@ -167,10 +176,24 @@ function resolveTransferSurface(config, projectDir) {
   if (typeof paths.transferSurface === 'string' && paths.transferSurface.trim() !== '') {
     value = paths.transferSurface.trim();
   } else {
-    const plansDir = typeof paths.plansDir === 'string' && paths.plansDir.trim() !== ''
-      ? paths.plansDir.trim() : DEFAULT_PLANS_DIR;
-    value = plansDir.replace(/[\\/]+$/, '') + '/' + TRANSFER_SURFACE_BASENAME;
+    value = plansDirFile(paths, TRANSFER_SURFACE_BASENAME);
   }
+  return containedSurface(value, projectDir);
+}
+
+// The roadmap: `<plansDir>/ROADMAP.md`, a FIXED location with no config key - the rule of
+// `resolveRoadmap` in scripts/setup/generate.mjs, copied for the same reason as the surface's. It is a
+// second one-file allow under exactly the surface's terms (containedSurface below), so an idea can
+// land in the roadmap while a ticket is open; an unusable config resolves to no roadmap at all.
+const ROADMAP_BASENAME = 'ROADMAP.md';
+function resolveRoadmap(config, projectDir) {
+  if (!isPlainObject(config)) return null;
+  const paths = isPlainObject(config.paths) ? config.paths : {};
+  return containedSurface(plansDirFile(paths, ROADMAP_BASENAME), projectDir);
+}
+
+// The containment rules both one-file allows share; `value` itself, or null when it may not be allowed.
+function containedSurface(value, projectDir) {
   if (path.win32.isAbsolute(value) || path.posix.isAbsolute(value)) return null;
   const segs = value.split(/[\\/]/);
   if (segs.includes('..')) return null;
@@ -243,9 +266,10 @@ function mainSessionDecision(input) {
   if (!routeWriteGuardEnabled(config)) return lib.allowPassthrough(); // enforcement.routeWriteGuard === false
   const st = readGuardState(projectDir);
   if (st.off) return lib.allowPassthrough(); // no ticket dispatched -> nothing about today's behaviour changes
-  // The transfer surface is an extra allow for a TICKET state only; an unusable state keeps exactly
-  // the fixed allowlist below.
+  // The transfer surface and the roadmap are extra allows for a TICKET state only; an unusable state
+  // keeps exactly the fixed allowlist below.
   const surface = st.why !== 'unusable' ? resolveTransferSurface(config, projectDir) : null;
+  const roadmap = st.why !== 'unusable' ? resolveRoadmap(config, projectDir) : null;
 
   // WHY the guard is armed, in the deny text. An unusable state arms it exactly like an open ticket —
   // SAME fixed allowlist (without the transfer surface), different explanation. That equality is
@@ -274,11 +298,13 @@ function mainSessionDecision(input) {
 
   if (isAllowlisted(rel)) return lib.allowPassthrough();
   if (surface !== null && isTransferSurface(projectDir, surface, resolved)) return lib.allowPassthrough();
+  if (roadmap !== null && isTransferSurface(projectDir, roadmap, resolved)) return lib.allowPassthrough();
 
   const plusSurface = surface !== null ? `, plus the transfer surface ${surface} (gate 3)` : '';
+  const plusRoadmap = roadmap !== null ? `, plus the roadmap ${roadmap} (gate 3)` : '';
   return lib.denyPreTool(
     `Blocked ${tool}: ${because}, so the MAIN SESSION may not write ${target} — while a ticket is open ` +
-    `it may write only docs/**, .aiwf/** and root-level *.md${plusSurface}. Code-class work goes to the Writer ` +
+    `it may write only docs/**, .aiwf/** and root-level *.md${plusSurface}${plusRoadmap}. Code-class work goes to the Writer ` +
     `subagent (.claude/agents/writer.md), which this gate never blocks. ${HOW_TO_CLEAR} ${G3}`
   );
 }
@@ -316,4 +342,4 @@ if (require.main === module) lib.runFailClosed(async () => {
 });
 
 // Required (not run) by the self-check, which calls the resolver directly; as a hook nothing changes.
-module.exports = { resolveTransferSurface, isAllowlisted };
+module.exports = { resolveTransferSurface, resolveRoadmap, isAllowlisted };

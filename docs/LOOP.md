@@ -167,7 +167,8 @@ hook files carry four gates) keeps the main session out of code-class files whil
 dispatched: with `<projectDir>/.aiwf/route-state.json` naming an R2/R3 route, a main-session
 Edit/Write is allowed only under `docs/**`, `.aiwf/**` and root-level `*.md`, plus the transfer
 surface (`paths.transferSurface`, else `<plansDir>/PNP_CANDIDATES.md`; one contained `.md` file not
-under `.claude`, and never while the state is unusable). No state file, or the
+under `.claude`, and never while the state is unusable) and the roadmap `<plansDir>/ROADMAP.md` under
+the same rules. No state file, or the
 cleared `{}`, means the guard is invisible and R1 work is untouched; the Writer is never gated by
 it. It covers the Edit/Write tool class only - shell mutations remain doctrine. A project can switch
 it off with `enforcement.routeWriteGuard: false` in `aiwf.config.json`; every other state of that

@@ -587,14 +587,15 @@ closing the ticket clears it by writing `{}`. While that file names an R2/R3 rou
 (the route-state guard inside the Gate 1 hook) lets the **main session** write only `docs/**`,
 `.aiwf/**` and root-level `*.md`, plus the transfer surface (`paths.transferSurface`, else
 `<plansDir>/PNP_CANDIDATES.md` - one file, and only when it is contained, ends in `.md` and is not
-under `.claude`); anything else is denied with a message naming the open ticket,
+under `.claude`) and the roadmap `<plansDir>/ROADMAP.md` under the same rules, so an idea lands in the
+roadmap while a ticket is open; anything else is denied with a message naming the open ticket,
 because code-class work belongs to the Writer while a ticket is open. With no state file - or
 with the cleared `{}` - behaviour is exactly what it was before, so R1 work is untouched, and the
 Writer is never affected in either case. A present-but-unusable state (a route that is not
 R2/R3, a non-string route, malformed JSON) denies by design, and is self-healing because
-`.aiwf/**` stays writable; an unusable state never opens the transfer surface. A `paths.plansDir`
+`.aiwf/**` stays writable; an unusable state never opens the transfer surface or the roadmap. A `paths.plansDir`
 under neither `docs/` nor `.aiwf/` puts the plan's own draft and readiness files behind this guard
-while a route is open - all except the transfer surface under it, which stays writable;
+while a route is open - all except the transfer surface and the roadmap under it, which stay writable;
 `/pnp:review` Step 2e says what stands in for them. Two honest limits, stated in the same breath:
 the guard covers the **Edit/Write tool class only**, so a main-session mutation performed through a
 shell command is not caught and remains doctrine; and it only bites if the COO actually writes the file at
@@ -828,10 +829,8 @@ Seeded once and then yours. Nothing in the plugin records this file, hashes it, 
 carries no bookkeeping entry, no resolvable address and no migration operation, so an update can
 never touch what you put here. Append to it; do not expect anything to prune it for you.
 
-Four sections, and each row is one line with a pointer rather than a retelling:
+Three sections, and each row is one line with a pointer rather than a retelling:
 
-- **Candidates** - work that is only proposed. A candidate carries a title and nothing else; it
-  earns its `<ABBR>-<NNN>` at the moment it is written into a plan, and not before.
 - **Ruling ledger** - one row per ruling that settled a conflict: what was ruled, and where the
   decision landed.
 - **Pass statistics** - one row per auditor pass: which pass it was and what it cost as the engine
@@ -839,7 +838,7 @@ Four sections, and each row is one line with a pointer rather than a retelling:
 - **Event ledger** - one row per rule-class event: a violation, a catch, or an operator correction,
   each with the pointer that lets a later reader check it.
 
-## Candidates
+Candidates live in `ROADMAP.md` under the plans directory.
 
 ## Ruling ledger
 

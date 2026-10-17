@@ -682,6 +682,18 @@ export function resolveTransferSurface(paths) {
 }
 
 /**
+ * THE ROADMAP'S PATH: `<plansDir>/ROADMAP.md`, a FIXED location with no config key of its own. Like
+ * the transfer surface it is seeded once and then the operator's, so nothing records, hashes or
+ * rewrites it; unlike the surface it cannot be pointed elsewhere. Returns a project-relative POSIX
+ * path. The Gate 3 hook copies this rule (pretooluse-mutation-guard.js resolveRoadmap) rather than
+ * importing it, for the same reason it copies resolveTransferSurface.
+ */
+export const ROADMAP_BASENAME = 'ROADMAP.md';
+export function resolveRoadmap(paths) {
+  return toPosix(path.join(String((paths && paths.plansDir) || ''), ROADMAP_BASENAME));
+}
+
+/**
  * THE THREE WARNINGS SETUP OWES, in one place because two spellings of the same sentence would
  * eventually disagree. The interview says all three at their questions; the generator repeats the
  * existing-plans warning and the under-scratch warning, through these same helpers, as notes in its
@@ -846,6 +858,34 @@ export function planInstall({
   //       yours", so setup reports the page as the operator's and never creates it.
   const transferSurfaceRel = resolveTransferSurface(merged.paths);
   const transferSurfaceFile = abs(transferSurfaceRel);
+  const roadmapRel = resolveRoadmap(merged.paths);
+  const roadmapFile = abs(roadmapRel);
+  // Every destination setup writes or creates on its own, each tagged with what it IS - because the
+  // conflict rules differ by kind (see below). The agent files are ALL reserved rather than only the
+  // ones this configuration renders: a codex-hosted role's agent file is a path setup still inspects
+  // and may delete. The roadmap is one of them: it is seeded once like the surface, so a surface (or
+  // an overrides document) on the roadmap's path would have two one-time writers for one file.
+  const roadmapDestination = { rel: roadmapRel, kind: 'file', label: 'the roadmap' };
+  const ownedDestinations = [
+    { rel: CONFIG_REL, kind: 'file', label: 'the pnp config' },
+    { rel: ROLES_REL, kind: 'file', label: 'the rendered roles.json' },
+    { rel: SETTINGS_REL, kind: 'file', label: 'the permission settings' },
+    { rel: 'CLAUDE.md', kind: 'file', label: 'the file carrying the managed region' },
+    { rel: CODEX_AGENTS_REL, kind: 'file', label: 'the Codex auditor instruction file' },
+    { rel: merged.paths.overridesDoc, kind: 'file', label: 'the overrides document' },
+    { rel: path.join(AGENTS_DIR, 'writer.md'), kind: 'file', label: 'the Writer agent' },
+    { rel: path.join(AGENTS_DIR, 'reviewer.md'), kind: 'file', label: 'the Reviewer agent' },
+    { rel: path.join(AGENTS_DIR, 'qa.md'), kind: 'file', label: 'the QA agent' },
+    roadmapDestination,
+    { rel: merged.paths.scratchDir, kind: 'dir', label: 'the scratch directory' },
+    { rel: path.join(merged.paths.plansDir, 'active'), kind: 'dir', label: 'the active plans directory' },
+    { rel: path.join(merged.paths.plansDir, 'archive'), kind: 'dir', label: 'the plan archive' },
+    { rel: path.join(merged.paths.plansDir, 'drafts'), kind: 'dir', label: 'the plan drafts directory' },
+    { rel: path.join(merged.paths.plansDir, 'readiness'), kind: 'dir', label: 'the readiness history directory' },
+    { rel: path.dirname(CONFIG_REL), kind: 'dir', label: 'the directory the pnp config lives in' },
+    { rel: AGENTS_DIR, kind: 'dir', label: 'the agents directory' },
+    { rel: path.dirname(merged.paths.overridesDoc), kind: 'dir', label: 'the directory the overrides document lives in' },
+  ];
   {
     const configured = typeof merged.paths.transferSurface === 'string' && merged.paths.transferSurface.trim() !== '';
     const where = configured
@@ -860,29 +900,6 @@ export function planInstall({
         + 'through a symlink or junction on one of its parent directories.',
       );
     } else {
-      // Every destination setup writes or creates on its own, each tagged with what it IS - because
-      // the conflict rules differ by kind (see below). The agent files are ALL reserved rather than
-      // only the ones this configuration renders: a codex-hosted role's agent file is a path setup
-      // still inspects and may delete.
-      const ownedDestinations = [
-        { rel: CONFIG_REL, kind: 'file', label: 'the pnp config' },
-        { rel: ROLES_REL, kind: 'file', label: 'the rendered roles.json' },
-        { rel: SETTINGS_REL, kind: 'file', label: 'the permission settings' },
-        { rel: 'CLAUDE.md', kind: 'file', label: 'the file carrying the managed region' },
-        { rel: CODEX_AGENTS_REL, kind: 'file', label: 'the Codex auditor instruction file' },
-        { rel: merged.paths.overridesDoc, kind: 'file', label: 'the overrides document' },
-        { rel: path.join(AGENTS_DIR, 'writer.md'), kind: 'file', label: 'the Writer agent' },
-        { rel: path.join(AGENTS_DIR, 'reviewer.md'), kind: 'file', label: 'the Reviewer agent' },
-        { rel: path.join(AGENTS_DIR, 'qa.md'), kind: 'file', label: 'the QA agent' },
-        { rel: merged.paths.scratchDir, kind: 'dir', label: 'the scratch directory' },
-        { rel: path.join(merged.paths.plansDir, 'active'), kind: 'dir', label: 'the active plans directory' },
-        { rel: path.join(merged.paths.plansDir, 'archive'), kind: 'dir', label: 'the plan archive' },
-        { rel: path.join(merged.paths.plansDir, 'drafts'), kind: 'dir', label: 'the plan drafts directory' },
-        { rel: path.join(merged.paths.plansDir, 'readiness'), kind: 'dir', label: 'the readiness history directory' },
-        { rel: path.dirname(CONFIG_REL), kind: 'dir', label: 'the directory the pnp config lives in' },
-        { rel: AGENTS_DIR, kind: 'dir', label: 'the agents directory' },
-        { rel: path.dirname(merged.paths.overridesDoc), kind: 'dir', label: 'the directory the overrides document lives in' },
-      ];
       // THREE conflicts, not one. Exact equality alone let a whole class through, because a filesystem
       // has a hierarchy: `docs/backlogs` is not EQUAL to `docs/backlogs/active`, and pointing the
       // surface at it still cannot work. `applyPlan` creates directories before it writes files, so
@@ -941,6 +958,58 @@ export function planInstall({
           `${where} already exists and is not a regular file (found a ${surfaceStat.isDirectory() ? 'directory' : 'special file'}). `
           + 'Setup never rewrites an existing surface, so it would report this as your page and the '
           + 'file the skeleton belongs in would never be created.',
+        );
+      }
+    }
+  }
+  // THE ROADMAP'S DESTINATION, judged on the surface's terms and for the same reason: it is seeded once
+  // and never bookkept, so a refusal is the only safe answer to a bad path. Its location is fixed
+  // (`<plansDir>/ROADMAP.md`, no config key), so the remedy is to move the other path or plansDir. A
+  // collision WITH the transfer surface was already judged above, where the roadmap is one of the
+  // owned destinations; here it is judged against the rest.
+  {
+    const where = `the roadmap "${roadmapRel}" (<plansDir>/${ROADMAP_BASENAME}, a fixed location)`;
+    const realRoot = canonicalPath(projectRoot);
+    const realRoadmap = canonicalPath(roadmapFile);
+    if (!isInsideDir(realRoot, realRoadmap)) {
+      blockers.push(
+        `${where} really resolves to "${toPosix(realRoadmap)}", which is not inside the project `
+        + `("${toPosix(realRoot)}") - a path can look project-relative and still leave the project `
+        + 'through a symlink or junction on one of its parent directories.',
+      );
+    } else {
+      for (const destination of ownedDestinations) {
+        const { rel, kind, label } = destination;
+        if (destination === roadmapDestination || typeof rel !== 'string' || rel === '' || rel === '.') continue;
+        const owned = canonicalPath(abs(rel));
+        const what = `${label} ("${toPosix(rel)}")`;
+        if (samePath(owned, realRoadmap)) {
+          blockers.push(
+            `${where} is the same destination setup writes as ${what} - the roadmap is seeded once and `
+            + 'then never touched again, so one of the two writes would silently lose. Move the other path, '
+            + 'or pick another paths.plansDir.',
+          );
+        } else if (isInsideDir(realRoadmap, owned)) {
+          blockers.push(
+            `${where} is a directory setup has to create things inside - ${what} sits beneath it. The `
+            + 'roadmap is a single file. Move the other path, or pick another paths.plansDir.',
+          );
+        } else if (kind === 'file' && isInsideDir(owned, realRoadmap)) {
+          blockers.push(
+            `${where} is placed INSIDE ${what}, which setup writes as a file. Move the other path, or `
+            + 'pick another paths.plansDir.',
+          );
+        }
+      }
+      // `statSync` FOLLOWS, as for the surface: a symlink to a regular file inside the project is left
+      // alone like any existing roadmap.
+      let roadmapStat = null;
+      try { roadmapStat = fs.statSync(roadmapFile); } catch { roadmapStat = null; }
+      if (roadmapStat && !roadmapStat.isFile()) {
+        blockers.push(
+          `${where} already exists and is not a regular file (found a ${roadmapStat.isDirectory() ? 'directory' : 'special file'}). `
+          + 'Setup never rewrites an existing roadmap, so it would report this as your page and the '
+          + 'file the template belongs in would never be created.',
         );
       }
     }
@@ -1099,6 +1168,21 @@ export function planInstall({
       kind: 'write', file: transferSurfaceFile, rel: transferSurfaceRel,
       why: 'transfer surface seeded once; unmanaged, never rewritten',
       content: renderTemplate(readTemplate(pluginRoot, 'PNP_CANDIDATES.md.tmpl'), context),
+    });
+  }
+
+  // ---- 5c. the roadmap: written ONCE, and never bookkept --------------------
+  // The transfer surface's mechanism, exactly: no `addArtifact`, no managed-region record. The COO
+  // writes the entries; an update that could re-render the file would be rewriting them. Absent ->
+  // seed the header; present -> leave it byte for byte. `roadmapRel` / `roadmapFile` were judged in
+  // step 1 (containment, collision, not an existing non-file).
+  if (fs.existsSync(roadmapFile)) {
+    notes.push(`${roadmapRel} already exists and is yours - setup never rewrites the roadmap.`);
+  } else {
+    actions.push({
+      kind: 'write', file: roadmapFile, rel: roadmapRel,
+      why: 'roadmap seeded once; unmanaged, never rewritten',
+      content: renderTemplate(readTemplate(pluginRoot, 'ROADMAP.md.tmpl'), context),
     });
   }
 

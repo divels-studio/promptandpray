@@ -1911,7 +1911,8 @@ function sectionGate3Toggle(tmpRoot) {
 // While a ticket is open the main session may write ONE more file than the fixed allowlist: the one
 // `paths.transferSurface` resolves to (else `<plansDir>/PNP_CANDIDATES.md`), and only when that path
 // is contained, ends in `.md` and does not sit under `.claude`. The allow rows are the change; the deny
-// rows are the negative controls proving the allow did not widen into anything else.
+// rows are the negative controls proving the allow did not widen into anything else. The roadmap,
+// `<plansDir>/ROADMAP.md`, is a second one-file allow on exactly those terms, with its own rows.
 function sectionGate3Surface(tmpRoot) {
   section('GATE 3 SURFACE - the main session may write the resolved transfer surface while a ticket is open, nothing more');
   const TICKET_STATE = JSON.stringify({ ticket: 'SURFACE-FIXTURE', route: 'R2' });
@@ -1997,6 +1998,42 @@ function sectionGate3Surface(tmpRoot) {
       allow(G(root, expected)) && deny(denied) && denied.reason.includes(surfaceText(expected)), denied.reason.slice(0, 70));
   }
 
+  // --- roadmap rows: `<plansDir>/ROADMAP.md`, the second one-file allow, on the surface's terms ----
+  // The allow row is the change; every other row is a negative control proving it opened ONE file.
+  const ROADMAP = 'dev/backlogs/ROADMAP.md';
+  const ROADMAP_CLAUSE = 'plus the roadmap';
+  const roadmapText = (p) => `${ROADMAP_CLAUSE} ${p} (gate 3)`;
+  check('main + R2 open + dev/backlogs/ROADMAP.md -> allow (the roadmap is writable while a ticket is open)',
+    allow(G(CONF, ROADMAP)));
+  {
+    const r = G(CONF, 'src/x.ts');
+    check('the deny text names the roadmap: "plus the roadmap dev/backlogs/ROADMAP.md (gate 3)"',
+      deny(r) && r.reason.includes(roadmapText(ROADMAP)), r.reason.slice(0, 70));
+  }
+  check('main + R2 open + dev/backlogs/x/ROADMAP.md -> DENY (only <plansDir>/ROADMAP.md, not a nested one)',
+    deny(G(CONF, 'dev/backlogs/x/ROADMAP.md')));
+  check('main + R2 open + dev/backlogs/ROADMAP.md.bak -> DENY (only the roadmap itself, not a sibling)',
+    deny(G(CONF, ROADMAP + '.bak')));
+  check('main + R2 open + dev/ROADMAP.md -> DENY (the name alone opens nothing outside <plansDir>)',
+    deny(G(CONF, 'dev/ROADMAP.md')));
+  {
+    const r = G(UNUSABLE, ROADMAP);
+    check('main + UNUSABLE state (route "R9") + the roadmap -> DENY, and the text has no roadmap clause',
+      deny(r) && !r.reason.includes(ROADMAP_CLAUSE), r.reason.slice(0, 70));
+  }
+  {
+    // The default plansDir puts the roadmap under docs/, allowed regardless - so the deny text is
+    // what proves the fallback resolved.
+    const denied = G(mkProject('rm-default', {}), 'src/x.ts');
+    check('fallback (plansDir absent): a denied src/x.ts names docs/backlogs/ROADMAP.md as the roadmap',
+      deny(denied) && denied.reason.includes(roadmapText('docs/backlogs/ROADMAP.md')), denied.reason.slice(0, 70));
+  }
+  {
+    const r = G(mkProject('rm-claude', { plansDir: '.claude/plans' }), '.claude/plans/ROADMAP.md');
+    check('plansDir .claude/plans: .claude/plans/ROADMAP.md -> DENY, no roadmap clause (never under .claude)',
+      deny(r) && !r.reason.includes(ROADMAP_CLAUSE), r.reason.slice(0, 70));
+  }
+
   // --- resolver rows: the exported resolver called directly, no hook run --------------------------
   // Requiring a hook that does not guard its entrypoint RUNS it: it would read this process's stdin
   // and exit this process with a hook decision, ending the self-check with a status not its own.
@@ -2039,6 +2076,27 @@ function sectionGate3Surface(tmpRoot) {
     const WIN = process.platform === 'win32';
     check(`(p3) resolver: configured ${ts} -> ${WIN ? 'null' : 'the value itself'} on ${process.platform} ` +
       '(a separator on win32; a filename character elsewhere)', WIN ? got === null : got === ts, JSON.stringify(got));
+  }
+
+  // --- roadmap resolver rows: the exported resolveRoadmap called directly -------------------------
+  if (!check('the hook exports resolveRoadmap (these rows call the REAL resolver)',
+    typeof hook.resolveRoadmap === 'function')) return;
+  const roadmapOf = (plansDir) => hook.resolveRoadmap(
+    { project: { name: 'Surface' }, paths: plansDir === undefined ? {} : { plansDir } }, CONF);
+  check('roadmap resolver control: plansDir dev/backlogs -> dev/backlogs/ROADMAP.md (the rows below can pass only by refusing)',
+    roadmapOf('dev/backlogs') === ROADMAP, JSON.stringify(roadmapOf('dev/backlogs')));
+  check('roadmap resolver: plansDir absent -> docs/backlogs/ROADMAP.md (the schema default)',
+    roadmapOf(undefined) === 'docs/backlogs/ROADMAP.md', JSON.stringify(roadmapOf(undefined)));
+  check('roadmap resolver: an unusable config (null) -> null', hook.resolveRoadmap(null, CONF) === null);
+  for (const [plansDir, why] of [
+    ['../x', 'a .. segment'],
+    [DRIVE + '/plans', 'win32-absolute'],
+    ['/abs/plans', 'posix-absolute'],
+    ['.claude/plans', 'under .claude'],
+    ['.claude./plans', 'trailing dot stripped by Windows'],
+  ]) {
+    const got = roadmapOf(plansDir);
+    check(`roadmap resolver: plansDir ${plansDir} -> null (${why})`, got === null, JSON.stringify(got));
   }
 }
 

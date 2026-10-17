@@ -1556,9 +1556,12 @@ section('24 - the transfer surface: seeded once at the resolved path, never mana
   // A template that stopped existing would make every assertion below vacuous in the "seeded" half
   // and trivially true in the "untouched" half.
   check('the payload ships templates/PNP_CANDIDATES.md.tmpl', SKELETON.length > 0, SURFACE_TMPL);
-  check('and the skeleton carries all four sections', ['# Transfer surface', '## Candidates',
+  check('and the skeleton carries the three ledger sections', ['# Transfer surface',
     '## Ruling ledger', '## Pass statistics', '## Event ledger'].every((h) => SKELETON.includes(h)),
   `${SKELETON.split('\n').length} lines`);
+  check('and no Candidates section - it points at ROADMAP.md instead', !SKELETON.includes('## Candidates')
+    && SKELETON.includes('Candidates live in `ROADMAP.md` under the plans directory.'),
+  SKELETON.split('\n').filter((l) => l.includes('Candidates')).join(' | ').slice(0, 160));
 
   // --- the DEFAULT path: no transferSurface key at all ----------------------
   {
@@ -1840,6 +1843,132 @@ section('24 - the transfer surface: seeded once at the resolved path, never mana
         check('and not even the plans directories were created outside the project',
           fs.readdirSync(escDefault.target).length === 0, fs.readdirSync(escDefault.target).join(', '));
       }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+section('24b - the roadmap: seeded once at <plansDir>/ROADMAP.md, never managed, never rewritten');
+{
+  const ROADMAP_TMPL = path.join(PLUGIN_ROOT, 'templates', 'ROADMAP.md.tmpl');
+  const lf = (t) => String(t).replace(/\r\n/g, '\n');
+  const SEED = lf(read(ROADMAP_TMPL) || '');
+  const regionsOf = (p) => ((readJson(at(p, CONFIG_REL)) || {})._aiwf || {}).managedRegions || {};
+  const ROADMAP_REL = 'docs/backlogs/ROADMAP.md';
+  check('the payload ships templates/ROADMAP.md.tmpl', SEED.length > 0, ROADMAP_TMPL);
+  check('and the seed opens with "# Roadmap" and carries the entry format', SEED.startsWith('# Roadmap\n')
+    && ['## <ABBR> - <title>', '- Goal:', '- Why:', '- Scope:', '- Size:', '- Plans:', '- Status:', '- Born:']
+      .every((h) => SEED.includes(h)),
+  SEED.split('\n')[0]);
+
+  // --- the default plansDir: seeded, unmanaged, a repeated run is a zero diff ----------------------
+  {
+    const p = project('roadmap-default');
+    const r = install(p, baseAnswers());
+    check('install exits 0', r.status === 0, why(r));
+    check(`the roadmap was seeded at <plansDir>/ROADMAP.md (${ROADMAP_REL})`, exists(at(p, ROADMAP_REL)));
+    check('with exactly the payload seed', lf(read(at(p, ROADMAP_REL))) === SEED,
+      `${String(lf(read(at(p, ROADMAP_REL)))).length} vs ${SEED.length} bytes`);
+    check('and NO bookkeeping record was written for it (it is unmanaged by design)',
+      !Object.prototype.hasOwnProperty.call(regionsOf(p), ROADMAP_REL), Object.keys(regionsOf(p)).join(', '));
+    const before = snapshot(p);
+    const again = install(p, baseAnswers());
+    check('a second install over the same project exits 0', again.status === 0, why(again));
+    check('and says the roadmap is already the operator\'s', again.out.includes(ROADMAP_REL)
+      && again.out.includes('never rewrites the roadmap'),
+    again.out.split('\n').filter((l) => l.includes('ROADMAP')).join(' | ').slice(0, 200));
+    check('the repeated run is a ZERO diff over the whole project', diffSnapshots(before, snapshot(p)).length === 0,
+      diffSnapshots(before, snapshot(p)).join(', '));
+  }
+
+  // --- a configured plansDir moves it; nothing lands at the default ------------------------------
+  {
+    const p = project('roadmap-plansdir');
+    const r = install(p, baseAnswers({
+      paths: { scratchDir: '.aiwf', plansDir: 'dev/plans', overridesDoc: 'docs/ai/PROJECT_OVERRIDES.md' },
+    }));
+    check('install with plansDir dev/plans exits 0', r.status === 0, why(r));
+    check('the roadmap was seeded at dev/plans/ROADMAP.md, with exactly the payload seed',
+      exists(at(p, 'dev/plans/ROADMAP.md')) && lf(read(at(p, 'dev/plans/ROADMAP.md'))) === SEED);
+    check('and nothing was seeded at the default path instead', !exists(at(p, ROADMAP_REL)));
+  }
+
+  // --- an EXISTING file is left byte for byte -----------------------------------------------------
+  {
+    const p = project('roadmap-existing');
+    const MINE = '# Roadmap\n\n## X - my own entry\n- Goal: kept\n';
+    fs.mkdirSync(at(p, 'docs/backlogs'), { recursive: true });
+    fs.writeFileSync(at(p, ROADMAP_REL), MINE, 'utf8');
+    const r = install(p, baseAnswers());
+    check('install over an existing roadmap exits 0', r.status === 0, why(r));
+    check('the operator\'s file is untouched, byte for byte', read(at(p, ROADMAP_REL)) === MINE,
+      JSON.stringify(String(read(at(p, ROADMAP_REL))).slice(0, 60)));
+    check('and the run SAYS so rather than adopting it in silence', r.out.includes('never rewrites the roadmap'),
+      r.out.split('\n').filter((l) => l.includes('ROADMAP')).join(' | ').slice(0, 200));
+    check('and it is still unmanaged', !Object.prototype.hasOwnProperty.call(regionsOf(p), ROADMAP_REL));
+  }
+
+  // --- the roadmap's path may not be another destination setup writes -------------------------------
+  const slug = (s) => s.replace(/[^a-z0-9]+/gi, '-').slice(0, 40);
+  const basePaths = { scratchDir: '.aiwf', plansDir: 'docs/backlogs', overridesDoc: 'docs/ai/PROJECT_OVERRIDES.md' };
+  for (const [label, paths] of [
+    ['the transfer surface configured onto it', { ...basePaths, transferSurface: ROADMAP_REL }],
+    ['the overrides document placed onto it', { ...basePaths, overridesDoc: ROADMAP_REL }],
+    ['the overrides document\'s directory placed onto it', { ...basePaths, overridesDoc: `${ROADMAP_REL}/OVERRIDES.md` }],
+  ]) {
+    for (const [entry, run] of [['generator', generateInstall], ['interview', install]]) {
+      const p = project(`roadmap-collide-${entry}-${slug(label)}`);
+      const r = run(p, baseAnswers({ paths }));
+      check(`${entry}: REFUSES ${label} ("${ROADMAP_REL}"), exit 1`, r.status === 1, why(r, true));
+      check(`${entry}: and names the roadmap in the collision (${label})`,
+        r.out.includes('is the same destination setup writes as') && r.out.includes('roadmap'),
+        r.out.trim().split('\n').slice(-3).join(' | ').slice(0, 220));
+      check(`${entry}: and wrote NOTHING (${label})`, Object.keys(snapshot(p)).length === 0, Object.keys(snapshot(p)).join(', '));
+    }
+  }
+  // The positive control for the collision rows: a surface merely NEXT TO the roadmap still installs,
+  // and both seeds land.
+  {
+    const p = project('roadmap-collide-control');
+    const NEAR = 'docs/backlogs/ROADMAP-NOTES.md';
+    const r = install(p, baseAnswers({ paths: { ...basePaths, transferSurface: NEAR } }));
+    check('control: a surface merely NEXT TO the roadmap still installs, exit 0', r.status === 0, why(r));
+    check('and both seeds landed', exists(at(p, NEAR)) && lf(read(at(p, ROADMAP_REL))) === SEED);
+  }
+
+  // --- the resolved roadmap is an existing DIRECTORY ------------------------------------------------
+  {
+    const p = project('roadmap-is-a-directory');
+    fs.mkdirSync(at(p, ROADMAP_REL), { recursive: true });
+    const before = snapshot(p);
+    const r = install(p, baseAnswers());
+    check('setup REFUSES when <plansDir>/ROADMAP.md is an existing directory, exit 1', r.status === 1, why(r, true));
+    check('and says what it found rather than reporting the page as yours',
+      r.out.includes('the roadmap') && r.out.includes('is not a regular file') && r.out.includes('directory'),
+      r.out.trim().split('\n').slice(-3).join(' | ').slice(0, 220));
+    check('and wrote NOTHING', diffSnapshots(before, snapshot(p)).length === 0, diffSnapshots(before, snapshot(p)).join(', '));
+    check('the operator\'s directory is still there, untouched', fs.statSync(at(p, ROADMAP_REL)).isDirectory());
+  }
+
+  // --- containment through the REAL filesystem: plansDir a junction out of the project ------------
+  // With the surface configured elsewhere, only the roadmap's own judgment can see the escape.
+  {
+    const target = project('roadmap-escape-target');
+    const p = project('roadmap-escape');
+    let made = true;
+    try { fs.symlinkSync(target, at(p, 'linked'), 'junction'); } catch { made = false; }
+    check('fixture: a junction inside the project, pointing OUT of it, could be created', made,
+      made ? '' : 'junction creation failed on this host');
+    if (made) {
+      const r = install(p, baseAnswers({
+        paths: { scratchDir: '.aiwf', plansDir: 'linked', overridesDoc: 'docs/ai/PROJECT_OVERRIDES.md', transferSurface: 'docs/CANDIDATES.md' },
+      }));
+      check('setup REFUSES a roadmap that leaves the project through a junction, exit 1', r.status === 1, why(r, true));
+      check('and names the roadmap and the REAL location it resolved to',
+        r.out.includes('the roadmap') && r.out.includes('really resolves to') && r.out.includes('not inside the project'),
+        r.out.trim().split('\n').slice(-3).join(' | ').slice(0, 240));
+      check('and NOTHING was created on the far side of the junction',
+        fs.readdirSync(target).length === 0, fs.readdirSync(target).join(', '));
     }
   }
 }

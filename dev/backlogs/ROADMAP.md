@@ -1,0 +1,24 @@
+# Roadmap
+
+Seeded once and then yours. Nothing in the plugin records this file, hashes it, or rewrites it.
+The COO writes the entries, one `##` per idea, in the format below; entries follow this header.
+
+```markdown
+## <ABBR> - <title>
+- Goal: <one sentence - what is true when it is done>
+- Why: <one sentence; the operator's words verbatim when they are the source>
+- Scope: in - <...>; out - <...>
+- Size: S (one plan) | M (two or three plans) | L (a sequence; each plan listed below as it is born)
+- Plans: <PLAN_<ABBR> or none yet>
+- Status: idea | researching | planned | in progress | done <date>
+- Born: <date>, operator word „<quote>"
+```
+
+## REBUILD - the working cycle rebuilt
+- Goal: the cycle idea -> commit is defined once, cheap in context and quota, the same in PnP and its consumers
+- Why: „не искам да гася пожара, а да го предотвратя"
+- Scope: in - the cycle, its gate, its skill, its docs, the measurement; out - the suites, the public README
+- Size: M
+- Plans: PLAN_RBA (active); plan B, plan C not yet
+- Status: in progress
+- Born: 2026-10-17, operator word „да"

@@ -58,7 +58,7 @@ import {
   PROJECT_ADDITIONS_BEGIN, PROJECT_ADDITIONS_END, ProjectAdditionsError, carryProjectAdditions, normalizeBookkeeping,
 } from '../setup/generate.mjs';
 import { loadSchema, validate } from '../setup/validate-config.mjs';
-import { validatePayload } from './validate-payload.mjs';
+import { validateOp, validatePayload } from './validate-payload.mjs';
 import { buildExampleBump } from '../ci/example-bump.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -1450,6 +1450,156 @@ section('15 - createIfAbsent: accepted, and nothing it would change - a render a
       check('[update-agents-5] and it is the setup render now, stamped',
         read(at(p, 'AGENTS.md')) === setupRender && bookkeeping(p).managedRegions['AGENTS.md'] === '0.2.0');
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+section('15b - seed-file: created when absent, kept byte for byte when present, never recorded');
+{
+  const SEED_TEMPLATE = 'templates/ROADMAP.md.tmpl';
+  const SEED_OP = { op: 'seed-file', template: SEED_TEMPLATE, target: '<plansDir>/ROADMAP.md' };
+  const ROADMAP_REL = 'docs/backlogs/ROADMAP.md';
+  const seedPayload = makePayload('seed', { version: '0.2.0', migrations: [{ id: '0002_seed', version: '0.2.0', ops: [SEED_OP] }] });
+  const TEMPLATE_TEXT = (read(at(PLUGIN_ROOT, SEED_TEMPLATE)) || '').replace(/\r\n/g, '\n');
+  const noRecord = (p) => !Object.keys(bookkeeping(p).managedRegions || {}).some((k) => /ROADMAP/i.test(k));
+  // A run-time refusal comes AFTER the run's one pre-operation write - a stale `$schema` pointed at
+  // this payload (refreshSchemaRef) - so the config may differ in exactly that key and nothing else.
+  const writtenBeyondSchema = (before, p) => {
+    const after = snapshot(p);
+    return diffSnapshots(before, after).filter((rel) => {
+      if (rel !== CONFIG_REL) return true;
+      // Key ORDER is not content: the refresh writes the config through orderConfig.
+      const canon = (v) => (v && typeof v === 'object' && !Array.isArray(v)
+        ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, canon(v[k])])) : (Array.isArray(v) ? v.map(canon) : v));
+      const strip = (t) => { const j = JSON.parse(t); delete j.$schema; return JSON.stringify(canon(j)); };
+      try { return strip(before[rel]) !== strip(after[rel]); } catch { return true; }
+    });
+  };
+
+  // --- face 1: absent -> created with the exact render, nothing recorded ------------------------
+  {
+    const p = project('seed-absent');
+    check('install exits 0', install(p).status === 0);
+    const setupSeed = read(at(p, ROADMAP_REL));
+    check('control: setup itself seeded the roadmap (the update case below starts from its absence)', setupSeed !== null);
+    fs.rmSync(at(p, ROADMAP_REL), { force: true });
+    const regionsBefore = JSON.stringify(bookkeeping(p).managedRegions);
+    const a = update(p, ['--apply'], { payload: seedPayload });
+    check('[seed-1] absent target: exit 0, and the run prints "seed-file: <target> (created)"',
+      a.status === 0 && a.out.includes(`0002_seed[0] seed-file: ${ROADMAP_REL} (created)`), why(a));
+    check('[seed-2] the file is the exact render - the setup seed, byte for byte, and the static template',
+      read(at(p, ROADMAP_REL)) === setupSeed && setupSeed === TEMPLATE_TEXT,
+      `${String(read(at(p, ROADMAP_REL))).length} vs ${String(setupSeed).length} vs ${TEMPLATE_TEXT.length} bytes`);
+    check('[seed-3] NO managedRegions record was written for it - the bookkeeping is unchanged',
+      noRecord(p) && JSON.stringify(bookkeeping(p).managedRegions) === regionsBefore, Object.keys(bookkeeping(p).managedRegions || {}).join(', '));
+    check('[seed-4] and the migration is stamped as applied', bookkeeping(p).lastMigrationApplied === '0002_seed',
+      String(bookkeeping(p).lastMigrationApplied));
+  }
+  // --- face 2: present -> kept byte for byte, with a kept line ----------------------------------
+  {
+    const p = project('seed-present');
+    check('install exits 0', install(p).status === 0);
+    const MINE = '# Roadmap\r\n\r\n## X - my own entry\r\n- Goal: kept exactly, CRLF and all\r\n';
+    fs.writeFileSync(at(p, ROADMAP_REL), MINE, 'utf8');
+    const a = update(p, ['--apply'], { payload: seedPayload });
+    check('[seed-5] present target: exit 0, and the run prints "seed-file: <target> (kept)"',
+      a.status === 0 && a.out.includes(`0002_seed[0] seed-file: ${ROADMAP_REL} (kept)`), why(a));
+    check('[seed-6] the operator\'s file is byte-identical', fs.readFileSync(at(p, ROADMAP_REL), 'utf8') === MINE,
+      JSON.stringify(String(read(at(p, ROADMAP_REL))).slice(0, 60)));
+    check('[seed-7] and still no record', noRecord(p));
+  }
+  // --- face 3: a dry run writes nothing ----------------------------------------------------------
+  {
+    const p = project('seed-dry');
+    check('install exits 0', install(p).status === 0);
+    fs.rmSync(at(p, ROADMAP_REL), { force: true });
+    const before = snapshot(p);
+    const d = update(p, ['--dry-run'], { payload: seedPayload });
+    check('[seed-8] dry run: exit 0, previews the creation', d.status === 0 && d.out.includes(`seed-file: ${ROADMAP_REL} (created)`), why(d));
+    check('[seed-9] and writes NOTHING - the file is still absent, the project unchanged',
+      !exists(at(p, ROADMAP_REL)) && diffSnapshots(before, snapshot(p)).length === 0, diffSnapshots(before, snapshot(p)).join(', '));
+  }
+  // --- face 4: <plansDir> resolves from THIS project's config ---------------------------------------
+  {
+    const p = project('seed-plansdir');
+    const answers = baseAnswers({ paths: { scratchDir: '.aiwf', plansDir: 'dev/plans', overridesDoc: 'docs/ai/PROJECT_OVERRIDES.md' } });
+    check('install exits 0 (plansDir dev/plans)', install(p, { answers }).status === 0);
+    fs.rmSync(at(p, 'dev/plans/ROADMAP.md'), { force: true });
+    const a = update(p, ['--apply'], { payload: seedPayload });
+    check('[seed-10] the target resolves to dev/plans/ROADMAP.md and is created there',
+      a.status === 0 && a.out.includes('seed-file: dev/plans/ROADMAP.md (created)') && read(at(p, 'dev/plans/ROADMAP.md')) === TEMPLATE_TEXT, why(a));
+    check('[seed-11] and nothing lands at the default plansDir', !exists(at(p, ROADMAP_REL)));
+  }
+  // --- face 5: run-time refusals write nothing ------------------------------------------------------
+  {
+    // A CONFIGURED transfer surface on the target: setup refuses that pairing now, so the config is
+    // edited after the install - the shape an installation older than the roadmap could carry.
+    const p = project('seed-surface');
+    check('install exits 0', install(p).status === 0);
+    const cfg = readJson(at(p, CONFIG_REL));
+    cfg.paths.transferSurface = ROADMAP_REL;
+    writeJson(at(p, CONFIG_REL), cfg);
+    fs.rmSync(at(p, ROADMAP_REL), { force: true });
+    const before = snapshot(p);
+    const a = update(p, ['--apply'], { payload: seedPayload });
+    check('[seed-12] a target that IS this installation\'s transfer surface is refused (exit 1), naming it',
+      a.status === 1 && a.out.includes('the transfer surface of this installation'), why(a));
+    check('[seed-13] and that refusal wrote nothing beyond the run\'s own $schema refresh, and stamped nothing',
+      writtenBeyondSchema(before, p).length === 0 && bookkeeping(p).lastMigrationApplied !== '0002_seed' && !exists(at(p, ROADMAP_REL)),
+      writtenBeyondSchema(before, p).join(', '));
+  }
+  {
+    const p = project('seed-dir');
+    check('install exits 0', install(p).status === 0);
+    fs.rmSync(at(p, ROADMAP_REL), { force: true });
+    fs.mkdirSync(at(p, ROADMAP_REL), { recursive: true });
+    const before = snapshot(p);
+    const a = update(p, ['--apply'], { payload: seedPayload });
+    check('[seed-14] a DIRECTORY at the target is refused (exit 1), not reported as kept',
+      a.status === 1 && a.out.includes('is not a regular file'), why(a));
+    check('[seed-15] and that refusal wrote nothing beyond the $schema refresh; the directory is still there',
+      writtenBeyondSchema(before, p).length === 0 && bookkeeping(p).lastMigrationApplied !== '0002_seed'
+      && fs.statSync(at(p, ROADMAP_REL)).isDirectory(), writtenBeyondSchema(before, p).join(', '));
+  }
+  // --- face 6: the validator - <plansDir> is the only token, and the surface is never a target ----------
+  {
+    const badToken = makePayload('seed-bad-token', {
+      version: '0.2.0', migrations: [{ id: '0002_seed', version: '0.2.0', ops: [{ ...SEED_OP, target: '<scratchDir>/ROADMAP.md' }] }],
+    });
+    const p = project('seed-bad-token');
+    check('install exits 0', install(p).status === 0);
+    const before = snapshot(p);
+    const a = update(p, ['--apply'], { payload: badToken });
+    check('[seed-16] an unknown token in target is refused by the payload validator (exit 1)',
+      a.status === 1 && a.out.includes('<plansDir> is the only token a seed target may carry'), why(a));
+    check('[seed-17] and that refusal wrote nothing', diffSnapshots(before, snapshot(p)).length === 0, diffSnapshots(before, snapshot(p)).join(', '));
+  }
+  {
+    const AT = 'ops[0]';
+    const errorsFor = (fields) => validateOp({ ...SEED_OP, ...fields }, AT, PLUGIN_ROOT);
+    check('[seed-18] control: the well-formed op validates clean', errorsFor({}).length === 0, errorsFor({}).join(' | '));
+    check('[seed-19] control: a target with no token validates clean', errorsFor({ target: 'docs/IDEAS.md' }).length === 0,
+      errorsFor({ target: 'docs/IDEAS.md' }).join(' | '));
+    for (const [label, fields, needle] of [
+      ['an unknown <token>', { target: '<projectRoot>/x.md' }, 'is the only token'],
+      ['a {{placeholder}}', { target: '{{paths.plansDir}}/x.md' }, 'is the only token'],
+      ['<plansDir> not as the first segment', { target: 'docs/<plansDir>/x.md' }, 'is the only token'],
+      ['<plansDir> with no path after it', { target: '<plansDir>' }, 'is the only token'],
+      ['the transfer surface\'s default', { target: '<plansDir>/PNP_CANDIDATES.md' }, 'is the transfer surface'],
+      ['the transfer surface\'s default, case-folded and dotted', { target: '<plansDir>/./pnp_candidates.md' }, 'is the transfer surface'],
+      ['a climb out', { target: '<plansDir>/../x.md' }, 'must not traverse upwards'],
+      ['an absolute path', { target: '/etc/x.md' }, 'must be relative'],
+      ['an empty segment', { target: '<plansDir>//x.md' }, 'empty path segment'],
+      ['an empty target', { target: '' }, 'non-empty string'],
+      ['a region on the template', { template: 'templates/CLAUDE.md.tmpl#aiwf-core' }, 'a seed has no region'],
+      ['a template that does not exist', { template: 'templates/NOPE.md.tmpl' }, 'templates/NOPE.md.tmpl'],
+      ['an unknown field', { region: null }, 'unknown field "region"'],
+    ]) {
+      const errors = errorsFor(fields);
+      check(`[seed-20] the validator refuses ${label}`, errors.some((e) => e.includes(needle)), errors.join(' | ') || '(no error)');
+    }
+    const missing = validateOp({ op: 'seed-file', template: SEED_TEMPLATE }, AT, PLUGIN_ROOT);
+    check('[seed-21] the validator refuses a missing target', missing.some((e) => e.includes('missing the required field "target"')), missing.join(' | '));
   }
 }
 

@@ -476,7 +476,8 @@ would write over the first's.
 files, the engines' session files, and the artifacts of the CURRENT ticket - and it is the
 project's own ignore rules (`.gitignore`, or its excludes) that keep it out of git (setup writes no
 ignore entry). While a route is open the main session's allowlist is `docs/**`, `.aiwf/**` and
-root-level `*.md`, plus the transfer surface, which it may write - so Gate 3 holds it out of a
+root-level `*.md`, plus the transfer surface and the roadmap `<plansDir>/ROADMAP.md`, which it may
+write - so Gate 3 holds it out of a
 `{{config.paths.plansDir}}` that sits under neither `docs/` nor `{{config.paths.scratchDir}}`,
 drafts and readiness files included. A draft and its
 readiness artifacts are written there, under `{{config.paths.scratchDir}}/plan/<ABBR>/`, in exactly

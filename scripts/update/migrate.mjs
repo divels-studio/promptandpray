@@ -20,7 +20,7 @@
  *   change its operations made. A crash mid-migration leaves the stamps at the previous migration,
  *   and the next run simply runs that migration again - every operation is idempotent by
  *   construction: a re-render overwrites, `add-config-key` skips a key that is already present,
- *   `reconcile-ask-ruleset` reconciles. The one config write INSIDE a migration is the reconcile's:
+ *   `seed-file` keeps a file that is already there, `reconcile-ask-ruleset` reconciles. The one config write INSIDE a migration is the reconcile's:
  *   it persists the ask-rule ownership right after it rewrites settings.json, because which rules
  *   this engine inserted cannot be read back off a settings file it has already rewritten.
  *
@@ -53,11 +53,11 @@ import { fileURLToPath } from 'node:url';
 import {
   CONFIG_REL, ROLES_REL, SETTINGS_REL, ProjectAdditionsError,
   carryProjectAdditions, dominantEol, encodeEol, jsonText, lf, normalizeBookkeeping, orderConfig, planAskRules,
-  renderTemplate, templateContext,
+  renderTemplate, resolveTransferSurface, templateContext,
 } from '../setup/generate.mjs';
 import { formatErrors, loadSchema, validate } from '../setup/validate-config.mjs';
 import { claudePinErrors } from '../setup/role-rules.mjs';
-import { compareVersions, parseVersion, validatePayload } from './validate-payload.mjs';
+import { SEED_TARGET_TOKEN, compareVersions, parseVersion, validatePayload } from './validate-payload.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const DEFAULT_PLUGIN_ROOT = path.resolve(HERE, '..', '..');
@@ -369,6 +369,7 @@ export function operationKey(op, fallback = null) {
     case 'add-config-key': return op.path;
     case 'reconcile-ask-ruleset': return SETTINGS_POSIX;
     case 'note': return op.id;
+    case 'seed-file': return op.target;
     default: return fallback;
   }
 }
@@ -376,6 +377,7 @@ export function operationKey(op, fallback = null) {
 // A plan is what applyPlan() executes. `mode`:
 //   'file'     a project file (whole file or spliced region)   'settings'  settings.json
 //   'config'   a config key (in memory until the migration's config write)   'none'  nothing
+//   'seed'     a file created only when absent, never recorded (seed-file)
 // `lines` are printed under the operation's summary (a note's text, docRefs and supersedes).
 function planOperation(ctx, migration, opIndex, op) {
   const address = (key) => `${migration}/${opIndex}/${key}`;
@@ -395,6 +397,8 @@ function planOperation(ctx, migration, opIndex, op) {
       return planRerender(ctx, op);
     case 'reconcile-ask-ruleset':
       return planReconcile(ctx, op);
+    case 'seed-file':
+      return planSeedFile(ctx, op);
     default:
       // Unreachable: validate-payload rejects unknown op types before anything runs.
       throw new UpdateError(`unknown operation type "${op.op}".`);
@@ -472,6 +476,84 @@ function planRerender(ctx, op) {
     bookkeeping: { managedRegions: { [key]: ctx.payload.version } },
     summary,
   };
+}
+
+/**
+ * A seed writes the rendered template ONLY when the target does not exist, and records NOTHING - no
+ * managedRegions entry, so the file never becomes a managed artifact and no later re-render can
+ * address it. Present -> kept byte for byte. The modes differ from a re-render on purpose: the write
+ * is an exclusive create (applySeed), so even a file that appeared after planning is never replaced.
+ * Refused, before anything is written: a `<plansDir>` the config cannot resolve, a target outside the
+ * project, a target that is the transfer surface (configured or default - migration 0011's promise),
+ * and a target that exists as something other than a regular file.
+ */
+function planSeedFile(ctx, op) {
+  const target = resolveSeedTarget(ctx, op.target);
+  if (seedTargetExists(ctx, op.target, target)) {
+    return { op, mode: 'none', key: op.target, summary: `seed-file: ${target} (kept)` };
+  }
+  return {
+    op, mode: 'seed', key: op.target, target, content: ctx.render(op.template), write: true,
+    summary: `seed-file: ${target} (created)`,
+  };
+}
+
+const FOLD_CASE = process.platform === 'win32' || process.platform === 'darwin';
+const sameRel = (a, b) => (FOLD_CASE ? a.toLowerCase() === b.toLowerCase() : a === b);
+
+/** The project-relative POSIX path a seed target names on THIS installation, or an UpdateError. */
+function resolveSeedTarget(ctx, raw) {
+  const paths = isPlainObject(ctx.config.paths) ? ctx.config.paths : {};
+  let rel = raw;
+  if (raw.startsWith(`${SEED_TARGET_TOKEN}/`)) {
+    const plansDir = typeof paths.plansDir === 'string' ? paths.plansDir.trim() : '';
+    if (plansDir === '') {
+      throw new UpdateError(`seed-file "${raw}": this project's config carries no paths.plansDir, so ${SEED_TARGET_TOKEN} resolves to nothing - nothing was written.`);
+    }
+    rel = `${plansDir}/${raw.slice(SEED_TARGET_TOKEN.length + 1)}`;
+  }
+  const projectRel = (value) => path.relative(ctx.projectRoot, path.resolve(ctx.projectRoot, value));
+  const inside = projectRel(rel);
+  if (inside === '' || path.isAbsolute(inside) || inside.split(/[\\/]/)[0] === '..') {
+    throw new UpdateError(`seed-file "${raw}" resolves to "${rel}", which is not inside the project - nothing was written.`);
+  }
+  const target = toPosix(inside);
+  const surface = toPosix(projectRel(resolveTransferSurface(paths)));
+  if (sameRel(target, surface)) {
+    throw new UpdateError(
+      `seed-file "${raw}" resolves to "${target}", the transfer surface of this installation - no migration `
+      + 'operation may ever address it (migration 0011), so nothing was written.',
+    );
+  }
+  return target;
+}
+
+/** Does the seed target exist? A regular file (or a previewed write) is "kept"; anything else stops. */
+function seedTargetExists(ctx, raw, target) {
+  if (ctx.overlay && ctx.overlay.has(target)) return true;
+  let stat = null;
+  try { stat = fs.statSync(path.join(ctx.projectRoot, ...target.split('/'))); } catch (e) {
+    if (e && e.code === 'ENOENT') return false;
+    throw new UpdateError(`seed-file "${raw}": "${target}" cannot be inspected (${e && e.message ? e.message : String(e)}) - nothing was written.`);
+  }
+  if (!stat.isFile()) {
+    throw new UpdateError(
+      `seed-file "${raw}": "${target}" exists and is not a regular file (found a ${stat.isDirectory() ? 'directory' : 'special file'}) - `
+      + 'a seed never replaces what is there, so nothing was written.',
+    );
+  }
+  return true;
+}
+
+/** The seed write: an EXCLUSIVE create, so an existing file is never replaced, whatever the timing. */
+function applySeed(file, text) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  try {
+    fs.writeFileSync(file, lf(text), { encoding: 'utf8', flag: 'wx' });
+  } catch (e) {
+    if (e && e.code === 'EEXIST') throw new UpdateError(`seed-file: "${file}" appeared after it was planned - it is kept, nothing was written.`);
+    throw e;
+  }
 }
 
 function planReconcile(ctx, op) {
@@ -566,6 +648,10 @@ function applyPlan(ctx, plan) {
   if ((plan.mode === 'file' || plan.mode === 'settings') && plan.write) {
     if (ctx.overlay) ctx.overlay.set(plan.target, plan.content);
     else writeAtomic(path.join(ctx.projectRoot, ...plan.target.split('/')), plan.content, { raw: plan.raw === true });
+  }
+  if (plan.mode === 'seed') {
+    if (ctx.overlay) ctx.overlay.set(plan.target, plan.content);
+    else applySeed(path.join(ctx.projectRoot, ...plan.target.split('/')), plan.content);
   }
   mergeBookkeeping(ctx.config, plan.bookkeeping);
   // The reconcile's ownership is persisted the moment settings.json carries it (see THE MODEL).

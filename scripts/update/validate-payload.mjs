@@ -149,7 +149,43 @@ export const OP_SPECS = {
     conditional: () => [],
     types: { id: 'string', text: 'string' },
   },
+  'seed-file': {
+    // A file seeded ONCE and then the operator's: written from `template` only when `target` does not
+    // exist, kept byte for byte when it does, and never recorded in managedRegions. `target` may carry
+    // exactly one token, `<plansDir>`, as its first segment; the engine resolves it from the project
+    // config. The transfer surface is never a target (migration 0011's promise).
+    required: ['op', 'template', 'target'],
+    optional: [],
+    conditional: () => [],
+    types: { template: 'string', target: 'string' },
+  },
 };
+
+// The one token a seed-file target may carry.
+export const SEED_TARGET_TOKEN = '<plansDir>';
+
+/**
+ * Why a seed-file `target` is refused, or null. `<plansDir>` is the only token, and only as the whole
+ * first segment; any other `<...>`, `{...}` or a stray bracket is a token this engine would write
+ * literally into a file name, so it is refused here rather than discovered on a consumer's disk. The
+ * transfer surface's default location is refused by name (case-folded, `.` segments normalised); a
+ * CONFIGURED surface is known only on the installation, so the engine refuses that one at run time.
+ */
+export function seedTargetError(value) {
+  if (typeof value !== 'string' || value.trim() === '') return 'target must be a non-empty string';
+  const tokenized = value.startsWith(`${SEED_TARGET_TOKEN}/`);
+  const rest = tokenized ? value.slice(SEED_TARGET_TOKEN.length + 1) : value;
+  if (/[<>{}]/.test(rest)) {
+    return `target ("${value}") carries a token other than a leading ${SEED_TARGET_TOKEN}/ - ${SEED_TARGET_TOKEN} is the only token a seed target may carry, and only as its first segment`;
+  }
+  const probe = tokenized ? `plansDir/${rest}` : value;
+  const bad = relPathError('target', probe);
+  if (bad) return bad.split(`("${probe}")`).join(`("${value}")`);
+  if (tokenized && path.posix.normalize(probe).toLowerCase() === 'plansdir/pnp_candidates.md') {
+    return `target ("${value}") is the transfer surface - no migration operation may ever address it (migration 0011)`;
+  }
+  return null;
+}
 
 export const OP_TYPES = Object.keys(OP_SPECS);
 
@@ -407,6 +443,19 @@ export function validateOp(op, at, pluginRoot) {
       else if (op.supersedes.some((r) => typeof r !== 'string' || r.trim() === '')) errors.push(`${at} (note) every supersedes entry must be a non-empty string.`);
     }
     if (has(op, 'id') && typeof op.id === 'string' && op.id.trim() === '') errors.push(`${at} (note) "id" must not be empty.`);
+  }
+  if (op.op === 'seed-file') {
+    // A seed is a WHOLE file: a `#<region>` suffix would name a span of a template for a file that
+    // does not exist yet - the same "no subject" defect createIfAbsent refuses on a region.
+    if (typeof op.template === 'string' && op.template.includes('#')) {
+      errors.push(`${at} (seed-file) template ("${op.template}") must name a whole template - a seed has no region.`);
+    } else if (typeof op.template === 'string') {
+      for (const m of payloadRefErrors('template', op.template, pluginRoot)) errors.push(`${at} (seed-file) ${m}.`);
+    }
+    if (typeof op.target === 'string') {
+      const bad = seedTargetError(op.target);
+      if (bad) errors.push(`${at} (seed-file) ${bad}.`);
+    }
   }
   return errors;
 }

@@ -74,6 +74,6 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
 - Subagent model policy: an explicit `model` always; `haiku` for mechanical scans, `sonnet` for
   evidence-with-judgment (the default scan tier); the top tier is never delegated for scans.
 - While an R2/R3 ticket is open the main session writes only `docs/**`, `.aiwf/**` and root-level
-  `*.md`, plus the transfer surface (Gate 3, armed by writing `.aiwf/route-state.json` at dispatch
+  `*.md`, plus the transfer surface and the roadmap `<plansDir>/ROADMAP.md` (Gate 3, armed by writing `.aiwf/route-state.json` at dispatch
   and cleared with `{}` on close); VERIFY commands run literally with exact exit codes; every claim
   to the operator carries its evidence (command / file:line / number).
