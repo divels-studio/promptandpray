@@ -40,3 +40,8 @@ tool at the end of a run and never writes them into any store: the store's forma
 machine-local and are not the plugin's to assume. Seeds marked `[R]` are deliberate reinforcements
 of a payload doctrine rule with a history of being violated - they point at the doctrine section
 rather than restating it.
+
+`briefs/` holds the agent contracts the skills send - `research.md`, `planner.md`,
+`readiness-codex.md`, `writer-dispatch.md` - read by the skills at run time by path under the plugin
+root, never rendered, never managed: no project ever holds a copy, and an update changes them with
+the plugin.
