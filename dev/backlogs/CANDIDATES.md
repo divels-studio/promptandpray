@@ -1305,6 +1305,30 @@ record.
    Codex pass, on the word; the plan gate (`scripts/engine/plan-gate.js`, Gate 2's `Class: plan` branch,
    the Codex wrapper's exit 2) applies to R3 only. Files: `docs/WORKFLOW.md` § Plan readiness review,
    `skills/review/SKILL.md` Steps 2a-2e, `docs/REVIEW_CHECKLIST.md` § Plan readiness, the gate code.
+   **Ticket DEENG-001 - SUPERSEDED the same day, never dispatched.** The operator's objection: cutting
+   the readiness cycle alone is fire-fighting („гасене на пожар ... опожарена къща"); the cost sits in
+   WHERE the plan is written (the COO's 800k session), HOW BIG it is (5-6 tickets, 2-3 sessions to
+   PASS) and the lack of blocker classes - so the whole cycle "idea -> research -> analysis -> plan ->
+   phases -> plan review and approval -> phase execution -> phase audit -> commit" is redesigned first,
+   with lessons from GSD / BMad (agent scan 2026-10-17) and the PLAN REFACTOR + PLAN_FOLD material; the
+   readiness cut, FOLD, the doctrine compaction and the suites are rooms in that house and follow the
+   design. The Codex readiness pass itself STAYS (the operator: it finds holes we did not suspect). The
+   original end state, kept for the record: (a) the readiness cycle -
+   consumer inventory, behavior ledger, consequence scan, own-pass file, per-section fact-check,
+   `review.plan.passes` with one word per further pass - is owed by an R3 plan only; (b) an R2 plan is
+   drafted by the COO, lands on the operator's approval, and gets an auditor only when the operator
+   asks - then ONE Codex pass over the plan text (`Class: plan`), no artifacts required; (c) the plan
+   gate fires only on a brief that carries BOTH `Class: plan` and `Route: R3` - in Gate 2
+   (`scripts/engine/plan-gate.js` through the dispatch hook), in both Codex review wrappers (exit 2),
+   and in the self-check's PLAN GATE section (deny/exit-2 cases carry `Route: R3`; a `Class: plan`
+   brief without it passes through, with a negative control each way); (d) `/pnp:review` Steps 2a-2e
+   run for `Route: R3` and are skipped otherwise, Step 2b (the fact-check gate) stays for code diffs;
+   (e) `docs/WORKFLOW.md` § Plan readiness review, § Planning lock, § Loop shape and
+   `docs/REVIEW_CHECKLIST.md` § Plan readiness say so, `docs/LOOP.md` § Role boundaries and § Enforcement
+   name the `Route: R3` condition, `templates/memory-seeds/` closing grep for "readiness"; (f) no bump,
+   no migration (no structure changes) - a `## [Unreleased]` CHANGELOG block, folded into the next
+   release. Split: code + `skills/review` + seeds -> the Writer; `docs/*.md` -> the COO (R1 prose), in
+   parallel. VERIFY: `selfcheck` + `spikes` (hooks row), once, by the Writer; provenance grep.
 3. **DOCT as plain prose tickets, no plan.** With the architecture done the doctrine compaction is
    next: `docs/WORKFLOW.md` is 1145 lines, much of it "measured on a consumer ..." history and
    rationale. The templates' rule applies to the docs - the rule stays, the story goes. One ticket per
