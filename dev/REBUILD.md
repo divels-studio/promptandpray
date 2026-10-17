@@ -195,7 +195,15 @@ doubt; "PASS, all fine" is not a handoff.
   document; prose, R1.
 - C3 the suites: fast or fewer (CANDIDATES § The suites cost an hour).
 
-Order: A -> B -> 0.3.0 -> Silerax plan measured -> C. Each ticket on its own word; A's code gets a
+**The session start cost (operator 2026-10-17: „нова сесия започва 140К COO контекст").** A fresh
+session pays the start every time, so the ~400k boundary is a guide, never a goal: a session is cut at
+a ticket boundary where it stops anyway, not for the number. The real saving is that the COO stops
+READING - research, planning, revisions and verdicts run in subagents that start from their brief and
+pay no doctrine preflight. The start itself is the next target: measure it right after 0.3.0 (thin
+files landed); if it is still above ~100k, C2 (the doctrine compaction) moves AHEAD of the first
+Silerax plan, because every new plan pays it.
+
+Order: A -> B -> 0.3.0 -> (start measured; C2 first if > ~100k) -> Silerax plan measured -> C. Each ticket on its own word; A's code gets a
 Codex pass only if the operator asks. COO routing (overrides § Loop shape, the four checks): A1, A2,
 A3 `COO: top (Fable) - because check 1` (a migration, Gate 2's lookup, the gate's enforcement code);
 B1, B2, B3 `COO: cheap (Opus) - all four no` (prose); C1, C2, C3 `COO: cheap (Opus) - all four no`.
