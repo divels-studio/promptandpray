@@ -40,10 +40,13 @@ PromptAndPray is **not**:
   readiness. Code - `scripts/`, `hooks/`, `schema/`, `.claude-plugin/` - goes through the Writer; a
   Codex pass over code only on the operator's word. `dev/` and the self-install layer (`.claude/`,
   root `CLAUDE.md`) are R1.
-- **Release discipline** (operator decision 2026-10-16). A migration only when the STRUCTURE changes -
-  a new file, a new config key, a re-render of the managed artifacts; a prose change ships with the
-  plugin (commit, push, `/plugin update`). A release cuts a version bump in
-  `.claude-plugin/plugin.json` and a `CHANGELOG.md` block (ending `Retires local rules:`). The tag is
+- **Release discipline** (operator decision 2026-10-16, corrected 2026-10-18). Every payload change
+  that must reach a consumer is a release: a version bump + a migration + a `CHANGELOG.md` block - a
+  structural change carries its real ops, a prose-only change one `note` op - because a consumer's
+  `/plugin update` refreshes NOTHING at the same version (verified 2026-10-18: the marketplace clone
+  moved, the version-keyed cache `~/.claude/plugins/cache/promptandpray/pnp/<version>/` did not;
+  REL-032). A release cuts the bump in
+  `.claude-plugin/plugin.json` and the `CHANGELOG.md` block (ending `Retires local rules:`). The tag is
   created LOCALLY on the record commit and pushed WITH `main` in ONE push - two words (tag, push),
   one dialog; CI is not waited for (operator rule 2026-10-02): a version is released when that push
   lands, and a red POSIX leg is a defect ticket, not a release block. A consumer picks the version up
@@ -153,7 +156,10 @@ only what its diff can break, run ONCE:
 - schema / config / roles -> `selfcheck`, `validate-payload`, `setup-suite`;
 - update engine / migrations -> `update-suite`, `validate-payload`, `selfcheck`;
 - hooks / gates -> `selfcheck`, `spikes`;
-- `scripts/ci/` or `examples/` -> the example cycle too.
+- `scripts/ci/` or `examples/` -> the example cycle too;
+- a release that carries only prose (a `note` migration + the bump; operator word 2026-10-18 „не ми се
+  чака целия верифай") -> `validate-payload` + the self-install `/pnp:update --apply` on this repository
+  with its embedded self-check; NO suite locally - CI runs the full set after the push.
 A diff spanning several rows runs their union; nothing beyond the ticket's own rows runs locally
 (operator rule 2026-09-28, HARD-021), and no row runs twice. CI runs the full set on the pushed
 commit, after the fact, on `windows` and `ubuntu`. (product)
