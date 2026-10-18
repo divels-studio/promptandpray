@@ -1,0 +1,12 @@
+{
+  "migration": "0027_roadmap-area",
+  "targetPluginVersion": "0.3.2",
+  "operations": [
+    {
+      "op": "note",
+      "id": "roadmap-area",
+      "text": "A roadmap entry may now be an AREA - a module or theme whose goal is \"no known open defect\" - whose `Scope: in -` list collects the findings born during work, one indented line each with its date, its origin and a pointer, until the list is worth a plan. That list is the fourth roadmap write: it grows at a finding's birth, while Status and Plans still change at the three events only. An installation older than the roadmap ports its live candidates into it once (the old rows marked taken up / done / dropped) and reads the roadmap alone for open work from then on; docs/WORKFLOW.md § Out-of-scope findings names the area line as a destination. Your own ROADMAP.md is a seed and is not re-rendered by this update: the one-sentence header that describes the area entry is your project's hand edit, made when you choose to.",
+      "docRefs": ["CHANGELOG.md", "docs/WORKFLOW.md"]
+    }
+  ]
+}

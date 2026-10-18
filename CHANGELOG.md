@@ -4,6 +4,27 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.3.2] - 2026-10-18
+
+The roadmap gains the area entry and its fourth write, shipped as a release so the doctrine reaches
+every installation.
+
+### Changed
+
+- **The roadmap area entry and the fourth write (REL-032)** - a roadmap entry may be an AREA (a module
+  or theme, goal "no known open defect") whose `Scope: in -` list collects the findings born during
+  work, one indented line each with date, origin and pointer, until the list is worth a plan; that
+  list grows at a finding's birth while Status and Plans change at the three events only.
+  - `docs/WORKFLOW.md` § Durable development history carries the rule and the one-time port of the
+    live candidates; § Out-of-scope findings names the area line as a destination.
+  - `templates/ROADMAP.md.tmpl` gains the one-sentence header; a consumer's `ROADMAP.md` is a seed
+    and is not re-rendered. Migration `0027_roadmap-area` is one `note`.
+- **Release discipline (REL-032)** - a payload change that must reach a consumer is a release: a
+  version bump + a migration (a note op when the change is prose) + a CHANGELOG block, because a
+  consumer's /plugin update refreshes nothing at the same version.
+
+Retires local rules: none
+
 ## [0.3.1] - 2026-10-18
 
 The transfer surface becomes the ledger - a pointer index - and the generic rules projects kept in
