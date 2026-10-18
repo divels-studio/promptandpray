@@ -19,7 +19,10 @@
  *   index-missing                       no regular file PLAN_<ABBR>.md in the folder;
  *   tickets-over-cap:<n>                more than 3 ticket files (names of the grammar <ABBR>-NNN.md -
  *                                       any other file in tickets/ is not a ticket and not counted);
- *   ticket-over-bytes:<file>            a ticket over 6,144 bytes of LF-normalised UTF-8;
+ *   ticket-over-bytes:<file>            a ticket over 6,144 bytes of LF-normalised UTF-8, its header
+ *                                       `Status:` line not counted (the first line starting `Status:`
+ *                                       above the first `## ` heading; one line at most - a `Status:`
+ *                                       line in the body counts);
  *   field-missing:<file>:<field>        a ticket without one of the six column-0 headings `## Outcome`,
  *                                       `## Scope`, `## Acceptance`, `## Risk threshold`,
  *                                       `## Stop condition`, `## Verify` (case-sensitive);
@@ -383,6 +386,21 @@ function contractOf(model, resolved) {
 const stampPathOf = (model) => path.join(model.plansDir, 'readiness', model.abbr, 'stamp.json');
 
 /**
+ * The bytes the cap counts: the ticket's LF-normalised UTF-8 minus its header `Status:` line - the
+ * FIRST line starting `Status:` above the first `## ` heading, fenced blocks ignored - so a status
+ * flip in the header never moves a ticket across the cap. Only that one line is ever excluded: a
+ * `Status:` line below the first heading is body text and counts, and a ticket with no `## `
+ * heading has no header to exclude from. The stamp still hashes the whole text.
+ */
+function countedTicketBytes(t) {
+  const firstHeading = t.lines.findIndex((l, i) => !t.mask[i] && l.startsWith('## '));
+  const header = firstHeading === -1 ? [] : t.lines.slice(0, firstHeading).map((l, i) => (t.mask[i] ? '' : l));
+  const status = header.filter((l) => l.startsWith('Status:')).slice(0, 1);
+  const excluded = status.reduce((n, l) => n + Buffer.byteLength(`${l}\n`, 'utf8'), 0);
+  return Buffer.byteLength(t.text, 'utf8') - excluded;
+}
+
+/**
  * Every problem of the folder, in this order: the folder itself, the index, the cap, each ticket's
  * bytes and fields, decision coverage, cross-references, open items, Code Map paths, and - with
  * `withStamp` - the stamp. A folder that is not one is the only problem reported.
@@ -408,8 +426,8 @@ function examine(folderArg, root, withStamp) {
     add(`tickets-over-cap:${model.tickets.length}`, `tickets/ holds ${model.tickets.length} ticket files - a plan carries at most ${MAX_TICKETS}; split it`);
   }
   for (const t of model.tickets) {
-    const bytes = Buffer.byteLength(t.text, 'utf8');
-    if (bytes > MAX_TICKET_BYTES) add(`ticket-over-bytes:${t.rel}`, `${t.rel} is ${bytes} bytes of LF-normalised UTF-8 - the cap is ${MAX_TICKET_BYTES}`);
+    const bytes = countedTicketBytes(t);
+    if (bytes > MAX_TICKET_BYTES) add(`ticket-over-bytes:${t.rel}`, `${t.rel} is ${bytes} bytes of LF-normalised UTF-8, its header Status: line not counted - the cap is ${MAX_TICKET_BYTES}`);
     const headings = new Set(t.lines.filter((l, i) => !t.mask[i]).map((l) => l.replace(/[ \t]+$/, '')));
     for (const f of TICKET_FIELDS) {
       if (!headings.has(`## ${f}`)) add(`field-missing:${t.rel}:${f}`, `${t.rel} has no "## ${f}" heading at its first column`);

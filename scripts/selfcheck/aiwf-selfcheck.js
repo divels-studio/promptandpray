@@ -4191,9 +4191,8 @@ const pgTicketText = ({ fields = PG_FIELDS, extra = [] } = {}) => [
   '| `src/fix.js`, `src/other.js` | the fixture sources, two in one cell |',
   '| `docs/backlogs/active/FIX/` | the folder itself (a directory counts) |', '',
 ].join('\n');
-/** The valid ticket padded to exactly `n` bytes of LF-normalised UTF-8. */
-const pgTicketOfBytes = (n) => {
-  const base = pgTicketText();
+/** The valid ticket (or `base`) padded to exactly `n` bytes of LF-normalised UTF-8. */
+const pgTicketOfBytes = (n, base = pgTicketText()) => {
   return `${base}${'p'.repeat(n - Buffer.byteLength(base, 'utf8') - 1)}\n`;
 };
 const PG_BRIEF = [
@@ -4394,6 +4393,11 @@ function planGateCases() {
       args: briefPlanClass, input: pgSetLine(PG_BRIEF, 'Class', 'Class: code'), expect: exactly('class-not-plan') },
     { id: 'M42', label: 'brief mode, PLAN names the index FILE of the folder -> exactly plan-folder-required',
       args: brief, input: pgSetLine(PG_BRIEF, 'PLAN', `PLAN: ${PG_FOLDER}/PLAN_FIX.md`), expect: exactly('plan-folder-required') },
+    { id: 'M43', label: 'the ticket at exactly 6,144 bytes plus a header "Status:" line after its title, stamped -> valid (the header Status: line is not counted)',
+      before: (put) => put(PG_TICKET, pgTicketOfBytes(6144).replace('\n', '\nStatus: open\n')), expect: valid },
+    { id: 'M44', label: 'a 6,145-byte ticket whose "Status:" line sits below its first "## " heading -> exactly ticket-over-bytes:tickets/FIX-001.md and stamp-mismatch (a body Status: line counts)',
+      after: (put) => put(PG_TICKET, pgTicketOfBytes(6145, pgTicketText({ extra: ['Status: open', ''] }))),
+      expect: exactly(`ticket-over-bytes:${T}`, 'stamp-mismatch') },
   ];
 }
 
@@ -4638,6 +4642,8 @@ function sectionPlanGate(tmpRoot) {
     { id: 'ctl-28', target: 'M33', label: 'the directory test removed from plan-folder-required', from: FOLDER, to: 'if (st === null || !lib.PLAN_ABBR_RE.test(path.basename(abs))) {' },
     { id: 'ctl-29', target: 'M34', label: 'the ABBR grammar removed from plan-folder-required', from: FOLDER, to: 'if (st === null || !st.isDirectory()) {' },
     { id: 'ctl-30', target: 'M41', label: 'class-not-plan disabled', from: "} else if (name === 'Class' && vals[name][0].toLowerCase() !== 'plan') {", to: '} else if (false) {' },
+    { id: 'ctl-31', target: 'M43', label: 'the header Status: line exclusion removed (every byte counted)', from: 'const excluded = status.reduce(', to: 'const excluded = 0 && status.reduce(' },
+    { id: 'ctl-32', target: 'M44', label: 'the exclusion applied to every Status: line, body included', from: "const status = header.filter((l) => l.startsWith('Status:')).slice(0, 1);", to: "const status = t.lines.filter((l) => l.startsWith('Status:'));" },
   ];
   // The checker controls: plan-gate.js copied beside aiwf-lib.js, sabotaged, and the target case run
   // against the copy. The fixture is still stamped by the PAYLOAD checker, so only the branch moved.
@@ -6914,6 +6920,12 @@ const PROV_SKIP_ROOT_DIRS = new Set(['dev', '.claude', '.aiwf']);
 // operator zone), not payload. Skipped by name at the ROOT ONLY - a CLAUDE.md anywhere deeper is
 // payload and is scanned.
 const PROV_SKIP_ROOT_FILES = new Set(['CLAUDE.md']);
+// A `.git` FILE at the root is git's worktree pointer (`gitdir: ...`): a plugin root that is a git
+// worktree - the live copy a self-hosted repository loads its plugin from - carries one where a
+// clone carries the `.git` directory, and it is no more payload than that directory is. Skipped by
+// its EXACT NAME, at the ROOT ONLY, and never read: a `.git` file below the root, or a root file
+// whose name only resembles it (`.git.bak`), is an unclassified payload file and fails.
+const PROV_SKIP_ROOT_GITFILE = '.git';
 // The HARNESS's own plugin-cache bookkeeping, and the only reason this scan has to know it exists:
 // when the plugin is installed from a marketplace, the payload root IS a directory inside Claude
 // Code's plugin cache, so the harness keeps its markers right next to docs/ and skills/ -
@@ -7006,7 +7018,7 @@ function provenanceWalk(root, { readdir = fs.readdirSync } = {}) {
         rec(p);
         continue;
       }
-      if (dir === root && (PROV_SKIP_ROOT_FILES.has(e.name) || PROV_SKIP_ROOT_HARNESS_FILES.has(e.name))) continue;
+      if (dir === root && (PROV_SKIP_ROOT_FILES.has(e.name) || PROV_SKIP_ROOT_HARNESS_FILES.has(e.name) || e.name === PROV_SKIP_ROOT_GITFILE)) continue;
       const rel = provRel(root, p);
       if (PROV_TEXT_EXT.has(path.extname(e.name).toLowerCase()) || PROV_TEXT_NAMES.has(e.name)) scanned.push(rel);
       else unclassified.push(rel);
@@ -7174,6 +7186,12 @@ const PROVENANCE_CONTROLS = [
     apply: (r) => { fs.mkdirSync(path.join(r, 'skills', '.in_use'), { recursive: true }); fs.writeFileSync(path.join(r, 'skills', '.in_use', 'x.md'), '\u0414\n', 'utf8'); } },
   { id: 'provenance-scope', label: 'a root file whose name only RESEMBLES a harness marker (.orphaned_at.bak) is still an unclassified payload file',
     apply: (r) => fs.writeFileSync(path.join(r, '.orphaned_at.bak'), '1788126859601\n', 'utf8') },
+  // The two that hold the root gitfile skip to its exact width: a resembling name at the root, and
+  // the exact name one level down, are both payload.
+  { id: 'provenance-scope', label: 'a root file whose name only RESEMBLES the gitfile (.git.bak) is still an unclassified payload file',
+    apply: (r) => fs.writeFileSync(path.join(r, '.git.bak'), 'gitdir: ../repo/.git/worktrees/live\n', 'utf8') },
+  { id: 'provenance-scope', label: 'a .git FILE below the root (docs/.git) is still an unclassified payload file (the gitfile skip is root-only)',
+    apply: (r) => fs.writeFileSync(path.join(r, 'docs', '.git'), 'gitdir: ../repo/.git/worktrees/live\n', 'utf8') },
   { id: 'provenance-abs-path', label: 'a new drive-letter absolute path planted in a script',
     apply: (r) => appendText(r, 'scripts/setup/generate.mjs', `\n// see ${'C:' + '\\Users\\someone\\notes.txt'}\n`) },
   { id: 'provenance-abs-path', label: 'an ALLOWLISTED literal planted in a file it does not belong to',
@@ -7233,6 +7251,24 @@ function sectionProvenance(tmpRoot) {
   const armedClean = provenanceFindings(base, PROV_ARMED).filter((f) => !f.ok);
   check('.git is not payload, and arming alone finds nothing: every forbidden pattern planted in .git/ with the canary armed leaves the copy green',
     armedClean.length === 0, armedClean.length ? armedClean.map((f) => f.id).join(', ') : 'still green');
+
+  // The worktree shape, on a FRESH copy: `base` already holds the .git DIRECTORY, and a root cannot
+  // carry both. The copy skips .git by name, so the gitfile planted here is the only .git in it -
+  // `gitdir: ...` plus every forbidden pattern, with the canary armed. A skip that read the file's
+  // content would go red here; the two provenance-scope controls below hold it to the root and to
+  // the exact name.
+  const gitfileRoot = path.join(tmpRoot, 'prov-gitfile');
+  copyPayloadTree(base, gitfileRoot);
+  fs.writeFileSync(path.join(gitfileRoot, '.git'),
+    `gitdir: ../repo/.git/worktrees/live\n${PROV_CANARY}\ncontact someone@${'example.com'}\n${String.fromCharCode(0x0414)}\n${'C:' + '\\Users\\someone\\secret'}\n`, 'utf8');
+  const gitfileClean = provenanceFindings(gitfileRoot, PROV_ARMED).filter((f) => !f.ok);
+  check('a .git FILE at the root (a worktree plugin root) is not payload: planted as "gitdir: ..." with every forbidden pattern and the canary armed, the copy stays green',
+    gitfileClean.length === 0, gitfileClean.length ? gitfileClean.map((f) => f.id).join(', ') : 'still green');
+  const gitfileWalk = provenanceWalk(gitfileRoot);
+  const gitfileSeen = [...gitfileWalk.scanned, ...gitfileWalk.unclassified].filter((rel) => rel === '.git');
+  check('the root .git file is in neither the scanned nor the unclassified list (the skip is the walk\'s, not a lucky classification)',
+    gitfileSeen.length === 0, gitfileSeen.length ? `listed: ${gitfileSeen.join(', ')}` : `${gitfileWalk.scanned.length} files scanned, ${gitfileWalk.unclassified.length} unclassified, .git in neither`);
+  try { fs.rmSync(gitfileRoot, { recursive: true, force: true }); } catch (e) { /* best-effort */ }
 
   // The self-hosting zones, the same way: every forbidden pattern planted in dev/, .claude/, .aiwf/
   // and the root CLAUDE.md - and the copy must stay green, AND none of those paths may appear in the
