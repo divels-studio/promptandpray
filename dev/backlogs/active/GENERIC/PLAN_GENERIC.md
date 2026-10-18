@@ -89,7 +89,9 @@ Parts of the cycle spend, one per line (source in brackets):
 - research agent B (mechanics, sonnet): 133,521 [notification]
 - planner (writer agent type, three handoffs): 258,932 [notification - the last of three, cumulative over
   the resumed transcript: 190,171 / 212,692 / 258,932; counted once]
-- Codex readiness pass 1 (gpt-6-sol, xhigh, cold): 164,635 [round header, `readiness/GENERIC/round-1.md`]
+- Codex readiness pass 1 (gpt-6-sol, xhigh, cold): 164,635 [round header, `readiness/GENERIC/round-1.md`];
+  its verdict line `BLOCKERS: 13 INFO: 0` [round-1.md] - 12 fixed, 1 asked (B11); planner revisions: 2
+  (the cap); no pass 2
 
 Start and approval numbers: `~/.claude/ctx/<session>.pct` x `.size` (1,000,000), whole-percent
 precision - 12% at Step 1, 28% at the approval [file]. Start number (a) of the `/pnp:work` entry: 110k

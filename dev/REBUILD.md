@@ -114,6 +114,34 @@ and asked by the COO - never estimated; `/pnp:mission` does not change (RBC/D-04
   REBUILD, readiness папки; не пускай git или скриптове; не пиши нищо. Когда приключиш, отговори с един
   ред „preflight готов" и спри."
 
+### First measured plan - GENERIC (PnP, 2026-10-18)
+
+Written on the operator's word relayed by the arbitration session („докато стигна до Silerax план тази
+сесия ще е умряла и твоята оценка ще е загубена"); items 1 and 4's counts are measured (source:
+`active/GENERIC/PLAN_GENERIC.md` § Measurements, `readiness/GENERIC/round-1.md`), item 2 is an
+ESTIMATE, item 3 is the arbiter's reading - marked as such, not canon.
+
+1. **Measured.** COO session 120k -> 280k for the whole readiness cycle (idea -> approved plan = 160k in
+   ONE session); start (a) 110k at `/pnp:work`, 120k at `/pnp:plan` Step 1 (statusline, whole percent).
+   Cycle spend outside the session 701,287 tokens: research agents 144,199 + 133,521 (sonnet), planner
+   258,932 over three handoffs (first handoff 190,171, the two revisions ~69k together), Codex readiness
+   pass 1 (gpt-6-sol, xhigh, cold) 164,635. The pass returned `BLOCKERS: 13 INFO: 0` (12 fixed in two
+   planner revisions, 1 asked - B11, answered „2 да"); no pass 2.
+2. **ESTIMATE, not a measurement** (the old cycle never measured agent spend): 2-3 COO sessions x ~800k
+   + Codex 194k (RBB) / 215,992 (DOCT, the arbiter's figure) ~= 2-2.8M; the new cycle ~0.98M including
+   the start. The headline fact IS measured: the COO session no longer grows with the plan (160k for a
+   full cycle against sessions of ~800k).
+3. **The arbiter's reading of the three levers, in order:** (a) research 278k for two sonnet scans is too
+   much - the agents read whole files; the research brief template should ask for the Code Map of the
+   touched surfaces and pointers, not full reads; (b) the planner's first handoff 190k is the cost of
+   reading every Code Map file in full - the planner brief should hand it sections by pointer; the
+   revisions at ~69k are the cheap part, as designed; (c) the Codex pass is sticky at 165-216k whatever the
+   plan size - the lever left is effort/model, to be measured once on the same plan (gpt-5.6-sol/high vs
+   gpt-6-sol/xhigh).
+4. **Open until Silerax:** whether the planner subagent pays (stage 4); whether one pass suffices (the
+   GENERIC pass's counts above are the first data point); the total-spend comparison on a consumer plan
+   with a measured baseline.
+
 ## Arbitration (how the arbiter session works)
 
 - The arbiter is a session that READS and never writes the tree: zero repo writes, zero paid passes.
