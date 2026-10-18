@@ -9,6 +9,15 @@ Roadmap entry: `REBUILD` in `dev/backlogs/ROADMAP.md` (created by RBA-001; until
 `dev/REBUILD.md` is the entry). Plan B (the cycle as `/pnp:plan`, docs, release 0.3.0) and plan C
 (after the measurement) are lines under that entry and are written after this plan lands.
 
+## Roadmap entry
+
+Copied verbatim from `dev/backlogs/ROADMAP.md` § REBUILD on 2026-10-18, when the entry left the
+roadmap (its last plan, RBC, archived 2026-10-18 as `015_PLAN_RBC_2026-10-18/`; plan B archived as
+`013_PLAN_RBB_2026-10-17/`):
+
+- Goal: the cycle idea -> commit is defined once, cheap in context and quota, the same in PnP and its consumers
+- Why: „не искам да гася пожара, а да го предотвратя"
+
 ## Goal
 
 A project can hold its ideas in `ROADMAP.md`, write a plan as a folder of small files, and have that

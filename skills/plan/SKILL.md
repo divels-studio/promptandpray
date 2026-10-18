@@ -240,7 +240,11 @@ Then move the untracked folder with the shell (not a git verb: nothing tracked i
 `windows`:
 `Move-Item <plansDir>/drafts/<ABBR> <plansDir>/active/<ABBR>`; os `linux`/`macos`:
 `mv <plansDir>/drafts/<ABBR> <plansDir>/active/<ABBR>`. Update the roadmap entry's `Plans:` and
-`Status: planned` lines. Under the ledger's `## Plans` - `<ledger>` below is its path, resolved as
+`Status: planned` lines - the roadmap is written at exactly three events and never otherwise
+(`docs/WORKFLOW.md` § Durable development history): the entry's birth (`idea`; `researching` when
+Step 2 dispatches the research agents), this landing (`planned`; the first ticket's dispatch - the
+route-state write - sets `in progress`), and the archiving of its last plan (the entry leaves). Under
+the ledger's `## Plans` - `<ledger>` below is its path, resolved as
 `docs/WORKFLOW.md` § The ledger states - write the plan's line:
 `<ABBR> - readiness/<ABBR>/, active/<ABBR>/records/`. Then `git add <plansDir>/active/<ABBR>
 <plansDir>/readiness/<ABBR> <plansDir>/ROADMAP.md <ledger>` and ONE docs commit (native dialog). The stamp survives the move byte for byte;

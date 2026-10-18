@@ -92,6 +92,19 @@ All in payload `docs/WORKFLOW.md`:
 - what each gate is and what it cannot do - § Commit & Push Authority (and payload `docs/LOOP.md`
   § Honest security model).
 
+## Where things are written
+
+- an idea / future work -> `dev/backlogs/ROADMAP.md`, one entry per idea;
+- a plan -> `dev/backlogs/active/<ABBR>/` (`PLAN_<ABBR>.md` index, `DECISIONS.md`,
+  `RESEARCH.md`, `tickets/`, `records/`); drafted under `dev/backlogs/drafts/<ABBR>/`;
+- readiness of a plan -> `dev/backlogs/readiness/<ABBR>/` (`stamp.json`, `round-<N>.md`
+  and the plan's own ruling and pass rows in `ledger.md`);
+- a closed ticket -> `records/<REF>.md` in its plan; a rule-class event inside a ticket -> that record;
+- a ruling / pass / event that belongs to NO plan -> the ledger at the configured
+  `paths.transferSurface` (`dev/backlogs/LEDGER.md` as setup writes it) - a pointer
+  index (one line per plan plus the plan-less rows) and nothing else;
+- doctrine -> the payload `docs/`; a project rule -> `dev/PROJECT_OVERRIDES.md`.
+
 <!-- END aiwf-core -->
 
 <!-- Everything below this line is YOURS. `/pnp:setup` seeds it once and never rewrites it. -->

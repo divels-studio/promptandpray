@@ -95,6 +95,22 @@ and asked by the COO - never estimated; `/pnp:mission` does not change (RBC/D-04
   Selective reading of the preflight rejected by the operator 2026-10-18 („няма селективно
   четене"); the start of ~110k is accepted as the floor the doctrine size allows (harness ~49k +
   doctrine ~38k + the rest); further savings come from GENERIC's overrides trim only.
+- **One instrument: the statusline** (operator decision 2026-10-18, „остава статуслайна"; the
+  arbitration session's measured correction, the reading marked as the arbiter's). The statusline's
+  used percentage EXCLUDES the fixed categories `/context` counts - system tools 31.9k, skills 6.1k,
+  memory 4k, ~41.5k together (111.5 - 31.9 - 6.1 - 4 ~= 69.5): the 70k read at `/pnp:work` on
+  2026-10-18 (statusline 7% of 1,000,000, session `5b906a46`) and the 111.5k above (`/context`) are two
+  instruments over one state, not a drop - no "130k -> 70k" reading exists. Every (a)/(b) row names
+  its instrument: (a) 120k statusline, 111.5k `/context`, 70k statusline; (b) 140k statusline; the
+  "~130k after 0.3.0" below - instrument not recorded. Re-measured preflight, RBC-002's method
+  (`claude -p`, claude-opus-5-5, tools off; baseline this run 6,544 against the record's 712 - the
+  deltas are unaffected): WORKFLOW 18,566 -> 20,909 (+2,343; `834147d`, `510165d`, `f356023`), LOOP
+  6,878 -> 7,226 (+348), overrides 9,147 -> 7,466 (-1,681; `510165d`, `b9c2278`, `96e0d98`),
+  ORCHESTRATOR 3,563 unchanged; the four 38,154 -> 39,164 (+1,010); `CLAUDE.md` 3,411 unchanged;
+  `skills/work` 2,297 -> 2,126; the memory files 2,397 at HEAD. The real start after RBC-002 + GENERIC
+  is ~110k by `/context` (harness ~49k, doctrine ~39k, the rest config, memory, git log) - the floor
+  the whole-preflight decision accepts. Evidence: the arbitration session's scratchpad
+  `5ad48d54-.../start-attrib/` (session-local, not in the tree).
 - **Start number (b)** - AFTER the active plan's files are read: in the same `/pnp:work` session,
   once the operator names the ticket and the plan is read, then the statusline (`/pnp:mission` in a
   fresh session gives a comparable one). It judges the folder format and selective reading. Recorded: ~130k after 0.3.0,

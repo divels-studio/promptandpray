@@ -1,13 +1,13 @@
 {
   "$schema": "D:/pnp-live/schema/aiwf.config.schema.json",
   "_aiwf": {
-    "installedPluginVersion": "0.3.0",
-    "lastMigrationApplied": "0025_roadmap-seed",
+    "installedPluginVersion": "0.3.1",
+    "lastMigrationApplied": "0026_ledger",
     "managedRegions": {
       ".claude/aiwf-native/roles.json": "0.2.19",
       ".claude/agents/writer.md": "0.2.20",
-      "CLAUDE.md#aiwf-core": "0.3.0",
-      ".claude/aiwf-native/ORCHESTRATOR.md": "0.3.0",
+      "CLAUDE.md#aiwf-core": "0.3.1",
+      ".claude/aiwf-native/ORCHESTRATOR.md": "0.3.1",
       "AGENTS.md": "0.2.20"
     },
     "ownedAskRules": [
@@ -222,7 +222,7 @@
     "scratchDir": ".aiwf",
     "plansDir": "dev/backlogs",
     "overridesDoc": "dev/PROJECT_OVERRIDES.md",
-    "transferSurface": "dev/backlogs/CANDIDATES.md",
+    "transferSurface": "dev/backlogs/LEDGER.md",
     "changesDir": "dev/changes"
   },
   "review": {

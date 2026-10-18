@@ -41,16 +41,15 @@ and priced; informal address; no dispatch on precedent; resource checks are the 
 is not prompted; a dead paid pass waits; analyse and decide; on an objection stop the tools; a
 ticket born mid-work; a yes covers only the asked action; the coo runs scripts itself; out-of-scope
 findings; dialogs only at the gates; never pipe a test run through tail; a documentation claim is a
-hypothesis; candidates registered where
-they are born; the bump by hand, the tag its own word; the resume memory is state; a repo copy of a
-live artifact; a file count is not a runner count; a heavy ticket in a fresh session; a session
-reads its own ticket; no session brief when the state is durable; readiness only through the plan
-skill; the auditor never below the author; a rule record carries a marker; english everywhere in the
-tree; the coo line names the model; worktree and memory-directory removal are destructive; the
-diff-review file; the writer runs only the tests it adds; no cd prefix; surgical edits over
-rewrites; long commands run in the background; auto mode and the config files; the writer's reply
-is short; n surfaces, n asserts; an entity's references; a paid pass is a quota start/stop pair;
-resume with an explicit id.
+hypothesis; candidates registered where they are born; the bump by hand, the tag its own word; the
+resume memory is state; a repo copy of a live artifact; a file count is not a runner count; a heavy
+ticket in a fresh session; a session reads its own ticket; no session brief when the state is
+durable; readiness only through the plan skill; the auditor never below the author; a rule record
+carries a marker; english everywhere in the tree; the coo line names the model; worktree and
+memory-directory removal are destructive; the diff-review file; the writer runs only the tests it
+adds; no cd prefix; surgical edits over rewrites; long commands run in the background; auto mode
+and the config files; the writer's reply is short; n surfaces, n asserts; an entity's references; a
+paid pass is a quota start/stop pair; resume with an explicit id.
 
 ## [0.3.0] - 2026-10-17
 

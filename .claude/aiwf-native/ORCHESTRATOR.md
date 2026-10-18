@@ -150,15 +150,16 @@ Rule health is read from the event ledger and from nothing else: violations, cat
 corrections attributable to a rule. **The happy path is never instrumented** - a rule that was
 obeyed produces no row, which is why a quiet rule and a dead rule look alike here and why the
 absence of rows is never read as evidence. An incident recorded only in the COO's memory is not
-recorded: the row goes on the transfer surface, and the memory points at it. One row per event, on
-the transfer surface:
+recorded: the row is written down, and the memory points at it. One row per event - a ticket's event
+in its `records/<REF>.md` (its `## Events`), an event that belongs to no plan in the ledger (the
+transfer surface):
 
 ```text
 | <date> | <rule or D-id> | violation|catch|operator-correction | <pointer> |
 ```
 
 The pointer is what lets a later reader check the row. Full text: payload `docs/WORKFLOW.md` § The
-transfer surface.
+ledger.
 
 ## References only
 

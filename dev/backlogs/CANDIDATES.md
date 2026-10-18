@@ -2,11 +2,7 @@
 
 **Frozen 2026-10-18 - history, written again only to mark a row "taken up -> ROADMAP § X" or "dropped".**
 New rows go to `LEDGER.md` (a plan's own rows to its `readiness/<ABBR>/`), ideas to `ROADMAP.md`.
-
-- RBA: rulings / passes in `dev/backlogs/readiness/RBA/`, events in `dev/backlogs/archive/012_PLAN_RBA_2026-10-17/records/`
-- RBB: rulings / passes in `dev/backlogs/readiness/RBB/`, events in `dev/backlogs/archive/013_PLAN_RBB_2026-10-17/records/`
-- RBC: rulings / passes in `dev/backlogs/readiness/RBC/`, events in `dev/backlogs/archive/015_PLAN_RBC_2026-10-18/records/`
-- SCRATCH dropped (2026-10-18): the operator does not need it („маха се от роадмапа, не ми трябва"); the entry was the API key outside `.aiwf/` and a cleanup that never deletes an operator file
+The plan pointer lines (RBA, RBB, RBC) and the SCRATCH drop moved to `LEDGER.md` on 2026-10-18 (GENERIC-003, D-11).
 
 Отворените кандидати (без ref) плюс трите дневника: Ruling ledger, Pass statistics, Event ledger.
 Решените кандидати са махнати при чистката на 2026-09-24 (операторска дума „изчистете го“).
