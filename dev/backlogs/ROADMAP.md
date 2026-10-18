@@ -50,6 +50,7 @@ leaves with one ledger row `<ABBR> dropped: <why>`.
 - Goal: the research and planner brief templates hand sections and pointers, not whole files, so a plan's research costs well under the first measured 278k and the planner's first handoff well under 190k
 - Why: `dev/REBUILD.md` § First measured plan - GENERIC, levers (a) and (b); operator 2026-10-18: „да не забравим след това да запишем идеите в роадмапа" (relayed by the arbitration session)
 - Scope: in - `templates/briefs/research.md`, `templates/briefs/planner.md` (a Code Map of the touched surfaces only; sections by pointer; the planner reads a file only where it writes a Code Map row), the measured before/after on the next plan; runs BEFORE the first Silerax plan; out - the Writer brief
+  - 2026-10 (candidate) - the Writer's handback carries one line "what in the plan was wrong or missing, which check saved work" - the prep cost measured against its benefit [dev/backlogs/CANDIDATES.md:64]
 - Size: S
 - Plans: none yet
 - Status: idea
@@ -59,6 +60,8 @@ leaves with one ledger row `<ABBR> dropped: <why>`.
 - Goal: the same plan folder audited by gpt-5.6-sol/high and by gpt-6-sol/xhigh, blockers and tokens side by side, and the blocker contract made hard enough that INFO is actually used (two passes so far returned 13 BLOCKER / 0 INFO)
 - Why: the Codex readiness pass is the sticky 165-216k of the cycle (`dev/REBUILD.md` § First measured plan - GENERIC, lever (c)); effort/model is the lever left (relayed by the arbitration session, 2026-10-18)
 - Scope: in - one paid pass on the operator's word, the readiness brief template's INFO examples and an explicit "wording is INFO" line, the audit table's plan row if the measurement says so; out - any further pass
+  - 2026-10 (candidate) - a warm (resumed, with compensations) pass against a cold one: cost and verdict quality unmeasured [dev/backlogs/CANDIDATES.md:588]
+  - 2026-09-24 Silerax rule - chain-trace in the code-pass evidence pack: adopted into the payload or left local by this measurement (Silerax keeps the pointer form until then, ruling 2026-10-18) [dev/backlogs/CANDIDATES.md:627] [dev/backlogs/CANDIDATES.md:1128]
 - Size: S
 - Plans: none yet
 - Status: idea
@@ -72,3 +75,92 @@ leaves with one ledger row `<ABBR> dropped: <why>`.
 - Plans: none yet
 - Status: idea
 - Born: 2026-10-18, operator word „това може да стане чак след селективното четене"
+
+Entries below were ported on 2026-10-18 from `dev/backlogs/CANDIDATES.md` (now history); each item keeps a pointer `[dev/backlogs/CANDIDATES.md:<line>]` to its original row, where the full text and the evidence live.
+
+## CTX - the context ceiling, compaction and gate state in the payload
+- Goal: the payload carries the checkpoint and compaction mechanism every project runs locally today (the gate-checkpoint hook, the context ceiling, the post-compaction return), so the local hooks expire
+- Why: the mechanism is a project's own addition in 0.3.x (`docs/WORKFLOW.md` session rule) while three projects run the same hook by hand; the compaction incident of 2026-10-14 produced the items below
+- Scope: in - the items below; out - any runtime or daemon (overrides § Identity)
+  - 2026-10-14 - the context-ceiling + gate-checkpoint mechanism in the payload: a hook that reads the transcript, silent without autocompact [dev/backlogs/CANDIDATES.md:135]
+  - 2026-10-14 compaction incident - (a) a SessionStart:compact reminder, (b) readiness starts by loading /pnp:review, (c) a warning on early fact-check agents [dev/backlogs/CANDIDATES.md:225]
+  - 2026-10-14 - (e) the checkpoint carries the next gate's operative lines verbatim [dev/backlogs/CANDIDATES.md:261]
+  - 2026-10-14 - (f) gate state as a small JSON beside the checkpoint prose (unproven; fixed headings are the alternative) [dev/backlogs/CANDIDATES.md:263] [dev/backlogs/CANDIDATES.md:289]
+  - 2026-10-14 - (g) long doctrine skills are not cut at 5k on their return after compaction; reload the skill before a gate [dev/backlogs/CANDIDATES.md:266] [dev/backlogs/CANDIDATES.md:277]
+  - 2026-10-14 - (e) SessionStart:compact is the only measured channel [dev/backlogs/CANDIDATES.md:274]
+  - 2026-10-14 - (h) compact hooks also fire for a background subagent (#91910) [dev/backlogs/CANDIDATES.md:279]
+  - 2026-10-14 - (i) a live-agents table in the checkpoint, a receipt line after compaction [dev/backlogs/CANDIDATES.md:283]
+  - 2026-10-14 - the checkpoint lists the current ticket's gates verbatim, never as "or" [dev/backlogs/CANDIDATES.md:305]
+  - 2026-10-14 - (l) a mechanical pre-commit check: the plan says QA yes but no QA dispatch is recorded [dev/backlogs/CANDIDATES.md:307]
+  - 2026-10 intake 4 - subagent hooks get the main session id, so the ceiling STOP reaches subagents [dev/backlogs/CANDIDATES.md:333]
+  - 2026-10 - a configurable GO-word / ask dialog for paid passes [dev/backlogs/CANDIDATES.md:1034]
+- Size: M
+- Plans: none yet
+- Status: idea
+- Born: 2026-10-18, operator word „продължи три"
+
+## DOCTR - doctrine: open wording and gaps
+- Goal: the doctrine has no known double phrasing, unqualified term or missing rule from the recorded list
+- Why: each item is a recorded gap or ambiguity found while working under the doctrine; DOCSTAGE restructures the files, this entry fixes their sentences
+- Scope: in - the items below; out - the split by stage (DOCSTAGE)
+  - 2026-10 - a later operator remark narrows the standing "да": stop and wait (unsure) [dev/backlogs/CANDIDATES.md:60]
+  - 2026-10 - work the doctrine does not require goes first through a question to the operator (unsure) [dev/backlogs/CANDIDATES.md:69]
+  - 2026-10 - a per-decision "escalation: none / trigger N" line in brief and plan (unsure) [dev/backlogs/CANDIDATES.md:75]
+  - 2026-10 - R2 vs R3 for payload migrations: WORKFLOW § R3 says "migrations" unqualified [dev/backlogs/CANDIDATES.md:93]
+  - 2026-10 intake 8 - the auditor still raises first-pass-visible blockers: enforce structurally, not by a sentence [dev/backlogs/CANDIDATES.md:349]
+  - 2026-10 intake 31 - a known-failing tests list, "zero new failures" (low priority) [dev/backlogs/CANDIDATES.md:436]
+  - 2026-10 - run the E2E spec before the code audit (waits for a word) [dev/backlogs/CANDIDATES.md:612]
+  - 2026-10 - a product name is not a path: "write to <plugin> CANDIDATES" has two addresses - a Branch policy sentence (unsure) [dev/backlogs/CANDIDATES.md:818]
+  - 2026-10 - two names for one set: "unplanned R2" vs "small R1 / non-durable R2" (unsure) [dev/backlogs/CANDIDATES.md:956]
+  - 2026-10 - a doctrine sentence that enumerates the world is phrased as a checkable rule (unsure) [dev/backlogs/CANDIDATES.md:966]
+- Size: S
+- Plans: none yet
+- Status: idea
+- Born: 2026-10-18, operator word „продължи три"
+
+## SKILLS - the skills: open items
+- Goal: every skill says what the doctrine already decided - the QA trace mode, the report copy, the auto-mode refusal, the brief rule
+- Why: four decided rules have no sentence in the skill that executes them
+- Scope: in - the items below; out - new skills
+  - 2026-10-04 Silerax UIR-003 - E2E `--trace retain-on-failure` by default in the QA run (`skills/qa` still says `--trace on`) [dev/backlogs/CANDIDATES.md:556] [dev/backlogs/CANDIDATES.md:1133]
+  - 2026-10-04 Silerax UIR-003 - the Writer copies the E2E JSON report into the scratch directory right after the run [dev/backlogs/CANDIDATES.md:565] [dev/backlogs/CANDIDATES.md:1135]
+  - 2026-10 - one sentence in the setup/update skills: auto mode refuses settings writes and `/pnp:update --apply` (unsure) [dev/backlogs/CANDIDATES.md:1141]
+  - 2026-10 - `/pnp:brief` says it is not offered when the state is durable (unsure) [dev/backlogs/CANDIDATES.md:1144]
+- Size: S
+- Plans: none yet
+- Status: idea
+- Born: 2026-10-18, operator word „продължи три"
+
+## CODEX - the Codex wrapper: open items
+- Goal: the three Codex wrappers keep their line endings under every git setting and use the tier agents once upstream is fixed
+- Why: two recorded wrapper behaviours wait for an external event
+- Scope: in - the items below; out - the review/QA contract itself
+  - 2026-10 PS-EOL - the three codex `.ps1` drift to LF; `.gitattributes` pins crlf; waits for a codex run [dev/backlogs/CANDIDATES.md:784]
+  - 2026-10 - Codex tier agents (`multi_agent`), waiting for the upstream bugs [dev/backlogs/CANDIDATES.md:859]
+- Size: S
+- Plans: none yet
+- Status: idea
+- Born: 2026-10-18, operator word „продължи три"
+
+## SETUP - setup and naming: open items
+- Goal: the installer owns every file it renders and the product carries one name
+- Why: two recorded gaps in the setup engine
+- Scope: in - the items below; out - the update engine
+  - 2026-10 RENAME-001 - the full rename AIWF -> pnp across the payload (R3) [dev/backlogs/CANDIDATES.md:748]
+  - 2026-10 - `ORCHESTRATOR.md` is not in `ownedDestinations` of `generate.mjs` [dev/backlogs/CANDIDATES.md:1062]
+- Size: S
+- Plans: none yet
+- Status: idea
+- Born: 2026-10-18, operator word „продължи три"
+
+## SUITES - the suites fast and honest
+- Goal: the eight VERIFY rows run in minutes, not an hour, and a POSIX proof exists where the canon claims one
+- Why: „the suites cost an hour" (CANDIDATES § The suites cost an hour); `example-cycle-linux` is a Windows run with Linux answers, not POSIX proof
+- Scope: in - the items below; out - the test policy rows (overrides § Test policy)
+  - 2026-09 - VERIFY has no POSIX leg; `example-cycle-linux` is a Windows run [dev/backlogs/CANDIDATES.md:985]
+  - 2026-10 - make the suites fast (setup ~16, update ~19, cycle ~16, selfcheck ~6 min; target under 3 min) [dev/backlogs/CANDIDATES.md:1284]
+  - 2026-10 AFTER step 4 - suites fast or fewer; drop `example-cycle-linux` from `verify.commands` [dev/backlogs/CANDIDATES.md:1342]
+- Size: S
+- Plans: none yet
+- Status: idea
+- Born: 2026-10-18, operator word „продължи три"
