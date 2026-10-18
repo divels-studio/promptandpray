@@ -12,7 +12,7 @@ directory.
 - RBA - readiness/RBA/, archive/012_PLAN_RBA_2026-10-17/records/
 - RBB - readiness/RBB/, archive/013_PLAN_RBB_2026-10-17/records/
 - RBC - readiness/RBC/, archive/015_PLAN_RBC_2026-10-18/records/
-- GENERIC - readiness/GENERIC/, active/GENERIC/records/
+- GENERIC - readiness/GENERIC/, archive/016_PLAN_GENERIC_2026-10-18/records/
 
 ## Rows that belong to no plan
 

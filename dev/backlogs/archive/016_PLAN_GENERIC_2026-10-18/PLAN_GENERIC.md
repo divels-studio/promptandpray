@@ -38,7 +38,7 @@ two words after the plan closes).
 |---|---|---|---|---|
 | GENERIC-001 | the rules: 43 payload sentences, the overrides trimmed and marked | D-01 D-02 D-03 D-04 D-05 D-06 | done (`510165d`) | `records/GENERIC-001.md` |
 | GENERIC-002 | the ledger, roadmap and skills prose | D-07 D-08 D-11 D-12 D-13 D-15 D-16 | done (`834147d`) | `records/GENERIC-002.md` |
-| GENERIC-003 | the code: ledger template and seed, migration 0026, managed templates, 0.3.1, self-update | D-08 D-09 D-10 D-11 D-14 D-17 | open | - |
+| GENERIC-003 | the code: ledger template and seed, migration 0026, managed templates, 0.3.1, self-update | D-08 D-09 D-10 D-11 D-14 D-17 | done (`169d9e1`, `60d4cf1`) | `records/GENERIC-003.md` |
 
 Order (D-18): 001 -> 002 -> 003, each on the operator's own word; 003 last because its
 `Retires local rules:` line reads 001's `rule-homes.md`, and its template rename needs the code in
@@ -96,3 +96,11 @@ Parts of the cycle spend, one per line (source in brackets):
 Start and approval numbers: `~/.claude/ctx/<session>.pct` x `.size` (1,000,000), whole-percent
 precision - 12% at Step 1, 28% at the approval [file]. Start number (a) of the `/pnp:work` entry: 110k
 (11%) [file].
+
+## Roadmap entry
+
+Copied verbatim from `dev/backlogs/ROADMAP.md` § GENERIC at the plan's close (2026-10-18; the landing
+predates the skill change - D-13):
+
+- Goal: every generic rule of the 2026-10-16 cross-project alignment has one home in the payload, and the three overrides documents keep only identity and product truth
+- Why: „тези 40 правила от консолидацията къде и кога влизат" (relayed by the arbitration session, 2026-10-18); RBC-002 removed only the payload restatements, and the generic rules without a payload home are still local copies in PnP's overrides and both consumers
