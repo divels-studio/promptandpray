@@ -51,7 +51,8 @@ The rules do not rely on the session "remembering" them - they are enforced mech
   plan is - so the step happens without you reading the folder. `/pnp:plan` runs the whole cycle.
 - **Gate 3 (hook)** - while a ticket is dispatched, the main session cannot edit code: with an open
   R2/R3 route recorded in `.aiwf/route-state.json` it may write only `docs/**`, `.aiwf/**` and
-  root-level `*.md`, plus the transfer surface (the one file where incident rows are recorded) and
+  root-level `*.md`, plus the transfer surface (the ledger: the plans' pointer index and the rows
+  that belong to no plan) and
   the roadmap `<plansDir>/ROADMAP.md`. Code
   goes to the Writer, where the review gates are.
 - **Gate 4 (hook)** - a git command whose verb is one of the gated ones (commit, push, reset,

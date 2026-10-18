@@ -1,8 +1,7 @@
 # Кандидати и transfer surface
 
-**2026-10-18 - from this date a pointer index.** Rulings, pass rows and events of a plan live in
-that plan's `readiness/<ABBR>/` and `records/`; this file holds one pointer line per plan and the
-rows that belong to no plan; ideas go to `ROADMAP.md`. Rows above this line stay as written.
+**Frozen 2026-10-18 - history, written again only to mark a row "taken up -> ROADMAP § X" or "dropped".**
+New rows go to `LEDGER.md` (a plan's own rows to its `readiness/<ABBR>/`), ideas to `ROADMAP.md`.
 
 - RBA: rulings / passes in `dev/backlogs/readiness/RBA/`, events in `dev/backlogs/archive/012_PLAN_RBA_2026-10-17/records/`
 - RBB: rulings / passes in `dev/backlogs/readiness/RBB/`, events in `dev/backlogs/archive/013_PLAN_RBB_2026-10-17/records/`

@@ -2,6 +2,9 @@
 
 Seeded once and then yours. Nothing in the plugin records this file, hashes it, or rewrites it.
 The COO writes the entries, one `##` per idea, in the format below; entries follow this header.
+An entry is a goal worth at least one plan; a task of a few lines is not an entry. Only live
+entries stay here: an entry leaves when its last plan is archived, and an idea dropped before then
+leaves with one ledger row `<ABBR> dropped: <why>`.
 
 ```markdown
 ## <ABBR> - <title>
@@ -10,7 +13,7 @@ The COO writes the entries, one `##` per idea, in the format below; entries foll
 - Scope: in - <...>; out - <...>
 - Size: S (one plan) | M (two or three plans) | L (a sequence; each plan listed below as it is born)
 - Plans: <PLAN_<ABBR> or none yet>
-- Status: idea | researching | planned | in progress | done <date>
+- Status: idea | researching | planned | in progress
 - Born: <date>, operator word „<quote>"
 ```
 

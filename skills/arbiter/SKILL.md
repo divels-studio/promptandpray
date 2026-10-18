@@ -1,6 +1,6 @@
 ---
 name: arbiter
-description: The escalation session, opened cold when a trigger fires - loads the escalation regulation, reads the ruling ledger, takes the brief the COO parked, and returns ONE ruling as a message. Read-only on the tree: it writes nothing, not even the ledger row.
+description: The escalation session, opened cold when a trigger fires - loads the escalation regulation, takes the brief the COO parked, reads the ruling ledger, and returns ONE ruling as a message. Read-only on the tree: it writes nothing, not even the ledger row.
 allowed-tools: Read, Grep, Glob, Bash
 ---
 
@@ -52,27 +52,12 @@ first shapes which rule you go looking for.
 Read § Branch policy of the same document as well, for the one-executing-session invariant this
 session runs under.
 
-## Step 2 - Read the ruling ledger
-
-The ledger is the **Ruling ledger** section of the transfer surface - the operator-owned page whose
-path is resolved by the rule
-`the configured paths.transferSurface, or <plansDir>/PNP_CANDIDATES.md when absent`
-(`{{config.paths.transferSurface}}` when the key is set, `{{config.paths.plansDir}}/PNP_CANDIDATES.md`
-when it is not). Read the section, not the whole file.
-
-Each row is one ruling: `{ question / ruling / evidence pointer }`. This is the only memory a cold
-session has of what was already settled on this mission, so read it before you judge: a ruling that
-silently contradicts an earlier one is worse than no ruling, and a case that was already decided is
-answered by pointing at the row rather than by deciding it again.
-
-If the file does not exist, or the section is empty, say so in one line and continue - an
-installation whose first escalation this is has an empty ledger by definition, and that is not an
-error.
-
-## Step 3 - Take the parked brief
+## Step 2 - Take the parked brief
 
 The COO parks it at `<root>/{{config.paths.scratchDir}}/arbiter-brief.txt`. Read it with the Read
-tool. It carries the casus, the `file:line` evidence, and WHICH of the four triggers fired.
+tool. It carries the casus, the `file:line` evidence, WHICH of the four triggers fired, and - when
+the case belongs to a ticket - a `Ticket: <ABBR>-<NNN>` line, which names the plan whose rulings
+Step 3 reads.
 
 **If the file is not there, stop.** Do not reconstruct the case from the conversation, from the
 PLAN, or from what the operator says in the channel - a case assembled by the arbiter is a case the
@@ -87,6 +72,29 @@ with `<path>` spelled out in full.
 first one's brief. That is the intended behaviour - one open case at a time - and it means a brief
 you are reading is the newest, never a queue. If you can see that a previous case was never answered,
 say so in the ruling; do not go looking for the overwritten text.
+
+## Step 3 - Read the ruling ledger
+
+The rulings live in two places (`docs/WORKFLOW.md` § The ledger), read in this order:
+
+1. **The plan's own rows.** When the brief carries a `Ticket: <ABBR>-<NNN>` line, read
+   `<root>/{{config.paths.plansDir}}/readiness/<ABBR>/ledger.md` - that plan's rulings.
+2. **The rows that belong to no plan** - the `## Rows that belong to no plan` section of the ledger,
+   the operator-owned page whose path is resolved by the rule
+   `the configured paths.transferSurface, or <plansDir>/PNP_CANDIDATES.md when absent`
+   (`{{config.paths.transferSurface}}` when the key is set, `{{config.paths.plansDir}}/PNP_CANDIDATES.md`
+   when it is not). Read the section, not the whole file.
+
+A brief with no ticket line reads the second place only.
+
+Each ruling row is `{ question / ruling / evidence pointer }`. These rows are the only memory a cold
+session has of what was already settled, so read them before you judge: a ruling that silently
+contradicts an earlier one is worse than no ruling, and a case that was already decided is answered
+by pointing at the row rather than by deciding it again.
+
+If a file does not exist, or its section is empty, say so in one line and continue - an
+installation whose first escalation this is has an empty ledger by definition, and that is not an
+error.
 
 ## Step 4 - Rule
 

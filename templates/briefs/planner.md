@@ -20,7 +20,9 @@ THE FOLDER CONTRACT (checked mechanically by `plan-gate.js` - a breach is refuse
 - `<folder>/PLAN_<ABBR>.md` - the index: a title line, `## Goal` (one paragraph), `## Scope` (in /
   out), `## Tickets` - one table `| ref | title | implements | status | record |`, every status
   `open`, every record `-` - then the order of the tickets and the gates each one passes (the
-  operator's word, the review passes, the commit dialogs, a tag or push word if any).
+  operator's word, the review passes, the commit dialogs, a tag or push word if any). You write no
+  `## Measurements` and no `## Roadmap entry`: the COO writes both into the index on the approval,
+  before the landing.
 - `<folder>/tickets/<ABBR>-NNN.md` - at most 3 tickets, numbered from 001; each at most 6,144 bytes
   (its header `Status:` line not counted);
   each with these six headings at column 0, exactly: `## Outcome`, `## Scope`, `## Acceptance`,

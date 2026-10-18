@@ -14,6 +14,12 @@ ticket's scope.>
 <Material decisions taken during the work and every deviation from the ticket's contract, each with
 its one-line why.>
 
+## Events
+
+<One row per rule-class event inside this ticket - a violation, a catch, or an operator
+correction - shaped `| <date> | <rule or D-id> | violation|catch|operator-correction | <pointer> |`,
+or `None.`. A ticket's events live here, not on the ledger (`docs/WORKFLOW.md` § The ledger).>
+
 ## Verification (what actually ran)
 
 <Every command that ran, literally, with its exact exit code or count line; the Reviewer/QA
@@ -21,7 +27,7 @@ verdict with its engine and pass number, or `no auditor` and why.>
 
 ## Remaining debt
 
-<What is left and where it went - a ticket, the roadmap, the transfer surface - or `None.`; never an
+<What is left and where it went - a ticket, the roadmap, the ledger - or `None.`; never an
 invented follow-up.>
 
 ## Scratch

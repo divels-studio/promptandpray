@@ -44,6 +44,17 @@ lock holds for the whole skill (`docs/WORKFLOW.md` § Planning lock): until the 
 only files written are the plan's own - `<plansDir>/drafts/<ABBR>/`, `<plansDir>/readiness/<ABBR>/`,
 the roadmap entry - and the scratch brief. A readiness cycle starts in a fresh session.
 
+## Step 0.5 - Doctrine preflight
+
+Read the plugin's `docs/WORKFLOW.md` and `docs/LOOP.md`, this project's
+`{{config.paths.overridesDoc}}` and `.claude/aiwf-native/ORCHESTRATOR.md` IN FULL - the four
+documents of `/pnp:work` Step 1 - before Step 1, and note `git rev-parse HEAD` at that read.
+
+**Its suppression dual.** Skip the read when this session already read the current text of all
+four: `git diff <the HEAD noted at that read> -- <the four paths>` returns empty. Any other result -
+a line of diff, or an error such as a path outside the repository - means read them again. After a
+context compaction all four are read again, whatever the diff says.
+
 ## Step 1 - The roadmap entry
 
 **The start number.** Before anything else, take the COO context size now and keep it for Step 6:
@@ -63,9 +74,14 @@ format, the operator's words verbatim where they are the source:
 - Scope: in - <...>; out - <...>
 - Size: S (one plan) | M (two or three plans) | L (a sequence; each plan listed below as it is born)
 - Plans: <PLAN_<ABBR> or none yet>
-- Status: idea | researching | planned | in progress | done <date>
+- Status: idea | researching | planned | in progress
 - Born: <date>, operator word "<quote>"
 ```
+
+An entry is a goal worth at least one plan; a task of a few lines is not an entry. The roadmap holds
+only live entries: the entry leaves it when its last plan is archived, and an idea dropped before
+then leaves with one ledger row `<ABBR> dropped: <why>` (`docs/WORKFLOW.md` § Durable development
+history).
 
 `<ABBR>` is 2 to 8 uppercase letters `A-Z` and is never reused: Glob `<plansDir>/active/`,
 `<plansDir>/archive/` and `<plansDir>/readiness/` for it first, and pick other letters on any hit.
@@ -208,8 +224,13 @@ recorded them. Under the table, list the parts of (2) one per line - agent or pa
 the source of every value: `file`, `notification`, `round header` or `operator`. No part is
 estimated: a part nobody printed is named as missing, never guessed.
 
-**Landing - on the approval, in the same session.** The Measurements write changed the index, so
-stamp the folder again BEFORE the move:
+**Roadmap entry - on the approval.** With `## Measurements`, write into the same index a section
+`## Roadmap entry`: the entry's `Goal:` and `Why:` lines from `<plansDir>/ROADMAP.md`, verbatim. The
+roadmap entry leaves the roadmap when its last plan is archived; this copy is what keeps its goal and
+reason beside the plan.
+
+**Landing - on the approval, in the same session.** The Measurements and Roadmap entry writes
+changed the index, so stamp the folder again BEFORE the move:
 
 ```text
 node "${CLAUDE_PLUGIN_ROOT}/scripts/engine/plan-gate.js" --stamp <plansDir>/drafts/<ABBR>
@@ -219,8 +240,10 @@ Then move the untracked folder with the shell (not a git verb: nothing tracked i
 `windows`:
 `Move-Item <plansDir>/drafts/<ABBR> <plansDir>/active/<ABBR>`; os `linux`/`macos`:
 `mv <plansDir>/drafts/<ABBR> <plansDir>/active/<ABBR>`. Update the roadmap entry's `Plans:` and
-`Status: planned` lines. Then `git add <plansDir>/active/<ABBR> <plansDir>/readiness/<ABBR>
-<plansDir>/ROADMAP.md` and ONE docs commit (native dialog). The stamp survives the move byte for byte;
+`Status: planned` lines. Under the ledger's `## Plans` - `<ledger>` below is its path, resolved as
+`docs/WORKFLOW.md` § The ledger states - write the plan's line:
+`<ABBR> - readiness/<ABBR>/, active/<ABBR>/records/`. Then `git add <plansDir>/active/<ABBR>
+<plansDir>/readiness/<ABBR> <plansDir>/ROADMAP.md <ledger>` and ONE docs commit (native dialog). The stamp survives the move byte for byte;
 a `--check` over `<plansDir>/active/<ABBR>` after the move confirms it.
 
 Each ticket is then started on its own word; the Writer brief is

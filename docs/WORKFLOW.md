@@ -220,8 +220,9 @@ Eight rules.
   silently into memory. Nothing is guessed from context.
 - **(h) Doctrine born in another home.** Doctrine born outside the canon - in a plan's process
   section, an agent's memory, the operator-owned zone of a CLAUDE.md - gets a same-moment one-line
-  pointer row on the transfer surface, shown and approved together with the text (one approval,
-  guard (g)'s). When the multi-session window is closed, it queues with the approved text frozen
+  pointer row - in `<plansDir>/readiness/<ABBR>/ledger.md` when it was born inside a plan, on the
+  ledger (§ The ledger) when it belongs to no plan - shown and approved together with the text (one
+  approval, guard (g)'s). When the multi-session window is closed, it queues with the approved text frozen
   and lands right after the executing ticket's commit (§ Branch policy).
 
 ## Verifying failure claims
@@ -509,7 +510,9 @@ tickets; no separate active BACKLOG file. The PLAN keeps:
    debt - in a folder plan the file `records/<REF>.md`, with the index's ticket row closed. The COO
    writes this record **immediately after the ticket's commit, in the same session,
    unprompted** - a ticket is not closed without it. The record is written on the skeleton
-   `templates/briefs/record.md`, its `## Measurements` row filled at the close. Two acts ride the
+   `templates/briefs/record.md`, its `## Measurements` row filled at the close; the ticket's
+   rule-class events - a violation, a catch, an operator correction - are rows of its `## Events`
+   section, not of the ledger. Two acts ride the
    record: evidence worth keeping moves from the scratch directory into the record or the plan's
    `readiness/<ABBR>/`, and what is left to delete is listed beside the record's commit (a delete
    is the operator's dialog); and the COO says in one line whether the next ticket stays in this
@@ -537,7 +540,10 @@ ticket. Archive name: `<NNN>_PLAN_<ABBR>_<YYYY-MM-DD>.md`, `NNN` the next free s
 date the day of ARCHIVING; `git mv` preserves the history. A folder plan moves as a DIRECTORY
 under the same grammar: `git mv <plansDir>/active/<ABBR>/
 <plansDir>/archive/<NNN>_PLAN_<ABBR>_<YYYY-MM-DD>/`. `<plansDir>/readiness/<ABBR>/` is not moved.
-Archiving also greps the plan's process sections for rule-class points without a pointer row -
+The plan's line under the ledger's `## Plans` is rewritten to the archive path, and the archiving of
+the last plan of a roadmap entry takes the entry out of `<plansDir>/ROADMAP.md`: the roadmap holds
+only live entries, and an idea dropped before its plans are done leaves it with one ledger row
+`<ABBR> dropped: <why>`. Archiving also greps the plan's process sections for rule-class points without a pointer row -
 fail-capable, with a positive control (the grep run once over a plan known to carry such a point,
 seen to report) - the backstop under guard (h). The trigger is the checkable fact - every ticket
 closed, every verify green. Archiving is bookkeeping, reversible with one `git mv` back, and NOT
@@ -549,9 +555,9 @@ PLAN.
 Use the configured paths (`paths.plansDir`):
 
 ```text
-<plansDir>/ROADMAP.md                         one entry per idea, its plans listed under it
+<plansDir>/ROADMAP.md                         one LIVE entry per idea, its plans listed under it
 <plansDir>/drafts/<ABBR>/                     the draft folder, untracked, while the plan is one
-<plansDir>/readiness/<ABBR>/                  stamp.json + round-<N>.md, committed at landing, kept
+<plansDir>/readiness/<ABBR>/                  stamp.json + round-<N>.md + ledger.md, committed at landing, kept
 <plansDir>/active/<ABBR>/PLAN_<ABBR>.md       the index + DECISIONS.md, RESEARCH.md, tickets/, records/
 <plansDir>/active/PLAN_<ABBR>.md              an older single-file plan, still read
 <plansDir>/archive/
@@ -592,36 +598,33 @@ checkpoint, while history lives in the records, the readiness folders and git. A
 a live artifact is refreshed at the canon moment - when anything declares it canon, and after each
 later iteration - and the check is a mechanical diff or size comparison against the live file.
 
-### The transfer surface
+### The ledger
 
-Beside the plans an installation keeps one operator-owned page, the **transfer surface**, at the
-configured `paths.transferSurface` - or at `<plansDir>/PNP_CANDIDATES.md` when that key is absent;
-`/pnp:setup` seeds it once from `templates/PNP_CANDIDATES.md.tmpl` and never writes it again, and an
-installation older than the key creates it by hand from exactly this skeleton:
+Beside the plans an installation keeps one operator-owned page, the **ledger** - the transfer
+surface of the config - at the configured `paths.transferSurface`, or at
+`<plansDir>/PNP_CANDIDATES.md` when that key is absent. It is a pointer index and nothing else: one
+line per plan under `## Plans`, pointing at the plan's `readiness/<ABBR>/` and its `records/`, plus
+the rows that belong to no plan. A plan's ruling and pass-statistics rows live in
+`<plansDir>/readiness/<ABBR>/ledger.md`, a ticket's events in its record's `## Events`; the ledger
+keeps only the ruling, the pass, the event or the dropped idea no plan owns, one line each with a
+pointer rather than a retelling. `/pnp:plan` writes a plan's `## Plans` line at the landing and the
+archiving rewrites it (§ Durable development history). `/pnp:setup` seeds the page once from
+`templates/PNP_CANDIDATES.md.tmpl` and never writes it again, and an installation older than the key
+creates it by hand from exactly this skeleton:
 
 ```markdown
-# Transfer surface
+# Ledger
 
-Seeded once and then yours. Nothing in the plugin records this file, hashes it, or rewrites it: it
-carries no bookkeeping entry, no resolvable address and no migration operation, so an update can
-never touch what you put here. Append to it; do not expect anything to prune it for you.
+Seeded once and then yours: nothing in the plugin records this file, hashes it or rewrites it, so an
+update never touches what you put here. It is a pointer index. Under Plans, one line per plan names
+its readiness folder and its records; a plan's own rulings and passes live in its readiness folder's
+`ledger.md`. Under Rows that belong to no plan, one row per ruling, pass, event or dropped idea that
+no plan owns, shaped `| date | kind | text | pointer |`. Ideas live in `ROADMAP.md` under the plans
+directory.
 
-Three sections, and each row is one line with a pointer rather than a retelling:
+## Plans
 
-- **Ruling ledger** - one row per ruling that settled a conflict: what was ruled, and where the
-  decision landed.
-- **Pass statistics** - one row per auditor pass: which pass it was and what it cost as the engine
-  reported it.
-- **Event ledger** - one row per rule-class event: a violation, a catch, or an operator correction,
-  each with the pointer that lets a later reader check it.
-
-Candidates live in `ROADMAP.md` under the plans directory.
-
-## Ruling ledger
-
-## Pass statistics
-
-## Event ledger
+## Rows that belong to no plan
 ```
 
 ## Routes
@@ -755,8 +758,8 @@ fired. The brief is the whole transfer.
 
 **Where it goes.** Where a suitable second-view session is live, the COO sends the brief to it
 directly: the operator is never a courier between two sessions. Where none is live, the operator's
-part is one command, `/pnp:arbiter`, which loads this section, reads the ruling ledger and takes the
-parked brief. With no second session at all, the escalation target is the OPERATOR.
+part is one command, `/pnp:arbiter`, which loads this section, takes the parked brief and reads the
+ruling rows of the plan its ticket names, then the ledger's. With no second session at all, the escalation target is the OPERATOR.
 
 **The arbiter reads; it does not write.** It is a non-executing session (§ Branch policy) - zero
 repo writes, zero database operations, zero paid auditor passes. It opens the evidence rather than
@@ -764,8 +767,9 @@ reasoning from a description. The ruling comes back as a MESSAGE, and the EXECUT
 the one-line ruling row.
 
 **The ruling ledger.** One row per ruling - `{ question / ruling / evidence pointer }` - in the
-**Ruling ledger** section of the transfer surface (§ The transfer surface). One line with a
-pointer: the ledger is the whole memory a cold arbiter has of what was already settled.
+plan's `<plansDir>/readiness/<ABBR>/ledger.md` when the ticket belongs to a plan, and under the
+ledger's `## Rows that belong to no plan` when it does not (§ The ledger). One line with a pointer:
+those rows are the whole memory a cold arbiter has of what was already settled.
 
 **Its suppression dual.** No trigger fired means no escalation: the decision is the COO's, made and
 reported with a one-line rationale. An escalation without a fired trigger turns the operator - or

@@ -36,10 +36,6 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
    session without it works without the product's boundaries.
 2. **Tree check.** Current branch, `git status`, the last ~5 commits. Identify uncommitted work -
    NEVER touch or stage foreign uncommitted files; commit only by explicit paths.
-   Print the **audit table** with it, **verbatim** - the tool's literal output, never a retelling -
-   `node "${CLAUDE_PLUGIN_ROOT}/scripts/setup/aiwf-roles.mjs" --show --project-root "<root>"
-   --plugin-root "${CLAUDE_PLUGIN_ROOT}"` - so the operator sees who will audit this work, on which
-   engine and with how many passes, before deciding what to ask for. `/pnp:roles` changes it.
 3. **Ask for the task** (in `{{config.operator.language}}`, briefly): what outcome, what is in and
    out of scope, any constraints. One round of questions, then work.
 4. **Classify and route.** R1 -> execute directly in this session and report. R2/R3 -> requires a
