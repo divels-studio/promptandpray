@@ -31,3 +31,12 @@ The COO writes the entries, one `##` per idea, in the format below; entries foll
 - Plans: none yet; runs after REBUILD plan C's RBC-002 (the README describes the cut doctrine) and cuts 0.3.1
 - Status: idea
 - Born: 2026-10-17, operator word „тоя 11 отива ... в новия роадмап"
+
+## GENERIC - one home per generic rule across the three projects
+- Goal: every generic rule of the 2026-10-16 cross-project alignment has one home in the payload, and the three overrides documents keep only identity and product truth
+- Why: „тези 40 правила от консолидацията къде и кога влизат" (relayed by the arbitration session, 2026-10-18); RBC-002 removed only the payload restatements, and the generic rules without a payload home are still local copies in PnP's overrides and both consumers
+- Scope: in - the C1/C2 rows of `drafts/align-2026-10-16/align-decision.md` checked against `dev/PROJECT_OVERRIDES.md`: a rule the payload carries is deleted locally; a generic rule with no payload home gets one sentence in `docs/WORKFLOW.md`, `docs/LOOP.md` or `docs/REVIEW_CHECKLIST.md` and its name on the 0.3.1 `Retires local rules:` line; out - product and machine-specific rows (they stay local, marked), any consumer tree
+- Size: S
+- Plans: none yet; a prose ticket after RBC-003 and before 0.3.1 cuts
+- Status: idea
+- Born: 2026-10-18, operator word „1 да"
