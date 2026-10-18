@@ -36,7 +36,7 @@ the plugin on push, 0.3.1 stays HARD-011's (D-11); any consumer tree.
 |---|---|---|---|---|
 | RBC-001 | the measurement instruments: the record skeleton, the approval row, the start protocol; the chain-trace rule | D-02 D-03 D-04 D-13 | done (bf018ac) | `records/RBC-001.md` |
 | RBC-002 | the doctrine compaction: WORKFLOW, LOOP, REVIEW_CHECKLIST, the whole overrides | D-05 D-06 D-07 D-08 | done (a10110f) | `records/RBC-002.md` |
-| RBC-003 | the two gate defects: the root gitfile, the header `Status:` line | D-09 D-10 | open | - |
+| RBC-003 | the two gate defects: the root gitfile, the header `Status:` line | D-09 D-10 | done (9bcf744, prose f356023) | `records/RBC-003.md` |
 
 Order (D-01): 001 -> 002 -> 003, each on the operator's own word; 001 first because 002's
 before/after is taken with its protocol. This plan gets NO readiness pass: the operator's word of

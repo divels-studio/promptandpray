@@ -7,7 +7,7 @@
 > for new entries (ROADMAP.md took that role on 2026-10-17).
 > Rewritten WHOLE at every change; history is in git.
 
-## Status (2026-10-18 - plan C in progress)
+## Status (2026-10-18 - plan C done)
 
 - RBC-001 done (`bf018ac`, record `31909bd`, amendment `90a2f81`). RBC-002 done (`a10110f`, record
   `744cc4b`): WORKFLOW + LOOP + REVIEW_CHECKLIST + overrides 54.6k -> 38.7k tokens (claude-opus-5-5
@@ -18,7 +18,11 @@
   protocol).
 - Follow-on: ROADMAP § GENERIC - the alignment's generic rules without a payload home get one
   payload sentence each and a 0.3.1 `Retires` line (after RBC-003, before 0.3.1).
-- RBC-003 open: code, R2, Writer, `COO: Fable - because check 1`, no Codex pass.
+- RBC-003 done (`9bcf744` code, `f356023` prose; Fable COO, Writer, no Codex pass): the root gitfile
+  skipped by the provenance walk, the header `Status:` line out of the byte cap, 8 new self-check
+  assertions with their controls; VERIFY rows selfcheck + spikes + validate-payload exit 0 once.
+  Plan C archived as `archive/015_PLAN_RBC_2026-10-18/`; its records hold the measurements. Start
+  number (b) of that session: 140k (§ Measurement protocol).
 
 ### Status at the 2026-10-17 handover
 
@@ -47,7 +51,8 @@
    one: targets WORKFLOW <= 12k tokens, overrides <= 8k, LOOP <= 4k (guides, not gates - the gate is
    "every rule has a home"; a result above ~40k total means the method failed and stops).
 3. **Measure the start again** (preflight-only prompt, § Measurement protocol) - expected ~65k if
-   RBC-002 hits its guides.
+   RBC-002 hits its guides. DONE 2026-10-18 together with steps 1-2 (plan C executed and archived):
+   (a) 111.5k, (b) 140k - the guides were missed, the start is 120k -> 111.5k.
 4. **Push** (one word; the dev commits since `v0.3.0` are unpushed) - the consumers take the compacted
    doctrine with `/plugin update`, no bump needed (prose). Then in Silerax and Furnissimo: `/pnp:update`
    is a no-op (current), but the thinner docs are what every session there reads from now.
@@ -91,6 +96,10 @@ and asked by the COO - never estimated; `/pnp:mission` does not change (RBC/D-04
   once the operator names the ticket and the plan is read, then the statusline (`/pnp:mission` in a
   fresh session gives a comparable one). It judges the folder format and selective reading. Recorded: ~130k after 0.3.0,
   with the active PLAN_HARD (~3,300 lines, ~34k tokens) inside it (`active/RBC/RESEARCH.md` fact 16).
+  Measured 2026-10-18 on the folder plan RBC: **140k** (Fable 5.1 session `2b168434`,
+  `~/.claude/ctx` 14% of 1,000,000, whole-percent precision), the same session whose (a) was 111.5k,
+  after `PLAN_RBC.md`, `tickets/RBC-003.md`, `DECISIONS.md` and `records/RBC-002.md` were read -
+  `RESEARCH.md`, the two closed tickets and `records/RBC-001.md` were not opened (selective reading).
 - Per plan and per ticket the numbers are no longer by hand: `/pnp:plan` asks the start and approval
   numbers and writes the index's `## Measurements` (idea -> approved plan, cycle spend); each record
   carries its `## Measurements` row (correction rounds, COO session at close) on
@@ -139,8 +148,8 @@ and asked by the COO - never estimated; `/pnp:mission` does not change (RBC/D-04
   6-ticket monolith DOCT (215,992). The pass reads the repo around the plan, not the plan: plan size
   does not drive pass cost. Levers to test: effort/model (`high` on gpt-5.6-sol), the blocker contract
   in the brief (B returned 13 BLOCKER / 0 INFO under the OLD brief), a named read scope in the brief.
-- The ticket byte cap (6144) counts the `Status:` line - RBB-002 hit 6180 on a status edit; RBC-003
-  moves status out of the measure.
+- The ticket byte cap (6144) counted the `Status:` line - RBB-002 hit 6180 on a status edit; RBC-003
+  moved the header `Status:` line out of the measure (`9bcf744`).
 
 ## Goal
 
@@ -247,7 +256,7 @@ all fine" is not a handoff.
 6. First measured plan: the next real plan in Silerax; the four numbers + total spend; baseline = the
    last plan under the old cycle, from its records.
 
-## The plans that built it (A, B done; C landed, not executed)
+## The plans that built it (A, B, C done)
 
 - **Plan A - the structure** (`archive/012_PLAN_RBA_2026-10-17/`, Fable, Writer, no Codex pass):
   RBA-001 `ROADMAP.md` template + setup seed + the `seed-file` op + Gate 3 opens the roadmap;
@@ -259,13 +268,14 @@ all fine" is not a handoff.
   `templates/briefs/`; RBB-002 `/pnp:review` readiness mode reduced, Steps 2a-2e deleted, the docs
   say the cycle once; RBB-003 release 0.3.0 - migration 0025, CHANGELOG with `Retires local rules:`,
   the overrides' retired bullets, the five stale pointers.
-- **Plan C** (`active/RBC/`, Opus, no passes): RBC-001 the measurement instruments (record skeleton,
+- **Plan C** (`archive/015_PLAN_RBC_2026-10-18/`, no passes; done 2026-10-18): RBC-001 the measurement instruments (record skeleton,
   approval row, the two start numbers) + chain-trace into REVIEW_CHECKLIST; RBC-002 the doctrine
   compaction (WORKFLOW, LOOP, REVIEW_CHECKLIST, the whole overrides; verified by a rule-homes table;
   PLAN_DOCT's drafts and `readiness/DOCT/` are input, deleted on the word); RBC-003 the root gitfile
   in the provenance walk + the header `Status:` line out of the byte cap.
 - Then ROADMAP § README (the public README, 0.3.1) - after RBC-002.
-- COO routing applied: A1-A3 Fable (check 1); B1, B2 Opus; B3 Fable (ruling 2); C1-C3 Opus.
+- COO routing applied: A1-A3 Fable (check 1); B1, B2 Opus; B3 Fable (ruling 2); C1, C2 Opus; C3
+  Fable (check 1, RBC/D-12).
 
 ## Inputs (data, not canon)
 
