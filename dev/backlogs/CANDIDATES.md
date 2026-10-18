@@ -7,6 +7,7 @@ rows that belong to no plan; ideas go to `ROADMAP.md`. Rows above this line stay
 - RBA: rulings / passes in `dev/backlogs/readiness/RBA/`, events in `dev/backlogs/archive/012_PLAN_RBA_2026-10-17/records/`
 - RBB: rulings / passes in `dev/backlogs/readiness/RBB/`, events in `dev/backlogs/archive/013_PLAN_RBB_2026-10-17/records/`
 - RBC: rulings / passes in `dev/backlogs/readiness/RBC/`, events in `dev/backlogs/archive/015_PLAN_RBC_2026-10-18/records/`
+- SCRATCH dropped (2026-10-18): the operator does not need it („маха се от роадмапа, не ми трябва"); the entry was the API key outside `.aiwf/` and a cleanup that never deletes an operator file
 
 Отворените кандидати (без ref) плюс трите дневника: Ruling ledger, Pass statistics, Event ledger.
 Решените кандидати са махнати при чистката на 2026-09-24 (операторска дума „изчистете го“).
