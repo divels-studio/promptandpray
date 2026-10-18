@@ -9,6 +9,13 @@ directory.
 
 ## Plans
 
+- CONS - readiness/CONS/, archive/005_PLAN_CONS_2026-09-21.md (single-file plan; readiness holds the parked arbiter brief)
+- RDY - readiness/RDY/, archive/006_PLAN_RDY_2026-09-30.md (single-file plan)
+- RGATE - readiness/RGATE/, archive/007_PLAN_RGATE_2026-10-02.md (single-file plan; its `ledger.md` is the old-cycle behavior ledger, not rulings)
+- DRAFTS - readiness/DRAFTS/, archive/008_PLAN_DRAFTS_2026-10-04.md (single-file plan; `ledger.md` as above)
+- LEAN - readiness/LEAN/, archive/009_PLAN_LEAN_2026-10-14.md (single-file plan; `ledger.md` as above)
+- STAB - readiness/STAB/, archive/010_PLAN_STAB_2026-10-15.md (single-file plan; `ledger.md` as above; `check-blocks.mjs` is its dead acceptance instrument, kept for the archive's citations)
+- PLB - readiness/PLB/, archive/011_PLAN_PLB_2026-10-16.md (single-file plan; `ledger.md` as above)
 - RBA - readiness/RBA/, archive/012_PLAN_RBA_2026-10-17/records/
 - RBB - readiness/RBB/, archive/013_PLAN_RBB_2026-10-17/records/
 - RBC - readiness/RBC/, archive/015_PLAN_RBC_2026-10-18/records/

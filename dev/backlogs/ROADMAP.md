@@ -40,7 +40,7 @@ leaves with one ledger row `<ABBR> dropped: <why>`.
 ## DOCSTAGE - the doctrine by stage, rendered into the project
 - Goal: a session loads only the doctrine of the stage it is in, whole, by construction of the entry command, and a project's local rules live next to the rule they modify
 - Why: „ние отваряйки сесия независимо от командата започваме работа и това изисква четене на доктрина ... доктрината да бъде разделена на секции" and „във всеки файл носещ някакви правила да има Local rules секция, така overrides остава само продуктови" (operator 2026-10-18, relayed by the arbitration session)
-- Scope: in - `docs/WORKFLOW.md`, `docs/LOOP.md`, `docs/REVIEW_CHECKLIST.md` split into stage files (always-on: identity + hard rules + gates, ~12k; `/pnp:work`: R1 + Routes + Commit; R2: the brief contract + LOOP roles, at dispatch; `/pnp:plan`: readiness + durable history + the checklist's plan section; `/pnp:review` and `/pnp:qa`: the checklist; `/pnp:mission`: the plan index, the ticket, its stage), each stage file RENDERED into the project under `.claude/aiwf-native/doctrine/` as a managed artifact with a `<!-- project additions -->` block holding the project's local rules for that stage (a rule written outside the block falls at update, by design); each skill names which files it reads IN FULL („a title is not the text" stands); the overrides document reduced to product truth; memory carries no rules; the LEDGER only pointers; adopting a local rule = moving the sentence into the payload template + push; retiring = a `Retires local rules:` line naming file and block; expected start: a chat-only session ~60k, a plan session ~85-95k (`/context`); out - any selective reading chosen by the COO (rejected 2026-10-18)
+- Scope: in - `docs/WORKFLOW.md`, `docs/LOOP.md`, `docs/REVIEW_CHECKLIST.md` split into stage files (always-on: identity + hard rules + gates, ~12k; `/pnp:work`: R1 + Routes + Commit; R2: the brief contract + LOOP roles, at dispatch; `/pnp:plan`: readiness + durable history + the checklist's plan section; `/pnp:review` and `/pnp:qa`: the checklist; `/pnp:mission`: the plan index, the ticket, its stage), each stage file RENDERED into the project under `.claude/aiwf-native/doctrine/` as a managed artifact with a `<!-- project additions -->` block holding the project's local rules for that stage (a rule written outside the block falls at update, by design); each skill names which files it reads IN FULL („a title is not the text" stands); the overrides document reduced to product truth; memory carries no rules; the LEDGER only pointers; adopting a local rule = moving the sentence into the payload template + push; retiring = a `Retires local rules:` line naming file and block; expected start: a chat-only session ~60k, a plan session ~85-95k (`/context`); the later compaction RBC deferred - `docs/OPERATOR_PROTOCOL.md`, `docs/SESSION_BRIEF_RECIPE.md`, the skills (`skills/review` above all) and the rendered templates [dev/backlogs/archive/015_PLAN_RBC_2026-10-18/DECISIONS.md:103-105]; out - any selective reading chosen by the COO (rejected 2026-10-18)
 - Size: M
 - Plans: none yet
 - Status: idea
@@ -51,6 +51,7 @@ leaves with one ledger row `<ABBR> dropped: <why>`.
 - Why: `dev/REBUILD.md` § First measured plan - GENERIC, levers (a) and (b); operator 2026-10-18: „да не забравим след това да запишем идеите в роадмапа" (relayed by the arbitration session)
 - Scope: in - `templates/briefs/research.md`, `templates/briefs/planner.md` (a Code Map of the touched surfaces only; sections by pointer; the planner reads a file only where it writes a Code Map row), the measured before/after on the next plan; runs BEFORE the first Silerax plan; out - the Writer brief
   - 2026-10 (candidate) - the Writer's handback carries one line "what in the plan was wrong or missing, which check saved work" - the prep cost measured against its benefit [dev/backlogs/CANDIDATES.md:64]
+  - 2026-10-17 RBB deferral - a `planner` agent type that Gate 1 lets write under `drafts/` (a hook change; today the planner runs as the writer type), judged after the first measured Silerax plan [dev/backlogs/archive/013_PLAN_RBB_2026-10-17/DECISIONS.md:128]
 - Size: S
 - Plans: none yet
 - Status: idea
@@ -113,6 +114,7 @@ Entries below were ported on 2026-10-18 from `dev/backlogs/CANDIDATES.md` (now h
   - 2026-10 - a product name is not a path: "write to <plugin> CANDIDATES" has two addresses - a Branch policy sentence (unsure) [dev/backlogs/CANDIDATES.md:818]
   - 2026-10 - two names for one set: "unplanned R2" vs "small R1 / non-durable R2" (unsure) [dev/backlogs/CANDIDATES.md:956]
   - 2026-10 - a doctrine sentence that enumerates the world is phrased as a checkable rule (unsure) [dev/backlogs/CANDIDATES.md:966]
+  - 2026-10-16 alignment, unconsumed by GENERIC - eight rules that live only in the three projects' overrides, with no payload home: a dialog only when the ticket cannot continue (Q2), the operator channel carries counts never file:line (Q3), ticket-end cleanup of `.aiwf/` (Q4/C-056), independent units run in parallel by default (C-002), a lint baseline (C-045), a run judged against a recorded baseline JSON (C-064), the brief line `E2E: yes/no - because` (C-067), sessions start from the repo root (C-071) - each homed in the payload or confirmed project-only [dev/PROJECT_OVERRIDES.md § Communication, § Test policy; `drafts/align-2026-10-16/align-decision.md` in git history before its deletion on 2026-10-18]
 - Size: S
 - Plans: none yet
 - Status: idea
@@ -148,6 +150,8 @@ Entries below were ported on 2026-10-18 from `dev/backlogs/CANDIDATES.md` (now h
 - Scope: in - the items below; out - the update engine
   - 2026-10 RENAME-001 - the full rename AIWF -> pnp across the payload (R3) [dev/backlogs/CANDIDATES.md:748]
   - 2026-10 - `ORCHESTRATOR.md` is not in `ownedDestinations` of `generate.mjs` [dev/backlogs/CANDIDATES.md:1062]
+  - 2026-10-17 RBB deferral - delete `--hash` from `scripts/engine/plan-gate.js` and the monolith readers (a code ticket promised after 0.3.0) [dev/backlogs/archive/013_PLAN_RBB_2026-10-17/DECISIONS.md:134]
+  - 2026-10-18 GENERIC deferral - rename the legacy fallback `PNP_CANDIDATES.md` -> `LEDGER.md` in the engine (guard, generate, selfcheck, the two suites) once every installation carries the key [dev/backlogs/archive/016_PLAN_GENERIC_2026-10-18/DECISIONS.md:170]
 - Size: S
 - Plans: none yet
 - Status: idea
