@@ -82,8 +82,8 @@ The rulings live in two places (`docs/WORKFLOW.md` § The ledger), read in this 
 2. **The rows that belong to no plan** - the `## Rows that belong to no plan` section of the ledger,
    the operator-owned page whose path is resolved by the rule
    `the configured paths.transferSurface, or <plansDir>/PNP_CANDIDATES.md when absent`
-   (`{{config.paths.transferSurface}}` when the key is set, `{{config.paths.plansDir}}/PNP_CANDIDATES.md`
-   when it is not). Read the section, not the whole file.
+   (`{{config.paths.transferSurface}}` when the key is set, the legacy fallback
+   `{{config.paths.plansDir}}/PNP_CANDIDATES.md` when it is not). Read the section, not the whole file.
 
 A brief with no ticket line reads the second place only.
 

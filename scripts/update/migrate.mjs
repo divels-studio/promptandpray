@@ -484,14 +484,17 @@ function planRerender(ctx, op) {
  * address it. Present -> kept byte for byte. The modes differ from a re-render on purpose: the write
  * is an exclusive create (applySeed), so even a file that appeared after planning is never replaced.
  * Refused, before anything is written: a `<plansDir>` the config cannot resolve, a target outside the
- * project, a target that is the transfer surface (configured or default - migration 0011's promise),
- * and a target that exists as something other than a regular file.
+ * project, an ABSENT target that is the transfer surface (configured or default - migration 0011's
+ * promise), and a target that exists as something other than a regular file. Existence is tested
+ * BEFORE the surface refusal: a target that is already there is `kept` - nothing written, nothing
+ * addressed - even when it is the surface (an installation whose key already names the seeded file).
  */
 function planSeedFile(ctx, op) {
   const target = resolveSeedTarget(ctx, op.target);
   if (seedTargetExists(ctx, op.target, target)) {
     return { op, mode: 'none', key: op.target, summary: `seed-file: ${target} (kept)` };
   }
+  refuseSurfaceSeed(ctx, op.target, target);
   return {
     op, mode: 'seed', key: op.target, target, content: ctx.render(op.template), write: true,
     summary: `seed-file: ${target} (created)`,
@@ -517,15 +520,19 @@ function resolveSeedTarget(ctx, raw) {
   if (inside === '' || path.isAbsolute(inside) || inside.split(/[\\/]/)[0] === '..') {
     throw new UpdateError(`seed-file "${raw}" resolves to "${rel}", which is not inside the project - nothing was written.`);
   }
-  const target = toPosix(inside);
-  const surface = toPosix(projectRel(resolveTransferSurface(paths)));
+  return toPosix(inside);
+}
+
+/** A seed that would CREATE this installation's transfer surface is refused (migration 0011). */
+function refuseSurfaceSeed(ctx, raw, target) {
+  const paths = isPlainObject(ctx.config.paths) ? ctx.config.paths : {};
+  const surface = toPosix(path.relative(ctx.projectRoot, path.resolve(ctx.projectRoot, resolveTransferSurface(paths))));
   if (sameRel(target, surface)) {
     throw new UpdateError(
       `seed-file "${raw}" resolves to "${target}", the transfer surface of this installation - no migration `
       + 'operation may ever address it (migration 0011), so nothing was written.',
     );
   }
-  return target;
 }
 
 /** Does the seed target exist? A regular file (or a previewed write) is "kept"; anything else stops. */

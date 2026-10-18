@@ -45,7 +45,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { existingPlansWarning, plansDirUnderScratchWarning, renderTemplate, templateContext } from './generate.mjs';
+import { applyPlan, existingPlansWarning, planInstall, plansDirUnderScratchWarning, renderTemplate, templateContext } from './generate.mjs';
 import { runInterview } from './interview.mjs';
 import { E2E_TRACE_NOTE } from './e2e-trace-note.mjs';
 // Read through the module NAMESPACE, not a named import: a helper this payload does not export yet
@@ -1578,36 +1578,48 @@ section('23 - an entrypoint reached through a symlinked payload still recognizes
 // ---------------------------------------------------------------------------
 section('24 - the transfer surface: seeded once at the resolved path, never managed, never rewritten');
 {
-  const SURFACE_TMPL = path.join(PLUGIN_ROOT, 'templates', 'PNP_CANDIDATES.md.tmpl');
+  const SURFACE_TMPL = path.join(PLUGIN_ROOT, 'templates', 'LEDGER.md.tmpl');
   const lf = (t) => String(t).replace(/\r\n/g, '\n');
   const SKELETON = lf(read(SURFACE_TMPL) || '');
   // A template that stopped existing would make every assertion below vacuous in the "seeded" half
   // and trivially true in the "untouched" half.
-  check('the payload ships templates/PNP_CANDIDATES.md.tmpl', SKELETON.length > 0, SURFACE_TMPL);
-  check('and the skeleton carries the three ledger sections', ['# Transfer surface',
-    '## Ruling ledger', '## Pass statistics', '## Event ledger'].every((h) => SKELETON.includes(h)),
+  check('the payload ships templates/LEDGER.md.tmpl', SKELETON.length > 0, SURFACE_TMPL);
+  check('and the skeleton carries the ledger title and its two sections', ['# Ledger',
+    '## Plans', '## Rows that belong to no plan'].every((h) => SKELETON.includes(h)),
   `${SKELETON.split('\n').length} lines`);
   check('and no Candidates section - it points at ROADMAP.md instead', !SKELETON.includes('## Candidates')
-    && SKELETON.includes('Candidates live in `ROADMAP.md` under the plans directory.'),
-  SKELETON.split('\n').filter((l) => l.includes('Candidates')).join(' | ').slice(0, 160));
+    && SKELETON.includes('Ideas live in `ROADMAP.md` under the plans'),
+  SKELETON.split('\n').filter((l) => l.includes('ROADMAP')).join(' | ').slice(0, 160));
+  // The skeleton IS the one the doctrine prints: the fenced block of docs/WORKFLOW.md § The ledger,
+  // byte for byte - two copies of one skeleton that could drift are one copy too many.
+  {
+    const wf = lf(read(path.join(PLUGIN_ROOT, 'docs', 'WORKFLOW.md')) || '');
+    const fence = wf.match(/```markdown\n(# Ledger\n[\s\S]*?\n)```/);
+    check('the skeleton is the fenced block of docs/WORKFLOW.md § The ledger, byte for byte',
+      !!fence && fence[1] === SKELETON, fence ? `${fence[1].length} vs ${SKELETON.length} bytes` : 'no fenced # Ledger block in WORKFLOW.md');
+  }
 
   // --- the DEFAULT path: no transferSurface key at all ----------------------
   {
     const p = project('surface-default');
     const r = install(p, baseAnswers());
     check('install with no transferSurface key exits 0', r.status === 0, why(r));
-    const DEFAULT_REL = 'docs/backlogs/PNP_CANDIDATES.md';
-    check(`the surface was seeded at <plansDir>/PNP_CANDIDATES.md (${DEFAULT_REL})`, exists(at(p, DEFAULT_REL)));
+    const DEFAULT_REL = 'docs/backlogs/LEDGER.md';
+    check(`the surface was seeded at <plansDir>/LEDGER.md (${DEFAULT_REL})`, exists(at(p, DEFAULT_REL)));
     check('with exactly the payload skeleton', lf(read(at(p, DEFAULT_REL))) === SKELETON,
       `${String(lf(read(at(p, DEFAULT_REL)))).length} vs ${SKELETON.length} bytes`);
+    check('and nothing was seeded at the legacy fallback <plansDir>/PNP_CANDIDATES.md',
+      !exists(at(p, 'docs/backlogs/PNP_CANDIDATES.md')));
     // THE RISK THRESHOLD OF THE TICKET THAT INTRODUCED IT, asserted on the setup side: a record here
     // would make the file a managed artifact, and the next /pnp:update could re-render the
     // operator's own notes.
     const regions = ((readJson(at(p, CONFIG_REL)) || {})._aiwf || {}).managedRegions || {};
     check('and NO bookkeeping record was written for it (it is unmanaged by design)',
       !Object.prototype.hasOwnProperty.call(regions, DEFAULT_REL), Object.keys(regions).join(', '));
-    check('the config carries no transferSurface key either (nothing is defaulted into it)',
-      !Object.prototype.hasOwnProperty.call((readJson(at(p, CONFIG_REL)) || {}).paths || {}, 'transferSurface'),
+    // FLIPPED by D-09: setup now WRITES the key, so no install relies on the legacy fallback - and it
+    // writes exactly the path it seeded, nothing else.
+    check('the config carries the transferSurface key setup wrote: exactly <plansDir>/LEDGER.md',
+      ((readJson(at(p, CONFIG_REL)) || {}).paths || {}).transferSurface === DEFAULT_REL,
       JSON.stringify((readJson(at(p, CONFIG_REL)) || {}).paths));
 
     // --- a repeated run is a ZERO diff ------------------------------------
@@ -1616,7 +1628,7 @@ section('24 - the transfer surface: seeded once at the resolved path, never mana
     check('a second install over the same project exits 0', again.status === 0, why(again));
     check('and says the surface is already the operator\'s', again.out.includes(DEFAULT_REL)
       && again.out.includes('never rewrites the transfer surface'),
-    again.out.split('\n').filter((l) => l.includes('PNP_CANDIDATES')).join(' | ').slice(0, 200));
+    again.out.split('\n').filter((l) => l.includes('LEDGER')).join(' | ').slice(0, 200));
     check('the repeated run is a ZERO diff over the whole project', diffSnapshots(before, snapshot(p)).length === 0,
       diffSnapshots(before, snapshot(p)).join(', '));
   }
@@ -1632,8 +1644,8 @@ section('24 - the transfer surface: seeded once at the resolved path, never mana
     check(`the surface was seeded at the CONFIGURED path (${CONFIGURED_REL}), directory created`,
       exists(at(p, CONFIGURED_REL)));
     check('with exactly the payload skeleton', lf(read(at(p, CONFIGURED_REL))) === SKELETON);
-    check('and nothing was seeded at the default path instead',
-      !exists(at(p, 'docs/backlogs/PNP_CANDIDATES.md')));
+    check('and nothing was seeded at the default path (or the legacy fallback) instead',
+      !exists(at(p, 'docs/backlogs/LEDGER.md')) && !exists(at(p, 'docs/backlogs/PNP_CANDIDATES.md')));
     check('the key survived into the written config', ((readJson(at(p, CONFIG_REL)) || {}).paths || {}).transferSurface === CONFIGURED_REL,
       JSON.stringify((readJson(at(p, CONFIG_REL)) || {}).paths));
   }
@@ -1641,17 +1653,53 @@ section('24 - the transfer surface: seeded once at the resolved path, never mana
   // --- an EXISTING file is left byte for byte -------------------------------
   {
     const p = project('surface-existing');
-    const MINE = '# My own candidates page\n\nNothing here came from the plugin.\n';
+    const MINE = '# My own ledger page\n\nNothing here came from the plugin.\n';
     fs.mkdirSync(at(p, 'docs/backlogs'), { recursive: true });
-    fs.writeFileSync(at(p, 'docs/backlogs/PNP_CANDIDATES.md'), MINE, 'utf8');
+    fs.writeFileSync(at(p, 'docs/backlogs/LEDGER.md'), MINE, 'utf8');
     const r = install(p, baseAnswers());
     check('install over an existing surface exits 0', r.status === 0, why(r));
     check('the operator\'s file is untouched, byte for byte',
-      read(at(p, 'docs/backlogs/PNP_CANDIDATES.md')) === MINE,
-      JSON.stringify(String(read(at(p, 'docs/backlogs/PNP_CANDIDATES.md'))).slice(0, 60)));
+      read(at(p, 'docs/backlogs/LEDGER.md')) === MINE,
+      JSON.stringify(String(read(at(p, 'docs/backlogs/LEDGER.md'))).slice(0, 60)));
     check('and the run SAYS so rather than adopting it in silence',
       r.out.includes('never rewrites the transfer surface'),
-      r.out.split('\n').filter((l) => l.includes('PNP_CANDIDATES')).join(' | ').slice(0, 200));
+      r.out.split('\n').filter((l) => l.includes('LEDGER')).join(' | ').slice(0, 200));
+  }
+
+  // --- a file that APPEARS between the plan and the apply is kept ------------
+  // The seed is an exclusive create (`wx`): planInstall saw no file and planned the seed, the file
+  // turned up before applyPlan ran, and the operator's bytes must win. In-process on purpose - the
+  // window between the two calls cannot be hit from outside a single CLI run.
+  {
+    const p = project('surface-race');
+    const LEDGER_REL = 'docs/backlogs/LEDGER.md';
+    const plan = planInstall({ pluginRoot: PLUGIN_ROOT, projectRoot: p, answers: baseAnswers() });
+    const planned = plan.actions.find((a) => a.kind === 'write' && a.rel === LEDGER_REL);
+    check('race: the plan has no blockers and plans the ledger seed as an exclusive write',
+      plan.blockers.length === 0 && !!planned && planned.exclusive === true,
+      plan.blockers.join(' | ') || JSON.stringify(planned ? { rel: planned.rel, exclusive: planned.exclusive } : null));
+    const MINE = '# Written while setup was planning\n';
+    fs.mkdirSync(at(p, 'docs/backlogs'), { recursive: true });
+    fs.writeFileSync(at(p, LEDGER_REL), MINE, 'utf8');
+    let applied = null;
+    let thrown = null;
+    try { applied = applyPlan(plan); } catch (e) { thrown = e; }
+    check('race: the apply does not fail on the file that appeared', thrown === null, thrown ? thrown.message : '');
+    check('race: the file that appeared is kept byte for byte', read(at(p, LEDGER_REL)) === MINE,
+      JSON.stringify(String(read(at(p, LEDGER_REL))).slice(0, 60)));
+    check('race: and the apply REPORTS it as kept, not as applied',
+      !!applied && applied.kept.some((a) => a.rel === LEDGER_REL) && !applied.applied.some((a) => a.rel === LEDGER_REL),
+      applied ? `kept: ${applied.kept.map((a) => a.rel).join(', ')}` : 'no result');
+    check('race: the rest of the install still landed (the config with its key)',
+      ((readJson(at(p, CONFIG_REL)) || {}).paths || {}).transferSurface === LEDGER_REL);
+    // CONTROL: the same plan shape on a project where nothing appears really writes the seed - so a
+    // "kept" above is the exclusive create at work, not an apply that skips the seed always.
+    const c = project('surface-race-control');
+    const cplan = planInstall({ pluginRoot: PLUGIN_ROOT, projectRoot: c, answers: baseAnswers() });
+    const capplied = applyPlan(cplan);
+    check('race control: with no file in the way the seed is applied and is the skeleton',
+      capplied.applied.some((a) => a.rel === LEDGER_REL) && capplied.kept.length === 0
+      && lf(read(at(c, LEDGER_REL))) === SKELETON);
   }
 
   // --- containment: a configured path that escapes the project --------------
@@ -1796,7 +1844,7 @@ section('24 - the transfer surface: seeded once at the resolved path, never mana
   // --- the resolved surface is an existing DIRECTORY -------------------------
   {
     const p = project('surface-is-a-directory');
-    fs.mkdirSync(at(p, 'docs/backlogs/PNP_CANDIDATES.md'), { recursive: true });
+    fs.mkdirSync(at(p, 'docs/backlogs/LEDGER.md'), { recursive: true });
     const before = snapshot(p); // snapshot records FILES, so an empty directory reads as {}
     const r = install(p, baseAnswers());
     check('setup REFUSES when the resolved surface is an existing directory, exit 1', r.status === 1, why(r, true));
@@ -1805,7 +1853,7 @@ section('24 - the transfer surface: seeded once at the resolved path, never mana
       r.out.trim().split('\n').slice(-3).join(' | ').slice(0, 220));
     check('and wrote NOTHING', diffSnapshots(before, snapshot(p)).length === 0, diffSnapshots(before, snapshot(p)).join(', '));
     check('the operator\'s directory is still there, untouched',
-      fs.statSync(at(p, 'docs/backlogs/PNP_CANDIDATES.md')).isDirectory());
+      fs.statSync(at(p, 'docs/backlogs/LEDGER.md')).isDirectory());
   }
 
   // --- containment through the REAL filesystem, not the string ---------------
@@ -1857,7 +1905,7 @@ section('24 - the transfer surface: seeded once at the resolved path, never mana
       }
 
       // AND THE DEFAULT PATH, which is the half a configured-surface test cannot reach: with
-      // `plansDir` itself a junction, `<plansDir>/PNP_CANDIDATES.md` escapes without anyone
+      // `plansDir` itself a junction, `<plansDir>/LEDGER.md` escapes without anyone
       // configuring a surface at all.
       const escDefault = makeEscape('surface-escape-default');
       if (escDefault.made) {
@@ -1866,8 +1914,9 @@ section('24 - the transfer surface: seeded once at the resolved path, never mana
         }));
         check('setup refuses the DEFAULT surface when plansDir itself is a junction out of the project, exit 1',
           d.status === 1, why(d, true));
-        check('and the message says it is the default rather than a configured path',
-          d.out.includes('the default transfer surface'), d.out.trim().split('\n').slice(-3).join(' | ').slice(0, 240));
+        check('and the message says it is the default rather than a configured path (<plansDir>/LEDGER.md)',
+          d.out.includes('the default transfer surface') && d.out.includes('linked/LEDGER.md'),
+          d.out.trim().split('\n').slice(-3).join(' | ').slice(0, 240));
         check('and not even the plans directories were created outside the project',
           fs.readdirSync(escDefault.target).length === 0, fs.readdirSync(escDefault.target).join(', '));
       }

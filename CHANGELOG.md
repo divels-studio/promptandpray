@@ -4,6 +4,54 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.3.1] - 2026-10-18
+
+The transfer surface becomes the ledger - a pointer index - and the generic rules projects kept in
+their overrides document live in the payload doctrine, one sentence each.
+
+### Added
+
+- **The ledger and migration `0026_ledger` (GENERIC-003)** - `templates/LEDGER.md.tmpl` (one
+  paragraph, `## Plans`, `## Rows that belong to no plan`) replaces `PNP_CANDIDATES.md.tmpl`;
+  `/pnp:setup` seeds `<plansDir>/LEDGER.md` with an exclusive create and writes
+  `paths.transferSurface` itself, so `<plansDir>/PNP_CANDIDATES.md` is a legacy fallback only.
+  - `0026` seeds the ledger, asks for `paths.transferSurface` where the key is absent (default
+    `docs/backlogs/LEDGER.md`), and re-renders the `CLAUDE.md` region and `ORCHESTRATOR.md`.
+  - A `seed-file` whose target already exists is `kept` even when it is the transfer surface; an
+    absent surface is still refused (the 0011 promise).
+- **`## Where things are written` in the managed `CLAUDE.md` region (GENERIC-003)** - the home of an
+  idea, a plan, readiness, a closed ticket and its events, the plan-less rows, doctrine and a
+  project rule.
+- **43 generic rules homed in the payload (GENERIC-001)** - one sentence each in `WORKFLOW`, `LOOP`,
+  `REVIEW_CHECKLIST` and the Codex recipe; the planner brief's COO line names the model.
+
+### Changed
+
+- **The ledger, the roadmap and the skills prose (GENERIC-002)** - `WORKFLOW` § The transfer surface
+  becomes § The ledger: one line per plan under `## Plans`, a plan's ruling and pass rows in
+  `readiness/<ABBR>/ledger.md`, a ticket's events in its record's `## Events`; the roadmap holds
+  only live entries. `/pnp:arbiter` reads the parked brief first, then the plan's `ledger.md`, then
+  the plan-less rows; `/pnp:plan` gains a doctrine preflight; `/pnp:work` and `/pnp:mission` stop
+  printing the audit table.
+- **The event ledger in `ORCHESTRATOR.md` (GENERIC-003)** - a ticket's event row goes into its
+  `records/<REF>.md`, a plan-less one into the ledger; it points at `WORKFLOW` § The ledger.
+
+Retires local rules: no retelling; never a whole plan in front of the operator; paid passes stated
+and priced; informal address; no dispatch on precedent; resource checks are the coo's own; the gate
+is not prompted; a dead paid pass waits; analyse and decide; on an objection stop the tools; a
+ticket born mid-work; a yes covers only the asked action; the coo runs scripts itself; out-of-scope
+findings; dialogs only at the gates; never pipe a test run through tail; a documentation claim is a
+hypothesis; candidates registered where
+they are born; the bump by hand, the tag its own word; the resume memory is state; a repo copy of a
+live artifact; a file count is not a runner count; a heavy ticket in a fresh session; a session
+reads its own ticket; no session brief when the state is durable; readiness only through the plan
+skill; the auditor never below the author; a rule record carries a marker; english everywhere in the
+tree; the coo line names the model; worktree and memory-directory removal are destructive; the
+diff-review file; the writer runs only the tests it adds; no cd prefix; surgical edits over
+rewrites; long commands run in the background; auto mode and the config files; the writer's reply
+is short; n surfaces, n asserts; an entity's references; a paid pass is a quota start/stop pair;
+resume with an explicit id.
+
 ## [0.3.0] - 2026-10-17
 
 The planning cycle is one skill, and the doctrine states it once: research, decisions, a planner, a

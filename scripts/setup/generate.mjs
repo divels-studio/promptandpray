@@ -671,13 +671,17 @@ const samePath = (a, b) => (process.platform === 'win32' ? a.toLowerCase() === b
  * `paths.transferSurface` has no schema default on purpose - a default would put the key into every
  * fresh config and invite the managed-artifact treatment this file must never get - so "where is it"
  * is answered here and quoted by the doctrine in the same words: the configured
- * `paths.transferSurface`, or `<plansDir>/PNP_CANDIDATES.md` when absent.
+ * `paths.transferSurface`, or `<plansDir>/PNP_CANDIDATES.md` when absent. Setup WRITES the key on
+ * every install that does not carry one (`<plansDir>/LEDGER.md`, the ledger - see planInstall), so
+ * the fallback is LEGACY: it answers only for an installation whose config predates the key.
  *
  * Returns a project-relative POSIX path. The caller supplies the whole `paths` block, so a config
  * that carries neither key resolves against the schema's own plansDir default having already been
  * merged in - this function does not invent one.
  */
 export const TRANSFER_SURFACE_BASENAME = 'PNP_CANDIDATES.md';
+/** The name setup gives the ledger when it writes the key itself: `<plansDir>/LEDGER.md`. */
+export const LEDGER_BASENAME = 'LEDGER.md';
 export function resolveTransferSurface(paths) {
   const configured = paths && paths.transferSurface;
   if (typeof configured === 'string' && configured.trim() !== '') return toPosix(configured);
@@ -845,6 +849,18 @@ export function planInstall({
   // `paths.changesDir` is not judged: nothing reads it since the update stopped writing CHANGES
   // reports, so an old value is carried over as it is and ignored.
 
+  // THE LEDGER KEY, written by setup itself. With no `paths.transferSurface` in the answers (or the
+  // config carried over), setup puts `<plansDir>/LEDGER.md` into the config it writes, so no install
+  // relies on the legacy `<plansDir>/PNP_CANDIDATES.md` fallback of resolveTransferSurface. Set AFTER
+  // the lexical containment loop above on purpose: the value is `<plansDir>` plus a basename, so a
+  // plansDir outside the project is already refused under its own key, and the judgement below still
+  // reports a path setup chose as "the default transfer surface" rather than as one the operator
+  // configured. A copy of `paths`, never an edit of an object the caller handed in.
+  const surfaceDefaulted = !(typeof merged.paths.transferSurface === 'string' && merged.paths.transferSurface.trim() !== '');
+  if (surfaceDefaulted) {
+    merged.paths = { ...merged.paths, transferSurface: toPosix(path.join(String(merged.paths.plansDir || ''), LEDGER_BASENAME)) };
+  }
+
   // THE TRANSFER SURFACE'S DESTINATION, judged HERE - before a single write is planned, and always,
   // whether the path was configured or defaulted. Three ways the seed can go wrong, and all three end
   // in a REFUSAL rather than an adoption: the surface is UNMANAGED, so there is no bookkeeping entry
@@ -890,10 +906,9 @@ export function planInstall({
     { rel: path.dirname(merged.paths.overridesDoc), kind: 'dir', label: 'the directory the overrides document lives in' },
   ];
   {
-    const configured = typeof merged.paths.transferSurface === 'string' && merged.paths.transferSurface.trim() !== '';
-    const where = configured
-      ? `paths.transferSurface ("${merged.paths.transferSurface}")`
-      : `the default transfer surface "${transferSurfaceRel}" (<plansDir>/${TRANSFER_SURFACE_BASENAME}, because paths.transferSurface is not set)`;
+    const where = surfaceDefaulted
+      ? `the default transfer surface "${transferSurfaceRel}" (<plansDir>/${LEDGER_BASENAME}, because paths.transferSurface is not set - setup writes it)`
+      : `paths.transferSurface ("${merged.paths.transferSurface}")`;
     const realRoot = canonicalPath(projectRoot);
     const realSurface = canonicalPath(transferSurfaceFile);
     if (!isInsideDir(realRoot, realSurface)) {
@@ -1163,14 +1178,16 @@ export function planInstall({
   // `transferSurfaceRel` / `transferSurfaceFile` were resolved and JUDGED in step 1 - containment
   // through the real filesystem, no collision with a destination setup owns, and not an existing
   // non-file. Anything that reaches here has already survived all three, so `existsSync` below can
-  // only be answering about a regular file.
+  // only be answering about a regular file. The seed is the ledger skeleton (`LEDGER.md.tmpl`), and
+  // its write is an EXCLUSIVE create (`exclusive: true`, applyPlan): a file that appears between this
+  // plan and the apply is kept and reported, never overwritten.
   if (fs.existsSync(transferSurfaceFile)) {
     notes.push(`${transferSurfaceRel} already exists and is yours - setup never rewrites the transfer surface.`);
   } else {
     actions.push({
-      kind: 'write', file: transferSurfaceFile, rel: transferSurfaceRel,
+      kind: 'write', file: transferSurfaceFile, rel: transferSurfaceRel, exclusive: true,
       why: 'transfer surface seeded once; unmanaged, never rewritten',
-      content: renderTemplate(readTemplate(pluginRoot, 'PNP_CANDIDATES.md.tmpl'), context),
+      content: renderTemplate(readTemplate(pluginRoot, 'LEDGER.md.tmpl'), context),
     });
   }
 
@@ -1319,8 +1336,14 @@ export function planInstall({
 // ---------------------------------------------------------------------------
 // Applying
 // ---------------------------------------------------------------------------
-function applyPlan(plan) {
+/**
+ * Applies a plan from planInstall. Returns `{ applied, kept }`: `kept` lists the EXCLUSIVE writes (the
+ * transfer surface's seed) whose file appeared after the plan was made - each was left exactly as it
+ * is, nothing written to it, as applySeed does for a migration's `seed-file`.
+ */
+export function applyPlan(plan) {
   const applied = [];
+  const kept = [];
   // Directories first: a write into a directory that does not exist yet must not depend on order.
   for (const action of plan.actions) {
     if (action.kind !== 'mkdir') continue;
@@ -1333,13 +1356,25 @@ function applyPlan(plan) {
       // A VERBATIM action carries bytes that are already exactly what must land: the operator's own
       // text spliced around a region encoded in that file's convention. Normalising it here would
       // rewrite every line ending outside the markers - the very thing the contract forbids.
-      fs.writeFileSync(action.file, action.verbatim ? action.content : lf(action.content), 'utf8');
+      const text = action.verbatim ? action.content : lf(action.content);
+      if (action.exclusive) {
+        // An exclusive create (`wx`): a file that exists now - whenever it appeared - is never
+        // replaced. EEXIST is reported as kept; any other failure is a real error.
+        try {
+          fs.writeFileSync(action.file, text, { encoding: 'utf8', flag: 'wx' });
+        } catch (e) {
+          if (e && e.code === 'EEXIST') { kept.push(action); continue; }
+          throw e;
+        }
+      } else {
+        fs.writeFileSync(action.file, text, 'utf8');
+      }
     } else if (action.kind === 'remove') {
       fs.rmSync(action.file, { force: true });
     } else continue;
     applied.push(action);
   }
-  return applied;
+  return { applied, kept };
 }
 
 export function readMemorySeeds(pluginRoot) {
@@ -1355,9 +1390,9 @@ export function readMemorySeeds(pluginRoot) {
  */
 export function generateProject(options) {
   const plan = planInstall(options);
-  if (plan.blockers.length || options.dryRun) return { ...plan, applied: [], blocked: plan.blockers.length > 0 };
-  const applied = applyPlan(plan);
-  return { ...plan, applied, blocked: false };
+  if (plan.blockers.length || options.dryRun) return { ...plan, applied: [], kept: [], blocked: plan.blockers.length > 0 };
+  const { applied, kept } = applyPlan(plan);
+  return { ...plan, applied, kept, blocked: false };
 }
 
 export function formatReport(report, { projectRoot, seeds = [] }) {
@@ -1375,6 +1410,9 @@ export function formatReport(report, { projectRoot, seeds = [] }) {
     for (const a of changes) lines.push(`  ${a.kind.padEnd(6)} ${toPosix(a.rel)}  (${a.why})`);
   }
   for (const n of report.notes) lines.push(`  note   ${n}`);
+  for (const a of report.kept || []) {
+    lines.push(`  note   ${toPosix(a.rel)} appeared after setup planned it and is yours - kept, nothing was written to it; setup never rewrites the transfer surface.`);
+  }
   // Information, not a question: a file this installation had no record of was (or, in a dry run,
   // would be) replaced by the render. The project additions block is where text of yours survives.
   for (const key of report.overwrote || []) lines.push(`overwrote: ${key}`);

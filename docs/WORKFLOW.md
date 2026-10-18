@@ -543,7 +543,11 @@ under the same grammar: `git mv <plansDir>/active/<ABBR>/
 The plan's line under the ledger's `## Plans` is rewritten to the archive path, and the archiving of
 the last plan of a roadmap entry takes the entry out of `<plansDir>/ROADMAP.md`: the roadmap holds
 only live entries, and an idea dropped before its plans are done leaves it with one ledger row
-`<ABBR> dropped: <why>`. Archiving also greps the plan's process sections for rule-class points without a pointer row -
+`<ABBR> dropped: <why>`. **The roadmap is written at exactly three events and never otherwise:**
+(1) an entry is born -> `Status: idea` (`researching` when `/pnp:plan` dispatches the research
+agents); (2) a plan lands in `active/` -> `Plans:` gains it, `Status: planned`, and the first
+ticket's dispatch - the moment the COO writes `.aiwf/route-state.json` - sets `Status: in
+progress`; (3) the last plan under the entry is archived -> the entry leaves the roadmap. Archiving also greps the plan's process sections for rule-class points without a pointer row -
 fail-capable, with a positive control (the grep run once over a plan known to carry such a point,
 seen to report) - the backstop under guard (h). The trigger is the checkable fact - every ticket
 closed, every verify green. Archiving is bookkeeping, reversible with one `git mv` back, and NOT
@@ -601,16 +605,18 @@ later iteration - and the check is a mechanical diff or size comparison against 
 ### The ledger
 
 Beside the plans an installation keeps one operator-owned page, the **ledger** - the transfer
-surface of the config - at the configured `paths.transferSurface`, or at
+surface of the config - at the configured `paths.transferSurface`, or at the legacy fallback
 `<plansDir>/PNP_CANDIDATES.md` when that key is absent. It is a pointer index and nothing else: one
 line per plan under `## Plans`, pointing at the plan's `readiness/<ABBR>/` and its `records/`, plus
 the rows that belong to no plan. A plan's ruling and pass-statistics rows live in
 `<plansDir>/readiness/<ABBR>/ledger.md`, a ticket's events in its record's `## Events`; the ledger
 keeps only the ruling, the pass, the event or the dropped idea no plan owns, one line each with a
 pointer rather than a retelling. `/pnp:plan` writes a plan's `## Plans` line at the landing and the
-archiving rewrites it (§ Durable development history). `/pnp:setup` seeds the page once from
-`templates/PNP_CANDIDATES.md.tmpl` and never writes it again, and an installation older than the key
-creates it by hand from exactly this skeleton:
+archiving rewrites it (§ Durable development history). `/pnp:setup` writes the key
+(`<plansDir>/LEDGER.md` when the answers carry none), seeds the page once from
+`templates/LEDGER.md.tmpl` and never writes it again; an installation older than the key receives
+it from `/pnp:update` (migration `0026_ledger`, the same seed, kept when the file exists). The
+skeleton:
 
 ```markdown
 # Ledger

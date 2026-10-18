@@ -17,7 +17,7 @@ in whatever document was open at the time, which is the same as not keeping them
   would put it into every fresh config and invite exactly the managed-artifact treatment this file
   must never get. The resolution is a rule, stated in the same words by the schema, by
   `scripts/setup/generate.mjs` and by `docs/WORKFLOW.md`.
-- **Who writes it.** `/pnp:setup`, once, from `templates/PNP_CANDIDATES.md.tmpl`, and only when
+- **Who writes it.** `/pnp:setup`, once, from `templates/LEDGER.md.tmpl` (named `PNP_CANDIDATES.md.tmpl` until 0.3.1), and only when
   nothing is there: a file that already exists is left byte for byte as it is, and reported as
   yours. That is the same one-time mechanism the overrides document has had since `0001_initial`.
 - **What never happens to it.** No `_aiwf.managedRegions` record, no `--resolve` address, no

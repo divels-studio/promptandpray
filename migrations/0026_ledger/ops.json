@@ -1,0 +1,10 @@
+{
+  "migration": "0026_ledger",
+  "targetPluginVersion": "0.3.1",
+  "operations": [
+    { "op": "seed-file", "template": "templates/LEDGER.md.tmpl", "target": "<plansDir>/LEDGER.md" },
+    { "op": "add-config-key", "path": "paths.transferSurface", "default": "docs/backlogs/LEDGER.md", "askOperator": true, "question": "Where does this project's ledger live? The answer becomes paths.transferSurface; the file this update just seeded is <plansDir>/LEDGER.md (with the default plansDir: docs/backlogs/LEDGER.md). Name a different path only if you keep the ledger elsewhere." },
+    { "op": "rerender-managed-region", "file": "CLAUDE.md", "region": "aiwf-core", "template": "templates/CLAUDE.md.tmpl#aiwf-core" },
+    { "op": "rerender-managed-region", "file": ".claude/aiwf-native/ORCHESTRATOR.md", "region": null, "template": "templates/ORCHESTRATOR.md.tmpl" }
+  ]
+}

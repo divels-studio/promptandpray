@@ -142,12 +142,12 @@ decision contract.
 **Gate 3** (the route-state write guard, INSIDE the Gate 1 hook file - three hook files carry four
 gates) applies while `<projectDir>/.aiwf/route-state.json` names an R2/R3 route: a main-session
 Edit/Write is allowed only under `docs/**`, `.aiwf/**` and root-level `*.md`, plus the transfer
-surface (`paths.transferSurface`, else `<plansDir>/PNP_CANDIDATES.md`; one contained `.md` file not
-under `.claude`) and the roadmap `<plansDir>/ROADMAP.md` under the same rules; anything else is
-denied with a message naming the open ticket. No state file, or the cleared `{}`, means the guard is
-invisible; the Writer is never gated by it. A present-but-unusable state (a route that is not R2/R3,
-a non-string route, malformed JSON) denies by design, never opens the transfer surface or the
-roadmap, and is self-healing because `.aiwf/**` stays writable. A `paths.plansDir` under neither
+surface (`paths.transferSurface`, else the legacy `<plansDir>/PNP_CANDIDATES.md`; one contained
+`.md` file not under `.claude`) and the roadmap `<plansDir>/ROADMAP.md` under the same rules; anything
+else is denied with a message naming the open ticket. No state file, or the cleared `{}`, means the
+guard is invisible; the Writer is never gated by it. A present-but-unusable state (a route that is
+not R2/R3, a non-string route, malformed JSON) denies by design, never opens the transfer surface or
+the roadmap, and is self-healing because `.aiwf/**` stays writable. A `paths.plansDir` under neither
 `docs/` nor `.aiwf/` puts the plan's own draft and readiness files behind the guard while a route is
 open (the transfer surface and the roadmap excepted), so `/pnp:plan` runs while no route is open.
 The paths and the state-file location are fixed. It covers the Edit/Write tool class only - shell

@@ -33,7 +33,9 @@
  *  13. the audit table migration, replayed from the shipped ops;
  *  14. a note prints its text, docRefs and supersedes ids;
  *  15. createIfAbsent is accepted and changes nothing (a render always creates), and the validator
- *      rules on the field still hold;
+ *      rules on the field still hold; 15b seed-file; 15c the shipped ledger migration (0026) - the
+ *      ledger created or kept, an older key kept, the re-rendered region, a seed onto an EXISTING
+ *      surface kept rather than refused;
  *  16. the example bump is numbered against the payload it is built into;
  *  17. a stale $schema is refreshed;
  *  18. LAST: the self-check is the update's own last step (PASS, skipped, unrunnable, RED, crashed).
@@ -1600,6 +1602,135 @@ section('15b - seed-file: created when absent, kept byte for byte when present, 
     }
     const missing = validateOp({ op: 'seed-file', template: SEED_TEMPLATE }, AT, PLUGIN_ROOT);
     check('[seed-21] the validator refuses a missing target', missing.some((e) => e.includes('missing the required field "target"')), missing.join(' | '));
+  }
+}
+
+// ---------------------------------------------------------------------------
+section('15c - the ledger migration: the shipped 0026 seeds <plansDir>/LEDGER.md, keeps what is there, and re-renders the two files');
+{
+  // The REAL operations of the shipped 0026, replayed as a fixture migration so this suite keeps its
+  // own manifest numbering (as section 13 does for 0004).
+  const realOps = readJson(path.join(PLUGIN_ROOT, 'migrations', '0026_ledger', 'ops.json'));
+  const ops = (realOps && Array.isArray(realOps.operations)) ? realOps.operations : [];
+  check('[ledger-0] the shipped 0026 carries four operations in the decided order: seed, key, CLAUDE.md region, ORCHESTRATOR.md',
+    ops.length === 4
+    && ops[0].op === 'seed-file' && ops[0].template === 'templates/LEDGER.md.tmpl' && ops[0].target === '<plansDir>/LEDGER.md'
+    && ops[1].op === 'add-config-key' && ops[1].path === 'paths.transferSurface' && ops[1].default === 'docs/backlogs/LEDGER.md'
+    && ops[1].askOperator === true && typeof ops[1].question === 'string' && ops[1].question.includes('<plansDir>/LEDGER.md')
+    && ops[2].op === 'rerender-managed-region' && ops[2].file === 'CLAUDE.md' && ops[2].region === 'aiwf-core'
+    && ops[3].op === 'rerender-managed-region' && ops[3].file === ORCH_REL && ops[3].region === null,
+  () => JSON.stringify(ops, null, 2));
+
+  const payload = makePayload('ledger', { version: '0.2.0', migrations: [{ id: '0002_ledger', version: '0.2.0', ops }] });
+  const LEDGER_REL = 'docs/backlogs/LEDGER.md';
+  const OLD_REL = 'docs/backlogs/CANDIDATES.md';
+  const TEMPLATE_TEXT = (read(at(PLUGIN_ROOT, 'templates/LEDGER.md.tmpl')) || '').replace(/\r\n/g, '\n');
+  const surfaceKey = (p) => ((readJson(at(p, CONFIG_REL)) || {}).paths || {}).transferSurface;
+  const noLedgerRecord = (p) => !Object.keys(bookkeeping(p).managedRegions || {}).some((k) => /LEDGER/i.test(k));
+  /** Points the installed config's transfer surface somewhere (or nowhere, with `null`). */
+  const setSurfaceKey = (p, value) => {
+    const cfg = readJson(at(p, CONFIG_REL));
+    if (value === null) delete cfg.paths.transferSurface; else cfg.paths.transferSurface = value;
+    writeJson(at(p, CONFIG_REL), cfg);
+  };
+  const MINE_OLD = '# Candidates\r\n\r\n| 2026-01-01 | ruling | an old row, CRLF and all | x |\r\n';
+  const MINE_LEDGER = '# Ledger\n\nMy own text, written before the update.\n';
+
+  // --- t2: the key names <plansDir>/CANDIDATES.md -> LEDGER.md is created, the old page and the key stay
+  {
+    const p = project('ledger-old-key');
+    check('install exits 0', install(p).status === 0);
+    setSurfaceKey(p, OLD_REL);
+    fs.writeFileSync(at(p, OLD_REL), MINE_OLD, 'utf8');
+    fs.rmSync(at(p, LEDGER_REL), { force: true });
+    const a = update(p, ['--apply'], { payload });
+    check('[ledger-1] key on CANDIDATES.md: exit 0, and "seed-file: <plansDir>/LEDGER.md (created)"',
+      a.status === 0 && a.out.includes(`0002_ledger[0] seed-file: ${LEDGER_REL} (created)`), why(a));
+    check('[ledger-2] LEDGER.md is the template, byte for byte', read(at(p, LEDGER_REL)) === TEMPLATE_TEXT,
+      `${String(read(at(p, LEDGER_REL))).length} vs ${TEMPLATE_TEXT.length} bytes`);
+    check('[ledger-3] CANDIDATES.md is untouched, byte for byte', fs.readFileSync(at(p, OLD_REL), 'utf8') === MINE_OLD,
+      JSON.stringify(String(read(at(p, OLD_REL))).slice(0, 60)));
+    check('[ledger-4] and the key still names CANDIDATES.md - the add-config-key op skipped a present key',
+      surfaceKey(p) === OLD_REL && a.out.includes('config key paths.transferSurface already present'), why(a));
+    check('[ledger-5] no managedRegions record for the ledger, and the migration is stamped',
+      noLedgerRecord(p) && bookkeeping(p).lastMigrationApplied === '0002_ledger', String(bookkeeping(p).lastMigrationApplied));
+  }
+  // --- t2b: no key at all (the legacy fallback) -> LEDGER.md is created and the key is ASKED ------------
+  {
+    const p = project('ledger-no-key');
+    check('install exits 0', install(p).status === 0);
+    setSurfaceKey(p, null);
+    fs.rmSync(at(p, LEDGER_REL), { force: true });
+    const d = update(p, ['--dry-run'], { payload });
+    check('[ledger-6] no key: the dry run previews the seed and lists the question, writing nothing',
+      d.status === 0 && d.out.includes(`seed-file: ${LEDGER_REL} (created)`) && d.out.includes('would ask: 0002_ledger/1/paths.transferSurface')
+      && !exists(at(p, LEDGER_REL)) && surfaceKey(p) === undefined, why(d));
+    const a = update(p, ['--apply', '--resolution-file', resolutionFile('ledger-no-key', {
+      '0002_ledger/1/paths.transferSurface': { kind: 'answer', value: LEDGER_REL },
+    })], { payload });
+    check('[ledger-7] no key: the apply creates LEDGER.md and writes the answered key',
+      a.status === 0 && read(at(p, LEDGER_REL)) === TEMPLATE_TEXT && surfaceKey(p) === LEDGER_REL, why(a));
+  }
+  // --- t3: LEDGER.md already present (key on CANDIDATES.md) -> kept byte for byte -----------------
+  {
+    const p = project('ledger-present');
+    check('install exits 0', install(p).status === 0);
+    setSurfaceKey(p, OLD_REL);
+    fs.writeFileSync(at(p, LEDGER_REL), MINE_LEDGER, 'utf8');
+    const a = update(p, ['--apply'], { payload });
+    check('[ledger-8] LEDGER.md present: exit 0, and "seed-file: <plansDir>/LEDGER.md (kept)"',
+      a.status === 0 && a.out.includes(`0002_ledger[0] seed-file: ${LEDGER_REL} (kept)`), why(a));
+    check('[ledger-9] the operator\'s LEDGER.md is byte-identical', fs.readFileSync(at(p, LEDGER_REL), 'utf8') === MINE_LEDGER,
+      JSON.stringify(String(read(at(p, LEDGER_REL))).slice(0, 60)));
+  }
+  // --- t4: the re-rendered region carries ## Where things are written ---------------------------
+  {
+    const p = project('ledger-region');
+    check('install exits 0', install(p).status === 0);
+    const claudeFile = at(p, 'CLAUDE.md');
+    const now = read(claudeFile) || '';
+    const HEADING = '## Where things are written';
+    const begin = now.indexOf(HEADING);
+    const end = now.indexOf('<!-- END aiwf-core -->');
+    // Fail LOUDLY rather than degrade into the already-current case: the fresh install must carry the
+    // section inside the markers, so taking it out ages the region to what 0.3.0 rendered.
+    check('[ledger-10] control: a fresh install already renders the section inside the managed region',
+      begin !== -1 && end !== -1 && begin < end, `heading at ${begin}, end marker at ${end}`);
+    if (begin !== -1 && end !== -1 && begin < end) fs.writeFileSync(claudeFile, now.slice(0, begin) + now.slice(end), 'utf8');
+    const ORCH_NOW = 'records/<REF>.md';
+    const orch = read(at(p, ORCH_REL)) || '';
+    fs.writeFileSync(at(p, ORCH_REL), orch.split(ORCH_NOW).join('the transfer surface'), 'utf8');
+    check('control: both files are aged before the update', !(read(claudeFile) || '').includes(HEADING)
+      && !(read(at(p, ORCH_REL)) || '').includes(ORCH_NOW));
+    const a = update(p, ['--apply'], { payload });
+    const after = read(claudeFile) || '';
+    const at2 = after.indexOf(HEADING);
+    check('[ledger-11] the update re-renders the region WITH ## Where things are written, inside the markers',
+      a.status === 0 && at2 !== -1 && at2 < after.indexOf('<!-- END aiwf-core -->') && after.includes('docs/backlogs/LEDGER.md'), why(a));
+    check('[ledger-12] and ORCHESTRATOR.md names the record as the home of a ticket\'s event row',
+      (read(at(p, ORCH_REL)) || '').includes(ORCH_NOW));
+  }
+  // --- t5: the key ALREADY names <plansDir>/LEDGER.md and the file is there -> kept, exit 0 ---------
+  // The shape of every install setup makes from 0.3.1 on. Before planSeedFile tested existence first,
+  // the surface refusal fired on a target that only needed to be kept.
+  {
+    const p = project('ledger-is-surface');
+    check('install exits 0', install(p).status === 0);
+    check('control: setup wrote the key on <plansDir>/LEDGER.md and seeded the file',
+      surfaceKey(p) === LEDGER_REL && exists(at(p, LEDGER_REL)), String(surfaceKey(p)));
+    fs.writeFileSync(at(p, LEDGER_REL), MINE_LEDGER, 'utf8');
+    const a = update(p, ['--apply'], { payload });
+    check('[ledger-13] key on LEDGER.md, file present: exit 0 and "(kept)", not the surface refusal',
+      a.status === 0 && a.out.includes(`0002_ledger[0] seed-file: ${LEDGER_REL} (kept)`)
+      && !a.out.includes('the transfer surface of this installation'), why(a));
+    check('[ledger-14] and the file is byte-identical', fs.readFileSync(at(p, LEDGER_REL), 'utf8') === MINE_LEDGER);
+    // CONTROL: the refusal still stands for an ABSENT surface - the 0011 promise.
+    const q = project('ledger-is-surface-absent');
+    check('install exits 0', install(q).status === 0);
+    fs.rmSync(at(q, LEDGER_REL), { force: true });
+    const r = update(q, ['--apply'], { payload });
+    check('[ledger-15] control: key on LEDGER.md, file ABSENT: refused (exit 1), nothing created',
+      r.status === 1 && r.out.includes('the transfer surface of this installation') && !exists(at(q, LEDGER_REL)), why(r));
   }
 }
 

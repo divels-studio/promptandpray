@@ -23,5 +23,6 @@
   { "id": "0022_stab-prose", "targetPluginVersion": "0.2.18" },
   { "id": "0023_changes-dir-and-agents", "targetPluginVersion": "0.2.19" },
   { "id": "0024_thin-rendered-files", "targetPluginVersion": "0.2.20" },
-  { "id": "0025_roadmap-seed", "targetPluginVersion": "0.3.0" }
+  { "id": "0025_roadmap-seed", "targetPluginVersion": "0.3.0" },
+  { "id": "0026_ledger", "targetPluginVersion": "0.3.1" }
 ]
