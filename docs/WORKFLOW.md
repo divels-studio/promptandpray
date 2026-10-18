@@ -486,7 +486,8 @@ proof is a **readiness blocker**, not an execution-time note:
 Out-of-scope pre-existing failures, stale tests, or build blockers discovered during work are
 recorded as risks in the report - never silently dropped, never silently fixed. Every out-of-scope
 finding, from any role, goes to the operator with a proposed destination - a new ticket under guard
-(b), or a roadmap entry - asked at the ticket's end; nothing stays recorded only as "pre-existing".
+(b), or a line in its area's roadmap entry (§ Durable development history) - asked at the ticket's
+end; nothing stays recorded only as "pre-existing".
 
 ## Durable development history
 
@@ -547,7 +548,14 @@ only live entries, and an idea dropped before its plans are done leaves it with 
 (1) an entry is born -> `Status: idea` (`researching` when `/pnp:plan` dispatches the research
 agents); (2) a plan lands in `active/` -> `Plans:` gains it, `Status: planned`, and the first
 ticket's dispatch - the moment the COO writes `.aiwf/route-state.json` - sets `Status: in
-progress`; (3) the last plan under the entry is archived -> the entry leaves the roadmap. Archiving also greps the plan's process sections for rule-class points without a pointer row -
+progress`; (3) the last plan under the entry is archived -> the entry leaves the roadmap. **An entry
+may be an area** - a module or theme whose goal is "no known open defect" - whose `Scope: in -` list
+collects the findings born during work, one indented line each (`<date> <origin> - <what>
+[<pointer>]`), until the list is worth a plan; the plan is born over the list and its tickets come
+from the lines. That list is the fourth write: it grows at a finding's birth, while `Status` and
+`Plans` change at the three events only. An installation older than the roadmap ports its live
+candidates once - each row to an area or goal entry, the old row marked `taken up -> ROADMAP §
+<ABBR>`, `done` or `dropped: <why>` - and from then on reads the roadmap alone for open work. Archiving also greps the plan's process sections for rule-class points without a pointer row -
 fail-capable, with a positive control (the grep run once over a plan known to carry such a point,
 seen to report) - the backstop under guard (h). The trigger is the checkable fact - every ticket
 closed, every verify green. Archiving is bookkeeping, reversible with one `git mv` back, and NOT

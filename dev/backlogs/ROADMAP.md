@@ -2,7 +2,9 @@
 
 Seeded once and then yours. Nothing in the plugin records this file, hashes it, or rewrites it.
 The COO writes the entries, one `##` per idea, in the format below; entries follow this header.
-An entry is a goal worth at least one plan; a task of a few lines is not an entry. Only live
+An entry is a goal worth at least one plan; a task of a few lines is not an entry - it is one
+indented line in the `Scope: in -` list of its area's entry (a module or theme whose goal is "no
+known open defect"), added when the finding is born, until the list is worth a plan. Only live
 entries stay here: an entry leaves when its last plan is archived, and an idea dropped before then
 leaves with one ledger row `<ABBR> dropped: <why>`.
 
