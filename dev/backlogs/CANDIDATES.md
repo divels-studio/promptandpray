@@ -1,5 +1,13 @@
 # Кандидати и transfer surface
 
+**2026-10-18 - from this date a pointer index.** Rulings, pass rows and events of a plan live in
+that plan's `readiness/<ABBR>/` and `records/`; this file holds one pointer line per plan and the
+rows that belong to no plan; ideas go to `ROADMAP.md`. Rows above this line stay as written.
+
+- RBA: rulings / passes in `dev/backlogs/readiness/RBA/`, events in `dev/backlogs/archive/012_PLAN_RBA_2026-10-17/records/`
+- RBB: rulings / passes in `dev/backlogs/readiness/RBB/`, events in `dev/backlogs/archive/013_PLAN_RBB_2026-10-17/records/`
+- RBC: rulings / passes in `dev/backlogs/readiness/RBC/`, events in `dev/backlogs/active/RBC/records/`
+
 Отворените кандидати (без ref) плюс трите дневника: Ruling ledger, Pass statistics, Event ledger.
 Решените кандидати са махнати при чистката на 2026-09-24 (операторска дума „изчистете го“).
 Историята им е в git (`git log -p -- dev/backlogs/CANDIDATES.md`) и в completion record-ите на

@@ -281,6 +281,15 @@ dev/                the plugin's OWN development: this doc, answers.json, backlo
                     (HARD-024) - and the artifacts of the CURRENT ticket
 ```
 
+**Where things are written** (operator word 2026-10-18):
+
+- an idea / future work -> `dev/backlogs/ROADMAP.md`, one entry in the strict format (never CANDIDATES);
+- a plan -> `dev/backlogs/active/<ABBR>/` (`PLAN_<ABBR>.md` index, `DECISIONS.md`, `RESEARCH.md`, `tickets/`, `records/`); drafted under `drafts/<ABBR>/`;
+- readiness of a plan -> `dev/backlogs/readiness/<ABBR>/` (`stamp.json`, `round-N.md`) - and from 2026-10-18 the plan's own ruling rows and pass-statistics rows;
+- a closed ticket -> `records/<REF>.md` in its plan; a rule-class event inside a ticket -> that record;
+- a ruling / pass / event that belongs to NO plan -> `dev/backlogs/CANDIDATES.md`, from 2026-10-18 a pointer index (one line per plan pointing at its `readiness/` and `records/`, plus the plan-less rows) and nothing else;
+- doctrine -> the payload `docs/` (R1 prose); a project rule -> this document; the redesign's state -> `dev/REBUILD.md`.
+
 Default integration/base branch: `main`.
 
 ## Loop shape (this project's overrides of the generic defaults)
