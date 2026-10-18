@@ -61,8 +61,8 @@
    Silerax plan under the old cycle, from its records.
 6. **Only then** judge: does the planner subagent pay (stage 4, the least certain)? does one Codex
    pass suffice? is 194k per pass acceptable (lever: effort `high` on gpt-5.6-sol, measured once on
-   the same plan)? Decisions go into this file as D-lines; the next release (0.3.1, with the README
-   from ROADMAP § README) carries whatever changed.
+   the same plan)? Decisions go into this file as D-lines; the next release carries whatever
+   changed (ROADMAP § README is bound to no version - operator 2026-10-18).
 7. Furnissimo: after Silerax's first measured plan, the same `/plugin update` + one list-driven
    cleanup of its local rules (the 0.3.0 `Retires` line, minus chain-trace and the checkpoint rule,
    which STAY local - see § Corrections).
@@ -92,6 +92,9 @@ and asked by the COO - never estimated; `/pnp:mission` does not change (RBC/D-04
   breakdown (that one was Silerax, messages 70.9k, system tools 23.8k): the harness's system tools
   grew ~8k since, and that part is not ours. Opus 5.5 and Fable 5.1 count identically (the same four
   files measured with both via `claude -p`: equal to the token).
+  Selective reading of the preflight rejected by the operator 2026-10-18 („няма селективно
+  четене"); the start of ~110k is accepted as the floor the doctrine size allows (harness ~49k +
+  doctrine ~38k + the rest); further savings come from GENERIC's overrides trim only.
 - **Start number (b)** - AFTER the active plan's files are read: in the same `/pnp:work` session,
   once the operator names the ticket and the plan is read, then the statusline (`/pnp:mission` in a
   fresh session gives a comparable one). It judges the folder format and selective reading. Recorded: ~130k after 0.3.0,
@@ -273,7 +276,7 @@ all fine" is not a handoff.
   compaction (WORKFLOW, LOOP, REVIEW_CHECKLIST, the whole overrides; verified by a rule-homes table;
   PLAN_DOCT's drafts and `readiness/DOCT/` are input, deleted on the word); RBC-003 the root gitfile
   in the provenance walk + the header `Status:` line out of the byte cap.
-- Then ROADMAP § README (the public README, 0.3.1) - after RBC-002.
+- ROADMAP § README (the public README) - a candidate bound to no version (operator 2026-10-18).
 - COO routing applied: A1-A3 Fable (check 1); B1, B2 Opus; B3 Fable (ruling 2); C1, C2 Opus; C3
   Fable (check 1, RBC/D-12).
 

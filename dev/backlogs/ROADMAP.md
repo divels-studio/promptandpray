@@ -28,7 +28,7 @@ The COO writes the entries, one `##` per idea, in the format below; entries foll
 - Why: „тоя план става сега история, тоя 11 отива някъде в обозримото бъдеще, предполагам мястото му е в новия роадмап"; the original ticket is HARD-011 in `archive/014_PLAN_HARD_2026-10-17.md` (§ HARD-011 (README-001))
 - Scope: in - the root `README.md`, § Status true per release, the command table, the macOS tier line (CANDIDATES § macOS support tier - re-examine folds in); out - the payload docs
 - Size: S
-- Plans: none yet; runs after REBUILD plan C's RBC-002 (the README describes the cut doctrine) and cuts 0.3.1
+- Plans: none yet; bound to no version (operator 2026-10-18: „остава кандидат необвързан с версия")
 - Status: idea
 - Born: 2026-10-17, operator word „тоя 11 отива ... в новия роадмап"
 
