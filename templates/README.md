@@ -42,6 +42,7 @@ of a payload doctrine rule with a history of being violated - they point at the 
 rather than restating it.
 
 `briefs/` holds the agent contracts the skills send - `research.md`, `planner.md`,
-`readiness-codex.md`, `writer-dispatch.md` - read by the skills at run time by path under the plugin
-root, never rendered, never managed: no project ever holds a copy, and an update changes them with
-the plugin.
+`readiness-codex.md`, `writer-dispatch.md` - and `record.md`, the skeleton of a ticket's completion
+record, which the COO fills itself. All of them are read at run time by path under the plugin root,
+never rendered, never managed: no project ever holds a copy, and an update changes them with the
+plugin.

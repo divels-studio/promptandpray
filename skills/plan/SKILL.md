@@ -13,8 +13,9 @@ another skill's steps, except `/pnp:review` Step 3 for the mechanics of the wrap
 Arguments: the goal in the operator's words, or the `<ABBR>` of an existing roadmap entry.
 
 The four agent contracts ship as plain Markdown under `${CLAUDE_PLUGIN_ROOT}/templates/briefs/`:
-`research.md`, `planner.md`, `readiness-codex.md`, `writer-dispatch.md`. They are read at run time by
-path, never rendered into the project. Fill the placeholders `<ABBR>`, `<folder>`, `<goal>` (and any
+`research.md`, `planner.md`, `readiness-codex.md`, `writer-dispatch.md`. Beside them, `record.md` is
+the skeleton of a ticket's completion record - not an agent contract; the COO fills it. They are read
+at run time by path, never rendered into the project. Fill the placeholders `<ABBR>`, `<folder>`, `<goal>` (and any
 other `<...>` a template names) and send the text; never paraphrase a template into a brief.
 
 ## Step 0 - Project context (mandatory for every `/pnp:*` skill)
@@ -44,6 +45,10 @@ only files written are the plan's own - `<plansDir>/drafts/<ABBR>/`, `<plansDir>
 the roadmap entry - and the scratch brief. A readiness cycle starts in a fresh session.
 
 ## Step 1 - The roadmap entry
+
+**The start number.** Before anything else, ask the operator ONCE for the COO context size their
+statusline shows now, and keep the answer for Step 6. It is a value only the operator can see: ask,
+never estimate.
 
 Open `<plansDir>/ROADMAP.md`. If the goal has an entry, use it; otherwise write one, in exactly this
 format, the operator's words verbatim where they are the source:
@@ -186,10 +191,25 @@ too and its compensations (`/pnp:review` Step 3).
 
 **Approval.** Report to the operator in a few lines: the tickets and their order, the passes run with
 their BLOCKER counts and dispositions, what is deferred, and the folder path - never the plan itself.
-Wait for the approval word.
+In the same report, ask the operator again for the COO context size on their statusline. Wait for the
+approval word.
 
-**Landing - on the approval, in the same session.** Move the untracked folder with the shell (not a
-git verb: nothing tracked is touched) - os `windows`:
+**Measurements - on the approval.** Write into the index `<plansDir>/drafts/<ABBR>/PLAN_<ABBR>.md` a
+section `## Measurements` with one table `| idea -> approved plan | cycle spend |` and one value row:
+(1) the approval number minus the start number of Step 1; (2) the sum of every subagent's tokens as
+each completion notification reported them, plus every Codex pass's tokens as the `round-<N>.md`
+headers recorded them. Under the table, list the parts of (2) one per line - agent or pass, tokens.
+No part is estimated: a part nobody printed is named as missing, never guessed.
+
+**Landing - on the approval, in the same session.** The Measurements write changed the index, so
+stamp the folder again BEFORE the move:
+
+```text
+node "${CLAUDE_PLUGIN_ROOT}/scripts/engine/plan-gate.js" --stamp <plansDir>/drafts/<ABBR>
+```
+
+Then move the untracked folder with the shell (not a git verb: nothing tracked is touched) - os
+`windows`:
 `Move-Item <plansDir>/drafts/<ABBR> <plansDir>/active/<ABBR>`; os `linux`/`macos`:
 `mv <plansDir>/drafts/<ABBR> <plansDir>/active/<ABBR>`. Update the roadmap entry's `Plans:` and
 `Status: planned` lines. Then `git add <plansDir>/active/<ABBR> <plansDir>/readiness/<ABBR>
@@ -197,4 +217,6 @@ git verb: nothing tracked is touched) - os `windows`:
 a `--check` over `<plansDir>/active/<ABBR>` after the move confirms it.
 
 Each ticket is then started on its own word; the Writer brief is
-`${CLAUDE_PLUGIN_ROOT}/templates/briefs/writer-dispatch.md`.
+`${CLAUDE_PLUGIN_ROOT}/templates/briefs/writer-dispatch.md`. Each ticket closes with its completion
+record `<plansDir>/active/<ABBR>/records/<REF>.md`, written on
+`${CLAUDE_PLUGIN_ROOT}/templates/briefs/record.md` (`docs/WORKFLOW.md` § Durable development history).

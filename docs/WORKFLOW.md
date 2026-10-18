@@ -619,7 +619,8 @@ tickets. Do not create a separate active BACKLOG file. The PLAN keeps:
    debt - in a folder plan the file `records/<REF>.md`, with the index's ticket row closed. The COO
    writes this record **immediately after the ticket's commit, in the same session,
    unprompted** - a ticket is not closed without it, and tracking it is never the operator's job.
-   Two acts ride the record. The scratch directory goes back to the live loop mechanics: evidence
+   The record is written on the skeleton `templates/briefs/record.md`, its `## Measurements` row
+   filled at the close. Two acts ride the record. The scratch directory goes back to the live loop mechanics: evidence
    worth keeping moves into the record or the plan's `readiness/<ABBR>/`, and what is left to
    delete is listed beside the record's commit, because a delete is the operator's dialog. And the
    COO says in one line whether the next ticket stays in this session or wants a fresh one - a

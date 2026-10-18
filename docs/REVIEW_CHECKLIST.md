@@ -63,6 +63,8 @@ If that list is empty, there is no project-specific boundary to enforce and the 
 otherwise unchanged.
 
 - Read the **actual diff**, not the summary. Do not accept optimistic prose.
+- For each behaviour the ticket's Outcome names, trace the ordered chain from its entry point to its
+  end point through the files of the Code Map, adversarially - and still read the whole diff.
 - Every acceptance criterion maps to a proof. A missing proof surface is a completion blocker even
   if existing tests are green.
 - Proof for algorithmic/matcher/routing/transform/parser logic MUST exercise the production function

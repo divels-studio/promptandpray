@@ -55,12 +55,22 @@ JUDGMENTS from GSD/BMad and our own numbers, not proofs. The operator's own word
 „хубаво преписахме, ама сме само на чернова, полирането тепърва предстои" - this document is a draft
 of a working system, and the first Silerax plan is where it is tested.
 
-## Measurement protocol (RBC-001 makes it a record row; until then by hand)
+## Measurement protocol (the session start cost; RBC/D-02, D-04)
 
-- Start (a): a fresh session, the preflight-only prompt (below), then the statusline / `/context`.
-- Start (b): after `/pnp:mission` has read the active plan.
-- Per plan: tokens idea -> approved plan (every agent's usage as the harness reports it + the Codex
-  pass tokens); correction rounds after implementation; COO session size at the end; total spend.
+The session start is TWO numbers of this repository, both read by the operator off the statusline
+and asked by the COO - never estimated; `/pnp:mission` does not change (RBC/D-04):
+
+- **Start number (a)** - after the doctrine preflight and BEFORE any plan file is read: a fresh session, the
+  preflight-only prompt (below), then the statusline / `/context`. It judges the doctrine compaction
+  (RBC-002). Baseline: 110k (PnP), 120k (Silerax), operator's `/context`, 2026-10-17
+  (`active/RBC/RESEARCH.md` fact 17).
+- **Start number (b)** - AFTER the active plan's files are read: `/pnp:mission` in a fresh session, then
+  the statusline. It judges the folder format and selective reading. Recorded: ~130k after 0.3.0,
+  with the active PLAN_HARD (~3,300 lines, ~34k tokens) inside it (`active/RBC/RESEARCH.md` fact 16).
+- Per plan and per ticket the numbers are no longer by hand: `/pnp:plan` asks the start and approval
+  numbers and writes the index's `## Measurements` (idea -> approved plan, cycle spend); each record
+  carries its `## Measurements` row (correction rounds, COO session at close) on
+  `templates/briefs/record.md` (RBC-001).
 - The preflight-only prompt (operator-tested 2026-10-17):
   "Измерване на стартовия контекст, нищо друго. Направи само doctrine preflight-а по CLAUDE.md: прочети
   IN FULL payload docs/WORKFLOW.md, docs/LOOP.md, dev/PROJECT_OVERRIDES.md и
