@@ -111,6 +111,11 @@ and asked by the COO - never estimated; `/pnp:mission` does not change (RBC/D-04
   is ~110k by `/context` (harness ~49k, doctrine ~39k, the rest config, memory, git log) - the floor
   the whole-preflight decision accepts. Evidence: the arbitration session's scratchpad
   `5ad48d54-.../start-attrib/` (session-local, not in the tree).
+  Measured 2026-10-18, Silerax on 0.3.1 (after GENERIC and the overrides trim): (a) **110k** at
+  `/pnp:work` (statusline, the operator's reading: „стартова сесия на силеракс с пнп уорк 110к") -
+  the same as Silerax's 2026-10-17 baseline (`/context`, a different instrument); the first measured
+  Silerax plan (REBUILD § How to continue step 5) starts from it, with the current brief templates
+  (ROADMAP § BRIEFS not yet done - its before/after is measured against this plan).
 - **Start number (b)** - AFTER the active plan's files are read: in the same `/pnp:work` session,
   once the operator names the ticket and the plan is read, then the statusline (`/pnp:mission` in a
   fresh session gives a comparable one). It judges the folder format and selective reading. Recorded: ~130k after 0.3.0,
