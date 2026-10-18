@@ -34,7 +34,10 @@ session on 2026-10-17 and confirmed here with the word „имаш дума и �
   reading are judged by. The protocol lives in `dev/REBUILD.md` § The session start cost (this
   repository's measurement, read by the operator off the statusline); `/pnp:mission` does not change
   - a per-session print would cost a question every session for a measurement taken twice. The
-  current 130k is (b) with PLAN_HARD inside it; RBC-001 records it as such. plan: RBC
+  current 130k is (b) with PLAN_HARD inside it; RBC-001 records it as such. Vehicle amended
+  2026-10-18 by arbitration ruling (CANDIDATES § Ruling ledger; the definition stands): (a) is read
+  at `/pnp:work`'s task question, before any plan file, and the same session then reads the plan for
+  (b) - no second session. plan: RBC
 - **D-05** The compaction rule (REBUILD C2): every RULE stays; rationale, history and "measured on a
   consumer ..." stories go; no `docs/RATIONALE.md` (PLAN_DOCT's idea is dropped - git keeps the
   history). Duplicate normative text across the three payload documents collapses to ONE home and

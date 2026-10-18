@@ -31,11 +31,12 @@ for the operator's delete dialog.>
 
 ## Measurements
 
-| correction rounds | COO session at close |
-|---|---|
-| <n, counted from an auditor's verdict> | <tokens, asked of the operator off the statusline at the close> |
+| correction rounds | COO session at close | source |
+|---|---|---|
+| <n, counted from an auditor's verdict> | <tokens, or `-` when no source> | <file or `-`> |
 
 <Correction rounds are counted from an auditor's verdict (`docs/WORKFLOW.md` § Loop shape and its
-overrides); a ticket with no auditor carries `0 (no auditor)`. The session size is the value the
-operator reads off the statusline when asked at the close - never estimated: a number only the
-operator can see is asked for.>
+overrides); a ticket with no auditor carries `0 (no auditor)`. The session size is read from the
+machine source the project's overrides document names (a file its statusline writes); with no such
+source it is `-` - never asked at a record's close, never estimated. Temporary: this row stays until
+the first plan measured with it has been judged, then it is removed from this skeleton.>

@@ -332,6 +332,12 @@ The documents the "status / release docs policy" in the payload doc `docs/WORKFL
 Platform: `windows`. Prefer that platform's native commands for local instructions unless the
 repo already uses a specific cross-platform tool, and pass paths in its native form.
 
+**COO context source** (machine-local, the operator's own statusline `~/.claude/statusline.sh`): it
+writes `~/.claude/ctx/<session id>.pct` (used percent) and `.size` (window tokens) for every session
+on this machine; the COO context is `pct * size / 100` - the number the statusline itself prints,
+to its whole-percent precision. The session id is the one in the session's scratchpad path. This is
+the machine source `/pnp:plan` and the record skeleton read; nothing of it is payload.
+
 ## Workspace paths
 
 ```text

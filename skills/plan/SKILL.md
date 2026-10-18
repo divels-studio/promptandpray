@@ -46,9 +46,12 @@ the roadmap entry - and the scratch brief. A readiness cycle starts in a fresh s
 
 ## Step 1 - The roadmap entry
 
-**The start number.** Before anything else, ask the operator ONCE for the COO context size their
-statusline shows now, and keep the answer for Step 6. It is a value only the operator can see: ask,
-never estimate.
+**The start number.** Before anything else, take the COO context size now and keep it for Step 6:
+read it from the machine source the project's overrides document names (a file its statusline
+writes), when there is one; with no such source, ask nothing here - the start is written as not
+measured (Step 6). Never estimate. *Temporary:* the measurement steps of this skill (this one, the
+approval number, `## Measurements`) stay until the first plan measured with them has been judged;
+then they are removed from this skill.
 
 Open `<plansDir>/ROADMAP.md`. If the goal has an entry, use it; otherwise write one, in exactly this
 format, the operator's words verbatim where they are the source:
@@ -191,15 +194,18 @@ too and its compensations (`/pnp:review` Step 3).
 
 **Approval.** Report to the operator in a few lines: the tickets and their order, the passes run with
 their BLOCKER counts and dispositions, what is deferred, and the folder path - never the plan itself.
-In the same report, ask the operator again for the COO context size on their statusline. Wait for the
-approval word.
+Take the approval number the same way, from the machine source; with none, ask the operator once,
+in this report, for the COO context size on their statusline - the only question this measurement
+asks per plan. Wait for the approval word.
 
 **Measurements - on the approval.** Write into the index `<plansDir>/drafts/<ABBR>/PLAN_<ABBR>.md` a
 section `## Measurements` with one table `| idea -> approved plan | cycle spend |` and one value row:
-(1) the approval number minus the start number of Step 1; (2) the sum of every subagent's tokens as
-each completion notification reported them, plus every Codex pass's tokens as the `round-<N>.md`
-headers recorded them. Under the table, list the parts of (2) one per line - agent or pass, tokens.
-No part is estimated: a part nobody printed is named as missing, never guessed.
+(1) the approval number minus the start number of Step 1, or the approval number alone marked
+`start not measured` when Step 1 had no source; (2) the sum of every subagent's tokens as each
+completion notification reported them, plus every Codex pass's tokens as the `round-<N>.md` headers
+recorded them. Under the table, list the parts of (2) one per line - agent or pass, tokens - and name
+the source of every value: `file`, `notification`, `round header` or `operator`. No part is
+estimated: a part nobody printed is named as missing, never guessed.
 
 **Landing - on the approval, in the same session.** The Measurements write changed the index, so
 stamp the folder again BEFORE the move:

@@ -60,12 +60,16 @@ of a working system, and the first Silerax plan is where it is tested.
 The session start is TWO numbers of this repository, both read by the operator off the statusline
 and asked by the COO - never estimated; `/pnp:mission` does not change (RBC/D-04):
 
-- **Start number (a)** - after the doctrine preflight and BEFORE any plan file is read: a fresh session, the
-  preflight-only prompt (below), then the statusline / `/context`. It judges the doctrine compaction
-  (RBC-002). Baseline: 110k (PnP), 120k (Silerax), operator's `/context`, 2026-10-17
-  (`active/RBC/RESEARCH.md` fact 17).
-- **Start number (b)** - AFTER the active plan's files are read: `/pnp:mission` in a fresh session, then
-  the statusline. It judges the folder format and selective reading. Recorded: ~130k after 0.3.0,
+- **Start number (a)** - after the doctrine preflight and BEFORE any plan file is read: a fresh
+  session opened with `/pnp:work`, read at its task question (preflight + tree check + audit table);
+  the same session then takes the ticket and yields (b) - zero extra sessions (arbitration ruling
+  2026-10-18, CANDIDATES § Ruling ledger). It judges the doctrine compaction (RBC-002). Baseline:
+  110k (PnP), 120k (Silerax), operator's `/context`, 2026-10-17 (`active/RBC/RESEARCH.md` fact 17) -
+  taken with the preflight-only prompt (below), so (a) via `/pnp:work` sits a few k above it by the
+  tree check and the table: a known offset, comparable.
+- **Start number (b)** - AFTER the active plan's files are read: in the same `/pnp:work` session,
+  once the operator names the ticket and the plan is read, then the statusline (`/pnp:mission` in a
+  fresh session gives a comparable one). It judges the folder format and selective reading. Recorded: ~130k after 0.3.0,
   with the active PLAN_HARD (~3,300 lines, ~34k tokens) inside it (`active/RBC/RESEARCH.md` fact 16).
 - Per plan and per ticket the numbers are no longer by hand: `/pnp:plan` asks the start and approval
   numbers and writes the index's `## Measurements` (idea -> approved plan, cycle spend); each record
