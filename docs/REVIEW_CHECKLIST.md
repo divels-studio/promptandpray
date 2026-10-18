@@ -1,33 +1,21 @@
 # Review & QA Checklist
 
 Verdict authority for the **Reviewer** (code/design) and **QA** (runtime/UI). Both roles are
-**engine-neutral**: the host is data in the project's `.claude/aiwf-native/roles.json` (resolved by
-the role resolver of this project's OS channel - `scripts/native/ps/aiwf-roles.ps1` on `windows`,
-`scripts/native/sh/aiwf-roles.sh` on `linux`/`macos`). `/pnp:review` and `/pnp:qa` dispatch either
-the read-only Codex wrappers of that channel - `scripts/native/ps/codex-review.ps1` /
-`scripts/native/ps/codex-qa.ps1`, or `scripts/native/sh/codex-review.sh` /
-`scripts/native/sh/codex-qa.sh` (brief on **stdin**
-under an OS `--sandbox read-only` boundary they cannot escape; recipe:
-`docs/CODEX_REVIEW_QA_RECIPE.md`) **or** the `reviewer` / `qa` Claude subagents (`Read/Grep/Glob`
-only - read-only by Gate 1 + the tool allowlist, with no OS cell; the hard OS boundary applies only
-on the codex path). Either way they report; they do not fix, stage, commit, or push. Routing and the
-ticket-brief contract live in `docs/WORKFLOW.md`; the native mapping is `docs/LOOP.md`.
+**engine-neutral** - a read-only Codex wrapper (brief on **stdin**, OS `--sandbox read-only`;
+recipe: `docs/CODEX_REVIEW_QA_RECIPE.md`) or the `reviewer` / `qa` Claude subagent
+(`Read/Grep/Glob` only, no OS cell); hosts and boundaries: `docs/LOOP.md` § Role boundaries. Either
+way they report; they do not fix, stage, commit, or push. Routing and the ticket-brief contract
+live in `docs/WORKFLOW.md`.
 
 ## Plan readiness (before implementation)
 
 For durable R2 and all R3 plans, the Reviewer performs ONE read-only pass over the plan folder
-before execution approval, on the plan row of the audit table (`/pnp:roles`). The pass rides the
-plan's standing word; a second pass runs only on the operator's explicit word, requested before the
-dispatch, when pass 1 returned a BLOCKER that reverses a recorded decision or the COO names a risk
-after a substantive revision; `review.plan.passes` is the ceiling. The planner and the COO never
-approve their own plan. No fact-check agent runs before a plan pass; the mechanical plan gate does
-(`docs/WORKFLOW.md` § Plan readiness review).
+before execution approval, on the plan row of the audit table; when a second pass runs and what
+guards the first is `docs/WORKFLOW.md` § Plan readiness review.
 
-Read the complete folder against the tree and check only that the plan matches the repository, has
-clear scope, contains no hidden discovery or unresolved architecture (for every write, the lock and
-what runs beside it - class 15), sequences executable work correctly, uses real
-acceptance/verification, and has valid branch/worktree/Git prerequisites - the classes of
-`docs/READINESS_CLASSES.md`.
+Read the complete folder against the tree and check only the six readiness checks of that section -
+the classes of `docs/READINESS_CLASSES.md` (class 15: for every write, the lock and what runs beside
+it).
 
 **The blocker contract.** A BLOCKER is a required property the plan lacks plus the evidence
 (`file:line`, opened). INFO never causes a revision. Wording, formatting, `file:line` precision in
@@ -47,8 +35,8 @@ Every R2/R3 brief hands the Reviewer and QA:
 
 Neither role is obligated to invent findings; absence of defects at the given threshold is a valid
 `pass`. Stop when the stop condition is met - do not keep digging. The implementation loop is capped
-at `loop.correctionRoundsCap` correction rounds; plan readiness follows its separate pass economy
-above.
+at `loop.correctionRoundsCap` correction rounds; plan readiness follows its own pass economy
+(`docs/WORKFLOW.md` § Plan readiness review).
 
 ---
 
@@ -194,15 +182,10 @@ Engages only when the brief declares observable runtime/UI behavior (never R1, n
 R2).
 
 - Verify what the software DOES against the acceptance criteria, not code style.
-- QA is an **artifact judge**, not a live browser. QA never drives a browser and never starts a dev
-  server (a Codex-launched browser cannot run under the read-only sandbox - see
-  `docs/QA_BROWSER_INVESTIGATION.md`). Instead: the Writer authors an E2E `.spec` from the acceptance
-  criteria, the orchestrator runs the configured test runner, and QA reads the resulting artifacts
-  (JSON report, traces, screenshots) and judges them against the criteria. On the **codex** host that
-  read is under a hard OS `--sandbox read-only` cell; on the **claude** host QA is a
-  `Read/Grep/Glob`-only subagent held read-only by its tool allowlist + Gate 1, with no OS cell. (For
-  live exploratory browsing there is a separate, operator-gated surface - QAL - which is NOT
-  read-only; never invoke it from the QA role.)
+- QA is an **artifact judge**, not a live browser: it never drives a browser and never starts a dev
+  server; it reads the artifacts the orchestrator's test run produced (JSON report, traces,
+  screenshots) and judges them against the criteria (the spec-flow: `docs/LOOP.md` § Role
+  boundaries). Never invoke QAL - the operator-gated live surface, NOT read-only - from the QA role.
 - Never claim PASS without a real reproduction backed by concrete artifact evidence: exact
   test/flow, account/tenant context if relevant, expected vs actual result, the JSON assertion or
   trace/screenshot that shows it. "Looks correct" is not a pass.
@@ -218,8 +201,7 @@ visible. For each blocker: name the exact failing surface and require proof on t
 forbid proxy closure (adapter-only, type-only, unit-only, prose-only, generic green test).
 
 **On a pass 2 the Reviewer is handed the previous list and owes a declaration for anything outside
-it:** a plan's pass-2 brief carries `round-1.md` verbatim - findings and dispositions - and a
-verification pass after a correction round carries the previous pass's blockers; every NEW blocker
+it** (what the brief carries: `docs/WORKFLOW.md` § Fail aggregation); every NEW blocker
 declares why it was not visible on the previous pass - a blocker with no declaration is a contract
 violation, reported separately from the verdict. Name the origin in one clause (born of the revision
 between the passes, or a fact the previous pass did not open); if the brief arrived WITHOUT the

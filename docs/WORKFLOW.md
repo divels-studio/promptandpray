@@ -8,10 +8,9 @@ Durable knowledge lives in Git. Live process state (delegation, review rounds, c
 cycles) lives in the in-session orchestration of the main Claude Code session - not in
 Markdown state files and not in an external runtime.
 
-The proven model is a light four-role loop: **Orchestrator -> Implementer -> Code Reviewer ->
-QA**, run **natively inside Claude Code** (one-page mapping: `docs/LOOP.md`). A project may
-run it deliberately lighter than the generic four-role defaults (see "Loop shape and its
-overrides") - not every ticket is a ceremony.
+The model is a light four-role loop: **Orchestrator -> Implementer -> Code Reviewer -> QA**, run
+**natively inside Claude Code** (one-page mapping: `docs/LOOP.md`). A project may run it lighter
+than the generic defaults (see "Loop shape and its overrides").
 
 ## Roles
 
@@ -19,280 +18,188 @@ overrides") - not every ticket is a ceremony.
   authority, classifies R1/R2/R3, authors the ticket brief (with risk threshold + stop
   condition), delegates, reads the full diff, makes product/UI judgment, arbitrates, stops the
   loop at the stop condition, and is the only AI role that presents the final result to the
-  human. It does not write implementation code in the R2/R3 cycle.
+  human. It does not write implementation code in the R2/R3 cycle - doctrine, not a hook: the
+  main session can write, because R1 requires it.
 - **Writer / Implementer** - the **only** role that writes to the repo. A native Claude
-  subagent (`.claude/agents/writer.md`, rendered from the plugin's writer template), invoked
-  via the **Agent tool** with `subagent_type: "writer"`. Does not approve its own work.
-  (Gate 1, the plugin's PreToolUse mutation guard, catches the Edit/Write family so non-writer
-  subagents cannot write - and on a Claude review host this tool-availability + convention
-  block is the read-only boundary itself, with no OS cell (the OS cell is codex-only); the main
-  session *can* write - R1 requires it - so the COO's not writing implementation code in the
-  R2/R3 cycle is doctrine, not a hook. Gate 2, the dispatch gate, puts the operator in the way
-  of a Writer dispatch - a native Yes/No dialog on every one of them, or only on one whose
-  `Ticket: <REF>` line names no ticket in an active PLAN, per `enforcement.dispatchGate`. The same
-  hook denies a Claude-hosted plan-readiness pass whose plan folder fails the mechanical gate (§ Plan
-  readiness review). Gate 4,
-  the git-verb guard on both shell tools (matcher `Bash|PowerShell`), denies an ask-class git verb
-  to any subagent that is not
-  the Writer - a background agent's dialog reaches no operator - and asks for it in the git forms
-  the shipped rules never spell out: `git.exe` outside push/merge/rebase, any `git -C <path> ...`,
-  and a wrapper the harness does not strip, such as `sudo`.)
+  subagent (`.claude/agents/writer.md`), invoked via the **Agent tool** with
+  `subagent_type: "writer"`. Does not approve its own work. The gates around it (Gate 1-4):
+  `docs/LOOP.md` § Enforcement of Writer-only writes.
 - **Reviewer / Code Reviewer** - read-only adversarial code/design review; not browser QA.
-  **Engine-neutral**: the host is data in the project's `.claude/aiwf-native/roles.json`
-  (resolved by the plugin's role resolver - `scripts/native/ps/aiwf-roles.ps1` on os `windows`,
-  `scripts/native/sh/aiwf-roles.sh` on os `linux`/`macos`), so `/pnp:review` dispatches
-  either the read-only Codex wrapper of that channel (`scripts/native/ps/codex-review.ps1` /
-  `scripts/native/sh/codex-review.sh`; `--sandbox read-only`, prompt via stdin) **or** the
-  `reviewer` Claude subagent (`Read/Grep/Glob` only).
-  On the codex host the read-only boundary is a hard OS cell; on the claude host Gate 1 catches
-  the Edit/Write family (tool-availability + convention + git reversibility, no OS cell).
+  **Engine-neutral** (Codex or Claude per the project's `.claude/aiwf-native/roles.json`; hosts,
+  wrappers and boundaries: `docs/LOOP.md` § Role boundaries).
 - **QA** - read-only; verifies real runtime/UI behavior against acceptance criteria; engages
-  only for observable runtime/UI behavior. An **artifact judge**, not a live browser: the Writer
-  authors an E2E `.spec`, the orchestrator runs the configured test runner, and QA reads the
-  artifacts (report/screenshots/traces). **Engine-neutral**: `/pnp:qa` dispatches either
-  `scripts/native/ps/codex-qa.ps1` / `scripts/native/sh/codex-qa.sh` (`--sandbox read-only`)
-  **or** the `qa` Claude subagent
-  (`Read/Grep/Glob` only); never starts a dev server, never drives a browser. (A Codex-launched
-  browser cannot run under the read-only sandbox - see `docs/QA_BROWSER_INVESTIGATION.md`.)
-- **QAL** - live agentic-browser Codex via `/pnp:qal` (wraps
-  `scripts/native/ps/codex-qal.ps1` / `scripts/native/sh/codex-qal.sh`). The **operator-gated
-  exception**, invoked only after an
-  explicit operator request, and only when `roles.qal.enabled` is true; runs **without an OS
-  sandbox** (containment is cwd/profile hygiene, not a guarantee). Not part of the default
-  route - read-only QA is the default.
+  only for observable runtime/UI behavior. An **artifact judge**, not a live browser;
+  engine-neutral (`docs/LOOP.md` § Role boundaries).
+- **QAL** - live agentic-browser Codex via `/pnp:qal`. The **operator-gated exception**, invoked
+  only after an explicit operator request and only when `roles.qal.enabled` is true; runs
+  **without an OS sandbox**. Not part of the default route.
 - **Operator** - the human. Sole authority for commit approval, push, merge, branch switches,
   and destructive or system-changing operations.
 
 ## COO owns broad scans
 
-The Writer has no Agent tool and an expensive context. When the Writer returns a scan question -
-blocking mid-ticket or confirming in the handoff - the COO runs it with cheap read-only scan
-agents in its own session and returns the answer. A scan question is correct behavior, not a
-failure; the defect is a Writer that silently assumed. Delegation taxonomy - **trigger** to
+When the Writer returns a scan question - blocking mid-ticket or confirming in the handoff - the
+COO runs it with cheap read-only scan agents in its own session and returns the answer. A scan
+question is correct behavior; a Writer that silently assumed is the defect. **Trigger** to
 delegate: 3+ independent files, 2+ verify tracks, or a docs/code/test cross-check.
 **Delegable:** grep/inventory, docs/reference checks, i18n scans, test-gap scans, schema/policy
 evidence gathering. **Never delegable:** the final architecture decision, the final
-code-integration decision, and the final synthesis/handoff - those the COO owns and does not
-delegate.
+code-integration decision, and the final synthesis/handoff.
 
-**Discovery precedes dispatch.** The reactive form above - answering the Writer's scan
-questions - is not the whole rule. When the delegation triggers are met, the COO runs the
-cheap-agent discovery BEFORE authoring the R2/R3 brief, and the brief carries the harvested
-evidence: a concrete worklist with `file:line` pointers, not reading assignments. The Writer's
-expensive context is spent on writing, not searching; a Writer that must scan broadly to learn
-WHAT to change is the symptom of a defective brief, not of diligence. A single Writer run has
-been observed spending on the order of a full session's context budget on discovery that a
-pre-brief scan pass would have delivered at scan-tier cost.
+**Discovery precedes dispatch.** When the delegation triggers are met, the COO runs the cheap-agent
+discovery BEFORE authoring the R2/R3 brief, and the brief carries the harvested evidence: a concrete
+worklist with `file:line` pointers, not reading assignments. A Writer that must scan broadly to learn
+WHAT to change is the symptom of a defective brief.
 
-**Four countable tripwires.** The rule above states categories, and categories do not stop
-mid-work inertia; these four moments do. (1) **Anything outside the repository is agent work per
-se**: downloading or sweeping upstream source, tarballs, external documentation - zero own steps,
-dispatch immediately; reading the repository's own canon stays the COO's. (2) **An open question
-that has already cost two lookups (Read/Grep) without an answer -> stop and dispatch.**
-(3) **Running a mechanical procedure is agent work, not COO work.** A helper script, a bulk
-find/replace, a verify cycle over a fixed list, debugging a helper the COO wrote a minute ago -
-"run this procedure and report" goes to a `general-purpose` subagent (`model: sonnet`; `haiku` when
-the job is counting) with exact inputs (paths, the mapping, the expected numbers, the verify
-commands) and an output contract. The COO decides, briefs, reads the result and commits; the SECOND
-inline fix of the same helper in one session is the countable moment - the first was the slide, the
-second is the pattern. A scan agent's output contract is its reply: it writes no file. A procedure
-agent that must leave a file - a helper script, a measurement - writes it only under the scratch
-directory, at the absolute path its brief names; a shell write anywhere else is a write no gate
-sees. (4) **An enumeration is closed by a grep, not by a feeling.** When a change
-touches a set - every call site of a symbol, every statement of a count, every pointer to a moved
-document - enumeration ends when the closing grep - for the symbol itself, for the phrase or count
-the change invalidates, and for the bare pointer form - returns zero outside the list; the grep must
-first HIT the known list. Every new or changed evidentiary instrument is
-made to fail on purpose before it is trusted; retro-proofing existing instruments is a deliberate
-ticket, never an ambient duty. A permission gate is made to fail on a copy - a fixture project or a
-scratch copy of its settings, as the self-check does - never by weakening the live gate. The seeds
-under `templates/memory-seeds/` are a home of that enumeration on every doctrine change - the closing
-grep covers them. A grep that
-matches nothing proves nothing, and the instrument nobody has seen go red is a belief rather than a
-check. All four exist because the category was known and
-the stopping moment was not: a COO can read this section in its own preflight, classify correctly,
-and still slide across the boundary by inertia.
+**Four countable tripwires.** (1) **Anything outside the repository is agent work per se**:
+upstream source, tarballs, external documentation - zero own steps, dispatch immediately; reading
+the repository's own canon stays the COO's. (2) **An open question that has already cost two
+lookups (Read/Grep) without an answer -> stop and dispatch.** (3) **Running a mechanical procedure
+is agent work, not COO work.** A helper script, a bulk find/replace, a verify cycle over a fixed
+list, debugging a helper the COO wrote - goes to a `general-purpose` subagent (`model: sonnet`;
+`haiku` when the job is counting) with exact inputs (paths, the mapping, the expected numbers, the
+verify commands) and an output contract. The COO decides, briefs, reads the result and commits; the
+SECOND inline fix of the same helper in one session is the countable moment. A scan agent's output
+contract is its reply: it writes no file. A procedure agent that must leave a file writes it only
+under the scratch directory, at the absolute path its brief names. (4) **An enumeration is closed by
+a grep, not by a feeling.** When a change touches a set - every call site of a symbol, every
+statement of a count, every pointer to a moved document - enumeration ends when the closing grep -
+for the symbol, for the phrase or count the change invalidates, and for the bare pointer form -
+returns zero outside the list; the grep must first HIT the known list. Every new or changed
+evidentiary instrument is made to fail on purpose before it is trusted; retro-proofing existing
+instruments is a deliberate ticket, never an ambient duty. A permission gate is made to fail on a
+copy - a fixture project or a scratch copy of its settings - never by weakening the live gate. The
+seeds under `templates/memory-seeds/` are a home of that enumeration on every doctrine change. A
+grep that matches nothing proves nothing.
 
 **Model policy for ad-hoc subagents:** always pass an explicit `model` to the Agent tool - never
 inherit the session model silently. `haiku` for purely mechanical scans (existence/counts, grep
 inventory, reference sweeps; mind its smaller context); `sonnet` for evidence gathering with
-judgment (coverage comparisons, harvest-type scans) - the default scan tier. The top-tier
-session model is never delegated for scans; synthesis and audit decisions stay with the COO
-regardless of tier. On contradiction or uncertainty in a cheap scan's result, the COO verifies
-directly or re-dispatches one tier up. The pinned loop roles (Writer frontmatter, Reviewer/QA
-via `roles.json`) are unaffected by this policy.
+judgment - the default scan tier. The top-tier session model is never delegated for scans;
+synthesis and audit decisions stay with the COO. On contradiction or uncertainty in a cheap scan's
+result, the COO verifies directly or re-dispatches one tier up. The pinned loop roles (Writer
+frontmatter, Reviewer/QA via `roles.json`) are unaffected by this policy.
 
 **Role dispatch is physical, never simulated:** the R2/R3 loop roles (Writer, Reviewer, QA) are
-ALWAYS dispatched as real subagents (Agent tool / the `/pnp:*` skills) - the main session
-"performing" a role's work inline is a route violation equivalent to a failed review, even when
-the output looks complete. Rationale: some harness builds carry a built-in nudge against
-subagent use; this doctrine's explicit dispatch requirement IS the user request, and a silent
-inline substitution would produce a non-blind review that defeats the independent-audit
-guarantee.
+ALWAYS dispatched as real subagents (Agent tool / the `/pnp:*` skills); the main session performing
+a role's work inline is a route violation equivalent to a failed review. This explicit dispatch
+requirement IS the user request, whatever a harness nudge against subagents says.
 
 ## The COO write boundary runs along artifact class, not size
 
 Docs class (`docs/**`, PLAN sections, README, comments without code) - the COO edits directly.
-Code class (anything under an app/package source tree that compiles, is imported, or is tested)
-- goes to the Writer, even a single line; one-line code changes are exactly the ones that break
-silently, and "mechanical, no logic" is self-assessed by the party that wants to skip the gate.
-The mechanism for code-class notes is a micro-round to the **live** Writer, not a fresh spawn -
-the warm context is an order of magnitude cheaper. If the Writer session has died, you spawn and
-pay; that is the price of the audit trail right before the commit gate. Every direct COO edit is
-announced explicitly in the commit summary.
+Code class (anything that compiles, is imported, or is tested) - goes to the Writer, even a single
+line. A code-class note goes as a micro-round to the **live** Writer, not a fresh spawn; if the
+Writer session has died, spawn and pay. Every direct COO edit is announced in the commit summary.
 
 **COO-authored text is reviewed like the Writer's:** when a ticket has a Reviewer pass, that
-text must already be in the tree when the pass is dispatched - the review covers the whole diff,
-not the Writer's half of it. Blockers cluster precisely where COO-written prose escaped a pass.
+text must already be in the tree when the pass is dispatched - the review covers the whole diff.
 
-**But the Reviewer verifies DECISIONS; it is not the mechanism that discovers factual errors.**
-A wrong path, a wrong line number, a wrong count, a command that does not exist, a claim about
-how an engine or a hook behaves - those are checkable against the tree by anything that can read
-it, and paying a review pass to find them buys at the most expensive tier what the cheapest one
-proves. They are caught by the **fact-check gate** (`/pnp:review` Step 2b): one cheap read-only
-scan agent over the prose of a diff, run BEFORE every diff pass above the scan tier, returning a
+**The Reviewer verifies DECISIONS; it is not the mechanism that discovers factual errors.** A wrong
+path, line number, count, a command that does not exist, a claim about how an engine or a hook
+behaves are caught by the **fact-check gate** (`/pnp:review` Step 2b): one cheap read-only scan
+agent over the prose of a diff, run BEFORE every diff pass above the scan tier, returning a
 per-claim ledger - every claim verified, false or unverifiable, with `file:line` and a count line.
-A plan gets no fact-check agent: its facts are the research's pointers, and its pass is guarded by
-the mechanical gate (§ Plan readiness review). The COO fixes those, and only then dispatches the
-review. The gate guards the EXPENSIVE pass,
-whichever engine hosts it: a Claude reviewer on `opus`/`fable` costs top-tier tokens exactly as a
-Codex pass costs external quota, and only a reviewer that itself runs on a scan-tier model
-(`haiku`/`sonnet`) has nothing more expensive than the gate to protect. That skip is read off the
-tier ALIAS alone: a Claude reviewer pinned to an exact model id always gets the gate, because PnP
-does not rank exact ids against the tiers, and running the gate is the safe direction.
+The COO fixes those, and only then dispatches the review. A plan gets no fact-check agent: its pass
+is guarded by the mechanical gate (§ Plan readiness review). The gate guards the EXPENSIVE pass,
+whichever engine hosts it: only a reviewer on a scan-tier alias (`haiku`/`sonnet`) skips it. The
+skip is read off the tier ALIAS alone: a Claude reviewer pinned to an exact model id always gets
+the gate.
 
 ## The operator does not arbitrate engineering decisions
 
 Scope structuring, brief content, technical sequencing, and what-lands-in-which-ticket (within
 an approved plan) are the COO's calls - decided and REPORTED with a one-line rationale, not
-offered as questions. The operator's gates are exactly: the commit click / the push word (a
-commit is the native dialog alone; push/merge/rebase need an explicit word plus their dialog),
-review passes BEYOND THE FIRST (a pass beyond `review.plan.passes`, a correction round past the
-cap - each needs its own explicit word, and so does every auditor pass after the first one of a
-route: only the FIRST pass rides the ticket's standing word - the implementation pass, or the
-first readiness pass - while a further configured readiness pass, the verification pass after a
-correction round that touched code, and any pass beyond the contract are each dispatched on the
-operator's own word, one word per pass),
-destructive or system-changing operations, and product/UX
-choices (what the user sees or loses as functionality). A question outside those gates blocks the
-operator without adding value - asking it is a workflow defect, not politeness. A blocker that
-demands more than the product needs - a precision, a scale or a guarantee beyond the business
-scope - is a product choice of exactly this kind, and the plan cannot go on without its answer: it
+offered as questions. The operator's gates are exactly:
+
+- the commit click / the push word (a commit is the native dialog alone; push/merge/rebase need an
+  explicit word plus their dialog);
+- review passes BEYOND THE FIRST: only the FIRST pass of a route rides the ticket's standing word -
+  the implementation pass, or the first readiness pass; a further configured readiness pass, the
+  verification pass after a correction round that touched code, a pass beyond `review.plan.passes`,
+  a correction round past the cap and any pass beyond the contract are each dispatched on the
+  operator's own word, asked for before the dispatch, one word per pass;
+- destructive or system-changing operations;
+- product/UX choices (what the user sees or loses as functionality).
+
+A question outside those gates is a workflow defect. A blocker that demands more than the product
+needs - a precision, a scale or a guarantee beyond the business scope - is a product choice: it
 goes to the operator early, in plain words, before a revision or a pass is spent on it.
 
 ### How the COO speaks to the operator
 
-Deciding well is not enough; the report has to land.
-
 1. **Plainly.** Answer the question and stop. One decision, one line; numbers and names rather
-   than categories. The abstract vocabulary the COO thinks in - debt / blocker / follow-up /
-   trade-off - is not the operator's, and the translation layer the COO skips is paid for in the
-   operator's confusion. A dialog is named by what it approves - "the commit of the ticket's code" -
-   and the operator is never told which button to press: the gate is their decision.
-2. **Invent no debts and no follow-up tickets.** A mission does not close while any debt stands,
-   so a manufactured follow-up literally defers the closeout and reframes finished work as
-   unfinished. Closing a ticket, ask whether the thing blocks anything real; if not, say
-   "closed" - and leave no "follow-up ticket" wording in the canon or the PLAN, because the next
-   session will read it and open one for nothing.
-3. **Do not reverse under tone.** After a sharp operator reaction, separate two things: am I
-   wrong on the substance, or only in the wording? Correct exactly that and restate the rest
-   calmly. Judgements that move with the operator's tone are worth nothing, including the ones
-   that happen to be right.
-4. **Report a verdict in substance.** Every Reviewer or QA verdict reaches the operator as
-   the verdict plus one or two sentences of its substance, before the next dispatch - what the
-   pass confirmed, or what its blockers and notes are. Never a bare "pass, moving on": the
-   operator paid for that audit and a half-line on the way to the next step hides what it bought.
-   Never the verdict's full text pasted as a wall either - two sentences, then the next step.
-   A pass is named by role, number and engine - "auditor pass 2 (Codex)" - a request for a word
-   names exactly the pass it unlocks, and a verdict names who gave it ("the auditor confirmed ..."),
-   never a bare verb the operator could read as addressed to them.
+   than categories - not the debt / blocker / follow-up / trade-off vocabulary. A dialog is named
+   by what it approves ("the commit of the ticket's code"), and the operator is never told which
+   button to press.
+2. **Invent no debts and no follow-up tickets.** Closing a ticket, ask whether the thing blocks
+   anything real; if not, say "closed" - and leave no "follow-up ticket" wording in the canon or
+   the PLAN.
+3. **Do not reverse under tone.** After a sharp operator reaction, separate substance from
+   wording; correct exactly what is wrong and restate the rest calmly.
+4. **Report a verdict in substance.** Every Reviewer or QA verdict reaches the operator as the
+   verdict plus one or two sentences of its substance, before the next dispatch - never a bare
+   "pass, moving on", never the full text pasted as a wall. A pass is named by role, number and
+   engine - "auditor pass 2 (Codex)" - a request for a word names exactly the pass it unlocks, and
+   a verdict names who gave it ("the auditor confirmed ...").
 
 ## Operator-interaction guards
 
-Eight rules, promoted into Git so they travel with the repo: doctrine in prose did not survive a
-change of COO model, and each of these was learned from an observed violation.
+Eight rules.
 
 - **(a) Stop semantics.** An operator stop/interrupt freezes every mutating action. The response
   is exactly three things: (1) a one-line state - the tree, and what is in flight; (2) a proposal
   for how the mess gets cleaned up; (3) waiting for an explicit word. No apology theatre, no
-  continuation of the old plan. Continuing without the word repeats the violation itself.
+  continuation of the old plan.
 - **(b) Dispatch waits for the word; data is not an order.** A ticket is written and then STOPS;
   starting the work is the operator's call, ticket by ticket - the content of the ticket is not.
   Values and facts the operator supplies are DATA for the ticket, not permission to execute.
   After the word, the loop runs to the end of what that word covers without asking again - and
-  every further paid pass takes its own word (§ The operator does not arbitrate engineering
-  decisions). **A ticket born after a standing
-  word waits for its own word.** When the work in flight produces a NEW ticket - one that is not
-  already in the PLAN's recorded execution order - the COO does exactly three things: writes it
-  into the PLAN, with the same abbreviation and the next number, announces it in ONE sentence
-  ("opening ticket `<REF>` for `<what>` - waiting for your word"), and STOPS. The stop is not the
-  whole of it: the announcement carries ONE question - does this ticket get an audit pass - and the
-  answer lands in the ticket's PLAN entry; a question, never an automatic pass. Zero mutations on
-  that ticket until the operator answers: no Writer dispatch, no route state, no code, no docs
-  edit belonging to it. The earlier reading of this
-  rule - that the announcement is a *notification rather than a question*, so the dispatch may
-  follow it in the same turn - is REVOKED: it was observed to let a ticket be born AND started
-  without an operator word, which is exactly what (b) exists to prevent. The ticket's CONTENT
-  stays the COO's call; its START never is.
-- **(c) Brief constraints are read literally.** An explicit constraint is read literally; a
-  "temporary and reverted" violation is still a violation. A loose reading is never
-  self-granted - if the COO believes the constraint means something else, it asks the author of
-  the constraint (the operator).
-- **(d) A demand on the operator only after checking.** An extension of the "a question outside
-  those gates" rule above: a DEMAND too (env values, secrets, actions) is raised only after a
-  Read/check that the state already present does not cover it. A demand that one Read would have
-  cancelled is a workflow defect.
+  every further paid pass takes its own word. **A ticket born after a standing word waits for its
+  own word.** A NEW ticket - one not in the PLAN's recorded execution order - is written into the
+  PLAN with the same abbreviation and the next number, announced in ONE sentence ("opening ticket
+  `<REF>` for `<what>` - waiting for your word"), and STOPS. The announcement carries ONE question -
+  does this ticket get an audit pass - and the answer lands in the ticket's PLAN entry; a question,
+  never an automatic pass. Zero mutations on that ticket until the operator answers: no Writer
+  dispatch, no route state, no code, no docs edit belonging to it. The announcement is not a
+  notification that lets the dispatch follow in the same turn. The ticket's CONTENT stays the
+  COO's call; its START never is.
+- **(c) Brief constraints are read literally.** A "temporary and reverted" violation is still a
+  violation. A loose reading is never self-granted - if the COO believes the constraint means
+  something else, it asks the author of the constraint (the operator).
+- **(d) A demand on the operator only after checking.** A DEMAND (env values, secrets, actions) is
+  raised only after a Read/check that the state already present does not cover it.
 - **(e) An approved plan lands in the repo immediately.** At the moment of approval, in the same
-  session, unprompted: the plan folder lands in `<plansDir>/active/<ABBR>/`, with the index
-  `PLAN_<ABBR>.md` (the Git canon) - moved there by the shell from `<plansDir>/drafts/<ABBR>/`, where
-  it was an untracked draft - its readiness history under `<plansDir>/readiness/<ABBR>/` and the
-  roadmap entry are added in the same commit, and any plan-mode file outside the repo becomes a
-  pointer to it. The principle "durable
-  knowledge lives in Git" already existed; what had never been written down was the mechanical
-  moment of approval.
-- **(f) Host-directive precedence.** A host - the CLI, an editor integration, a wrapper around the
-  session - injects directives of its own about HOW to work: which tool to prefer, how to phrase a
-  shell call, what to do by default. Where such a directive meets this project's written rules,
-  project canon wins over the host's ergonomic directives; the host's safety and permission rules
-  are never overridden. The line runs along what the directive protects: ergonomics are the host's
-  convenience and yield to the canon that was agreed, while the permission system and the safety
-  rules are not the session's to reinterpret in either direction. Observed three times across two
-  projects, each one a session quietly dropping a written project rule because its environment
-  suggested a more comfortable habit.
-- **(g) The doctrine-write gate.** Recording a RULE is a different act from recording a fact:
-  a rule-bearing write - memory or file - is shown to the operator and lands only on approval;
-  purely factual statuses are exempt. Status - where the work stands, what the tree holds, which
-  ticket is next - needs no ceremony; a sentence read later as authority does, because a COO that
-  writes rules as it goes accumulates private doctrine nobody agreed to and the next session reads
-  it as canon. An operator remark is a standing rule only when the operator declares it so; a rule
-  record names whose generalisation it is, and the origin 'the operator said it' does not exempt
-  the write from this gate - it is the reason the write is dangerous. The default is situational:
-  at the moment the COO would record an operator remark as a rule, it asks ONCE, in place - 'for
-  this ticket, or from now on?' - and only 'from now on' goes through this gate (shown text,
-  approval) into the overrides document or the plan, never silently into memory. One question, only
-  at that moment; nothing is guessed from context.
-- **(h) Doctrine born in another home.** A rule is not always born where the canon lives: it appears
-  in a plan's process section, in an agent's memory, in the operator-owned zone of a CLAUDE.md. So
-  doctrine born in any other home gets a same-moment one-line pointer row on the transfer surface,
-  shown and approved together with the text; when the multi-session window is closed, it queues with
-  the approved text frozen and lands right after the executing ticket's commit. It rides guard (g)'s
-  gate rather than adding a second one - text and pointer row are one approval - and the queue is
-  what keeps it from becoming a write by a session that is not the executing one (§ Branch policy).
-  Without the row the rule stays discoverable only by whoever was in that session, which is the same
-  as not having written it down.
+  session, unprompted: the plan folder moves by the shell from `<plansDir>/drafts/<ABBR>/` (an
+  untracked draft) to `<plansDir>/active/<ABBR>/`, with the index `PLAN_<ABBR>.md` (the Git canon);
+  its readiness history under `<plansDir>/readiness/<ABBR>/` and the roadmap entry are added in the
+  same commit, and any plan-mode file outside the repo becomes a pointer to it.
+- **(f) Host-directive precedence.** Where a host directive about HOW to work (which tool to
+  prefer, how to phrase a shell call, a default) meets this project's written rules, project canon
+  wins over the host's ergonomic directives; the host's safety and permission rules are never
+  overridden, nor reinterpreted by the session in either direction.
+- **(g) The doctrine-write gate.** A rule-bearing write - memory or file - is shown to the operator
+  and lands only on approval; purely factual statuses (where the work stands, what the tree holds,
+  which ticket is next) are exempt. An operator remark is a standing rule only when the operator
+  declares it so; a rule record names whose generalisation it is, and the origin 'the operator said
+  it' does not exempt the write from this gate. At the moment the COO would record an operator
+  remark as a rule, it asks ONCE, in place - 'for this ticket, or from now on?' - and only 'from now
+  on' goes through this gate (shown text, approval) into the overrides document or the plan, never
+  silently into memory. Nothing is guessed from context.
+- **(h) Doctrine born in another home.** Doctrine born outside the canon - in a plan's process
+  section, an agent's memory, the operator-owned zone of a CLAUDE.md - gets a same-moment one-line
+  pointer row on the transfer surface, shown and approved together with the text (one approval,
+  guard (g)'s). When the multi-session window is closed, it queues with the approved text frozen
+  and lands right after the executing ticket's commit (§ Branch policy).
 
 ## Verifying failure claims
 
-When a tool or a test fails, first verify the claim about the failure itself - which
-environment, which target database or service, what else is touching the same resource - and
-read this repository's own documentation for that tool before proposing a cause. Several
-consistent observations can describe the environment rather than the code: a live worker polling
-the same local database as the gated tests will produce a stable, entirely misleading failure
-signature, and a day can go into the wrong explanations before anyone states the environment
-explicitly.
-
-The same holds for every claim the COO relays to the operator, its own or an agent's: it is checked
-against the tree first, or it reaches the operator marked unverified.
+When a tool or a test fails, first verify the claim about the failure itself - which environment,
+which target database or service, what else is touching the same resource - and read this
+repository's own documentation for that tool before proposing a cause: several consistent
+observations can describe the environment rather than the code. Every claim the COO relays to the
+operator, its own or an agent's, is checked against the tree first, or reaches the operator marked
+unverified.
 
 **VERIFY honesty.** Run every VERIFY command literally and record the exact exit code - a
 claimed "exit 0" is not authority, the actual run is. If VERIFY fails for an environment reason
@@ -303,114 +210,94 @@ operator; never silently fix the environment and report a pass.
 
 The loop's *shape* is project-configurable; the *gates* are not.
 
-Configurable, and documented in your project's overrides document (`paths.overridesDoc`) - the
-defaults the plugin seeds there are: one reviewer rather than two; a correction-round cap of
-`loop.correctionRoundsCap` (factory default 2) instead of the generic low-4 / medium-8 /
-high-12 caps; R1 uses no orchestration loop; QA is conditional (only when a brief declares
-observable runtime/UI behavior, never in R1 or non-runtime R2).
+Configurable in your project's overrides document (`paths.overridesDoc`), with the seeded defaults:
+one reviewer rather than two; a correction-round cap of `loop.correctionRoundsCap` (factory 2)
+instead of the generic low-4 / medium-8 / high-12 caps; R1 uses no orchestration loop; QA is
+conditional (only when a brief declares observable runtime/UI behavior, never in R1 or non-runtime
+R2).
 
-Configurable in `aiwf.config.json` and shown on one screen by `/pnp:roles`: the **audit table** -
-`review.plan`, `review.code` and `review.docs`, one row per review class. A row carries `passes`
-alone and INHERITS the Reviewer role whole (engine, model and effort together), or it names its own
-host. The factory table is `plan 2`, `code 1`, `docs 1`, all three inheriting the Reviewer. Who
-audits what, on which engine, with how many passes is therefore a value the operator reads and
-changes - not a sentence in this document. What the table does NOT contain is the fact-check gate -
-it runs before every diff pass above the scan tier - nor the mechanical plan gate, which keeps a
-plan-class pass from starting without a current stamp (§ Plan readiness review); neither is
-configurable.
+Configurable in `aiwf.config.json` and shown by `/pnp:roles`: the **audit table** - `review.plan`,
+`review.code` and `review.docs`, one row per review class. A row carries `passes` alone and
+INHERITS the Reviewer role whole (engine, model and effort), or names its own host. Factory: `plan
+2`, `code 1`, `docs 1`, all inheriting the Reviewer. The table does NOT contain the fact-check gate
+nor the mechanical plan gate; neither is configurable.
 
-Not configurable, and enforced here regardless of the project:
+Not configurable:
 
 - **A plan-class pass does not start without a current stamp** over a folder that meets its
   mechanical contract (§ Plan readiness review).
 - **Only the operator lifts the correction-round cap.** After the cap without a passable result,
   stop and summarize to the operator. A round beyond the cap requires an explicit word in chat
-  *before* the re-dispatch, granted one extension at a time and recorded in the ticket's PLAN
-  entry. A correction round is counted from an auditor's verdict: the Writer's fixes before the
-  first verdict - a fact-check micro-round, the COO's own notes - are ticket work, not rounds
-  against the cap.
-- Plan readiness runs on its own contract - `review.plan.passes`, the audit table's plan row
-  (below) - independent of the correction cap.
+  *before* the re-dispatch, one extension at a time, recorded in the ticket's PLAN entry. A
+  correction round is counted from an auditor's verdict: the Writer's fixes before the first
+  verdict - a fact-check micro-round, the COO's own notes - are ticket work, not rounds.
+- Plan readiness runs on its own contract - `review.plan.passes` - independent of the cap.
 - The risk threshold and the stop condition are mandatory in every R2/R3 brief.
 - **A code-touching correction round WARRANTS a verification pass above the scan tier - and
-  dispatching it takes the operator's explicit word.** Such a pass costs the operator - external
-  quota on a Codex host, top-tier tokens on a Claude one - so it is asked for before the dispatch,
-  one word per pass, and a correction round whose whole delta is PROSE does not warrant one at
-  all: it is verified by the fact-check gate (one cheap scan agent over the changed text) plus the
-  COO's own first-hand verification of the delta, and both are recorded in the ticket's completion
-  record. The moment a correction round changes code the pass is warranted, on the row's host as
-  usual - what is gone is the default that dispatched it without asking. **Its suppression dual,
-  an exception to the sentence before it:** a code round answering a Reviewer `fail` whose whole
-  delta is at most ~10 lines, in files the previous pass already audited, and which carries a unit
-  test seen red before the fix, warrants no verification pass - so there is no word to ask and
-  nothing to resume - unless the delta touches a surface of COO routing check 1 (migration, access
-  policy, grants, auth, permission model), where the pass stays warranted. A QA `fail` is closed
-  only by a QA run. The fact-check gate and the COO's first-hand check of the delta are recorded as
-  for a prose round.
+  dispatching it takes the operator's explicit word**, one word per pass. A correction round whose
+  whole delta is PROSE warrants none: it is verified by the fact-check gate plus the COO's own
+  first-hand verification of the delta, both recorded in the ticket's completion record. **Its
+  suppression dual:** a code round answering a Reviewer `fail` whose whole delta is at most ~10
+  lines, in files the previous pass already audited, and which carries a unit test seen red before
+  the fix, warrants no verification pass - unless the delta touches a surface of COO routing
+  check 1 (migration, access policy, grants, auth, permission model). A QA `fail` is closed only by
+  a QA run. The fact-check gate and the COO's first-hand check of the delta are recorded as for a
+  prose round.
 
 ## Planning lock
 
-`/plan` and any explicit request to plan before implementation activate a planning-only lock at
-the orchestration level. Native Claude Plan Mode is useful but is not by itself the authority:
-it is local to one CLI session and does not constrain the Writer subagent or the Codex
-review/QA runs. The planning lock is doctrine that binds every role in the loop.
+`/plan` and any explicit request to plan before implementation activate a planning-only lock that
+binds every role in the loop; native Plan Mode alone is not the authority (it does not constrain the
+Writer or the Codex runs).
 
 While locked, the COO may read files, inspect Git state, research, compare options, and present
-a concrete plan. It may also update its own agent-local memory to retain user corrections or
-preferences; these memory updates need no separate approval
-(facts and preferences; a rule-bearing memory write goes through guard (g) even under the lock) and
-are not project workflow authority.
+a concrete plan, and update its own agent-local memory with facts and preferences (a rule-bearing
+memory write goes through guard (g) even under the lock); such memory is not project workflow
+authority.
 
 Until the concrete plan is presented and the operator explicitly approves its execution, the COO
 must not:
 
-- dispatch or advance an **implementation** brief for execution, or commit a change to the
-  Git-tracked PLAN - these wait for execution approval. Composing the concrete draft plan and a
-  read-only plan-readiness brief (each carrying its risk threshold + stop condition) is **explicitly
-  permitted** by the readiness exception below - the draft and its readiness history are the
-  planning's own files, the folder `<plansDir>/drafts/<ABBR>/` and `<plansDir>/readiness/<ABBR>/`,
-  written UNTRACKED under the lock and committed only at the landing, which is not the repository
-  edit this lock forbids; an extension of a plan that has already landed is drafted the same way,
-  as an UNCOMMITTED edit of `<plansDir>/active/<ABBR>/` and of its `<plansDir>/readiness/<ABBR>/`,
-  and lands with the extension's own docs commit;
+- dispatch or advance an **implementation** brief, or commit a change to the Git-tracked PLAN.
+  Composing the draft plan and a read-only plan-readiness brief (each carrying its risk threshold +
+  stop condition) is **explicitly permitted**: the
+  draft folder `<plansDir>/drafts/<ABBR>/` and `<plansDir>/readiness/<ABBR>/` are written
+  UNTRACKED under the lock and committed only at the landing; an extension of a landed plan is
+  drafted the same way, as an UNCOMMITTED edit of `<plansDir>/active/<ABBR>/` and its
+  `<plansDir>/readiness/<ABBR>/`, and lands with the extension's own docs commit;
 - delegate to the Writer subagent, QA, or another implementation run - the planner excepted: it is
   dispatched as the `writer` agent type with the planner brief, writes only under
   `<plansDir>/drafts/<ABBR>/`, and implements nothing (`/pnp:plan`);
 - edit the repository, agent/tooling configuration, or other project state - the planning's own
-  files excepted: `<plansDir>/drafts/<ABBR>/`, `<plansDir>/readiness/<ABBR>/`, the roadmap
-  entry, and the uncommitted edit of an active plan that an extension is;
+  files above and the roadmap entry excepted;
 - stage, commit, switch/create branches, merge, push, or perform another Git mutation.
 
-The sole orchestration exception is a read-only plan-readiness review by the Reviewer - run
-through the **plan-readiness mode of `/pnp:review`** (the findings-table readiness branch), which
-`/pnp:plan` calls, under the rules below. It does not release the planning lock or authorize
-implementation.
-
-Selecting an option (for example `A`, `B`, or `C`) chooses direction and refines the plan; it is
-not by itself approval to execute. Execution approval applies to the presented plan only.
-Commit, merge, push, destructive, and system-changing gates remain separate. Entering or leaving
-plan mode does not replace these human authority rules.
+The sole orchestration exception is the read-only plan-readiness review through the plan-readiness
+mode of `/pnp:review`, which `/pnp:plan` calls. It does not release the lock or authorize
+implementation. Selecting an option (`A`, `B`, `C`) chooses direction; it is not approval to
+execute. Execution approval applies to the presented plan only; commit, merge, push, destructive and
+system-changing gates remain separate, and plan mode does not replace them.
 
 ## Plan readiness review
 
 Plans for durable R2 work and all R3 work receive an independent read-only review before the COO
-presents the final plan for execution approval. Small R1 and non-durable R2 work do not receive
-this ceremony. Neither the planner nor the COO approves its own plan. `/pnp:plan` runs the cycle;
-this section is its doctrine. The COO owns the routine engineering choices inside it and asks the
-operator only when an unresolved alternative would materially change product intent, an
-architecture boundary, security/external risk or cost, or an irreversible outcome.
+presents the final plan for execution approval; small R1 and non-durable R2 work do not. Neither
+the planner nor the COO approves its own plan. `/pnp:plan` runs the cycle; this section is its
+doctrine. The COO owns the routine engineering choices inside it and asks the operator only when an
+unresolved alternative would materially change product intent, an architecture boundary,
+security/external risk or cost, or an irreversible outcome.
 
 **The cycle.** One roadmap entry per idea (`<plansDir>/ROADMAP.md`) -> research by one or two
 scan-tier agents in a fresh context, BEFORE the first sentence of the plan: the Code Map, what the
 code does today, and the consumers and adjacent contracts of every touched surface, as pointers ->
 `DECISIONS.md`: numbered decisions, a Deferred list and Open Questions; an open question stops the
 cycle until the operator answers, and an unknown is never written down as an assumption -> the
-planner agent writes the folder `<plansDir>/drafts/<ABBR>/` (the index, at most 3 tickets with
-their six fields and a Code Map, the gates each ticket passes in order) and returns a structured
-handoff - which decision lands in which ticket, the dependencies checked, the risks left, the
-evidence pointers; the COO reads the files and does not write the plan -> the mechanical gate ->
-ONE readiness pass -> the COO's triage -> at most 2 revisions -> the operator's approval -> the
-landing (guard (e)).
+planner agent writes `<plansDir>/drafts/<ABBR>/` (the index, at most 3 tickets with their six
+fields and a Code Map, the gates each ticket passes in order) and returns a structured handoff -
+which decision lands in which ticket, the dependencies checked, the risks left, the evidence
+pointers; the COO reads the files and does not write the plan -> the mechanical gate -> ONE
+readiness pass -> the COO's triage -> at most 2 revisions -> the operator's approval -> the landing
+(guard (e)).
 
 **The mechanical gate.** `scripts/engine/plan-gate.js --stamp <folder>` checks the folder contract -
 the index, at most 3 tickets, 6,144 bytes per ticket, the six headings, every decision of this plan
@@ -423,11 +310,9 @@ it cannot prove the plan is good.
 
 **The pass and the blocker contract.** The pass runs on the `review.plan` row (`/pnp:roles`). Its
 brief is the `COVERED BY:` line, `Class: plan`, `PLAN: <folder>` and the shipped readiness brief.
-The auditor reads the complete folder against the tree and returns every material gap at once: one
-findings table and one `BLOCKERS: <n> INFO: <m>` line, distinct from the implementation
-`pass`/`pass-with-notes`/`fail` verdict. A BLOCKER names a required property the plan lacks plus
-its evidence; INFO never causes a revision; wording, formatting and `file:line` precision in
-explaining context are out of scope; the fix is a hint, never the finding.
+The auditor reads the complete folder against the tree and returns every material gap at once; the
+output contract (one findings table, one `BLOCKERS: <n> INFO: <m>` line, what a BLOCKER is, what is
+out of scope) is `docs/REVIEW_CHECKLIST.md` § Plan readiness (before implementation).
 
 **Triage and the round file.** The COO disposes of every finding - fixed / rejected with a
 refutation / deferred / asked - in `<plansDir>/readiness/<ABBR>/round-<N>.md`: the table verbatim
@@ -441,7 +326,7 @@ own explicit word, and only when pass 1 returned a BLOCKER that reverses a recor
 the COO names a risk - security, tenancy, concurrency, transactions - after a substantive revision;
 its brief carries `round-1.md` verbatim (§ Fail aggregation). `review.plan.passes` is the ceiling
 (factory 2) and no pass runs beyond it without the operator's explicit word; at `0` the plan gets no
-auditor, a configuration `/pnp:roles` prints as `no auditor`, never a shortcut taken silently.
+auditor, which `/pnp:roles` prints as `no auditor`.
 
 **The session rule.** A readiness cycle starts in a fresh session. The COO session holds the plan
 index, the state and the verdict lines; it reads the approved tickets once and carries no revision
@@ -461,7 +346,7 @@ The readiness review checks only:
    class 15: a race left as an accepted residual is an open decision);
 4. tickets/steps are executable in the correct dependency order;
 5. acceptance criteria are sufficient, and every verification command is literal and can fail -
-   runnable as written rather than described, with a named output that would mean "broken";
+   runnable as written, with a named output that would mean "broken";
 6. branch, worktree, and Git prerequisites are valid.
 
 The approved plan is the durable Git authority after the operator approves execution.
@@ -482,92 +367,47 @@ Assignee
 Working branch     - only when different from the default integration branch
 ```
 
-`Risk threshold` and `Stop condition` are mandatory for every R2/R3 brief: without them
-Reviewer/QA can loop forever.
+`Risk threshold` and `Stop condition` are mandatory for every R2/R3 brief.
 
 Every Writer brief additionally carries the ticket ref on a **line of its own**, `Ticket: <REF>` -
-the machine-readable form of the ref the contract already requires. That line is not decoration: it
-is the contract Gate 2 reads. In the factory mode (`enforcement.dispatchGate: "always"`) the gate
-raises a native Yes/No dialog on every Writer dispatch. In `off-plan` mode it looks `<REF>` up in
-`<plansDir>/active/PLAN_*.md` and the plan folders `active/<ABBR>/` (index and `tickets/`) and stays
-**silent** when the ticket is really in an active PLAN, raising the dialog only for a brief with no
-ticket line, a ref that is in no active PLAN, or a plans directory it cannot read - because a
-dispatch that cannot name a ticket in an active PLAN is work nobody planned, which is exactly the
-accident worth one operator click.
+the contract Gate 2 reads (`docs/LOOP.md` § Enforcement of Writer-only writes).
 
-At the same moment - dispatch of an R2/R3 ticket - the COO writes the **route state**,
-`.aiwf/route-state.json` (kept out of git by the project's own `.gitignore`), as
-`{ "ticket": "<REF>", "route": "R2"|"R3" }`, and on
-closing the ticket clears it by writing `{}`. While that file names an R2/R3 route, **Gate 3**
-(the route-state guard inside the Gate 1 hook) lets the **main session** write only `docs/**`,
-`.aiwf/**` and root-level `*.md`, plus the transfer surface (`paths.transferSurface`, else
-`<plansDir>/PNP_CANDIDATES.md` - one file, and only when it is contained, ends in `.md` and is not
-under `.claude`) and the roadmap `<plansDir>/ROADMAP.md` under the same rules, so an idea lands in the
-roadmap while a ticket is open; anything else is denied with a message naming the open ticket,
-because code-class work belongs to the Writer while a ticket is open. With no state file - or
-with the cleared `{}` - behaviour is exactly what it was before, so R1 work is untouched, and the
-Writer is never affected in either case. A present-but-unusable state (a route that is not
-R2/R3, a non-string route, malformed JSON) denies by design, and is self-healing because
-`.aiwf/**` stays writable; an unusable state never opens the transfer surface or the roadmap. A `paths.plansDir`
-under neither `docs/` nor `.aiwf/` puts the plan's own draft and readiness files behind this guard
-while a route is open - all except the transfer surface and the roadmap under it, which stay writable -
-so `/pnp:plan` runs while no route is open. Two honest limits, stated in the same breath:
-the guard covers the **Edit/Write tool class only**, so a main-session mutation performed through a
-shell command is not caught and remains doctrine; and it only bites if the COO actually writes the file at
-dispatch - a convention, not an enforcement. The paths and the state-file location are fixed in
-v0.1. The guard is configurable per project through `enforcement.routeWriteGuard` in
-`aiwf.config.json`: an explicit `false` skips the route-state check, and EVERY other state -
-no config, an unreadable or malformed config, a missing key, a non-boolean value - leaves the
-guard armed exactly as it is with no config layer at all. The toggle never touches Gate 1: no
-config value can buy a non-writer subagent the right to write.
+At dispatch of an R2/R3 ticket the COO writes the **route state**, `.aiwf/route-state.json` (kept
+out of git by the project's `.gitignore`), as `{ "ticket": "<REF>", "route": "R2"|"R3" }`, and on
+closing the ticket clears it by writing `{}`. While it names an R2/R3 route, **Gate 3** lets the
+main session write only `docs/**`, `.aiwf/**`, root-level `*.md`, the transfer surface and the
+roadmap (mechanics and limits: `docs/LOOP.md` § Enforcement of Writer-only writes). The guard only
+bites if the COO actually writes the file at dispatch - a convention, not an enforcement.
 
 Six brief-authoring failures each cost a correction round:
 
 - **State the end state, not the edit.** "A reader cannot reach step X without having established
-  the prerequisite" is checkable; "add the version constraint" is not - and it can land *after*
-  the step it was meant to guard.
+  the prerequisite" is checkable; "add the version constraint" is not.
 - **Verify an inherited fact before it enters a brief.** A number or claim copied from the PLAN
-  or another doc is not evidence. A loose sentence in a plan can pass through a brief and ship as
-  a false statement in a runbook.
+  or another doc is not evidence.
 - **Walk any path a human executes** (runbook, setup, migration sequence) end to end yourself
-  before briefing it. A runbook has been briefed as correct while one of its steps carried no
-  command at all.
+  before briefing it.
 - **A factual claim the Writer acts on carries a `file:line` pointer** - or is marked explicitly
-  unverified, for the Writer to check. A claim dictated from memory of the design instead of read
-  from the source comes back as a review blocker; a brief that instructs the Writer to read the
-  source before writing a factual claim it acts on produces zero factual errors.
-  Where the pointer is owed is where the Writer ACTS or an acceptance check READS - a worklist line,
-  a guard, a command; context that only explains cites the section and the symbol, because a line
-  number in prose goes stale with the next commit and has to be verified again for nothing anyone
-  acts on.
-- **A scope or diff guard is anchored to HEAD at dispatch, never to an older commit.** A
-  guard that asks "what did this ticket touch" must diff against the tree the Writer started
-  from (`git rev-parse HEAD` at the moment of dispatch, written into the brief as a literal
-  hash); anchoring it to "the previous ticket's commit" silently includes every commit made in
-  between - typically the COO's own completion-record commit - and manufactures a false VERIFY
-  failure the Writer cannot (and must not) fix. Guards that intentionally span several tickets
-  (e.g. "no `messages/**` change since `<base>`") stay on their named base, but say so
-  explicitly.
+  unverified, for the Writer to check; a brief that instructs the Writer to read the source before
+  writing a factual claim it acts on is the remedy. The pointer is owed where the Writer ACTS or an
+  acceptance check READS - a worklist line, a guard, a command; context that only explains cites
+  the section and the symbol.
+- **A scope or diff guard is anchored to HEAD at dispatch, never to an older commit** -
+  `git rev-parse HEAD` at the moment of dispatch, written into the brief as a literal hash. Guards
+  that intentionally span several tickets stay on their named base, and say so explicitly.
 - **Scope the contract that has to move with the change** - an adjacent contract rides with the
   change it depends on: a dependency pin pulls the lockfile into the worklist, a deploy change
-  pulls the deployment canon into scope. A brief that names only the artifact the ticket is
-  "about" leaves its partner stating the old truth, and the pair is found out of step by the
-  review - a correction round for a dependency that one line of the worklist would have carried.
+  pulls the deployment canon into scope.
 
-**The brief carries its full precision in the first draft.** A readiness or implementation
-review VERIFIES decisions the COO has already made; it is never the mechanism that extracts
-them. Every looseness the COO can see while authoring is resolved and written down before the
-first review pass is dispatched: a CLI surface names its modes and exit codes; a record names
-its exact field shape (discriminated where it varies); a "reuse where it fits" names the files
-and functions; a test is an enumerated matrix, not a category; a verify command is literal and
-can fail with a named output. Leaving such items to the Reviewer buys the same precision at
-review-quota price, with the auditor effectively writing the design. This changes nothing about
-routes or pass counts - it is about the state of the document when the first pass starts.
+**The brief carries its full precision in the first draft.** A review VERIFIES decisions the COO
+has already made; it is never the mechanism that extracts them. Every looseness the COO can see is
+resolved before the first pass: a CLI surface names its modes and exit codes; a record names its
+exact field shape (discriminated where it varies); a "reuse where it fits" names the files and
+functions; a test is an enumerated matrix, not a category; a verify command is literal and can fail
+with a named output.
 
 Briefs, micro-rounds, and verdict contracts between the COO and the subagents are written in
-**plain engineering English** - the operator does not read agent-to-agent traffic, and another
-language between agents risks ambiguity and lost-in-translation on technical wording. The
-operator-channel language (`operator.language`) applies only to the COO <-> operator
+**plain engineering English**; `operator.language` applies only to the COO <-> operator
 conversation.
 
 ### Proof-surface feasibility (checked at brief-authoring / readiness time)
@@ -584,10 +424,8 @@ proof is a **readiness blocker**, not an execution-time note:
 - Proof requiring DB access, response metadata, or runtime state needs the access path stated
   explicitly in scope.
 - **A verify command must be able to fail.** If you cannot name the output that would mean
-  "broken", it is not a check. A grep that silently matches nothing has manufactured a false pass
-  that survived to review; byte-level facts are counted at byte level. Nor is this a ticket-brief
-  rule only - this holds for the PLAN document itself: a proof without a writable command is
-  a discovery row, not acceptance.
+  "broken", it is not a check; byte-level facts are counted at byte level. This holds for the PLAN
+  document too: a proof without a writable command is a discovery row, not acceptance.
 
 ### Out-of-scope failures found during work
 
@@ -596,15 +434,12 @@ recorded as risks in the report - never silently dropped, never silently fixed.
 
 ## Durable development history
 
-The in-session orchestration owns live execution state; it does not replace the Git-tracked
-history that future agents and collaborators need to understand why the code exists.
-
 A durable record is required when work is multi-session, changes architecture,
 migrations/security/access policy, or important domain behavior, or is likely to need future
 code-level explanation. Small R1/R2 fixes do not receive an artificial document.
 
 Every durable initiative uses **one living Mission PLAN**, including when it has multiple
-tickets. Do not create a separate active BACKLOG file. The PLAN keeps:
+tickets; no separate active BACKLOG file. The PLAN keeps:
 
 1. product/problem context and repository reality discovered during planning;
 2. mission goal, scope/out-of-scope, architecture boundaries, decisions, and rejected
@@ -618,63 +453,41 @@ tickets. Do not create a separate active BACKLOG file. The PLAN keeps:
    decisions/deviations, verification results, Reviewer/QA conclusion, commit hash, and remaining
    debt - in a folder plan the file `records/<REF>.md`, with the index's ticket row closed. The COO
    writes this record **immediately after the ticket's commit, in the same session,
-   unprompted** - a ticket is not closed without it, and tracking it is never the operator's job.
-   The record is written on the skeleton `templates/briefs/record.md`, its `## Measurements` row
-   filled at the close. Two acts ride the record. The scratch directory goes back to the live loop mechanics: evidence
-   worth keeping moves into the record or the plan's `readiness/<ABBR>/`, and what is left to
-   delete is listed beside the record's commit, because a delete is the operator's dialog. And the
-   COO says in one line whether the next ticket stays in this session or wants a fresh one - a
-   recommendation, not a stop: compaction is tolerable inside a ticket, while a plan's planning and
-   readiness are not a boundary.
-   That record does not ride along with the work it describes -
-   the docs commit is separate from the code commit: the code commit carries only the ticket's
-   work, and the record about it lands in its own commit, so what was audited and what is a note
-   after it stay distinguishable.
-   **A number describing the state of the system is measured or it is not stated:** anything a
-   reader may rely on as a current fact and regress against - tests passed or skipped, timings,
-   sizes, coverage, benchmark results - carries the command that produced it or does not go in at
-   all, and arithmetic over two real measurements is not a measurement. Numbers describing the
-   history of the work - blockers in a review round, observations across sessions, correction
-   rounds - are narrative anchored to the ticket record rather than facts about the code, and are
-   not covered; nor are identifiers, versions, dates, line references and design constants.
-   Refusing to write an unmeasured number into the canon is the Writer doing its job;
+   unprompted** - a ticket is not closed without it. The record is written on the skeleton
+   `templates/briefs/record.md`, its `## Measurements` row filled at the close. Two acts ride the
+   record: evidence worth keeping moves from the scratch directory into the record or the plan's
+   `readiness/<ABBR>/`, and what is left to delete is listed beside the record's commit (a delete
+   is the operator's dialog); and the COO says in one line whether the next ticket stays in this
+   session or wants a fresh one - a recommendation, not a stop: compaction is tolerable inside a
+   ticket, while a plan's planning and readiness are not a boundary. The record lands in its own docs
+   commit, separate from the code commit. **A number describing the state of the system is
+   measured or it is not stated:** anything a reader may rely on as a current fact and regress
+   against - tests passed or skipped, timings, sizes, coverage, benchmark results - carries the
+   command that produced it or does not go in at all, and arithmetic over two real measurements is
+   not a measurement. Numbers describing the history of the work (blockers in a round, correction
+   rounds) are narrative anchored to the record and not covered; nor are identifiers, versions,
+   dates, line references and design constants;
 5. the final Mission outcome and next durable follow-up. **Write a closeout ticket in two
    separable halves.** The durable half - platform canon, factual corrections, anything true
-   whether or not the mission ends - is worth landing on its own. The irreversible half - the
-   `CHANGELOG.md` release block, the version bump and its tag - is kept apart, so a mission that
-   turns out not to be closing costs nothing. A closeout scoped and executed as a single unit has
-   had to be split mid-flight, with the version bump reverted, when the live product was
-   exercised and found defective.
+   whether or not the mission ends - lands on its own. The irreversible half - the `CHANGELOG.md`
+   release block, the version bump and its tag - is kept apart, so a mission that turns out not to
+   be closing costs nothing.
 
 **A plan that is 100% executed is archived immediately.** The moment every ticket in a PLAN
-carries a closed status and its completion record, the COO moves the file from
-`<plansDir>/active/` to `<plansDir>/archive/` - in the same session, unprompted, as the last act
-of closing the final ticket, not as a step someone has to remember later. The archive has a
-naming convention the active directory does not: `<NNN>_PLAN_<ABBR>_<YYYY-MM-DD>.md`, where
-`NNN` is the next free sequence number and the date is the day of ARCHIVING, not of creation.
-`git mv` preserves the history; a bare copy of the active filename does not belong there. A folder
-plan moves as a DIRECTORY under the same name grammar: `git mv <plansDir>/active/<ABBR>/
-<plansDir>/archive/<NNN>_PLAN_<ABBR>_<YYYY-MM-DD>/`.
-`<plansDir>/readiness/<ABBR>/` is not moved: the archive numbering is for plans, and the history
-stays where the plan's landing put it. And
-archiving CHECKS as well as moves - the step is not only a `git mv` but a last look at the plan:
-archiving greps the plan's process sections for rule-class points without a pointer row -
-fail-capable, with a positive control, which here means running the grep once over a plan known to
-carry such a point and watching it report, because a grep nobody has seen hit is not evidence of
-anything. It is the backstop under guard (h): a rule that was born inside the plan and never reached
-the transfer surface is caught while someone is still reading the plan, rather than leaving the
-active set with it.
-
-This is the mirror image of guard (e) above: (e) fixes the mechanical moment a plan ENTERS the
-repo, this fixes the moment it LEAVES the active set. Both had to be asked for, and for the same
-reason - the principle was written down while the moment was not. The trigger is the checkable
-fact - every ticket closed, every verify green - never a feeling that the work is finished.
-Archiving is bookkeeping and reversible with one `git mv` back, which is why it is deliberately
-NOT part of the irreversible half above; the release block, the version bump and the tag stay
-gated exactly as before.
+carries a closed status and its completion record, the COO moves it from `<plansDir>/active/` to
+`<plansDir>/archive/` - in the same session, unprompted, as the last act of closing the final
+ticket. Archive name: `<NNN>_PLAN_<ABBR>_<YYYY-MM-DD>.md`, `NNN` the next free sequence number, the
+date the day of ARCHIVING; `git mv` preserves the history. A folder plan moves as a DIRECTORY
+under the same grammar: `git mv <plansDir>/active/<ABBR>/
+<plansDir>/archive/<NNN>_PLAN_<ABBR>_<YYYY-MM-DD>/`. `<plansDir>/readiness/<ABBR>/` is not moved.
+Archiving also greps the plan's process sections for rule-class points without a pointer row -
+fail-capable, with a positive control (the grep run once over a plan known to carry such a point,
+seen to report) - the backstop under guard (h). The trigger is the checkable fact - every ticket
+closed, every verify green. Archiving is bookkeeping, reversible with one `git mv` back, and NOT
+part of the irreversible half above.
 
 Do not copy raw orchestration conversation, assignee/status changes, or review rounds into the
-PLAN. Preserve accepted engineering context, not runtime noise.
+PLAN.
 
 Use the configured paths (`paths.plansDir`):
 
@@ -687,51 +500,34 @@ Use the configured paths (`paths.plansDir`):
 <plansDir>/archive/
 ```
 
-A draft lives in the repository while the plan is one, its readiness history lands beside it, and the
-scratch directory carries the live loop mechanics only - a plan's proof written there would
-disappear with it, because git ignores it. One `<ABBR>` is one plan for good: its `readiness/<ABBR>/`
-stays after archiving, and a later plan with the same letters would write over it.
-
-The approved PLAN is written to Git only after the planning lock is released - and then
-immediately, by the COO itself (docs class, per the write boundary above and guard (e)), before
-production-code changes begin - the landing commit, which also takes the readiness history that
-has sat untracked beside the draft since the cycle began (`/pnp:plan` Step 6). Rough personal notes are inputs, never
-implementation authority.
-When a durable record is warranted:
+The scratch directory carries the live loop mechanics only - a plan's proof written there would
+disappear with it. The approved PLAN is written to Git only after the planning lock is released -
+and then immediately, by the COO itself (docs class), before production-code changes begin: the
+landing commit, which also takes the readiness history (`/pnp:plan` Step 6). Rough personal notes
+are inputs, never implementation authority. When a durable record is warranted:
 
 - **one prefix per plan.** A plan file is `PLAN_<ABBR>.md` - a folder plan's index
-  `active/<ABBR>/PLAN_<ABBR>.md` carries the same name - where `<ABBR>` is an abbreviation of the
-  plan's topic written as **2 to 8 uppercase letters `A-Z`**, and every ticket in that plan carries
-  the Ticket Ref `<ABBR>-<NNN>`: the SAME abbreviation as its plan file, plus `<NNN>`, a **three-
-  digit** sequential number that is never reused - not even for a ticket that was dropped.
-  `PLAN_ABC.md` holds `ABC-001`, `ABC-002`, and so on. That grammar is what the tooling reads: it
-  is the shape the dispatch gate turns into a filename (`PLAN_<ABBR>.md`, then `<ABBR>/PLAN_<ABBR>.md`,
-  then `<ABBR>/tickets/<ABBR>-<NNN>.md`) and the shape the self-check holds a plan to.
-  An `<ABBR>` is never reused by a later plan: its `<plansDir>/readiness/<ABBR>/` outlives the plan,
-  and a second plan with the same letters would write over it.
-  The ref is a lookup key, not a description: from the ref alone the plan file is known without
-  searching for it;
-- **a ticket born in flight takes the same abbreviation and the next free number.** Whatever its
-  subject, it belongs to the plan it was born in; a different abbreviation means a different
-  plan, never a foreign ref inside an existing one;
-- **a candidate has no ref.** Work that is only proposed - a candidate, an idea, a note toward a
-  future plan - carries a title and nothing else. It earns its `<ABBR>-<NNN>` at the moment it is
-  written into a plan, and not before; a ref that resolves to no ticket section is a broken
-  lookup;
-- choose the abbreviation so it identifies the actual product/workstream; do not reuse an
-  unrelated migration or technology prefix merely because it is available. The convention is not
-  retroactive: plans and refs created before it keep their names, and the tools that read refs
-  fall back to a full scan for them;
-- the durable ledger is the living Mission PLAN itself - there is no separate runtime work-item
-  store;
-- carry the Ticket Ref, PLAN path, and ticket-section anchor in the brief the COO hands the
-  Writer, instead of copying the plan into it;
+  `active/<ABBR>/PLAN_<ABBR>.md` carries the same name - where `<ABBR>` is **2 to 8 uppercase
+  letters `A-Z`**, and every ticket in that plan carries the Ticket Ref `<ABBR>-<NNN>`: the SAME
+  abbreviation plus a **three-digit** sequential number that is never reused - not even for a
+  dropped ticket. That grammar is what the tooling reads: the dispatch gate turns it into a
+  filename (`PLAN_<ABBR>.md`, then `<ABBR>/PLAN_<ABBR>.md`, then `<ABBR>/tickets/<ABBR>-<NNN>.md`)
+  and the self-check holds a plan to it. An `<ABBR>` is never reused by a later plan: its
+  `<plansDir>/readiness/<ABBR>/` outlives the plan;
+- **a ticket born in flight takes the same abbreviation and the next free number**; a different
+  abbreviation means a different plan, never a foreign ref inside an existing one;
+- **a candidate has no ref.** Proposed work carries a title and nothing else; it earns its
+  `<ABBR>-<NNN>` when written into a plan;
+- choose the abbreviation so it identifies the actual product/workstream. The convention is not
+  retroactive: older plans and refs keep their names, and the tools fall back to a full scan;
+- the durable ledger is the living Mission PLAN itself - no separate runtime work-item store;
+- carry the Ticket Ref, PLAN path, and ticket-section anchor in the Writer brief, instead of
+  copying the plan into it;
 - use the stable Ticket Ref in commit bodies (`Refs: ABC-001`) and in code comments only when it
   preserves a non-obvious architectural, compatibility, security, or domain reason.
 
 Do not update Markdown for assignee changes, review rounds, or other live events. Update the
-relevant ticket section once after that ticket is accepted, then update the Mission closeout once
-and archive the PLAN.
+ticket section once after that ticket is accepted, then the Mission closeout once, and archive.
 
 ### The transfer surface
 
@@ -773,37 +569,30 @@ Direct work in the main Claude Code session. No subagents, no Reviewer, no QA.
 
 **An executable artifact ends R1.** The moment a ticket scoped as docs-only gains an executable
 artifact - a script, a hook, anything that runs - it is re-classified and takes the code loop,
-Writer and Reviewer included. A "closeout docs, no code" ticket that gained a shell launcher was
-still producing blockers in the final review pass; under R1 that launcher would have had no
-Reviewer at all.
+Writer and Reviewer included.
 
 ### R2 - product
 
 - **Non-runtime:** `COO -> Writer subagent -> /pnp:review -> COO`.
 - **Runtime/UI (observable behavior):** `COO -> Writer subagent -> /pnp:review -> /pnp:qa -> COO`.
 
-Correction rounds are capped (see "Loop shape and its overrides"). Local commit after the loop
-passes and a human approves (the commit `ask` dialog - see Commit & Push Authority).
+Correction rounds are capped (§ Loop shape and its overrides). Local commit after the loop passes
+and a human approves (§ Commit & Push Authority).
 
 **The engine and the pass count come from the ticket's CLASS - and the class is a row you can
-see.** Every review brief carries `Class: plan | code | docs` (default `code` when the line is
-absent), and `/pnp:review` resolves that row of the **audit table** before it dispatches:
+see.** Every review brief carries `Class: plan | code | docs` (default `code` when absent), and
+`/pnp:review` resolves that row of the **audit table** before it dispatches:
 
 - **`Class: code`** - anything that runs, is imported, or is tested - takes `review.code`.
 - **`Class: docs`** - the overrides document, README, skill/doc prose with **no executable
   artifact** in the diff - takes `review.docs`.
 - **`Class: plan`** - a plan-readiness pass over a durable plan before implementation - takes
-  `review.plan` (see "Plan readiness review").
+  `review.plan` (§ Plan readiness review).
 
-The engine, the model, the effort and `passes` all come from `review.<class>`; the factory table
-sends all three rows to the Reviewer role, with one pass for `code` and `docs`. **A docs-class
-ticket on a Claude host is a configuration you can see with `/pnp:roles`, not a rule** - and a
-Claude-hosted row dispatches the project's rendered `reviewer` agent, which `/pnp:setup` and
-`/pnp:roles` render whenever the Reviewer role OR any row is Claude-hosted, so the row is always
-dispatchable.
-
-The class is the COO's call and follows the R1 rule above: the moment a docs-class ticket gains an
-executable artifact it is code class, in the review row as in the route.
+The engine, the model, the effort and `passes` all come from `review.<class>`. A Claude-hosted row
+dispatches the project's rendered `reviewer` agent, rendered whenever the Reviewer role OR any row
+is Claude-hosted. The class is the COO's call and follows the R1 rule above: a docs-class ticket
+that gains an executable artifact is code class, in the review row as in the route.
 
 ### R3 - critical (migrations / access policy / auth / destructive / push)
 
@@ -812,15 +601,13 @@ r3/<topic> -> /pnp:review -> /pnp:qa (when there is observable/runtime behavior)
 -> operator commit/merge gate`. Push always requires the operator's explicit word and is executed
 via the `ask` dialog.
 
-R3 always uses the full ticket-brief contract. It also uses the durable Mission PLAN when the
-work crosses the durable-history threshold above. Durable decisions go to a short ADR when
-warranted.
+R3 always uses the full ticket-brief contract, and the durable Mission PLAN when the work crosses
+the durable-history threshold. Durable decisions go to a short ADR when warranted.
 
 ### COO routing
 
-Which session drives a ticket is a routing question of its own, beside R1/R2/R3, and it is answered
-by counting rather than by feel. The term is **COO routing**: "tier" stays reserved for the model
-vocabulary - the scan tier, the top tier - because a routing decision is not a model decision.
+Which session drives a ticket is answered by counting. The term is **COO routing**: "tier" stays
+reserved for the model vocabulary.
 
 Four checks, yes/no, read off the ticket before it starts:
 
@@ -832,28 +619,22 @@ Four checks, yes/no, read off the ticket before it starts:
    arbiter);
 4. a canon conflict or an open incident stands on the ticket's path.
 
-ANY "yes" puts the ticket on a COO at the top tier. ALL "no" puts it on the cheap COO. The plan
-records the answer in each ticket's entry as one line -
-`COO: top|cheap, because <check N | all four no>` - so the operator sees at approval which session
-each ticket needs. A non-durable R2 with no plan section records the same line in its brief.
+ANY "yes" puts the ticket on a COO at the top tier; ALL "no" on the cheap COO. The plan records
+the answer in each ticket's entry as one line - `COO: top|cheap, because <check N | all four no>`;
+a non-durable R2 with no plan section records it in its brief.
 
 **The routing moves the COO and nothing else.** The Writer's model stays pinned in its agent
-frontmatter and the audit table stays exactly as `/pnp:roles` shows it - a cheap COO does not buy a
-cheaper Writer or a cheaper auditor. That invariant is part of the rule, not a note beside it: the
-whole reason a cheap COO is survivable is that the audit net above and below it did not move, so
-mis-routing downward costs rounds and never the tree.
+frontmatter and the audit table stays as `/pnp:roles` shows it: a cheap COO does not buy a cheaper
+Writer or a cheaper auditor.
 
 **The dynamic clause.** A trigger that surfaces MID-ticket suspends the ticket exactly as a canon
-conflict does - escalation, not continuation. The four checks are read again against what is now
-true, not against what the brief assumed when it was written.
+conflict does - escalation, not continuation; the four checks are read again against what is now
+true.
 
-**The hardening principle - an economics note, not a fifth check.** The saving a cheap COO brings is
-real downstream of expensive readiness: on a hardened plan the cheap COO executes a contract that is
-already written down. Work routed cheap without a readiness cycle behind it keeps the same routing
-and pays the difference later, in correction rounds - the principle says where the saving comes from
-and where it evaporates; it changes no answer of the four checks and names no kind of work.
-**The dual** guards the opposite failure: routing upward "to be safe" on a ticket where all four
-checks really are "no" is the same defect as routing everything cheap, read from the other end.
+The saving of a cheap COO is real downstream of an expensive readiness cycle; work routed cheap
+without one keeps the same routing and pays later, in correction rounds. **The dual:** routing
+upward "to be safe" on a ticket where all four checks are "no" is the same defect as routing
+everything cheap.
 
 ## Branch policy
 
@@ -862,89 +643,69 @@ branch. R1/R2 may work directly on it or on a short-lived `feature/<topic>`, `fi
 `experiment/<topic>`, or `spike/<topic>` branch. R3 defaults to `r3/<topic>`. A non-default
 working branch is declared in the brief or directly by the operator.
 
-The agent works on whichever branch is currently checked out in the project root; it does not
-impose a branch of its own. Check branch and dirty state before work. If pre-existing dirty or
-untracked files are outside the planned task, do not propose branch creation/switching as an
-immediate execution step and do not carry those files into the task branch. State the
-prerequisite instead: finish or checkpoint the current scope first, or use a separate clean
-worktree explicitly provided by the operator. Never stash, clean, reset, or otherwise hide that
-state. A draft under `<plansDir>/drafts/` and a `readiness/<ABBR>/` in progress are the planning's
-own untracked files, not foreign work: they stay where they are and move only at their own landing.
-Merge and push run only on the operator's explicit word, through the `ask` dialog.
+The agent works on whichever branch is checked out in the project root. Check branch and dirty
+state before work. If pre-existing dirty or untracked files are outside the planned task, do not
+propose branch creation/switching as an immediate step and do not carry those files into the task
+branch: finish or checkpoint the current scope first, or use a separate clean worktree explicitly
+provided by the operator. Never stash, clean, reset, or otherwise hide that state. A draft under
+`<plansDir>/drafts/` and a `readiness/<ABBR>/` in progress are the planning's own untracked files,
+not foreign work: they stay where they are and move only at their own landing. Merge and push run only on the operator's explicit word, through the `ask` dialog.
 
 **A session does not mutate a repository outside its own project root.** No git or filesystem
-operation that writes, moves or discards state in another repository runs without the operator's
-explicit word for that exact operation - a sibling checkout, a consumer project and a scratch clone
-are all somebody else's tree, and a branch or a dirty file lost there is lost outside every gate this
-loop has. The `-C` forms ask by construction on both shell tools: the ruleset spells out
-`git -C <projectRoot> ...` for push, merge and rebase only, and Gate 4 raises a dialog for **any**
-other `git -C <path> <verb>`, because a hook that reads no project directory cannot tell one path
-from another. The dialog is the backstop, not the rule; the rule is that the word comes first.
-A product named in a request is not a path: when "write it into X's file" can mean two trees - a
-plugin's own repository and a consumer's copy - the COO settles which tree before writing, and asks
-when the tree cannot settle it.
+operation that writes, moves or discards state in another repository - a sibling checkout, a
+consumer project, a scratch clone - runs without the operator's explicit word for that exact
+operation. The `-C` forms ask by construction (`docs/LOOP.md` § Enforcement of Writer-only writes);
+the dialog is the backstop, the word comes first. When "write it into X's file" can mean two trees -
+a plugin's own repository and a consumer's copy - the COO settles which tree before writing, and
+asks when the tree cannot settle it.
 
-**A working tree carries one executing session.** Several sessions may be open at once - that is
-normal on a machine with more than one window - and the invariant that keeps them from writing over
-each other is this: on one working tree exactly ONE executing session; non-executing sessions may
-READ - zero repo writes, zero DB operations, zero paid auditor passes. It is an OPERATOR-HELD
-invariant (no hook can see sibling sessions), written in the honest-limits register.
+**A working tree carries one executing session.** Several sessions may be open at once; on one
+working tree exactly ONE is executing, and non-executing sessions may READ - zero repo writes, zero
+DB operations, zero paid auditor passes. An OPERATOR-HELD invariant: no hook can see sibling
+sessions.
 
 ## Fail aggregation
 
-Reviewer and QA must return ALL visible material problems in a single round - not one problem per
-cycle. A later round may not raise a blocker that was already visible earlier.
+Reviewer and QA must return ALL visible material problems in a single round; a later round may not
+raise a blocker that was already visible earlier (the role's side: `docs/REVIEW_CHECKLIST.md`
+§ Fail aggregation (both roles)).
 
-**In the plan-readiness cycle that ban is instrumented rather than trusted, and the mechanism is
-HANDING the list:** the pass-2 brief carries `<plansDir>/readiness/<ABBR>/round-1.md` verbatim -
-the findings and the COO's dispositions - and every NEW finding declares why it was not visible on
-pass 1 - a finding with no declaration is a contract violation, reported separately from the table.
-The declaration is an origin, not an apology (born of the revision between the passes, or a fact
-pass 1 did not open). A pass that is handed the previous list cannot re-derive it from scratch, and
-the COO sees which blockers the revision created. A verification pass after a code correction round
-carries the previous pass's blockers the same way.
+**In the plan-readiness cycle the mechanism is HANDING the list:** the pass-2 brief carries
+`<plansDir>/readiness/<ABBR>/round-1.md` verbatim - the findings and the COO's dispositions - and a
+verification pass after a code correction round carries the previous pass's blockers the same way.
+Every NEW finding then declares why it was not visible before; a finding with no declaration is a
+contract violation, reported separately from the table.
 
 ## Escalation and the arbiter
 
-Some decisions are not the COO's to make alone, and which ones they are is countable rather than
-felt. A decision escalates when:
+A decision escalates when:
 
 1. the decision reverses a plan-recorded decision;
 2. it touches access policy / tenancy / security-definer surfaces;
 3. its blast radius crosses the current ticket's boundary;
 4. two sessions/roles disagree in writing.
 
-**A fired trigger makes escalation MANDATORY - no word gates it.** A word here would hand the
-judgment back to the party tempted to skip the escalation, which is the whole of the failure this
-rule exists against. The COO announces it to the operator in ONE line and prepares the brief: the
-casus, the `file:line` evidence, and WHICH trigger fired. The brief is the whole transfer - nothing
-is explained by hand on top of it.
+**A fired trigger makes escalation MANDATORY - no word gates it.** The COO announces it to the
+operator in ONE line and prepares the brief: the casus, the `file:line` evidence, and WHICH trigger
+fired. The brief is the whole transfer.
 
-**Where it goes, and what the operator's part is.** Where a suitable second-view session is live,
-the COO sends the brief to it directly: the operator is never a courier between two sessions. Where
-none is live, the operator's part is purely PHYSICAL - a session cannot open another session - and
-it is one command, `/pnp:arbiter`, which loads this section, reads the ruling ledger and takes the
-parked brief. Succession, where the installation has no second session at all: the escalation target
-is the OPERATOR, who is a second view by construction, and a solo installation loses nothing by it.
+**Where it goes.** Where a suitable second-view session is live, the COO sends the brief to it
+directly: the operator is never a courier between two sessions. Where none is live, the operator's
+part is one command, `/pnp:arbiter`, which loads this section, reads the ruling ledger and takes the
+parked brief. With no second session at all, the escalation target is the OPERATOR.
 
-**The arbiter reads; it does not write.** It is a non-executing session in the sense of § Branch
-policy - zero repo writes, zero database operations, zero paid auditor passes. "No ruling without an
-opened file" is a duty to READ the evidence rather than reason about it from a description; it is
-never a licence to edit. The ruling comes back as a MESSAGE, and the EXECUTING session writes the
-one-line ruling row, because the session that writes the tree is the one accountable for what lands
-in it.
+**The arbiter reads; it does not write.** It is a non-executing session (§ Branch policy) - zero
+repo writes, zero database operations, zero paid auditor passes. It opens the evidence rather than
+reasoning from a description. The ruling comes back as a MESSAGE, and the EXECUTING session writes
+the one-line ruling row.
 
 **The ruling ledger.** One row per ruling - `{ question / ruling / evidence pointer }` - in the
-**Ruling ledger** section of the transfer surface (§ The transfer surface above defines that file
-and its four sections; nothing is restated here). One line with a pointer rather than a retelling:
-the ledger is the whole memory a cold arbiter has of what was already settled, and that is what
-makes an on-demand session possible where a standing one would otherwise be needed.
+**Ruling ledger** section of the transfer surface (§ The transfer surface). One line with a
+pointer: the ledger is the whole memory a cold arbiter has of what was already settled.
 
 **Its suppression dual.** No trigger fired means no escalation: the decision is the COO's, made and
-reported with a one-line rationale. An escalation opened without a fired trigger turns the operator
-- or a second session - into a tie-breaker for routine engineering, which is the defect at the other
-end of the same axis. Escalations are rare by design; a mission that escalates on most of its
-tickets has stopped classifying them.
+reported with a one-line rationale. An escalation without a fired trigger turns the operator - or
+a second session - into a tie-breaker for routine engineering.
 
 ## Tests
 
@@ -955,8 +716,7 @@ Test policy has a single home in your project - the standard named in your overr
 ## Status / release docs policy
 
 Your project's status and release artifacts (a project-status page, `CHANGELOG.md`, a roadmap -
-whichever of these exist) are named in the overrides document. The rules the plugin applies to
-them:
+whichever exist) are named in the overrides document. The rules:
 
 - they are evaluated only **after a DONE product ticket**;
 - docs-only analysis / inventory / audit / backlog work MUST NOT touch them;
@@ -969,92 +729,47 @@ them:
   completion record, the plan landing, R1 work; local only, after the review route passes AND a
   human explicitly approves. The approval is a native Claude Code visual Yes/No dialog -
   `Bash(git commit:*)` and its `PowerShell(git commit:*)` mirror are `ask` rules in the project's
-  `.claude/settings.json`;
-  the operator clicks **Yes** and types
-  nothing (no approval token, no state file). No automatic commits. One click buys one commit of one
-  kind - the docs commit is separate from the code commit: the code commit carries only the ticket's
-  work, and the record about it lands in its own commit, so what was audited and what is a note after
-  it stay distinguishable.
-  **The click approves the invocation, not the final tree content:** on a project carrying commit
-  automation - a `post-commit` hook that amends, a `pre-commit` formatter, a version stamper - the
-  approved tree and the tree that lands diverge silently (measured on a real consumer: an unstaged
-  version file was amended in), and every guard of the form "this ticket touched exactly these
-  files", including the HEAD-at-dispatch anchor above, is wrong by construction there. The
-  click-to-content binding that would close this is refused by design (`docs/LOOP.md` § Commit
-  gate); such a hook is a legitimate choice, so `/pnp:selfcheck` reports one as a `[NOTE]`, never a
-  failure, and auditing what it does stays the project's own job.
+  `.claude/settings.json`; the operator clicks **Yes** and types nothing (no approval token, no
+  state file). No automatic commits. One click buys one commit of one kind - the docs commit is
+  separate from the code commit. **The click approves the invocation, not the final tree
+  content:** on a project carrying commit automation - a `post-commit` hook that amends, a
+  `pre-commit` formatter, a version stamper - the approved tree and the tree that lands can diverge
+  silently, and every guard of the form "this ticket touched exactly these files", including the
+  HEAD-at-dispatch anchor, is wrong by construction there. The click-to-content binding is refused
+  by design; such a hook is a legitimate choice, `/pnp:selfcheck` reports one as a `[NOTE]`, never a failure, and
+  auditing it stays the project's own job.
 - **Push / merge / rebase:** executed from the session **only after the operator's explicit
   word** in chat, and each additionally surfaces a native `ask` dialog (Yes/No) as the second
-  gate - `Bash(git push:*)` / `merge` / `rebase` (and the `git.exe` and
-  `git -C <projectRoot>` variants, each mirrored as a `PowerShell(...)` rule) are `ask` rules.
-  They are deliberately **not** `deny`-blocked:
-  the operator does not drive git manually, so the agent must be able to run these itself, gated
-  by the dialog plus the explicit-word doctrine.
+  gate - `Bash(git push:*)` / `merge` / `rebase` (and the `git.exe` and `git -C <projectRoot>`
+  variants, each mirrored as a `PowerShell(...)` rule) are `ask` rules, deliberately **not**
+  `deny`: the operator does not drive git manually, so the agent must be able to run these itself.
 - Destructive/system-changing commands need explicit human confirmation immediately before
   execution, even when a brief marks them `MUST` - surfaced as `ask` permission dialogs for
   matching commands (`git reset/clean/rm/checkout/restore/revert/pull/fetch/cherry-pick`,
   database reset/seed scripts, migration tools, containers, recursive delete).
 
-These permission rules are harness-enforced and match by command **prefix** - and per Claude Code's
-permission documentation that matching is operator-aware: per subcommand (split on `&&`, `||`, `;`,
-`|`, `|&`, `&` and newlines), past a stripped wrapper such as `timeout` or `nice`, and past leading
-`NAME=value` assignments - so they cover the matching command
-forms in a normal permission mode; they are accident-grade, not adversary-proof - see `docs/LOOP.md`
-for the full honest model, including what this repository can and cannot test about that host
-behaviour. **Gate 4** stands behind them on both shell tools: an ask-class git verb
-(the same list the ruleset gates) is **denied** to any subagent that is not the Writer, because a
-background agent's dialog reaches nobody, and for the main session or the Writer it raises the dialog
-on the git forms **the rules never spell out**: `git.exe` outside `push|merge|rebase`, any
-`git -C <path> <verb>` (the shipped rule names `<projectRoot>`, which a hook that reads no project
-directory cannot confirm), a wrapper the harness does not strip (`sudo`, `npx`, a flagged `xargs`, a
-`command -v` query), a nested shell (`bash -c "..."`), and irregular whitespace on either side of
-the verb. A subcommand a rule really does match passes through silently - the `ask`
-rule is already raising that dialog itself, and a hook `ask` beside it would not add a second one
-anyway.
-
-**Both layers cover both shell tools.** Every rule in the ruleset ships as a `Bash(<X>)` /
-`PowerShell(<X>)` mirror pair - asserted in both directions by the self-check, so neither a missing
-twin nor an orphan rule that gates one tool alone can pass - and Gate 4 is wired on the matcher
-`Bash|PowerShell`, judging each command in its own tool's dialect (PowerShell splits subcommands on
-`;`, `|`, `&&` and `||`, strips no wrapper, treats `&` as the call operator, and folds case in
-recognition but never in the rule test). `Monitor` runs its commands under the Bash rules and needs
-none of its own.
-What remains is the CLASS rather than an instance of it: a harness tool **neither layer names** would
-be outside the matcher and outside every rule. That is weaker than the residuals above rather than
-another instance of them: it needs no unusual command form, only another tool, so Gate 4's deny of a
-background subagent would be bypassable by tool choice. Closing it for a tool that exists is the
-matcher plus the mirrored rules; it is written down so the guarantee is not read wider than it is.
+These rules match by command **prefix**, per subcommand, and are accident-grade, not
+adversary-proof; Gate 4 stands behind them on both shell tools. What the harness does, what Gate 4
+adds and what stays out of scope: `docs/LOOP.md` § Enforcement of Writer-only writes and § Honest
+security model.
 
 ## Reproducibility
 
 The loop is reproducible from Git plus the plugin payload - no external runtime required:
 
-- **Writer:** `.claude/agents/writer.md` in the project, rendered by `/pnp:setup` from
-  `templates/agents/writer.md.tmpl`; invoked via the Agent tool with `subagent_type: "writer"`.
-- **Reviewer / QA:** **engine-neutral** - the host per role is data in the project's
-  `.claude/aiwf-native/roles.json` (itself rendered from `aiwf.config.json.roles.*`), resolved by
-  the role resolver of this project's OS channel - `scripts/native/ps/aiwf-roles.ps1` (entrypoint
-  `-Role <r> -RolesPath <p> -AsJson`) on `windows`, `scripts/native/sh/aiwf-roles.sh` (entrypoint
-  `--role <r> --roles-path <p> --as-json`) on `linux`/`macos`; on either, a missing config file
-  falls back to the factory `claude`/`opus`/`high` record. The reviewer-only `-Class` / `--class`
-  flag resolves the audit table's row for one review class instead, adding `passes`. `/pnp:review`
-  and `/pnp:qa` dispatch either the read-only Codex wrappers of that channel
-  (`scripts/native/ps/codex-review.ps1` / `scripts/native/ps/codex-qa.ps1`, or
-  `scripts/native/sh/codex-review.sh` / `scripts/native/sh/codex-qa.sh`; recipe:
-  `docs/CODEX_REVIEW_QA_RECIPE.md`; needs the Codex CLI) **or** the `reviewer` / `qa` Claude
-  subagents (`Read/Grep/Glob` only; read-only by Gate 1
-  + tool allowlist). QA is an artifact judge on either host: the orchestrator runs the configured
-  E2E runner (which produces the JSON report/traces/screenshots) and QA reads those artifacts
-  read-only - QA does not drive a browser. The live-browser tools are used by the operator-gated
-  **QAL** (`scripts/native/ps/codex-qal.ps1` / `scripts/native/sh/codex-qal.sh`, `/pnp:qal`,
-  codex-only), not by QA.
-- **Enforcement:** Gate 1 (the PreToolUse mutation guard, which also carries Gate 3, the
-  route-state write guard), Gate 2 (the PreToolUse dispatch gate) and Gate 4 (the PreToolUse
-  git-verb guard on both shell tools, matcher `Bash|PowerShell`), wired through the plugin's
-  `hooks/hooks.json` - three hook
-  files, four responsibilities - plus the declarative `ask`
-  permission rules merged into the project's `.claude/settings.json` from
-  `templates/settings.ask-ruleset.json`, whose git verbs Gate 4 is cross-checked against.
+- **Writer:** `.claude/agents/writer.md`, rendered by `/pnp:setup` from
+  `templates/agents/writer.md.tmpl`.
+- **Reviewer / QA:** engine-neutral, the host per role in `.claude/aiwf-native/roles.json`
+  (rendered from `aiwf.config.json.roles.*`), resolved by `scripts/native/ps/aiwf-roles.ps1`
+  (`-Role <r> -RolesPath <p> -AsJson`) or `scripts/native/sh/aiwf-roles.sh` (`--role <r>
+  --roles-path <p> --as-json`); a missing config file falls back to the factory
+  `claude`/`opus`/`high` record, and the reviewer-only `-Class` / `--class` flag resolves one
+  audit-table row, adding `passes`. The Codex path needs the Codex CLI (recipe:
+  `docs/CODEX_REVIEW_QA_RECIPE.md`). Hosts and
+  boundaries: `docs/LOOP.md` § Role boundaries.
+- **Enforcement:** Gate 1-4 through the plugin's `hooks/hooks.json` (three hook files, four
+  responsibilities) plus the `ask` rules merged into `.claude/settings.json` from
+  `templates/settings.ask-ruleset.json` (`docs/LOOP.md` § Enforcement of Writer-only writes).
 - **One-page native mapping:** `docs/LOOP.md`. Regression: the selfcheck engine under
   `scripts/selfcheck/`.
 
