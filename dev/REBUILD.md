@@ -14,8 +14,8 @@
   via `claude -p`, base `90a2f81`), every rule homed (four rule-homes tables, homeless 0), the
   guides missed (WORKFLOW 18.6k vs 12k, LOOP 6.9k vs 4k, overrides 9.1k vs 8k) - closed on homeless
   0; under the ~40k stop line of step 2 below. Start numbers of that session: (a) 120k, (b) 130k
-  (before the compaction took effect). **Start number (a) is re-measured at the next fresh
-  session** and written into § Measurement protocol.
+  (before the compaction took effect). Start number (a) after the compaction: 111.5k (§ Measurement
+  protocol).
 - Follow-on: ROADMAP § GENERIC - the alignment's generic rules without a payload home get one
   payload sentence each and a 0.3.1 `Retires` line (after RBC-003, before 0.3.1).
 - RBC-003 open: code, R2, Writer, `COO: Fable - because check 1`, no Codex pass.
@@ -80,6 +80,13 @@ and asked by the COO - never estimated; `/pnp:mission` does not change (RBC/D-04
   110k (PnP), 120k (Silerax), operator's `/context`, 2026-10-17 (`active/RBC/RESEARCH.md` fact 17) -
   taken with the preflight-only prompt (below), so (a) via `/pnp:work` sits a few k above it by the
   tree check and the table: a known offset, comparable.
+  Measured: before RBC-002 120k (Opus 5.5 session `99e11b12`, statusline 12%); after RBC-002
+  (`a10110f`) **111.5k** (Fable 5.1 session `2b168434`, operator's `/context`, 2026-10-18; statusline
+  11%): messages 62.7k, system tools 31.9k, skills 6.1k, system prompt 5.9k, memory 4k, compact
+  buffer 3k, MCP instructions 0.7k, agents 0.2k. Not comparable line by line with the 2026-10-17
+  breakdown (that one was Silerax, messages 70.9k, system tools 23.8k): the harness's system tools
+  grew ~8k since, and that part is not ours. Opus 5.5 and Fable 5.1 count identically (the same four
+  files measured with both via `claude -p`: equal to the token).
 - **Start number (b)** - AFTER the active plan's files are read: in the same `/pnp:work` session,
   once the operator names the ticket and the plan is read, then the statusline (`/pnp:mission` in a
   fresh session gives a comparable one). It judges the folder format and selective reading. Recorded: ~130k after 0.3.0,

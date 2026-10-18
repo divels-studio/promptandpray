@@ -263,6 +263,12 @@ on this machine; the COO context is `pct * size / 100` - the number the statusli
 to its whole-percent precision. The session id is the one in the session's scratchpad path. This is
 the machine source `/pnp:plan` and the record skeleton read; nothing of it is payload.
 
+**Start number (a) at `/pnp:work`** (operator word 2026-10-18): at `/pnp:work`'s task question,
+before any plan file is read, the COO reads its context from the source above and prints it as
+start number (a) together with the task question; the operator may add `/context` for the
+breakdown. *Expires* with the measurement steps (after the first measured plan is judged -
+`dev/REBUILD.md` § How to continue step 6).
+
 ## Workspace paths
 
 ```text
