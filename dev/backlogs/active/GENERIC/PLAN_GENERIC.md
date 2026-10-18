@@ -36,7 +36,7 @@ two words after the plan closes).
 
 | ref | title | implements | status | record |
 |---|---|---|---|---|
-| GENERIC-001 | the rules: 43 payload sentences, the overrides trimmed and marked | D-01 D-02 D-03 D-04 D-05 D-06 | open | - |
+| GENERIC-001 | the rules: 43 payload sentences, the overrides trimmed and marked | D-01 D-02 D-03 D-04 D-05 D-06 | done (`510165d`) | `records/GENERIC-001.md` |
 | GENERIC-002 | the ledger, roadmap and skills prose | D-07 D-08 D-11 D-12 D-13 D-15 D-16 | open | - |
 | GENERIC-003 | the code: ledger template and seed, migration 0026, managed templates, 0.3.1, self-update | D-08 D-09 D-10 D-11 D-14 D-17 | open | - |
 
