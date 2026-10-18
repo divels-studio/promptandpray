@@ -81,13 +81,17 @@ Hard requirements (do not change without re-proving the read-only posture):
   operator's budget and returns no verdict. What the run had already read is recoverable - see
   "Resuming a session" below - and that changes nothing about this rule: recovery costs a further
   dispatch and the operator's attention. Never retry a timed-out pass in the foreground: a full
-  `high` pass on a multi-file diff has been observed killed at the cap with nothing returned.
+  `high` pass on a multi-file diff has been observed killed at the cap with nothing returned. Each
+  paid pass is measured as its own quota start/stop pair read off the operator's counter: a token
+  counter overstates a resumed pass, whose cached context it counts.
 
 ### Resuming a session (both wrappers, both channels)
 
 A correction round does not have to pay for a second cold read of the whole repository. Every run of
 `codex-review.*` and `codex-qa.*` - cold or resumed - records this run's session id into a state
-file, and a later pass can replay that session with the new brief.
+file, and a later pass can replay that session with the new brief. A verification pass resumes
+with the explicit id recorded at pass 1 (`-ResumeId <id>` / `--resume-id <id>`); a bare resume only
+when one session is known to hold the tree.
 
 - **THE WRAPPERS DO NOT TOUCH EITHER OUTPUT STREAM, and the id does not come from the output at
   all.** Codex prints its configuration banner - the part carrying `session id:` - on **stderr**,

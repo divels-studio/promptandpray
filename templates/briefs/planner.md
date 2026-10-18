@@ -26,8 +26,8 @@ THE FOLDER CONTRACT (checked mechanically by `plan-gate.js` - a breach is refuse
   each with these six headings at column 0, exactly: `## Outcome`, `## Scope`, `## Acceptance`,
   `## Risk threshold`, `## Stop condition`, `## Verify`; then `## Code Map` - a table whose first
   column is a backticked path that EXISTS (a directory counts), and the ticket's role for it.
-- Under the title of each ticket: `Implements: D-NN, ...` and the COO routing line `COO: top|cheap -
-  because <check N | all four no>`.
+- Under the title of each ticket: `Implements: D-NN, ...` and the COO routing line, which names the
+  model filling the tier: `COO: <model> - because <check N | all four no>`.
 - Every decision whose `plan:` names `<ABBR>` is cited by at least one ticket or the index; a
   decision of another plan is cited as `<X>/D-NN`.
 - No bare open-item marker anywhere (put the word in a code span if you must mention it).

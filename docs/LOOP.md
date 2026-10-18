@@ -96,7 +96,18 @@ The session rule (a readiness cycle in a fresh session; ~400k tokens as a ticket
 tools, not shell commands (`cat`/`head`/`node -e`/shell loops) - the shell is for execution
 (tests/git/build). Editing is not a shell job either: change tracked files with Edit / Write, never
 `sed -i`, a heredoc or a redirect - a shell edit can stall on a dialog nobody is watching, and a file
-whose text names a gated git verb trips Gate 4 when written through the shell.
+whose text names a gated git verb trips Gate 4 when written through the shell. No command carries a
+`cd` prefix: it runs from the repository root and reaches a subfolder with the tool's own flag.
+Surgical edits over rewrites: a file is never rewritten whole when the result is the same, and a
+whole-file restructure that is needed is announced in one line first, with its reason. A command
+expected to run over about five minutes runs in the background for every role, with a timeout of at
+least 3600000 ms, awaited by its notification; a run killed by the cap is not restarted but
+reported, and every brief repeats this. Auto mode refuses agent edits to `.claude/settings.json`,
+`.claude/hooks/**` and the config files an update writes, even with the operator's word: the COO
+asks the operator to switch auto mode off in its first reply, and if still blocked stops and
+explains - never a bypass through `sed`, a heredoc or a redirect; the operator may hand-edit from
+the COO's exact lines. The Writer's reply is short - about 25 lines: blockers, deviations, failed
+checks and the handoff path, the details in the handoff file.
 
 ## Enforcement of Writer-only writes
 

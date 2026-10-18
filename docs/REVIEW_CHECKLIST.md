@@ -73,6 +73,9 @@ The Reviewer does not reproduce runtime behavior - that is QA's job.
 ## Review dimensions by defect class
 
 Read the diff against each class below. Not a flat pass; group findings by the class they belong to.
+A change that reaches N surfaces carries N fixtures or asserts, one per surface - a test over one of
+them proves none of the others. A delete or an edit of an entity is checked against every reference
+to it - callers, pointers, documents - before the verdict.
 
 ### Regression & back-compat
 
