@@ -371,6 +371,14 @@ all fine" is not a handoff.
    failures: orchestrators cannot judge semantic correctness, verifiers false-pass non-inferable
    checks, plan checkers "go soft", the loop is ceremony for small tasks - the same risks apply here.
    Unverified by the agent: token savings (ranking is judgment), BMad stable v6.
+   **GSD tried locally 2026-10-18** (source: the operator's `/context` paste in the arbitration
+   session's transcript; written on the operator's word „записвай пакетите"): the operator installed
+   GSD `--claude --local` in an empty folder (`D:\gsd`, which carries no `CLAUDE.md` - GSD generates
+   one only at `/gsd-new-project`, so the figure includes no project instructions file); `/context`
+   after `/gsd-new-project` = 96.8k (system 5.9k, tools 22k, agents 3.1k for 35 agents, skills 8.3k for
+   72 commands, messages 56.8k = the workflow files ~31k + checks) against PnP ~110k after `/pnp:work`:
+   the two are within 15% at "ready to plan". GSD's only lead is a session that never invokes a
+   planning command (~40k vs ~110k) - exactly what ROADMAP § DOCSTAGE targets.
 5. The second-opinion review of this file (GPT, 2026-10-17): D-NN scoped per plan and qualified
    across plans; the SHA stamp over the frozen contract only; a second pass on a named risk; thin not
    blind (structured planner handoff; the COO reads the approved tickets); total spend as the fourth
