@@ -300,8 +300,9 @@ readiness pass -> the COO's triage -> at most 2 revisions -> the operator's appr
 (guard (e)).
 
 **The mechanical gate.** `scripts/engine/plan-gate.js --stamp <folder>` checks the folder contract -
-the index, at most 3 tickets, 6,144 bytes per ticket, the six headings, every decision of this plan
-cited, cross-references resolved, no bare open item, Code Map paths that exist - and writes the
+the index, at most 3 tickets, 6,144 bytes per ticket (its header `Status:` line not counted), the six
+headings, every decision of this plan cited, cross-references resolved, no bare open item, Code Map
+paths that exist - and writes the
 SHA-256 stamp to `<plansDir>/readiness/<ABBR>/stamp.json`; `--check` confirms it, and every
 revision is stamped again. A plan-class pass does not start without a current stamp: the Codex
 review wrapper refuses it (exit 2) and Gate 2 denies a Claude reviewer dispatch whose brief carries

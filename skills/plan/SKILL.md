@@ -125,8 +125,9 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/engine/plan-gate.js" --stamp <plansDir>/draf
 ```
 
 It refuses and lists every problem while the folder breaks its contract (index, at most 3 tickets,
-6,144 bytes per ticket, the six headings, every `D-NN` of this plan cited, cross-references, no bare
-open item, Code Map paths that exist), and writes `<plansDir>/readiness/<ABBR>/stamp.json` otherwise.
+6,144 bytes per ticket (its header `Status:` line not counted), the six headings, every `D-NN` of this
+plan cited, cross-references, no bare open item, Code Map paths that exist), and writes
+`<plansDir>/readiness/<ABBR>/stamp.json` otherwise.
 A refusal goes back to the planner (Step 4, the same dispatch, the problem lines quoted). When the
 stamp is written, confirm it:
 
