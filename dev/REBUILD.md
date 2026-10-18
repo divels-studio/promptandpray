@@ -7,7 +7,20 @@
 > for new entries (ROADMAP.md took that role on 2026-10-17).
 > Rewritten WHOLE at every change; history is in git.
 
-## Status (2026-10-17, late night - handover)
+## Status (2026-10-18 - plan C in progress)
+
+- RBC-001 done (`bf018ac`, record `31909bd`, amendment `90a2f81`). RBC-002 done (`a10110f`, record
+  `744cc4b`): WORKFLOW + LOOP + REVIEW_CHECKLIST + overrides 54.6k -> 38.7k tokens (claude-opus-5-5
+  via `claude -p`, base `90a2f81`), every rule homed (four rule-homes tables, homeless 0), the
+  guides missed (WORKFLOW 18.6k vs 12k, LOOP 6.9k vs 4k, overrides 9.1k vs 8k) - closed on homeless
+  0; under the ~40k stop line of step 2 below. Start numbers of that session: (a) 120k, (b) 130k
+  (before the compaction took effect). **Start number (a) is re-measured at the next fresh
+  session** and written into § Measurement protocol.
+- Follow-on: ROADMAP § GENERIC - the alignment's generic rules without a payload home get one
+  payload sentence each and a 0.3.1 `Retires` line (after RBC-003, before 0.3.1).
+- RBC-003 open: code, R2, Writer, `COO: Fable - because check 1`, no Codex pass.
+
+### Status at the 2026-10-17 handover
 
 - 0.2.20 and 0.3.0 released; both proven in Silerax (0.3.0: `--apply` exit 0, self-check 1300/1300,
   only the four expected files changed, the additions block kept). PnP self-install at 0.3.0.
