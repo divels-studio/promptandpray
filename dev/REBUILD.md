@@ -20,6 +20,14 @@
   1316/1316), release 0.3.3 = migration 0028 + CHANGELOG with the `Retires local rules:` line naming
   Silerax's eleven guards. The LEDGER's plan-less rows hold the ticket's record. Tag + push: the
   operator's two words. Next: step 11 PASSCOST (after the consumers take 0.3.3), then DOCSTAGE.
+- 2026-10-22, step 11 prose half DONE: PASSCOST's INFO contract `58a2f59` (R1 prose; release 0.3.4 =
+  migration 0029 note + CHANGELOG `Retires local rules: none`; validate-payload valid, provenance
+  empty, no suite, no auditor; self-install `/pnp:update --apply` exit 0, self-check 1332/1332). Issued alone rather than with DOCSTAGE because the measurement reads
+  the brief from the consumer's installed payload. The paid pass moves from the archived AIOCR (stale
+  stamp, a tree this repository does not write) to the next real Silerax plan (RDR): pass 1 on the
+  plan row, then on the operator's word a COLD pass 2 on gpt-5.6-sol/high over the same stamped folder
+  with the same pass-1 brief, the plan row switched through `/pnp:roles --set` for that pass on its own
+  apply word (ROADMAP § PASSCOST). Tag + push 0.3.4: the operator's two words. Next: DOCSTAGE (step 12).
 - RBC-001 done (`bf018ac`, record `31909bd`, amendment `90a2f81`). RBC-002 done (`a10110f`, record
   `744cc4b`): WORKFLOW + LOOP + REVIEW_CHECKLIST + overrides 54.6k -> 38.7k tokens (claude-opus-5-5
   via `claude -p`, base `90a2f81`), every rule homed (four rule-homes tables, homeless 0), the
@@ -93,8 +101,10 @@ plans). Step 6's judgment is below; step 7 waits for the release of step 10. The
    release. Why: planner 500k + research 407k = 43% of AIOCR's cycle spend.
 10. **Release 0.3.3** - bump + note migration + CHANGELOG whose `Retires local rules:` line names the
     Silerax guards the payload now carries; the consumers delete theirs on their operator's word.
-11. **PASSCOST** (ROADMAP § PASSCOST) - after the release: the INFO contract in the readiness brief +
-    one paid pass gpt-5.6-sol/high over an already stamped folder (AIOCR), on the operator's word.
+11. **PASSCOST** (ROADMAP § PASSCOST) - after the release: the INFO contract in the readiness brief
+    (DONE `58a2f59`, 0.3.4) + one paid pass gpt-5.6-sol/high, on the operator's word - over the next
+    real Silerax plan's stamped folder (RDR), cold, beside its pass 1, not over the archived AIOCR
+    (decided 2026-10-22, § Status).
 12. **DOCSTAGE** - after that. It rearranges files; it does not change what the COO does.
 13. SEEDFS, README, PORTABLE - unchanged, later.
 

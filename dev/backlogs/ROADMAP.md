@@ -67,9 +67,10 @@ leaves with one ledger row `<ABBR> dropped: <why>`.
   - 2026-09-24 Silerax rule - chain-trace in the code-pass evidence pack: adopted into the payload or left local by this measurement (Silerax keeps the pointer form until then, ruling 2026-10-18) [dev/backlogs/CANDIDATES.md:627] [dev/backlogs/CANDIDATES.md:1128]
   - 2026-10-22 AIOCR measured (Silerax) - three readiness passes 199,703 / 227,726 / 388,516 cumulative, blockers 13/0, 5 new, 1 new; six code passes over three tickets (every pass 1 fail -> pass 2 resumed); the stamped AIOCR folder is the candidate for the side-by-side pass [dev/REBUILD.md § First measured consumer plans]
   - 2026-10-22 Silerax pnp-candidate - the revision stop rule compares carried rows (open of carried vs raw count), not raw blocker counts [D:\Stratex\dev\backlogs\LEDGER.md rows of 2026-10-20]
+  - 2026-10-22 the INFO contract DONE in `58a2f59` (release 0.3.4: the explicit "wording / formatting / file:line precision = INFO" line, the one test for a row, six INFO examples; REVIEW_CHECKLIST mirrors the test); the measurement goes to the next real Silerax plan (RDR): pass 1 on the plan row (gpt-6-sol/xhigh), then on the operator's word a COLD pass 2 on gpt-5.6-sol/high over the same stamped folder with the same pass-1 brief, the plan row switched through `/pnp:roles --set` for that one pass on its own apply word and switched back; written into the RDR plan as a paid pass beyond the contract (scope + cost). Not over the archived AIOCR: its stamp is stale and this repository writes nothing in the consumer's tree [dev/REBUILD.md § How to continue step 11]
 - Size: S
 - Plans: none yet
-- Status: idea
+- Status: in progress
 - Born: 2026-10-18, operator word relayed by the arbitration session (the post-archive batch, „записвай пакетите")
 
 ## PORTABLE - a consumer is not coupled to PnP
