@@ -6,6 +6,8 @@ Read/Grep/Glob; the shell only for `git log`/`git show` when history is the ques
 GOAL OF THE PLAN (the operator's, for orientation - do not judge it): <goal>
 
 SURFACE TO SCAN: <the files, commands, config keys, contracts or behaviours this agent covers>
+Read by pointer: a grep hit and its neighbourhood, the section a symbol lives in - never a whole file
+to learn its role; the Code Map row needs the role, the facts need the lines.
 
 BASE: <none - first plan of the entry | <plansDir>/active-or-archive/<X>/RESEARCH.md - report only
 what changed since that plan and what it did not cover>

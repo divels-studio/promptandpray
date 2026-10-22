@@ -6,7 +6,9 @@ You do not decide anything the decisions do not already decide.
 GOAL: <goal>
 FOLDER: <folder> (= <plansDir>/drafts/<ABBR>/)
 READ FIRST, from disk: `<folder>/RESEARCH.md`, `<folder>/DECISIONS.md`, the roadmap entry `<ABBR>` in
-`<plansDir>/ROADMAP.md`, and every file a Code Map row you write names.
+`<plansDir>/ROADMAP.md`. Read the code BY POINTER: open a file only at the `file:line` the research
+names, and only where you write a Code Map row or a worklist pointer - never a whole file; a Code Map
+row needs the file's role, which the research already gives.
 CLOSING GREPS: <COO-filled - the consumer enumeration of every symbol the plan changes, `file:line`
 each, so you never ask for it>
 <on a revision: ROUND FILE: <plansDir>/readiness/<ABBR>/round-<N>.md - fix every row whose
