@@ -28,6 +28,15 @@ leaves with one ledger row `<ABBR> dropped: <why>`.
 - Status: idea
 - Born: 2026-10-17, operator word „тоя 11 отива ... в новия роадмап"
 
+## GUARDS - the consumer's execution guards and pnp-candidate rows homed in the payload
+- Goal: every one of Silerax's eleven execution guards and five `pnp-candidate` rows is either a duplicate of a payload sentence (then nothing) or has one sentence in its payload home, so a session governs itself without an arbiter beside it and the consumers delete the local copies through a `Retires local rules:` line
+- Why: OCRG-002 was closed green and reverted; AIOCR stayed clean only with an arbiter session plus eleven hand-carried rules - „да не го карам цял живот работеща сесия + арбитър че ми ляга скъпо" (operator 2026-10-20, Silerax); the reading is `dev/REBUILD.md` § First measured consumer plans
+- Scope: in - the scan (duplicate / gap per point, pointers), the gap sentences in `docs/WORKFLOW.md`, `docs/REVIEW_CHECKLIST.md`, `templates/briefs/` (prose, R1), and one R2 code ticket for the three engine pieces: the 6,144-byte ticket cap as a warning with a setting (`scripts/engine/plan-gate.js`), the Codex wrapper's `engine refused: capacity, session <id> resumable` line and the round-file skeleton it writes; release 0.3.3 together with BRIEFS; out - Silerax's product rules (the junction, the frozen redesign, behaviour pointers stay local unless the scan finds them generic), any new hook
+- Size: S
+- Plans: none yet
+- Status: idea
+- Born: 2026-10-22, operator word „няма ли да ги запишем тия неща заедно с анализа някъде преди да продължим"
+
 ## SEEDFS - the seed-file op contained through the real filesystem
 - Goal: the `seed-file` migration op refuses a target that resolves outside the project or onto this installation's transfer surface through the REAL filesystem (a junction, a symlinked alias), as setup's surface judgement already does
 - Why: Codex code pass 1 on GENERIC-003 (2026-10-18) returned two blockers on it - `resolveSeedTarget` / `refuseSurfaceSeed` in `scripts/update/migrate.mjs` resolve `<plansDir>` and compare the surface lexically; pre-existing since `926a3c6` (0.3.0's seed-file op; 0025's ROADMAP seed has the same exposure), outside GENERIC-003's scope; operator word „1" (recorded as a risk, not a correction round)
@@ -52,6 +61,8 @@ leaves with one ledger row `<ABBR> dropped: <why>`.
 - Scope: in - `templates/briefs/research.md`, `templates/briefs/planner.md` (a Code Map of the touched surfaces only; sections by pointer; the planner reads a file only where it writes a Code Map row), the measured before/after on the next plan; runs BEFORE the first Silerax plan; out - the Writer brief
   - 2026-10 (candidate) - the Writer's handback carries one line "what in the plan was wrong or missing, which check saved work" - the prep cost measured against its benefit [dev/backlogs/CANDIDATES.md:64]
   - 2026-10-17 RBB deferral - a `planner` agent type that Gate 1 lets write under `drafts/` (a hook change; today the planner runs as the writer type), judged after the first measured Silerax plan [dev/backlogs/archive/013_PLAN_RBB_2026-10-17/DECISIONS.md:128]
+  - 2026-10-22 AIOCR measured (Silerax) - research 189,297 + 217,376, planner 499,902 in ONE dispatch: 43% of a 2.11M cycle; the before number for this entry [dev/REBUILD.md § First measured consumer plans]
+  - 2026-10-22 Silerax pnp-candidate - the research brief asks "what already exists for this" and "which real inputs the operator can supply"; the planner brief gains a "closing greps" section [D:\Stratex\dev\backlogs\LEDGER.md rows of 2026-10-20]
 - Size: S
 - Plans: none yet
 - Status: idea
@@ -63,6 +74,8 @@ leaves with one ledger row `<ABBR> dropped: <why>`.
 - Scope: in - one paid pass on the operator's word, the readiness brief template's INFO examples and an explicit "wording is INFO" line, the audit table's plan row if the measurement says so; out - any further pass
   - 2026-10 (candidate) - a warm (resumed, with compensations) pass against a cold one: cost and verdict quality unmeasured [dev/backlogs/CANDIDATES.md:588]
   - 2026-09-24 Silerax rule - chain-trace in the code-pass evidence pack: adopted into the payload or left local by this measurement (Silerax keeps the pointer form until then, ruling 2026-10-18) [dev/backlogs/CANDIDATES.md:627] [dev/backlogs/CANDIDATES.md:1128]
+  - 2026-10-22 AIOCR measured (Silerax) - three readiness passes 199,703 / 227,726 / 388,516 cumulative, blockers 13/0, 5 new, 1 new; six code passes over three tickets (every pass 1 fail -> pass 2 resumed); the stamped AIOCR folder is the candidate for the side-by-side pass [dev/REBUILD.md § First measured consumer plans]
+  - 2026-10-22 Silerax pnp-candidate - the revision stop rule compares carried rows (open of carried vs raw count), not raw blocker counts [D:\Stratex\dev\backlogs\LEDGER.md rows of 2026-10-20]
 - Size: S
 - Plans: none yet
 - Status: idea

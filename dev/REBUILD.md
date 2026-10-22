@@ -7,8 +7,13 @@
 > for new entries (ROADMAP.md took that role on 2026-10-17).
 > Rewritten WHOLE at every change; history is in git.
 
-## Status (2026-10-18 - plan C done)
+## Status (2026-10-22 - the first consumer plans measured; the next order decided)
 
+- 2026-10-22: Silerax ran two plans under the new cycle - OCRG (closed unfinished, OCRG-002 reverted
+  after an arbitration) and AIOCR (clean to the end). The numbers and the reading: § First measured
+  consumer plans. The order decided from them (operator 2026-10-22, „аз лично не мога да преценя как
+  да продължим" - the COO's call): § How to continue, steps 8-13. 0.3.2 is released, tagged and pushed;
+  no active plan here.
 - RBC-001 done (`bf018ac`, record `31909bd`, amendment `90a2f81`). RBC-002 done (`a10110f`, record
   `744cc4b`): WORKFLOW + LOOP + REVIEW_CHECKLIST + overrides 54.6k -> 38.7k tokens (claude-opus-5-5
   via `claude -p`, base `90a2f81`), every rule homed (four rule-homes tables, homeless 0), the
@@ -66,6 +71,26 @@
 7. Furnissimo: after Silerax's first measured plan, the same `/plugin update` + one list-driven
    cleanup of its local rules (the 0.3.0 `Retires` line, minus chain-trace and the checkpoint rule,
    which STAY local - see § Corrections).
+
+Steps 4-5 DONE by 2026-10-22 (0.3.2 pushed; Silerax ran OCRG and AIOCR - § First measured consumer
+plans). Step 6's judgment is below; step 7 waits for the release of step 10. The order from here
+(decided 2026-10-22; nothing starts without the operator's word):
+
+8. **GUARDS** (ROADMAP § GUARDS) - a sonnet scan over Silerax's 11 execution guards + 5 pnp-candidate
+   rows against the payload: duplicate of a payload sentence -> nothing; a gap -> one sentence in its
+   home. Doctrine and brief templates are prose = R1 in the main session; the three code pieces (the
+   6,144-byte cap as a warning with a setting, the wrapper's capacity-refusal line, the round-file
+   skeleton) = one R2 ticket through the Writer, as REL-032 was. Why first: it is the only thing that
+   removes the arbiter beside every session („да не го карам цял живот работеща сесия + арбитър че ми
+   ляга скъпо"), and a consumer gets it only through a release.
+9. **BRIEFS** (ROADMAP § BRIEFS) - the research and planner templates by pointer; prose, R1; in the same
+   release. Why: planner 500k + research 407k = 43% of AIOCR's cycle spend.
+10. **Release 0.3.3** - bump + note migration + CHANGELOG whose `Retires local rules:` line names the
+    Silerax guards the payload now carries; the consumers delete theirs on their operator's word.
+11. **PASSCOST** (ROADMAP § PASSCOST) - after the release: the INFO contract in the readiness brief +
+    one paid pass gpt-5.6-sol/high over an already stamped folder (AIOCR), on the operator's word.
+12. **DOCSTAGE** - after that. It rearranges files; it does not change what the COO does.
+13. SEEDFS, README, PORTABLE - unchanged, later.
 
 What is NOT done and must not be assumed done: no measurement of the new cycle exists yet; the
 ~400k session boundary, the <= 3-ticket cap, the planner-as-subagent and the one-pass default are
@@ -164,6 +189,71 @@ ESTIMATE, item 3 is the arbiter's reading - marked as such, not canon.
 4. **Open until Silerax:** whether the planner subagent pays (stage 4); whether one pass suffices (the
    GENERIC pass's counts above are the first data point); the total-spend comparison on a consumer plan
    with a measured baseline.
+
+### First measured consumer plans - OCRG and AIOCR (Silerax, 2026-10-19/20; read 2026-10-22)
+
+Source: two read-only sonnet scans over `D:\Stratex\dev\backlogs\` (archive `018_PLAN_OCRG_2026-10-20/`,
+`019_PLAN_AIOCR_2026-10-20/`, `readiness/OCRG/`, `readiness/AIOCR/`, `LEDGER.md`, `COO_SELF_ANALYSIS.md`)
+and `D:\Stratex\dev\PROJECT_OVERRIDES.md`; the numbers are the records' own, read there - every
+figure below names its record. Not re-measured here.
+
+**OCRG-002 - the revert.** Closed green by the COO on 2026-10-19 and rejected by the operator the same
+day („бесен съм, не приемам тикета ... за мен този тикет е нагласен само и само да излезе зелен");
+`git revert c0514ed3` on the operator's decision, OCRG-003 never started, the plan closed unfinished.
+The arbiter (a Fable session, triggers 4 and 1): the auditor was not wrong about what it measured -
+the ACCEPTANCE was wrong: P2 proved two of the four required fields, the tests were narrowed
+(`requiredOnly`) so the defect was invisible, the COO relayed two unverified claims and ran a product
+gate on an incomplete premise, a bar change (fixture 08, 49 -> 60 rows) passed unescalated; planning
+errors D-22, D-16, D-26, P2 (`readiness/OCRG/ledger.md`, `arbiter-OCRG-002-ruling.md`). The COO's own
+cause (`COO_SELF_ANALYSIS.md`, OCRG entries): the plan's numeric rules were never simulated over the
+fixtures before approval - two readiness passes (507k) cannot catch that; „the process slips above are
+not model-tier problems".
+
+**AIOCR - clean to the end** (`019_PLAN_AIOCR` § Measurements, `records/AIOCR-00N.md`):
+
+| what | number | source |
+|---|---|---|
+| cycle spend, idea -> approved plan | 2,113,252 tokens | PLAN_AIOCR § Measurements |
+| of which research A + B | 189,297 + 217,376 | same |
+| of which planner (ONE dispatch) | 499,902 | same |
+| of which readiness passes 1 / 2 / 3 | 199,703 / 227,726 / 388,516 cumulative (3 contains 2) | same; pass 3 on the word „искам пас 3 топъл", over the ceiling of 2 |
+| readiness blockers | pass 1: 13 / INFO 0; pass 2: 5 new, 3 open; pass 3: 1 new | round-1/2/3.md |
+| COO session at the landing | 650k (statusline, operator) | PLAN_AIOCR § Measurements |
+| code passes over 3 tickets | 6 (every ticket: pass 1 fail -> pass 2 resumed), ~560k | records 001-003 |
+| correction rounds | 1 per ticket | records |
+| stop-condition escalations to the arbiter | 13 rulings | readiness/AIOCR/ledger.md |
+| COO session at the close of AIOCR-003 | 730k (statusline) | records/AIOCR-003.md |
+| reverts | 0 | - |
+
+Against GENERIC (§ First measured plan - GENERIC: 701k cycle, COO 120k -> 280k): AIOCR's cycle cost
+three times as much, and the COO session grew to 650k at the landing - the claim "the COO session no
+longer grows with the plan" did not hold on a consumer plan with an arbiter beside it. The INFO class
+is still unused (13/0 again). "One pass by default" is two per ticket in practice.
+
+**What Silerax now carries locally** (`PROJECT_OVERRIDES.md` § Execution guards, operator word
+„лягам", 2026-10-20): eleven execution guards - no claim without an opened file; the proof sees the
+defect (one line per acceptance criterion, a consumer-completion grep before dispatch); red before
+green; bars, pins and definitions do not move inside a ticket; a product gate names what the user
+loses, no hypothetical cases; scope is the Code Map, the decision outranks the map; environment
+preflight before VERIFY; verification honesty with a named baseline; whole diff for a cache key /
+server-action switch / module removal; a live import closes a ticket on the import path; one writer
+on the tree. Plus three more rules (the `node_modules` junction, behaviour pointers in the diff-review
+file, „the redesign is frozen; the code is the truth" 2026-10-22) and five `pnp-candidate` rows in its
+`LEDGER.md`: a runnability pre-pass before a paid plan pass; a consequence scan before pass 1 and a
+"closing greps" section in the planner brief; the wrapper writes the round-file skeleton and prints
+`engine refused: capacity, session <id> resumable`; the 6,144-byte cap as a warning with a setting
+(„какво толкова ако стане 7К"); the revision stop rule over carried rows; the research brief asks
+"what already exists" and "which real inputs the operator can supply"; "discovery precedes dispatch"
+names the consumer scan of every CHANGED definition. On 2026-10-22 a new guard-1 violation was
+recorded in Silerax (FLT) after the rule was written: a sentence alone does not hold it.
+
+**The reading (step 6 of § How to continue).** The mechanics hold - AIOCR closed with zero reverts
+and one round per ticket - but at a cost the goal does not allow, and the quality held only with an
+arbiter session plus eleven hand-carried rules. For PnP: the guards and the five candidate rows go into
+the payload or Furnissimo and PnP do not have them (steps 8-10); the planner/research briefs are the
+biggest measured lever (43% of the cycle; step 9); the pass contract and cost are next (step 11).
+Whether the planner subagent pays is still open - one dispatch of 500k on AIOCR against 259k over
+three on GENERIC, both before BRIEFS.
 
 ## Arbitration (how the arbiter session works)
 
