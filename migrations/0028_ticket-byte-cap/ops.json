@@ -1,0 +1,18 @@
+{
+  "migration": "0028_ticket-byte-cap",
+  "targetPluginVersion": "0.3.3",
+  "operations": [
+    {
+      "op": "add-config-key",
+      "path": "plan.ticketByteCap",
+      "default": 6144,
+      "askOperator": false
+    },
+    {
+      "op": "note",
+      "id": "guards-0-3-3",
+      "text": "0.3.3 homes the execution guards a consumer wrote during its first plans under the new cycle: no claim without an opened file or the word UNVERIFIED; a consumer grep of every changed definition before dispatch; one defect line per acceptance criterion before the first paid pass; a plan-recorded bar, pin, threshold or cap moves only through escalation trigger 1; a product dialog names the field lost and its definition; environment preflight and a unit baseline by test name before VERIFY; the operator's own live run closes a ticket whose outcome is visible in the running product; the revision stop rule counts carried OPEN rows; every new test red under a named fault then green, narrowings grepped; the Writer's three stop conditions in every dispatch; the planner brief's CLOSING GREPS block and trim-by-citing; the research brief's two new sections; the plan skill's input question and runnability pre-pass. The per-ticket byte cap is now plan.ticketByteCap (this update wrote 6144 into your config). Delete the local copies of these rules on your operator's word - the CHANGELOG's Retires line names them.",
+      "docRefs": ["CHANGELOG.md", "docs/WORKFLOW.md", "docs/REVIEW_CHECKLIST.md"]
+    }
+  ]
+}

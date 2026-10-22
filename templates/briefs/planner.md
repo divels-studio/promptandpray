@@ -27,8 +27,8 @@ THE FOLDER CONTRACT (checked mechanically by `plan-gate.js` - a breach is refuse
   operator's word, the review passes, the commit dialogs, a tag or push word if any). You write no
   `## Measurements` and no `## Roadmap entry`: the COO writes both into the index on the approval,
   before the landing.
-- `<folder>/tickets/<ABBR>-NNN.md` - at most 3 tickets, numbered from 001; each at most 6,144 bytes
-  (its header `Status:` line not counted);
+- `<folder>/tickets/<ABBR>-NNN.md` - at most 3 tickets, numbered from 001; each at most the configured
+  ticket byte cap (`plan.ticketByteCap`, factory 6,144), its header `Status:` line not counted;
   each with these six headings at column 0, exactly: `## Outcome`, `## Scope`, `## Acceptance`,
   `## Risk threshold`, `## Stop condition`, `## Verify`; then `## Code Map` - a table whose first
   column is a backticked path that EXISTS (a directory counts), and the ticket's role for it.

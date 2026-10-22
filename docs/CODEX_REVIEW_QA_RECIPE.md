@@ -99,7 +99,10 @@ when one session is known to hold the tree.
   a terminal. A wrapper that tees, pipes or redirects either stream therefore changes what the
   caller sees *and* what Codex prints; on PowerShell it cannot preserve bytes either, as the shell
   decodes a native command's stdout line by line and re-terminates the last one. Both were measured,
-  not assumed. So the invocation is the plain one and the id is looked up **after** the run.
+  not assumed. So the invocation is the plain one and the id is looked up **after** the run. The
+  review wrappers add two stderr lines of their OWN beside it, never through it: `codex-review: run
+  <cold|resumed <id>>, ...` with the model and effort before Codex starts, and `codex-review: exit
+  <code>, session <id> (resumable: ...)` after the id is recorded (or `session not identified`).
 - **A RESUMED run records the id it resumed with**, without consulting the store at all:
   `codex exec resume <id>` continues *that* conversation (branching into a new one is the separate
   `codex exec fork` subcommand, which these wrappers never use), and the store could not answer for

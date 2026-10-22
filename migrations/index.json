@@ -25,5 +25,6 @@
   { "id": "0024_thin-rendered-files", "targetPluginVersion": "0.2.20" },
   { "id": "0025_roadmap-seed", "targetPluginVersion": "0.3.0" },
   { "id": "0026_ledger", "targetPluginVersion": "0.3.1" },
-  { "id": "0027_roadmap-area", "targetPluginVersion": "0.3.2" }
+  { "id": "0027_roadmap-area", "targetPluginVersion": "0.3.2" },
+  { "id": "0028_ticket-byte-cap", "targetPluginVersion": "0.3.3" }
 ]

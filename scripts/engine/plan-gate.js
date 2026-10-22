@@ -19,10 +19,12 @@
  *   index-missing                       no regular file PLAN_<ABBR>.md in the folder;
  *   tickets-over-cap:<n>                more than 3 ticket files (names of the grammar <ABBR>-NNN.md -
  *                                       any other file in tickets/ is not a ticket and not counted);
- *   ticket-over-bytes:<file>            a ticket over 6,144 bytes of LF-normalised UTF-8, its header
+ *   ticket-over-bytes:<file>            a ticket over the cap of LF-normalised UTF-8, its header
  *                                       `Status:` line not counted (the first line starting `Status:`
  *                                       above the first `## ` heading; one line at most - a `Status:`
- *                                       line in the body counts);
+ *                                       line in the body counts); the cap is `plan.ticketByteCap` of
+ *                                       <root>/.claude/aiwf-native/aiwf.config.json (an integer of at
+ *                                       least 1024), and 6144 when that key or file cannot be read;
  *   field-missing:<file>:<field>        a ticket without one of the six column-0 headings `## Outcome`,
  *                                       `## Scope`, `## Acceptance`, `## Risk threshold`,
  *                                       `## Stop condition`, `## Verify` (case-sensitive);
@@ -89,8 +91,9 @@ const lib = require('./aiwf-lib');
 const CLASS_PLAN_LINE = /^Class:[ \t]*[Pp][Ll][Aa][Nn][ \t]*\r?$/m;
 const LINE_NAMES = ['Class', 'PLAN'];
 const MAX_TICKETS = 3;
-// A design constant standing for the ~1,500-token cap of one ticket.
+// The default of plan.ticketByteCap (~1,500 tokens of one ticket): the cap in force when the config's key or file cannot be read.
 const MAX_TICKET_BYTES = 6144;
+const MIN_TICKET_BYTES = 1024;
 const TICKET_FIELDS = ['Outcome', 'Scope', 'Acceptance', 'Risk threshold', 'Stop condition', 'Verify'];
 const XREF_RE = /\b([A-Z]{2,8})\/D-(\d{2})\b/g;
 const DECISION_LINE = /^- \*\*(D-\d{2})\*\*/;
@@ -401,6 +404,21 @@ function countedTicketBytes(t) {
 }
 
 /**
+ * The per-ticket byte cap in force for the project at `root`: `plan.ticketByteCap` of its
+ * .claude/aiwf-native/aiwf.config.json when that is an integer of at least MIN_TICKET_BYTES, else
+ * MAX_TICKET_BYTES. Any read or parse error is MAX_TICKET_BYTES - the stricter cap is the safe direction.
+ */
+function ticketByteCap(root) {
+  try {
+    const cfg = JSON.parse(stripBom(fs.readFileSync(path.join(root, '.claude', 'aiwf-native', 'aiwf.config.json'), 'utf8')));
+    const v = cfg !== null && typeof cfg === 'object' && cfg.plan !== null && typeof cfg.plan === 'object' ? cfg.plan.ticketByteCap : undefined;
+    return Number.isInteger(v) && v >= MIN_TICKET_BYTES ? v : MAX_TICKET_BYTES;
+  } catch (e) {
+    return MAX_TICKET_BYTES;
+  }
+}
+
+/**
  * Every problem of the folder, in this order: the folder itself, the index, the cap, each ticket's
  * bytes and fields, decision coverage, cross-references, open items, Code Map paths, and - with
  * `withStamp` - the stamp. A folder that is not one is the only problem reported.
@@ -420,6 +438,7 @@ function examine(folderArg, root, withStamp) {
     return { problems, model: null, contract: null };
   }
   const model = readFolder(abs);
+  const byteCap = ticketByteCap(root);
 
   if (model.index === null) add('index-missing', `the folder has no regular file ${model.indexName}`);
   if (model.tickets.length > MAX_TICKETS) {
@@ -427,7 +446,7 @@ function examine(folderArg, root, withStamp) {
   }
   for (const t of model.tickets) {
     const bytes = countedTicketBytes(t);
-    if (bytes > MAX_TICKET_BYTES) add(`ticket-over-bytes:${t.rel}`, `${t.rel} is ${bytes} bytes of LF-normalised UTF-8, its header Status: line not counted - the cap is ${MAX_TICKET_BYTES}`);
+    if (bytes > byteCap) add(`ticket-over-bytes:${t.rel}`, `${t.rel} is ${bytes} bytes of LF-normalised UTF-8, its header Status: line not counted - the cap is ${byteCap}`);
     const headings = new Set(t.lines.filter((l, i) => !t.mask[i]).map((l) => l.replace(/[ \t]+$/, '')));
     for (const f of TICKET_FIELDS) {
       if (!headings.has(`## ${f}`)) add(`field-missing:${t.rel}:${f}`, `${t.rel} has no "## ${f}" heading at its first column`);

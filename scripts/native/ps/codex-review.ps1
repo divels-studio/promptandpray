@@ -327,6 +327,7 @@ function Save-CodexSessionId {
         New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
       }
       Set-Content -LiteralPath $StateFile -Value $sessionId -Encoding ASCII -ErrorAction Stop
+      $script:RecordedSessionId = $sessionId
     } catch {
       Write-Warning "the codex session id could not be recorded in ${StateFile}: $($_.Exception.Message)"
     }
@@ -353,8 +354,24 @@ $CaptureSince = (Get-Date).AddSeconds(-2)
 # itself decides to print, because it renders by whether the stream is a terminal. The session id is
 # NOT in this output anyway: codex puts its configuration banner on STDERR and reserves STDOUT for
 # the final message. It is looked up from codex's own session store after the run instead.
+#
+# THE RUN HEADER AND THE RUN FOOTER are this wrapper's own two stderr lines, written BESIDE the
+# invocation and never through it: one line before codex starts (cold or resumed, the class or the
+# role, the model and effort the resolver returned) and one after the session id is recorded (the
+# exit code, and the id with the flag that resumes it). They are information, never a decision: the
+# exit code below is codex's own. The footer opens with a line break because codex's last stderr byte
+# need not be one, and the footer must start its own line.
+$runMode = if ($IsResume) { "resumed $ResumeId" } else { 'cold' }
+$runHost = if ($HasClass) { "class $Class" } else { 'role reviewer' }
+[Console]::Error.WriteLine("codex-review: run $runMode, $runHost, model $($role.model), effort $($role.effort)")
+$script:RecordedSessionId = $null
 $Prompt | & codex @codexArgs
 $code = $LASTEXITCODE
 
 Save-CodexSessionId -StateFile $SessionState -Resumed $IsResume -KnownId $ResumeId -Brief $Prompt -Since $CaptureSince
+if ($script:RecordedSessionId) {
+  [Console]::Error.WriteLine("`ncodex-review: exit $code, session $($script:RecordedSessionId) (resumable: -ResumeId $($script:RecordedSessionId))")
+} else {
+  [Console]::Error.WriteLine("`ncodex-review: exit $code, session not identified - the next resume needs an explicit id")
+}
 exit $code

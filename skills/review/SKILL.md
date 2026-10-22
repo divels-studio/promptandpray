@@ -416,7 +416,9 @@ carries the three fixed lines of the readiness brief as well - the folder has no
 stamp still holds, and the plan gate checks the continuation like any other plan brief.
 
 **How the id gets recorded, and when it does not.** The wrapper does **not** read the engine's
-output - it touches neither stdout nor stderr, so what you see is the engine's own bytes. A
+output - it leaves codex's stdout and stderr untouched, so what you see is the engine's own bytes,
+plus exactly two lines of the wrapper's own on stderr: `codex-review: run ...` before the engine and
+`codex-review: exit ..., session ...` after it. A
 **resumed** run records the id it resumed with (which also repairs the state file after an explicit
 `-ResumeId`). A **cold** run identifies its session in Codex's own store (`$CODEX_HOME`, default
 `~/.codex`) by mtime plus a fingerprint of this run's brief, and records the id only when exactly

@@ -146,8 +146,9 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/engine/plan-gate.js" --stamp <plansDir>/draf
 ```
 
 It refuses and lists every problem while the folder breaks its contract (index, at most 3 tickets,
-6,144 bytes per ticket (its header `Status:` line not counted), the six headings, every `D-NN` of this
-plan cited, cross-references, no bare open item, Code Map paths that exist), and writes
+the configured ticket byte cap per ticket - `plan.ticketByteCap`, factory 6,144, its header `Status:`
+line not counted - the six headings, every `D-NN` of this plan cited, cross-references, no bare open
+item, Code Map paths that exist), and writes
 `<plansDir>/readiness/<ABBR>/stamp.json` otherwise.
 A refusal goes back to the planner (Step 4, the same dispatch, the problem lines quoted). When the
 stamp is written, confirm it:
@@ -203,7 +204,8 @@ the same brief - `/pnp:review` Step 3 (claude branch). Read the result with Grep
 line and the table rows - never whole.
 
 **Triage.** Write `<plansDir>/readiness/<ABBR>/round-<N>.md`: one header line (engine, model, cold or
-resumed, the tokens as the engine printed them, the verdict line), the auditor's findings table
+resumed, the tokens as the engine printed them, the verdict line - the wrapper's two `codex-review:`
+stderr lines carry model, effort, cold/resumed, exit and session id), the auditor's findings table
 VERBATIM, plus a `disposition` column the COO fills per row - `fixed` / `rejected: <why>` /
 `deferred` / `asked`. INFO rows never trigger a revision. A row that disputes a recorded decision
 or a design choice the operator approved is `asked` - it goes to the operator in plain words, not

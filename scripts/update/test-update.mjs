@@ -1735,6 +1735,50 @@ section('15c - the ledger migration: the shipped 0026 seeds <plansDir>/LEDGER.md
 }
 
 // ---------------------------------------------------------------------------
+section('15d - the ticket byte cap migration: the shipped 0028 writes plan.ticketByteCap into a config without it, and keeps a present one');
+{
+  // The REAL operations of the shipped 0028, replayed as a fixture migration (the 15c pattern).
+  const realOps = readJson(path.join(PLUGIN_ROOT, 'migrations', '0028_ticket-byte-cap', 'ops.json'));
+  const ops = (realOps && Array.isArray(realOps.operations)) ? realOps.operations : [];
+  check('[bytecap-0] the shipped 0028 carries the key without a question, then the note',
+    ops.length === 2
+    && ops[0].op === 'add-config-key' && ops[0].path === 'plan.ticketByteCap' && ops[0].default === 6144 && ops[0].askOperator === false
+    && ops[1].op === 'note' && ops[1].id === 'guards-0-3-3',
+  () => JSON.stringify(ops, null, 2));
+  const payload = makePayload('bytecap', { version: '0.2.0', migrations: [{ id: '0002_bytecap', version: '0.2.0', ops }] });
+  const planOf = (p) => (readJson(at(p, CONFIG_REL)) || {}).plan;
+  /** Ages the installed config to a 0.3.2 one (no `plan` object), or sets the key to `value`. */
+  const setCap = (p, value) => {
+    const cfg = readJson(at(p, CONFIG_REL));
+    if (value === null) delete cfg.plan; else cfg.plan = { ticketByteCap: value };
+    writeJson(at(p, CONFIG_REL), cfg);
+  };
+  // --- the key absent -> written with the factory value
+  {
+    const p = project('bytecap-absent');
+    check('install exits 0', install(p).status === 0);
+    check('[bytecap-1] control: a fresh install already carries plan.ticketByteCap 6144 (the schema default)',
+      JSON.stringify(planOf(p)) === JSON.stringify({ ticketByteCap: 6144 }), JSON.stringify(planOf(p)));
+    setCap(p, null);
+    check('control: the config is aged to one without plan', planOf(p) === undefined);
+    const a = update(p, ['--apply'], { payload });
+    check('[bytecap-2] no plan object: exit 0, "config key plan.ticketByteCap = 6144", and the key is in the config',
+      a.status === 0 && a.out.includes('config key plan.ticketByteCap = 6144')
+      && JSON.stringify(planOf(p)) === JSON.stringify({ ticketByteCap: 6144 }), why(a));
+  }
+  // --- the key present -> left exactly as it is
+  {
+    const p = project('bytecap-present');
+    check('install exits 0', install(p).status === 0);
+    setCap(p, 8192);
+    const a = update(p, ['--apply'], { payload });
+    check('[bytecap-3] plan.ticketByteCap 8192 present: exit 0, "already present", and the value is still 8192',
+      a.status === 0 && a.out.includes('config key plan.ticketByteCap already present')
+      && JSON.stringify(planOf(p)) === JSON.stringify({ ticketByteCap: 8192 }), why(a));
+  }
+}
+
+// ---------------------------------------------------------------------------
 section('16 - a release never touches examples/: the example bump is numbered when it is built, against the payload it lands in');
 {
   const NOTE_ONLY = [{ op: 'note', id: 'fake-release', text: 'A release the example bump has to follow.', docRefs: ['docs/LOOP.md'] }];

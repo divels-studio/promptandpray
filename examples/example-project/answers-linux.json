@@ -18,6 +18,7 @@
     "qal": { "enabled": false, "engine": "codex", "model": "unset", "effort": "high" }
   },
   "loop": { "correctionRoundsCap": 2 },
+  "plan": { "ticketByteCap": 6144 },
   "enforcement": { "routeWriteGuard": true, "dispatchGate": "always" },
   "verify": {
     "commands": [

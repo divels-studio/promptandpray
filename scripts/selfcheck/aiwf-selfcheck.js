@@ -543,6 +543,7 @@ function writeFixture(root, pluginVersion) {
       qal: { enabled: true, engine: 'codex', model: 'codex-atom-1', effort: 'high' },
     },
     loop: { correctionRoundsCap: 2 },
+    plan: { ticketByteCap: 6144 },
     enforcement: { routeWriteGuard: true, dispatchGate: 'always' },
     verify: {
       commands: [{ name: 'unit', run: 'npm test', cwd: '.' }],
@@ -2405,6 +2406,7 @@ function sectionConfigSchema(tmpRoot) {
   }
   rejects('rejects a codex-hosted qal switched to another engine', variant('qal-engine', (c) => { c.roles.qal.engine = 'claude'; }));
   rejects('rejects a correctionRoundsCap below 1', variant('cap0', (c) => { c.loop.correctionRoundsCap = 0; }));
+  rejects('rejects a plan.ticketByteCap below 1024', variant('bytecap1023', (c) => { c.plan.ticketByteCap = 1023; }));
   rejects('rejects a scratchDir moved away from .aiwf', variant('scratch', (c) => { c.paths.scratchDir = '.scratch'; }));
   rejects('rejects a verify command with no run line', variant('cmd', (c) => { c.verify.commands = [{ name: 'unit' }]; }));
 
@@ -3599,10 +3601,17 @@ function shWrapperFindings(root, { execProbes = true, tmpDir = null } = {}) {
           `${SESSION_FILES[short]}=${JSON.stringify(probe.state(SESSION_FILES[short]))}, ${OTHER_SESSION_FILE[short]}=${JSON.stringify(probe.state(OTHER_SESSION_FILE[short]))}`);
         // BYTE PRESERVATION, EXECUTED. Both payloads carry a CR and end WITHOUT a newline, so a
         // pass-through that re-terminates the last line is caught - the hex is compared, not the text.
+        // The REVIEW wrapper writes its own exit line after the engine, opening with a line break, so
+        // there the engine's stderr bytes must be followed DIRECTLY by that LF and the line's prefix.
+        const stderrOk = short === 'review'
+          ? probe.stderrHex.includes(STUB_STDERR_HEX + '0a' + Buffer.from('codex-review: exit ').toString('hex'))
+          : probe.stderrHex.endsWith(STUB_STDERR_HEX);
         add(`sh-exec-${short}-bytes`,
-          `${wrapper} EXECUTED: the caller's stdout and stderr are the engine's own bytes, unchanged (hex-compared, CR included, no re-terminated last line)`,
-          probe.stdoutHex === STUB_STDOUT_HEX && probe.stderrHex.endsWith(STUB_STDERR_HEX),
-          `stdout ${probe.stdoutHex} (expected ${STUB_STDOUT_HEX}); stderr ends with the payload: ${probe.stderrHex.endsWith(STUB_STDERR_HEX)}`);
+          short === 'review'
+            ? `${wrapper} EXECUTED: the caller's stdout and stderr are the engine's own bytes, unchanged (hex-compared, CR included, no re-terminated last line), directly followed by the wrapper's exit line`
+            : `${wrapper} EXECUTED: the caller's stdout and stderr are the engine's own bytes, unchanged (hex-compared, CR included, no re-terminated last line)`,
+          probe.stdoutHex === STUB_STDOUT_HEX && stderrOk,
+          `stdout ${probe.stdoutHex} (expected ${STUB_STDOUT_HEX}); stderr ${short === 'review' ? 'carries the payload directly followed by the exit line' : 'ends with the payload'}: ${stderrOk}`);
       }
       // THE RESUME FORM, EXECUTED. Source text cannot prove what argv a shell really builds, and the
       // resume form is the one where a stray -C or --sandbox would not merely be wrong but rejected
@@ -4145,9 +4154,10 @@ function sectionShWrappers(tmpRoot) {
 // that token is part of the set), so a neighbouring check that happens to refuse cannot stand in for
 // the named one. Passing twins: M8/M7 (6,144 LF bytes on CRLF against 6,145), M12/M13 (a decision of
 // another plan against the same decision of this one), M16/M11 (no `plan:` against `plan: FIX`),
-// M6/M5 (a file outside the ticket grammar against a fourth ticket), M37/M36, M38/M39, and M27/M28
-// for the stamp's own scope. The seven negative controls of the contract are M11 (a decision nothing
-// cites), M17 (a cross-reference that does not resolve), M12 (another plan's decision not demanded),
+// M6/M5 (a file outside the ticket grammar against a fourth ticket), M37/M36, M38/M39, M45/M46 (a
+// 7,000-byte ticket under a configured plan.ticketByteCap of 7168 against the same ticket with the
+// key gone), and M27/M28 for the stamp's own scope. The seven negative controls of the contract are
+// M11 (a decision nothing cites), M17 (a cross-reference that does not resolve), M12 (another plan's decision not demanded),
 // M26 (a stamp that does not match), M21 (a cited decision changed after the stamp), M5 (a fourth
 // ticket) and M7 (a ticket over the byte cap). The sabotage controls come ON TOP of that: each
 // patches ONE branch of a copy of the checker and its named case must turn red, and ctl-1/2/3/6 cover
@@ -4202,6 +4212,9 @@ const PG_BRIEF = [
   'RISK THRESHOLD: block on a gap the Writer cannot execute.',
   'STOP CONDITION: stop once the whole plan is read.', '',
 ].join('\n');
+// The project config the checker reads plan.ticketByteCap from; `undefined` writes `plan` without the key.
+const PG_CONFIG = '.claude/aiwf-native/aiwf.config.json';
+const pgCapConfig = (cap) => `${JSON.stringify({ plan: cap === undefined ? {} : { ticketByteCap: cap } }, null, 2)}\n`;
 const pgSetLine = (brief, name, line) => brief.replace(new RegExp(`^${name}:.*$`, 'm'), line);
 const pgDropLine = (brief, name) => brief.replace(new RegExp(`^${name}:.*\\n`, 'm'), '');
 const pgLineOf = (text, needle) => text.split('\n').findIndex((l) => l.includes(needle)) + 1;
@@ -4398,6 +4411,17 @@ function planGateCases() {
     { id: 'M44', label: 'a 6,145-byte ticket whose "Status:" line sits below its first "## " heading -> exactly ticket-over-bytes:tickets/FIX-001.md and stamp-mismatch (a body Status: line counts)',
       after: (put) => put(PG_TICKET, pgTicketOfBytes(6145, pgTicketText({ extra: ['Status: open', ''] }))),
       expect: exactly(`ticket-over-bytes:${T}`, 'stamp-mismatch') },
+    // The cap is the project's plan.ticketByteCap. Each case stamps a 7,000-byte ticket under a
+    // configured 7168, so only the config moves after the stamp - it is not a contract file, and the
+    // token set stays the one ticket-over-bytes; the message must name the cap in force.
+    { id: 'M45', label: 'plan.ticketByteCap 7168 in the project config, a 7,000-byte ticket, stamped -> valid (the configured cap is in force)',
+      before: (put) => { put(PG_CONFIG, pgCapConfig(7168)); put(PG_TICKET, pgTicketOfBytes(7000)); }, expect: valid },
+    { id: 'M46', label: 'the same stamped folder with the key removed from the config -> exactly ticket-over-bytes:tickets/FIX-001.md, the message naming the cap 6144 (the default applies)',
+      before: (put) => { put(PG_CONFIG, pgCapConfig(7168)); put(PG_TICKET, pgTicketOfBytes(7000)); },
+      after: (put) => put(PG_CONFIG, pgCapConfig(undefined)), expect: (r) => exactly(`ticket-over-bytes:${T}`)(r) && r.stdout.includes('the cap is 6144') },
+    { id: 'M47', label: 'plan.ticketByteCap 512 (below the minimum 1024) -> exactly ticket-over-bytes:tickets/FIX-001.md, the message naming the cap 6144 (the default applies, not 512)',
+      before: (put) => { put(PG_CONFIG, pgCapConfig(7168)); put(PG_TICKET, pgTicketOfBytes(7000)); },
+      after: (put) => put(PG_CONFIG, pgCapConfig(512)), expect: (r) => exactly(`ticket-over-bytes:${T}`)(r) && r.stdout.includes('the cap is 6144') },
   ];
 }
 
@@ -4615,6 +4639,7 @@ function sectionPlanGate(tmpRoot) {
   const FIELD = 'if (!headings.has(`## ${f}`))';
   const FOLDER = 'if (st === null || !st.isDirectory() || !lib.PLAN_ABBR_RE.test(path.basename(abs))) {';
   const CODEMAP = 'if (!fs.existsSync(path.resolve(root, p)))';
+  const CAP_READ = 'return Number.isInteger(v) && v >= MIN_TICKET_BYTES ? v : MAX_TICKET_BYTES;';
   const controls = [
     { id: 'ctl-4', target: 'M4', label: 'the index check disabled', from: "if (model.index === null) add('index-missing'", to: "if (false) add('index-missing'" },
     { id: 'ctl-5', target: 'M5', label: 'the ticket cap raised from 3 to 4', from: 'const MAX_TICKETS = 3;', to: 'const MAX_TICKETS = 4;' },
@@ -4644,6 +4669,9 @@ function sectionPlanGate(tmpRoot) {
     { id: 'ctl-30', target: 'M41', label: 'class-not-plan disabled', from: "} else if (name === 'Class' && vals[name][0].toLowerCase() !== 'plan') {", to: '} else if (false) {' },
     { id: 'ctl-31', target: 'M43', label: 'the header Status: line exclusion removed (every byte counted)', from: 'const excluded = status.reduce(', to: 'const excluded = 0 && status.reduce(' },
     { id: 'ctl-32', target: 'M44', label: 'the exclusion applied to every Status: line, body included', from: "const status = header.filter((l) => l.startsWith('Status:')).slice(0, 1);", to: "const status = t.lines.filter((l) => l.startsWith('Status:'));" },
+    { id: 'ctl-cap-config', target: 'M45', label: 'the config reader returning MAX_TICKET_BYTES always (plan.ticketByteCap ignored)', from: CAP_READ, to: 'return MAX_TICKET_BYTES;' },
+    { id: 'ctl-cap-fallback', target: 'M46', label: 'an absent or unusable key loosening the cap to 1 MiB instead of falling back to 6144', from: CAP_READ, to: 'return Number.isInteger(v) && v >= MIN_TICKET_BYTES ? v : 1048576;' },
+    { id: 'ctl-cap-min', target: 'M47', label: 'the minimum 1024 dropped from the reader (512 accepted)', from: CAP_READ, to: 'return Number.isInteger(v) && v >= 1 ? v : MAX_TICKET_BYTES;' },
   ];
   // The checker controls: plan-gate.js copied beside aiwf-lib.js, sabotaged, and the target case run
   // against the copy. The fixture is still stamped by the PAYLOAD checker, so only the branch moved.
@@ -4713,6 +4741,72 @@ function sectionPlanGate(tmpRoot) {
       const g1ok = r.decision === 'deny' && r.reason.includes('[AIWF gate 2: plan pass]');
       check('[plan-gate-ctl-3] sabotage detected: the plan branch removed from Gate 2 -> gate2-plan-G1 turns red', g1ok === false,
         g1ok ? 'still PASS - the check is vacuous' : `FAIL as required (${r.decision})`);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// SECTION 5d - the review wrappers' run header and run footer (both channels, recording stubs)
+// ---------------------------------------------------------------------------
+// codex-review.{ps1,sh} print ONE line on stderr before codex starts and ONE after the session id is
+// recorded; codex's own streams are not touched, so stdout stays the stub's bytes exactly. The run is
+// a cold code-class pass: the header names the ROW's model and effort, the footer the stub's exit
+// code and the session id the wrapper recorded, with the resume flag of its channel. Each channel's
+// control removes one of the two lines from a copy, and the check must turn red.
+const HDR_RUN = 'codex-review: run ';
+const HDR_EXIT = 'codex-review: exit ';
+function hdrVerdict(stderrText, stdoutHex, resumeFlag) {
+  const lines = String(stderrText).replace(/\x1b\[[0-9;]*m/g, '').split(/\r?\n/);
+  const runs = lines.filter((l) => l.startsWith(HDR_RUN));
+  const exits = lines.filter((l) => l.startsWith(HDR_EXIT));
+  const runWant = `${HDR_RUN}cold, class code, model ${ROW_MODEL}, effort ${ROW_EFFORT}`;
+  const exitWant = `${HDR_EXIT}${STUB_EXIT}, session ${STUB_SESSION_ID} (resumable: ${resumeFlag} ${STUB_SESSION_ID})`;
+  const ok = runs.length === 1 && exits.length === 1 && runs[0] === runWant && exits[0] === exitWant && stdoutHex === STUB_STDOUT_HEX;
+  return { ok, detail: `run lines ${runs.length}, exit lines ${exits.length}; stdout is the stub's bytes ${stdoutHex === STUB_STDOUT_HEX}; ${JSON.stringify(runs[0] || '(none)')} / ${JSON.stringify(exits[0] || '(none)')}` };
+}
+const hdrPs = (root, tmpRoot) => {
+  try {
+    const p = runPsWrapperWithStub(root, 'codex-review.ps1', tmpRoot, { klass: 'code' });
+    return Object.assign(hdrVerdict(p.stderrText, p.stdoutHex, '-ResumeId'), { status: p.status });
+  } catch (e) { return { ok: false, detail: `the probe could not be built: ${e && e.message ? e.message : String(e)}` }; }
+};
+const hdrSh = (root, tmpRoot) => {
+  try {
+    const p = runWrapperWithStub(root, 'codex-review.sh', tmpRoot, ['--class', 'code']);
+    return Object.assign(hdrVerdict(p.stderr, p.stdoutHex, '--resume'), { status: p.status });
+  } catch (e) { return { ok: false, detail: `the probe could not be built: ${e && e.message ? e.message : String(e)}` }; }
+};
+
+function sectionRunHeader(tmpRoot) {
+  section('REVIEW WRAPPERS - one run header and one run footer line on stderr, stdout untouched (both channels, recording stubs)');
+  const PS_RUN = /\r?\n\[Console\]::Error\.WriteLine\("codex-review: run [^\r\n]*\r?\n/;
+  const PS_EXIT = /\r?\n {2}\[Console\]::Error\.WriteLine\("`ncodex-review: exit \$code, session \$\(\$script:RecordedSessionId\)[^\r\n]*\r?\n/;
+  const SH_RUN = /\nprintf 'codex-review: run [^\n]*\n/;
+  const SH_EXIT = /\n {2}printf '\\ncodex-review: exit %s, session %s [^\n]*\n/;
+  if (!PWSH) {
+    check('[W-hdr-ps] a PowerShell host is available to run the wrapper', false, 'neither `pwsh` nor `powershell` could be executed - the run header is UNPROVEN on this channel');
+  } else {
+    const r = hdrPs(PLUGIN_ROOT, tmpRoot);
+    check('[W-hdr-ps] codex-review.ps1 EXECUTED (cold, -Class code): exactly one "codex-review: run " line and one "codex-review: exit " line on stderr, their values the row\'s and the run\'s, stdout the stub\'s bytes', r.ok, r.detail);
+    for (const [id, label, re] of [['ctl-hdr-ps-run', 'the run line removed from codex-review.ps1', PS_RUN], ['ctl-hdr-ps-exit', 'the exit line removed from codex-review.ps1', PS_EXIT]]) {
+      const broken = fs.mkdtempSync(path.join(tmpRoot, `hdr-${id}-`));
+      try { copyPsChannel(PLUGIN_ROOT, broken); pgPatch(path.join(broken, ...psRel('codex-review.ps1')), re, '\n'); } catch (e) { check(`[${id}] control could be applied: ${label}`, false, String(e.message)); continue; }
+      const b = hdrPs(broken, tmpRoot);
+      check(`[${id}] sabotage detected: ${label} -> W-hdr-ps turns red`, b.ok === false, b.ok ? 'still PASS - the check is vacuous' : `FAIL as required (${b.detail})`);
+    }
+  }
+  if (!BASH) {
+    check('[W-hdr-sh] a bash host is available to run the wrapper', false, 'neither `bash` on PATH nor a Git-for-Windows bash could be executed - the run header is UNPROVEN on this channel');
+  } else {
+    const r = hdrSh(PLUGIN_ROOT, tmpRoot);
+    check('[W-hdr-sh] codex-review.sh EXECUTED (cold, --class code): exactly one "codex-review: run " line and one "codex-review: exit " line on stderr, their values the row\'s and the run\'s, stdout the stub\'s bytes', r.ok, r.detail);
+    // The exit line sits alone in its `then` branch, so it is replaced by `:` - an empty branch would be
+    // a bash syntax error, and the control would then prove a parse failure rather than a missing line.
+    for (const [id, label, re, to] of [['ctl-hdr-sh-run', 'the run line removed from codex-review.sh', SH_RUN, '\n'], ['ctl-hdr-sh-exit', 'the exit line removed from codex-review.sh', SH_EXIT, '\n  :\n']]) {
+      const broken = fs.mkdtempSync(path.join(tmpRoot, `hdr-${id}-`));
+      try { copyShChannel(PLUGIN_ROOT, broken); pgPatch(path.join(broken, ...shRel('codex-review.sh')), re, to); } catch (e) { check(`[${id}] control could be applied: ${label}`, false, String(e.message)); continue; }
+      const b = hdrSh(broken, tmpRoot);
+      check(`[${id}] sabotage detected: ${label} -> W-hdr-sh turns red`, b.ok === false, b.ok ? 'still PASS - the check is vacuous' : `FAIL as required (${b.detail})`);
     }
   }
 }
@@ -8403,6 +8497,7 @@ function main() {
     sectionWrappers(tmpRoot);
     sectionShWrappers(tmpRoot);
     sectionPlanGate(tmpRoot);
+    sectionRunHeader(tmpRoot);
     sectionResolver(tmpRoot);
     sectionRolesCommand(tmpRoot, pluginVersion);
     sectionPayloadIntegrity();

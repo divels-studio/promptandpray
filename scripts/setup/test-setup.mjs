@@ -173,6 +173,8 @@ check('the install RAN the self-check itself and reported PASS', r1.out.includes
 check('and the PASS line quotes the self-check\'s own summary line verbatim',
   /self-check: PASS - .*assertions passed/.test(r1.out), (r1.out.split('\n').find((l) => l.startsWith('self-check:')) || '(no self-check line)').slice(0, 120));
 check('config written', exists(at(p1, CONFIG_REL)));
+check('answers without a plan object get plan.ticketByteCap 6144 from the schema default',
+  ((readJson(at(p1, CONFIG_REL)) || {}).plan || {}).ticketByteCap === 6144, JSON.stringify((readJson(at(p1, CONFIG_REL)) || {}).plan));
 check('roles.json written', exists(at(p1, ROLES_REL)));
 check('writer agent always rendered', exists(at(p1, '.claude/agents/writer.md')));
 // The Orchestrator role is UNCONDITIONAL like the writer: the main session exists on every
@@ -622,6 +624,8 @@ section('12 - the interactive question flow itself (scripted answers, no readlin
   const answers = await runInterview({ schema: loadSchemaJson(), ask: scriptedAsk });
   check('the required answer is captured', answers.project.name === 'Interviewed');
   check('an empty answer takes the schema default', answers.os === 'windows' && answers.paths.plansDir === 'docs/backlogs' && answers.loop.correctionRoundsCap === 2);
+  check('the plan byte cap question is asked and an empty answer takes the schema default 6144',
+    answers.plan !== undefined && answers.plan.ticketByteCap === 6144, JSON.stringify(answers.plan));
   check('the enforcement questions are asked and default to the factory posture',
     answers.enforcement.routeWriteGuard === true && answers.enforcement.dispatchGate === 'always',
     JSON.stringify(answers.enforcement));

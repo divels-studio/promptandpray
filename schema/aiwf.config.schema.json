@@ -226,6 +226,20 @@
       }
     },
 
+    "plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ticketByteCap"],
+      "properties": {
+        "ticketByteCap": {
+          "type": "integer",
+          "minimum": 1024,
+          "default": 6144,
+          "description": "The per-ticket byte cap scripts/engine/plan-gate.js enforces over the LF-normalised UTF-8 text of a ticket file, its header Status: line not counted. The factory value stands for ~1,500 tokens; raise it when a project's tickets need more room. The gate reads it from this file and falls back to 6144 when the key or the file cannot be read."
+        }
+      }
+    },
+
     "enforcement": {
       "type": "object",
       "additionalProperties": false,

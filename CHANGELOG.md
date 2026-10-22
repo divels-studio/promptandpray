@@ -4,6 +4,49 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.3.3] - 2026-10-22
+
+The execution guards a consumer wrote during its first plans under the new cycle live in the payload,
+one sentence each; the per-ticket byte cap is a config value; the Codex review wrappers say what they
+ran.
+
+### Added
+
+- **The execution guards homed (GUARDS)** - `docs/WORKFLOW.md`: no claim without an opened file or the
+  word UNVERIFIED (§ Verifying failure claims); a consumer grep of every changed definition before
+  dispatch (§ COO owns broad scans); one defect line per acceptance criterion in the diff-review file
+  before the first paid pass (§ The COO write boundary); a plan-recorded bar, pin, threshold or cap
+  moves only through trigger 1 (§ Escalation); a product dialog names the field lost and its
+  definition (§ The operator does not arbitrate); environment preflight and the unit baseline by test
+  name before VERIFY (§ VERIFY honesty); the operator's own live run closes a ticket whose outcome is
+  visible in the running product (§ Durable development history); the revision stop rule counts
+  carried OPEN rows (§ Triage). `docs/REVIEW_CHECKLIST.md` § Test quality: red under a named fault,
+  then green; narrowings grepped.
+- **The briefs carry the guards (GUARDS, BRIEFS)** - `templates/briefs/writer-dispatch.md` states
+  the three stop conditions; `planner.md` gains the COO-filled CLOSING GREPS block and trim-by-citing;
+  `research.md` returns six sections (what already exists; paths touched without being named);
+  `skills/plan` Step 1 asks which real inputs the operator can supply, Step 5 runs a scan-tier
+  runnability pre-pass before the paid readiness pass. The research and planner briefs read the
+  code by pointer - a grep hit and its section, never a whole file (BRIEFS; measured before: research
+  407k and one planner dispatch of 500k on a consumer plan).
+- **`plan.ticketByteCap` (GUARDS-001)** - the plan gate's per-ticket byte cap is read from
+  `aiwf.config.json` (factory 6144, minimum 1024; an unreadable key falls back to 6144). Migration
+  `0028_ticket-byte-cap` writes the key and carries the release note.
+
+### Changed
+
+- **The Codex review wrappers print a run header and a run footer on stderr (GUARDS-001)** - model,
+  effort, cold or resumed, and after the run the exit code and the recorded session id with the
+  resume flag; codex's own streams stay untouched.
+
+Retires local rules: the execution guards 1-11 of a consumer's overrides (no claim without an opened
+file; the proof sees the defect; red before green; bars, pins and definitions do not move; a product
+gate names what the user loses; scope is the Code Map; environment preflight before VERIFY;
+verification honesty with a named baseline; whole diff for a cache key, server-action switch or
+module removal; a live import closes a ticket on the import path; one writer on the tree); "a ticket
+is trimmed by citing, never by cutting"; the memory rule "a settled product rule is not reopened with
+a hypothetical case".
+
 ## [0.3.2] - 2026-10-18
 
 The roadmap gains the area entry and its fourth write, shipped as a release so the doctrine reaches

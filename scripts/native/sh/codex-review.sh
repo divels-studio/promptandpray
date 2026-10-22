@@ -344,14 +344,32 @@ record_session_id() {
   fi
   if [ -n "$id" ]; then
     mkdir -p "$(dirname "$SESSION_STATE")" 2>/dev/null || true
-    printf '%s\n' "$id" > "$SESSION_STATE" 2>/dev/null \
-      || printf 'codex-review: the session id could not be recorded in %s\n' "$SESSION_STATE" >&2
+    if printf '%s\n' "$id" > "$SESSION_STATE" 2>/dev/null; then
+      RECORDED_ID="$id"
+    else
+      printf 'codex-review: the session id could not be recorded in %s\n' "$SESSION_STATE" >&2
+    fi
     return 0
   fi
   clear_session_state
 }
 
+# THE RUN HEADER AND THE RUN FOOTER are this wrapper's own two stderr lines, written BESIDE the
+# invocation and never through it: one line before codex starts (cold or resumed, the class or the
+# role, the model and effort the resolver returned) and one after the session id is recorded (the
+# exit code, and the id with the flag that resumes it). They are information, never a decision: the
+# exit code below is codex's own. The footer opens with a line break because codex's last stderr byte
+# need not be one, and the footer must start its own line.
+if [ "$RESUME" -eq 1 ]; then RUN_MODE="resumed $RESUME_ID"; else RUN_MODE='cold'; fi
+if [ "$HAS_CLASS" -eq 1 ]; then RUN_HOST="class $CLASS"; else RUN_HOST='role reviewer'; fi
+printf 'codex-review: run %s, %s, model %s, effort %s\n' "$RUN_MODE" "$RUN_HOST" "$ROLE_MODEL" "$ROLE_EFFORT" >&2
+RECORDED_ID=''
 status=0
 printf '%s\n' "$PROMPT" | codex "${CODEX_ARGS[@]}" || status=$?
 record_session_id "$RESUME"
+if [ -n "$RECORDED_ID" ]; then
+  printf '\ncodex-review: exit %s, session %s (resumable: --resume %s)\n' "$status" "$RECORDED_ID" "$RECORDED_ID" >&2
+else
+  printf '\ncodex-review: exit %s, session not identified - the next resume needs an explicit id\n' "$status" >&2
+fi
 exit "$status"
