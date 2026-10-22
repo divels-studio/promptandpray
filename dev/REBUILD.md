@@ -12,8 +12,14 @@
 - 2026-10-22: Silerax ran two plans under the new cycle - OCRG (closed unfinished, OCRG-002 reverted
   after an arbitration) and AIOCR (clean to the end). The numbers and the reading: § First measured
   consumer plans. The order decided from them (operator 2026-10-22, „аз лично не мога да преценя как
-  да продължим" - the COO's call): § How to continue, steps 8-13. 0.3.2 is released, tagged and pushed;
-  no active plan here.
+  да продължим" - the COO's call): § How to continue, steps 8-13.
+- 2026-10-22, steps 8-10 DONE: GUARDS prose `45c90ee` (14 sentences), BRIEFS prose `2c7c002`,
+  GUARDS-001 code `e21734b` + correction round 1 `45bd834` (non-durable R2, no plan; Writer; Codex
+  code pass 1 cold `fail` 2 P2 at 110,819 tokens, pass 2 resumed `pass` at 135,536 cumulative; suites
+  setup 470/0, update 445/0, spikes 334/0, example cycle 42/0, self-install apply self-check
+  1316/1316), release 0.3.3 = migration 0028 + CHANGELOG with the `Retires local rules:` line naming
+  Silerax's eleven guards. The LEDGER's plan-less rows hold the ticket's record. Tag + push: the
+  operator's two words. Next: step 11 PASSCOST (after the consumers take 0.3.3), then DOCSTAGE.
 - RBC-001 done (`bf018ac`, record `31909bd`, amendment `90a2f81`). RBC-002 done (`a10110f`, record
   `744cc4b`): WORKFLOW + LOOP + REVIEW_CHECKLIST + overrides 54.6k -> 38.7k tokens (claude-opus-5-5
   via `claude -p`, base `90a2f81`), every rule homed (four rule-homes tables, homeless 0), the

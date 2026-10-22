@@ -1,8 +1,8 @@
 {
   "$schema": "D:/pnp-live/schema/aiwf.config.schema.json",
   "_aiwf": {
-    "installedPluginVersion": "0.3.2",
-    "lastMigrationApplied": "0027_roadmap-area",
+    "installedPluginVersion": "0.3.3",
+    "lastMigrationApplied": "0028_ticket-byte-cap",
     "managedRegions": {
       ".claude/aiwf-native/roles.json": "0.2.19",
       ".claude/agents/writer.md": "0.2.20",
@@ -246,5 +246,8 @@
     "docs": {
       "passes": 0
     }
+  },
+  "plan": {
+    "ticketByteCap": 6144
   }
 }
