@@ -360,15 +360,24 @@ record_session_id() {
 # exit code, and the id with the flag that resumes it). They are information, never a decision: the
 # exit code below is codex's own. The footer opens with a line break because codex's last stderr byte
 # need not be one, and the footer must start its own line.
+# EACH LINE IS ONE PHYSICAL LINE. Every dynamic field (run mode, resume id, class, model, effort,
+# session id) passes through header_field, which turns every control character - CR, LF and the rest
+# of 0x00-0x1F, and 0x7F - into one space each: the schema admits any non-empty string for a model or
+# an effort, and a value carrying a line break could otherwise split the header or print a fake
+# footer before codex has even started.
+header_field() {
+  printf '%s' "$1" | LC_ALL=C tr '\000-\037\177' ' '
+}
 if [ "$RESUME" -eq 1 ]; then RUN_MODE="resumed $RESUME_ID"; else RUN_MODE='cold'; fi
 if [ "$HAS_CLASS" -eq 1 ]; then RUN_HOST="class $CLASS"; else RUN_HOST='role reviewer'; fi
-printf 'codex-review: run %s, %s, model %s, effort %s\n' "$RUN_MODE" "$RUN_HOST" "$ROLE_MODEL" "$ROLE_EFFORT" >&2
+printf 'codex-review: run %s, %s, model %s, effort %s\n' "$(header_field "$RUN_MODE")" "$(header_field "$RUN_HOST")" "$(header_field "$ROLE_MODEL")" "$(header_field "$ROLE_EFFORT")" >&2
 RECORDED_ID=''
 status=0
 printf '%s\n' "$PROMPT" | codex "${CODEX_ARGS[@]}" || status=$?
 record_session_id "$RESUME"
 if [ -n "$RECORDED_ID" ]; then
-  printf '\ncodex-review: exit %s, session %s (resumable: --resume %s)\n' "$status" "$RECORDED_ID" "$RECORDED_ID" >&2
+  SID="$(header_field "$RECORDED_ID")"
+  printf '\ncodex-review: exit %s, session %s (resumable: --resume %s)\n' "$status" "$SID" "$SID" >&2
 else
   printf '\ncodex-review: exit %s, session not identified - the next resume needs an explicit id\n' "$status" >&2
 fi

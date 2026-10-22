@@ -3137,16 +3137,17 @@ function psResumeFindings(root, { execProbes = false, tmpDir = null } = {}) {
 // -Class at all, a string passes that class. `prepare(projectRoot)` runs before the wrapper (the
 // plan-gate probes write their plan folder with it). `pathFor(bin)` replaces the PATH the
 // wrapper sees (the node-less probe); by default the stub's bin is prepended to the inherited PATH.
+// `roleRecord` replaces the roles' own host (default: the hostile model and effort).
 function runPsWrapperWithStub(root, wrapper, tmpDir,
   { brief = STUB_BRIEF, writeRollout = true, foreignRollout = false, seedState = null, readOnlyState = null, extraArgs = '',
-    klass = undefined, prepare = null, pathFor = null } = {}) {
+    klass = undefined, prepare = null, pathFor = null, roleRecord = null } = {}) {
   const home = fs.mkdtempSync(path.join(tmpDir, 'ps-exec-run-'));
   const bin = path.join(home, 'bin');
   const projectRoot = path.join(home, 'project');
   const codexHome = path.join(home, 'codex-home');
   fs.mkdirSync(bin, { recursive: true });
   fs.mkdirSync(path.join(projectRoot, '.claude', 'aiwf-native'), { recursive: true });
-  const record = { engine: 'codex', model: HOSTILE_MODEL, effort: HOSTILE_EFFORT };
+  const record = roleRecord || { engine: 'codex', model: HOSTILE_MODEL, effort: HOSTILE_EFFORT };
   fs.writeFileSync(path.join(projectRoot, '.claude', 'aiwf-native', 'roles.json'),
     JSON.stringify({
       reviewer: record,
@@ -3791,7 +3792,7 @@ const NUL_BYTE = String.fromCharCode(0);
 // `prepare(projectRoot)` runs before the wrapper (the plan-gate probes write their plan folder
 // into the probe's project with it).
 function runWrapperWithStub(root, wrapper, tmpDir, extraArgs = [],
-  { seedState = null, writeRollout = true, secondRollout = null, brief = STUB_BRIEF, readOnlyState = null, prepare = null } = {}) {
+  { seedState = null, writeRollout = true, secondRollout = null, brief = STUB_BRIEF, readOnlyState = null, prepare = null, roleRecord = null } = {}) {
   const home = fs.mkdtempSync(path.join(tmpDir, 'sh-exec-'));
   const bin = path.join(home, 'bin');
   const projectRoot = path.join(home, 'project');
@@ -3815,7 +3816,8 @@ function runWrapperWithStub(root, wrapper, tmpDir, extraArgs = [],
   // content is exactly the stale id a bare resume must refuse to replay.
   if (readOnlyState) fs.chmodSync(path.join(projectRoot, '.aiwf', readOnlyState), 0o444);
   if (prepare) prepare(projectRoot);
-  const record = { engine: 'codex', model: HOSTILE_MODEL, effort: HOSTILE_EFFORT };
+  // `roleRecord` replaces the roles' own host (default: the hostile model and effort).
+  const record = roleRecord || { engine: 'codex', model: HOSTILE_MODEL, effort: HOSTILE_EFFORT };
   // The ROW deliberately carries a DIFFERENT model and effort from the role. That asymmetry is the
   // whole proof: with --class the argv must show the row's values, so a wrapper that accepted the
   // flag and then resolved the role anyway is caught by the atoms rather than by reading its source.
@@ -4749,64 +4751,99 @@ function sectionPlanGate(tmpRoot) {
 // SECTION 5d - the review wrappers' run header and run footer (both channels, recording stubs)
 // ---------------------------------------------------------------------------
 // codex-review.{ps1,sh} print ONE line on stderr before codex starts and ONE after the session id is
-// recorded; codex's own streams are not touched, so stdout stays the stub's bytes exactly. The run is
-// a cold code-class pass: the header names the ROW's model and effort, the footer the stub's exit
-// code and the session id the wrapper recorded, with the resume flag of its channel. Each channel's
-// control removes one of the two lines from a copy, and the check must turn red.
+// recorded; codex's own streams are not touched, so stdout stays the stub's bytes exactly. Five
+// executed probes per channel, each asserted exact-string: the cold code-class pass (W-hdr: the ROW's
+// model and effort, the recorded id with the channel's resume flag), a RESUMED pass (the known id in
+// both lines), a CLASSLESS pass (`role reviewer` and the role's own hostile model and effort, their
+// newlines turned into spaces), a pass the store cannot identify (the `not identified` footer), and a
+// model that embeds a line break and a fake footer (still one run line, one exit line, the fake text
+// never at a line start). Every probe has a named-fault control on a copy that must turn it red.
 const HDR_RUN = 'codex-review: run ';
 const HDR_EXIT = 'codex-review: exit ';
-function hdrVerdict(stderrText, stdoutHex, resumeFlag) {
+const HDR_FAKE = 'codex-review: exit 0, session FAKE';
+const HDR_INJECT_MODEL = `evil\n${HDR_FAKE}`;
+/** What the wrappers print for a dynamic field: every control character one space. */
+const hdrField = (s) => String(s).replace(/[\x00-\x1F\x7F]/g, ' ');
+const HDR_RESUME_ID = SEEDED_IDS['last-review-session.txt'];
+const hdrExitRecorded = (flag, id) => `${HDR_EXIT}${STUB_EXIT}, session ${id} (resumable: ${flag} ${id})`;
+const HDR_PROBES = [
+  { id: 'W-hdr', label: 'cold, code class, the id recorded', ps: { klass: 'code' }, sh: [['--class', 'code'], {}],
+    run: `${HDR_RUN}cold, class code, model ${ROW_MODEL}, effort ${ROW_EFFORT}`, exit: (flag) => hdrExitRecorded(flag, STUB_SESSION_ID) },
+  { id: 'W-hdr-resumed', label: 'a RESUMED code-class pass from the recorded id', ps: { klass: 'code', seedState: SEEDED_IDS, extraArgs: '-Resume' },
+    sh: [['--class', 'code', '--resume'], { seedState: SEEDED_IDS }],
+    run: `${HDR_RUN}resumed ${HDR_RESUME_ID}, class code, model ${ROW_MODEL}, effort ${ROW_EFFORT}`, exit: (flag) => hdrExitRecorded(flag, HDR_RESUME_ID) },
+  { id: 'W-hdr-role', label: 'a CLASSLESS cold pass on the Reviewer role\'s own host (its newlines printed as spaces)', ps: { klass: null }, sh: [[], {}],
+    run: `${HDR_RUN}cold, role reviewer, model ${hdrField(HOSTILE_MODEL)}, effort ${hdrField(HOSTILE_EFFORT)}`, exit: (flag) => hdrExitRecorded(flag, STUB_SESSION_ID) },
+  { id: 'W-hdr-unidentified', label: 'a cold pass with no matching rollout in the store', psWarnsOnStdout: true, ps: { klass: 'code', writeRollout: false }, sh: [['--class', 'code'], { writeRollout: false }],
+    run: `${HDR_RUN}cold, class code, model ${ROW_MODEL}, effort ${ROW_EFFORT}`, exit: () => `${HDR_EXIT}${STUB_EXIT}, session not identified - the next resume needs an explicit id` },
+  { id: 'W-hdr-inject', label: 'a classless pass whose model embeds a line break and a fake footer', ps: { klass: null, roleRecord: { engine: 'codex', model: HDR_INJECT_MODEL, effort: 'high' } },
+    sh: [[], { roleRecord: { engine: 'codex', model: HDR_INJECT_MODEL, effort: 'high' } }],
+    run: `${HDR_RUN}cold, role reviewer, model ${hdrField(HDR_INJECT_MODEL)}, effort high`, exit: (flag) => hdrExitRecorded(flag, STUB_SESSION_ID) },
+];
+function hdrVerdict(probeDef, stderrText, stdoutHex, resumeFlag) {
   const lines = String(stderrText).replace(/\x1b\[[0-9;]*m/g, '').split(/\r?\n/);
   const runs = lines.filter((l) => l.startsWith(HDR_RUN));
   const exits = lines.filter((l) => l.startsWith(HDR_EXIT));
-  const runWant = `${HDR_RUN}cold, class code, model ${ROW_MODEL}, effort ${ROW_EFFORT}`;
-  const exitWant = `${HDR_EXIT}${STUB_EXIT}, session ${STUB_SESSION_ID} (resumable: ${resumeFlag} ${STUB_SESSION_ID})`;
-  const ok = runs.length === 1 && exits.length === 1 && runs[0] === runWant && exits[0] === exitWant && stdoutHex === STUB_STDOUT_HEX;
-  return { ok, detail: `run lines ${runs.length}, exit lines ${exits.length}; stdout is the stub's bytes ${stdoutHex === STUB_STDOUT_HEX}; ${JSON.stringify(runs[0] || '(none)')} / ${JSON.stringify(exits[0] || '(none)')}` };
+  const fake = lines.some((l) => l.startsWith(HDR_FAKE));
+  const exitWant = probeDef.exit(resumeFlag);
+  // PowerShell's host writes Write-Warning to STDOUT, and the unidentified run's warning ("this run
+  // could not be identified ...", which predates the header) lands there AFTER codex's bytes; on that
+  // probe stdout must START with the stub's bytes - codex's own output is still untouched.
+  const stdoutOk = probeDef.psWarnsOnStdout && resumeFlag === '-ResumeId' ? stdoutHex.startsWith(STUB_STDOUT_HEX) : stdoutHex === STUB_STDOUT_HEX;
+  const ok = runs.length === 1 && exits.length === 1 && runs[0] === probeDef.run && exits[0] === exitWant && !fake && stdoutOk;
+  const extra = stdoutHex === STUB_STDOUT_HEX ? '' : ` (stdout after the stub's bytes: ${JSON.stringify(Buffer.from(stdoutHex.replace(STUB_STDOUT_HEX, ''), 'hex').toString('utf8').slice(0, 90))})`;
+  return { ok, detail: `run lines ${runs.length}, exit lines ${exits.length}; fake footer at a line start ${fake}; stdout ${stdoutOk ? 'as required' : 'NOT as required'}${extra}; ${JSON.stringify(runs[0] || '(none)')} / ${JSON.stringify(exits[0] || '(none)')}` };
 }
-const hdrPs = (root, tmpRoot) => {
+const hdrPs = (root, tmpRoot, probeDef) => {
   try {
-    const p = runPsWrapperWithStub(root, 'codex-review.ps1', tmpRoot, { klass: 'code' });
-    return Object.assign(hdrVerdict(p.stderrText, p.stdoutHex, '-ResumeId'), { status: p.status });
+    const p = runPsWrapperWithStub(root, 'codex-review.ps1', tmpRoot, probeDef.ps);
+    return Object.assign(hdrVerdict(probeDef, p.stderrText, p.stdoutHex, '-ResumeId'), { status: p.status });
   } catch (e) { return { ok: false, detail: `the probe could not be built: ${e && e.message ? e.message : String(e)}` }; }
 };
-const hdrSh = (root, tmpRoot) => {
+const hdrSh = (root, tmpRoot, probeDef) => {
   try {
-    const p = runWrapperWithStub(root, 'codex-review.sh', tmpRoot, ['--class', 'code']);
-    return Object.assign(hdrVerdict(p.stderr, p.stdoutHex, '--resume'), { status: p.status });
+    const p = runWrapperWithStub(root, 'codex-review.sh', tmpRoot, probeDef.sh[0], probeDef.sh[1]);
+    return Object.assign(hdrVerdict(probeDef, p.stderr, p.stdoutHex, '--resume'), { status: p.status });
   } catch (e) { return { ok: false, detail: `the probe could not be built: ${e && e.message ? e.message : String(e)}` }; }
 };
 
 function sectionRunHeader(tmpRoot) {
   section('REVIEW WRAPPERS - one run header and one run footer line on stderr, stdout untouched (both channels, recording stubs)');
-  const PS_RUN = /\r?\n\[Console\]::Error\.WriteLine\("codex-review: run [^\r\n]*\r?\n/;
-  const PS_EXIT = /\r?\n {2}\[Console\]::Error\.WriteLine\("`ncodex-review: exit \$code, session \$\(\$script:RecordedSessionId\)[^\r\n]*\r?\n/;
-  const SH_RUN = /\nprintf 'codex-review: run [^\n]*\n/;
-  const SH_EXIT = /\n {2}printf '\\ncodex-review: exit %s, session %s [^\n]*\n/;
-  if (!PWSH) {
-    check('[W-hdr-ps] a PowerShell host is available to run the wrapper', false, 'neither `pwsh` nor `powershell` could be executed - the run header is UNPROVEN on this channel');
-  } else {
-    const r = hdrPs(PLUGIN_ROOT, tmpRoot);
-    check('[W-hdr-ps] codex-review.ps1 EXECUTED (cold, -Class code): exactly one "codex-review: run " line and one "codex-review: exit " line on stderr, their values the row\'s and the run\'s, stdout the stub\'s bytes', r.ok, r.detail);
-    for (const [id, label, re] of [['ctl-hdr-ps-run', 'the run line removed from codex-review.ps1', PS_RUN], ['ctl-hdr-ps-exit', 'the exit line removed from codex-review.ps1', PS_EXIT]]) {
-      const broken = fs.mkdtempSync(path.join(tmpRoot, `hdr-${id}-`));
-      try { copyPsChannel(PLUGIN_ROOT, broken); pgPatch(path.join(broken, ...psRel('codex-review.ps1')), re, '\n'); } catch (e) { check(`[${id}] control could be applied: ${label}`, false, String(e.message)); continue; }
-      const b = hdrPs(broken, tmpRoot);
-      check(`[${id}] sabotage detected: ${label} -> W-hdr-ps turns red`, b.ok === false, b.ok ? 'still PASS - the check is vacuous' : `FAIL as required (${b.detail})`);
+  const byId = (id) => HDR_PROBES.find((p) => p.id === id);
+  // One named fault per probe (two for W-hdr), [id, label, target probe, from, to] per channel. The
+  // sh exit line sits alone in its `then` branch beside the SID line, so it is replaced by `:`.
+  const channels = [
+    { ch: 'ps', file: 'codex-review.ps1', host: PWSH, hostWhy: 'neither `pwsh` nor `powershell` could be executed', run: hdrPs, copy: copyPsChannel, rel: psRel, controls: [
+      ['ctl-hdr-ps-run', 'the run line removed', 'W-hdr', /\r?\n\[Console\]::Error\.WriteLine\("codex-review: run [^\r\n]*\r?\n/, '\n'],
+      ['ctl-hdr-ps-exit', 'the exit line removed', 'W-hdr', /\r?\n {2}\[Console\]::Error\.WriteLine\("`ncodex-review: exit \$code, session \$sid [^\r\n]*\r?\n/, '\n'],
+      ['ctl-hdr-ps-resumed', 'the "resumed" word patched to "cold"', 'W-hdr-resumed', '"resumed $ResumeId"', '"cold $ResumeId"'],
+      ['ctl-hdr-ps-role', 'the "role reviewer" literal patched to "role qa"', 'W-hdr-role', "{ 'role reviewer' }", "{ 'role qa' }"],
+      ['ctl-hdr-ps-unidentified', 'the "not identified" branch printing a fake id', 'W-hdr-unidentified', 'session not identified - the next resume needs an explicit id', 'session FAKE (resumable: -ResumeId FAKE)'],
+      ['ctl-hdr-ps-sanitize', 'Sanitize-HeaderField returning its value unchanged', 'W-hdr-inject', "return ([string]$Value -replace '[\\x00-\\x1F\\x7F]', ' ')", 'return [string]$Value'],
+    ] },
+    { ch: 'sh', file: 'codex-review.sh', host: BASH, hostWhy: 'neither `bash` on PATH nor a Git-for-Windows bash could be executed', run: hdrSh, copy: copyShChannel, rel: shRel, controls: [
+      ['ctl-hdr-sh-run', 'the run line removed', 'W-hdr', /\nprintf 'codex-review: run [^\n]*\n/, '\n'],
+      ['ctl-hdr-sh-exit', 'the exit line removed', 'W-hdr', /\n {2}printf '\\ncodex-review: exit %s, session %s [^\n]*\n/, '\n  :\n'],
+      ['ctl-hdr-sh-resumed', 'the "resumed" word patched to "cold"', 'W-hdr-resumed', 'RUN_MODE="resumed $RESUME_ID"', 'RUN_MODE="cold $RESUME_ID"'],
+      ['ctl-hdr-sh-role', 'the "role reviewer" literal patched to "role qa"', 'W-hdr-role', "RUN_HOST='role reviewer'", "RUN_HOST='role qa'"],
+      ['ctl-hdr-sh-unidentified', 'the "not identified" branch printing a fake id', 'W-hdr-unidentified', 'session not identified - the next resume needs an explicit id', 'session FAKE (resumable: --resume FAKE)'],
+      ['ctl-hdr-sh-sanitize', 'header_field printing its value unchanged', 'W-hdr-inject', "printf '%s' \"$1\" | LC_ALL=C tr '\\000-\\037\\177' ' '", "printf '%s' \"$1\""],
+    ] },
+  ];
+  for (const c of channels) {
+    if (!c.host) {
+      check(`[W-hdr-${c.ch}] a host is available to run ${c.file}`, false, `${c.hostWhy} - the run header is UNPROVEN on this channel`);
+      continue;
     }
-  }
-  if (!BASH) {
-    check('[W-hdr-sh] a bash host is available to run the wrapper', false, 'neither `bash` on PATH nor a Git-for-Windows bash could be executed - the run header is UNPROVEN on this channel');
-  } else {
-    const r = hdrSh(PLUGIN_ROOT, tmpRoot);
-    check('[W-hdr-sh] codex-review.sh EXECUTED (cold, --class code): exactly one "codex-review: run " line and one "codex-review: exit " line on stderr, their values the row\'s and the run\'s, stdout the stub\'s bytes', r.ok, r.detail);
-    // The exit line sits alone in its `then` branch, so it is replaced by `:` - an empty branch would be
-    // a bash syntax error, and the control would then prove a parse failure rather than a missing line.
-    for (const [id, label, re, to] of [['ctl-hdr-sh-run', 'the run line removed from codex-review.sh', SH_RUN, '\n'], ['ctl-hdr-sh-exit', 'the exit line removed from codex-review.sh', SH_EXIT, '\n  :\n']]) {
+    for (const p of HDR_PROBES) {
+      const r = c.run(PLUGIN_ROOT, tmpRoot, p);
+      check(`[${p.id}-${c.ch}] ${c.file} EXECUTED (${p.label}): exactly one "codex-review: run " line and one "codex-review: exit " line on stderr, each the exact expected text, codex's stdout bytes untouched`, r.ok, r.detail);
+    }
+    for (const [id, label, target, from, to] of c.controls) {
       const broken = fs.mkdtempSync(path.join(tmpRoot, `hdr-${id}-`));
-      try { copyShChannel(PLUGIN_ROOT, broken); pgPatch(path.join(broken, ...shRel('codex-review.sh')), re, to); } catch (e) { check(`[${id}] control could be applied: ${label}`, false, String(e.message)); continue; }
-      const b = hdrSh(broken, tmpRoot);
-      check(`[${id}] sabotage detected: ${label} -> W-hdr-sh turns red`, b.ok === false, b.ok ? 'still PASS - the check is vacuous' : `FAIL as required (${b.detail})`);
+      try { c.copy(PLUGIN_ROOT, broken); pgPatch(path.join(broken, ...c.rel(c.file)), from, to); } catch (e) { check(`[${id}] control could be applied: ${label} in ${c.file}`, false, String(e.message)); continue; }
+      const b = c.run(broken, tmpRoot, byId(target));
+      check(`[${id}] sabotage detected: ${label} in ${c.file} -> ${target}-${c.ch} turns red`, b.ok === false, b.ok ? 'still PASS - the check is vacuous' : `FAIL as required (${b.detail})`);
     }
   }
 }

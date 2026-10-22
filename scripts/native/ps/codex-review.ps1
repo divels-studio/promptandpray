@@ -361,16 +361,26 @@ $CaptureSince = (Get-Date).AddSeconds(-2)
 # exit code, and the id with the flag that resumes it). They are information, never a decision: the
 # exit code below is codex's own. The footer opens with a line break because codex's last stderr byte
 # need not be one, and the footer must start its own line.
+# EACH LINE IS ONE PHYSICAL LINE. Every dynamic field (run mode, resume id, class, model, effort,
+# session id) passes through Sanitize-HeaderField, which turns every control character - CR, LF and
+# the rest of 0x00-0x1F, and 0x7F - into one space each: the schema admits any non-empty string for
+# a model or an effort, and a value carrying a line break could otherwise split the header or print
+# a fake footer before codex has even started.
+function Sanitize-HeaderField {
+  param([string] $Value)
+  return ([string]$Value -replace '[\x00-\x1F\x7F]', ' ')
+}
 $runMode = if ($IsResume) { "resumed $ResumeId" } else { 'cold' }
 $runHost = if ($HasClass) { "class $Class" } else { 'role reviewer' }
-[Console]::Error.WriteLine("codex-review: run $runMode, $runHost, model $($role.model), effort $($role.effort)")
+[Console]::Error.WriteLine("codex-review: run $(Sanitize-HeaderField $runMode), $(Sanitize-HeaderField $runHost), model $(Sanitize-HeaderField $role.model), effort $(Sanitize-HeaderField $role.effort)")
 $script:RecordedSessionId = $null
 $Prompt | & codex @codexArgs
 $code = $LASTEXITCODE
 
 Save-CodexSessionId -StateFile $SessionState -Resumed $IsResume -KnownId $ResumeId -Brief $Prompt -Since $CaptureSince
 if ($script:RecordedSessionId) {
-  [Console]::Error.WriteLine("`ncodex-review: exit $code, session $($script:RecordedSessionId) (resumable: -ResumeId $($script:RecordedSessionId))")
+  $sid = Sanitize-HeaderField $script:RecordedSessionId
+  [Console]::Error.WriteLine("`ncodex-review: exit $code, session $sid (resumable: -ResumeId $sid)")
 } else {
   [Console]::Error.WriteLine("`ncodex-review: exit $code, session not identified - the next resume needs an explicit id")
 }
