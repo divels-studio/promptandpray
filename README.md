@@ -19,7 +19,7 @@ Born in a real production project, then extracted and genericized.
 
 ## Status
 
-**v0.3.3. Public since 0.2.0.**
+**v0.3.4. Public since 0.2.0.**
 
 What is here:
 

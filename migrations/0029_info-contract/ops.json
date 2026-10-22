@@ -1,0 +1,12 @@
+{
+  "migration": "0029_info-contract",
+  "targetPluginVersion": "0.3.4",
+  "operations": [
+    {
+      "op": "note",
+      "id": "info-contract-0-3-4",
+      "text": "0.3.4 hardens the plan-readiness blocker contract so that INFO is actually used: the shipped readiness brief (templates/briefs/readiness-codex.md) now says in one line that wording, formatting and file:line precision are INFO, never BLOCKER, gives the one test for a row (executed exactly as written, would a ticket fail, land wrong or leave a decision open?) and six INFO examples; docs/REVIEW_CHECKLIST.md carries the same test in one sentence. Nothing in your installation is rewritten by this update: the brief is read from the payload at every pass.",
+      "docRefs": ["CHANGELOG.md", "docs/REVIEW_CHECKLIST.md"]
+    }
+  ]
+}

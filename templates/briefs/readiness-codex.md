@@ -26,6 +26,19 @@ opened by you). INFO never causes a revision. Out of scope: wording, formatting,
 precision in explaining context, the size of the prose, and the design choices the decisions record
 as the operator's. The hint column is a hint; the finding is the property.
 
+Wording, formatting and `file:line` precision are INFO, never BLOCKER - and so is every finding whose
+fix changes no property the six checks read. The test for a row: executed exactly as written, would
+a ticket fail, land wrong, or leave a decision open? Yes -> BLOCKER. No -> INFO. INFO examples, rows
+that belong under I<n> whatever their count:
+- a worklist pointer that names the right file and symbol at a line a few lines off;
+- a sentence that could be shorter, a heading that could be renamed, a list that could be a table;
+- a decision cited by number where the cited text makes the number recoverable;
+- an acceptance command whose target is right and whose difference is cosmetic (a flag, an order);
+- a risk the plan already names, restated as a reminder;
+- an improvement the plan does not need in order to be executable.
+A pass that returns zero INFO over a plan carrying any of the above has misfiled them as BLOCKERs.
+An I<n> row costs the plan nothing: the COO reads it and lands or drops it without a revision.
+
 OUTPUT SHAPE - exactly this and nothing else:
 
 | id | class | property the plan must have | evidence | hint |

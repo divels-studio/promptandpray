@@ -4,6 +4,22 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.3.4] - 2026-10-22
+
+The plan-readiness blocker contract says what INFO is, so the paid pass stops filing wording as a
+BLOCKER.
+
+### Changed
+
+- **The readiness blocker contract names INFO (PASSCOST)** - `templates/briefs/readiness-codex.md`
+  states in one line that wording, formatting and `file:line` precision are INFO, never BLOCKER,
+  gives the one test for a row (executed exactly as written, would a ticket fail, land wrong or
+  leave a decision open?) and six INFO examples; `docs/REVIEW_CHECKLIST.md` § Plan readiness carries
+  the same test. Every readiness pass measured before this returned INFO: 0. Migration
+  `0029_info-contract` carries the release note and writes nothing.
+
+Retires local rules: none.
+
 ## [0.3.3] - 2026-10-22
 
 The execution guards a consumer wrote during its first plans under the new cycle live in the payload,

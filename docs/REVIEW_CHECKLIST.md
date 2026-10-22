@@ -20,7 +20,10 @@ it).
 **The blocker contract.** A BLOCKER is a required property the plan lacks plus the evidence
 (`file:line`, opened). INFO never causes a revision. Wording, formatting, `file:line` precision in
 explaining context and the design choices the decisions record as the operator's are out of scope;
-the hint is a hint, never the finding. The output is one findings table
+the hint is a hint, never the finding. A finding whose fix changes no property the six checks read
+is INFO - the test is whether the plan, executed exactly as written, would make a ticket fail, land
+wrong or leave a decision open; the shipped readiness brief carries the INFO examples. The output
+is one findings table
 `| id | class | property the plan must have | evidence | hint |` and one line
 `BLOCKERS: <n> INFO: <m>`, nothing else (pass 2 adds `CLOSED: <k> OPEN: <j>`). Do not require a
 universal DoR/DoD, create an audit document, or review formatting for its own sake.
