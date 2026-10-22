@@ -64,6 +64,10 @@ measured (Step 6). Never estimate. *Temporary:* the measurement steps of this sk
 approval number, `## Measurements`) stay until the first plan measured with them has been judged;
 then they are removed from this skill.
 
+Before the entry is written, ask the operator three things in one message: which real inputs they
+can supply (samples, fixtures, documents), what must stay as it is, and what retires soon. The
+answers are data for the research briefs and the decisions, never a word to start.
+
 Open `<plansDir>/ROADMAP.md`. If the goal has an entry, use it; otherwise write one, in exactly this
 format, the operator's words verbatim where they are the source:
 
@@ -99,7 +103,8 @@ A later plan of the same roadmap entry researches the DELTA only: the brief name
 
 From the replies the COO writes `<plansDir>/drafts/<ABBR>/RESEARCH.md`: the Code Map (file -> role
 today), the numbered facts of what the code does today with their pointers, the consumers and
-adjacent contracts of every touched surface, and the unknowns. Short; pointers, not prose. A claim
+adjacent contracts of every touched surface, what already exists for the goal, the paths the goal
+touches without naming them, and the unknowns. Short; pointers, not prose. A claim
 two agents contradict is verified by the COO with one Read before it is written down.
 
 ## Step 3 - Decisions
@@ -154,6 +159,12 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/engine/plan-gate.js" --check <plansDir>/draf
 Exit 0 is the only way into Step 6. After EVERY revision, stamp the folder again before the next
 dispatch; a stale stamp makes the wrapper refuse the pass.
 
+**Runnability pre-pass.** Between the stamp and the paid pass, dispatch one scan-tier agent (Agent
+tool, `model: "sonnet"`, read-only) over every `## Acceptance` command of the tickets and every
+procedure of the index: it runs each read-only command as written (a mutating one is checked for
+existence only) and replies with the ones that cannot run and why. A command that cannot run goes
+back to the planner (Step 4) and the folder is stamped again; the auditor never pays for it.
+
 ## Step 6 - One readiness pass, triage, approval, landing
 
 **Resolve the row.** Run the resolver of `/pnp:review` Step 0b with the class `plan`; `$row.passes`
@@ -199,8 +210,9 @@ or a design choice the operator approved is `asked` - it goes to the operator in
 into a revision.
 
 **Revision.** The planner revises (Step 4, the same dispatch over the round file); the COO re-stamps
-(Step 5). At most 2 revisions. A revision that does not reduce the BLOCKER count stops the cycle and
-goes to the operator with the numbers.
+(Step 5). At most 2 revisions. A revision that does not reduce the count of carried OPEN rows stops
+the cycle and goes to the operator with the numbers; a blocker born of added scope is named
+separately, never counted as carried.
 
 **Pass 2 - only on the operator's own word, and only when** pass 1 returned a BLOCKER that reverses a
 `D-NN`, or the COO names a risk (security, tenancy, concurrency, transactions) after a substantive

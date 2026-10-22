@@ -152,6 +152,9 @@ to it - callers, pointers, documents - before the verdict.
 - No stale test names/expectations.
 - A Contract Justification is required whenever a failing assertion is adjusted.
 - Named-fixture mismatch -> STOP and report, never silently redefine the expectation.
+- Every new test is shown red under a named fault and then green, both runs in the hand-back; the
+  COO greps the diff for skip, only, todo and reduced sets and records a decision per hit - green by
+  narrowing is not accepted.
 
 ### Verdict discipline
 

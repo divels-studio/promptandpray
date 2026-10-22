@@ -7,6 +7,8 @@ GOAL: <goal>
 FOLDER: <folder> (= <plansDir>/drafts/<ABBR>/)
 READ FIRST, from disk: `<folder>/RESEARCH.md`, `<folder>/DECISIONS.md`, the roadmap entry `<ABBR>` in
 `<plansDir>/ROADMAP.md`, and every file a Code Map row you write names.
+CLOSING GREPS: <COO-filled - the consumer enumeration of every symbol the plan changes, `file:line`
+each, so you never ask for it>
 <on a revision: ROUND FILE: <plansDir>/readiness/<ABBR>/round-<N>.md - fix every row whose
 disposition is `fixed`; touch nothing else>
 <on a gate refusal: GATE PROBLEMS: <the plan-gate lines, verbatim> - fix exactly these>
@@ -35,7 +37,10 @@ THE FOLDER CONTRACT (checked mechanically by `plan-gate.js` - a breach is refuse
 - No bare open-item marker anywhere (put the word in a code span if you must mention it).
 - Scope is a worklist: each item names the file and, where the Writer acts or an acceptance check
   reads, the `file:line`. Acceptance is literal commands, each with the output that would mean
-  "broken". Over the caps = split or defer: say so in the handoff, the COO decides.
+  "broken". Over the caps = split or defer: say so in the handoff, the COO decides. A ticket is
+  trimmed by citing, never by cutting: restated decision text becomes its `D-NN` cite, procedures
+  and tables move to the index; a `file:line`, an acceptance command, a "broken when" clause or a
+  constant is never cut.
 
 HANDOFF - your whole reply, at most ~25 lines, never the files' text:
 

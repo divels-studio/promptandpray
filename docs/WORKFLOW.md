@@ -49,7 +49,9 @@ code-integration decision, and the final synthesis/handoff.
 **Discovery precedes dispatch.** When the delegation triggers are met, the COO runs the cheap-agent
 discovery BEFORE authoring the R2/R3 brief, and the brief carries the harvested evidence: a concrete
 worklist with `file:line` pointers, not reading assignments. A Writer that must scan broadly to learn
-WHAT to change is the symptom of a defective brief.
+WHAT to change is the symptom of a defective brief. Every definition the ticket changes gets a
+consumer grep over source, tests and scripts before dispatch; the zero-hit result, with the exempt
+list named, closes that enumeration.
 
 **Four countable tripwires.** (1) **Anything outside the repository is agent work per se**:
 upstream source, tarballs, external documentation - zero own steps, dispatch immediately; reading
@@ -95,6 +97,8 @@ line. A code-class note goes as a micro-round to the **live** Writer, not a fres
 Writer session has died, spawn and pay. Every direct COO edit is announced in the commit summary.
 The COO reads the whole diff of every ticket and writes that reading into
 `<scratchDir>/<REF>-diff-review.md`, which is folded into the ticket's completion record at the close.
+Before the first paid pass that file carries one line per acceptance criterion naming the defect the
+proof would see and the field and line it reads.
 
 **COO-authored text is reviewed like the Writer's:** when a ticket has a Reviewer pass, that
 text must already be in the tree when the pass is dispatched - the review covers the whole diff.
@@ -128,7 +132,9 @@ offered as questions. The operator's gates are exactly:
 
 A question outside those gates is a workflow defect. A blocker that demands more than the product
 needs - a precision, a scale or a guarantee beyond the business scope - is a product choice: it
-goes to the operator early, in plain words, before a revision or a pass is spent on it.
+goes to the operator early, in plain words, before a revision or a pass is spent on it. A product
+dialog names the exact field or behaviour the user loses and the definition that makes it so; a case
+no fixture and no operator word shows takes the strict reading of the existing rule.
 
 No pass is dispatched on precedent: a word given for an earlier, similar pass is not a word for this
 one. Resource checks are the COO's own - free memory before a paid pass is never a question to the
@@ -236,12 +242,17 @@ unverified. A documentation claim is a hypothesis: a number with no command, a `
 a statement of tool or config behaviour, a "was / was not done" is verified against the tree before
 it is relied on or repeated, and where a document disagrees with the code, the code wins and the
 document is a finding. A test run is never piped through `tail`: it runs to a log file, and the file
-is read.
+is read. Every `file:line`, number, command result or cause the COO writes into a brief, a record, a
+decision or a message is one it opened or ran itself, or carries the word UNVERIFIED; a scan agent
+returns pointers, not conclusions; a violation is a row in the record's Events.
 
 **VERIFY honesty.** Run every VERIFY command literally and record the exact exit code - a
 claimed "exit 0" is not authority, the actual run is. If VERIFY fails for an environment reason
 (corrupted state, missing test data, stale path, unavailable service), STOP and ask the
-operator; never silently fix the environment and report a pass.
+operator; never silently fix the environment and report a pass. Before VERIFY the COO checks the
+environment - tool binaries present, lockfile clean, env pins as expected - and records the unit
+baseline at HEAD by test name; the bar after the change is zero new failures by name, and a "not
+recognized" or "Cannot find module" is the environment and goes to the operator.
 
 ## Loop shape and its overrides
 
@@ -361,7 +372,8 @@ refutation / deferred / asked - in `<plansDir>/readiness/<ABBR>/round-<N>.md`: t
 plus a disposition column. A finding that disputes a recorded decision goes to the operator, not
 into a revision. The planner writes the fix. A revision closes the blockers it was handed and adds
 nothing new: a change that opens new surface is a candidate for the next plan. A revision that does
-not reduce the BLOCKER count stops the cycle and goes to the operator.
+not reduce the count of carried OPEN rows stops the cycle and goes to the operator; a blocker born of
+added scope is named separately, never counted as carried.
 
 **Pass economy.** Pass 1 rides the plan's standing word. A second pass runs only on the operator's
 own explicit word, and only when pass 1 returned a BLOCKER that reverses a recorded decision, or
@@ -519,7 +531,9 @@ tickets; no separate active BACKLOG file. The PLAN keeps:
    is the operator's dialog); and the COO says in one line whether the next ticket stays in this
    session or wants a fresh one - a recommendation, not a stop: compaction is tolerable inside a
    ticket, while a plan's planning and readiness are not a boundary. The record lands in its own docs
-   commit, separate from the code commit. **A number describing the state of the system is
+   commit, separate from the code commit. A ticket whose outcome is visible in the running product
+   closes only after the operator's own run on a real input, their words recorded in the record;
+   offline proof never replaces it. **A number describing the state of the system is
    measured or it is not stated:** anything a reader may rely on as a current fact and regress
    against - tests passed or skipped, timings, sizes, coverage, benchmark results - carries the
    command that produced it or does not go in at all, and arithmetic over two real measurements is
@@ -765,6 +779,9 @@ A decision escalates when:
 2. it touches access policy / tenancy / security-definer surfaces;
 3. its blast radius crosses the current ticket's boundary;
 4. two sessions/roles disagree in writing.
+
+A plan-recorded bar, pin, threshold or cap is a recorded decision: a ticket that would move it fires
+trigger 1, with no "tuning" reading.
 
 **A fired trigger makes escalation MANDATORY - no word gates it.** The COO announces it to the
 operator in ONE line and prepares the brief: the casus, the `file:line` evidence, and WHICH trigger
