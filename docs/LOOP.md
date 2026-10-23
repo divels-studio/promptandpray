@@ -143,14 +143,16 @@ decision contract.
 gates) applies while `<projectDir>/.aiwf/route-state.json` names an R2/R3 route: a main-session
 Edit/Write is allowed only under `docs/**`, `.aiwf/**` and root-level `*.md`, plus the transfer
 surface (`paths.transferSurface`, else the legacy `<plansDir>/PNP_CANDIDATES.md`; one contained
-`.md` file not under `.claude`) and the roadmap `<plansDir>/ROADMAP.md` under the same rules; anything
-else is denied with a message naming the open ticket. No state file, or the cleared `{}`, means the
-guard is invisible; the Writer is never gated by it. A present-but-unusable state (a route that is
-not R2/R3, a non-string route, malformed JSON) denies by design, never opens the transfer surface or
-the roadmap, and is self-healing because `.aiwf/**` stays writable. A `paths.plansDir` under neither
-`docs/` nor `.aiwf/` puts the plan's own draft and readiness files behind the guard while a route is
-open (the transfer surface and the roadmap excepted), so `/pnp:plan` runs while no route is open.
-The paths and the state-file location are fixed. It covers the Edit/Write tool class only - shell
+`.md` file not under `.claude`), the roadmap `<plansDir>/ROADMAP.md` under the same rules, and the
+two planning folders `<plansDir>/drafts/**` and `<plansDir>/readiness/**` (every file under them;
+`<plansDir>` contained the same way - relative, no `..`, not under `.claude`); anything else is
+denied with a message naming the open ticket. No state file, or the cleared `{}`, means the guard is
+invisible; the Writer is never gated by it. A present-but-unusable state (a route that is not R2/R3,
+a non-string route, malformed JSON) denies by design, never opens the transfer surface, the roadmap
+or the planning folders, and is self-healing because `.aiwf/**` stays writable. The planning folders
+are what lets `/pnp:plan` run beside an open route (`docs/WORKFLOW.md` § Branch policy); the landed
+plans under `<plansDir>/active/**` stay behind the guard - a landed plan is edited by the executing
+session or after the route closes. The paths and the state-file location are fixed. It covers the Edit/Write tool class only - shell
 mutations remain doctrine. `enforcement.routeWriteGuard: false` skips it; every other state of that
 key - absent, non-boolean, an unreadable config - leaves it ARMED, and the toggle never reaches
 Gate 1.

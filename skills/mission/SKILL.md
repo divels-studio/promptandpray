@@ -77,7 +77,8 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
 - Subagent model policy: an explicit `model` always; `haiku` for mechanical scans, `sonnet` for
   evidence-with-judgment; the loop roles are never run inline in the main session.
 - With an open R2/R3 ticket the main session writes only `docs/**`, `.aiwf/**` and root-level
-  `*.md`, plus the transfer surface and the roadmap `<plansDir>/ROADMAP.md`; code goes through the
+  `*.md`, plus the transfer surface, the roadmap `<plansDir>/ROADMAP.md` and the planning folders
+  `<plansDir>/drafts/**` and `<plansDir>/readiness/**`; code goes through the
   Writer. Gate 3 enforces this for the
   Edit/Write tool class whenever `.aiwf/route-state.json` names an R2/R3 route - so write that file
   at dispatch and clear it to `{}` on close. Shell-performed mutations are not caught and remain

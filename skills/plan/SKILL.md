@@ -38,11 +38,16 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
 `<plansDir>` is `{{config.paths.plansDir}}`, `<scratchDir>` is `{{config.paths.scratchDir}}`; every
 path below is written from `<root>`, and every command runs from `<root>`.
 
-**Preconditions.** No R2/R3 route is open (`<scratchDir>/route-state.json` absent or `{}`) - while one
-is, Gate 3 keeps the main session out of `<plansDir>` and the drafts cannot be written. The planning
-lock holds for the whole skill (`docs/WORKFLOW.md` § Planning lock): until the landing in Step 6 the
-only files written are the plan's own - `<plansDir>/drafts/<ABBR>/`, `<plansDir>/readiness/<ABBR>/`,
-the roadmap entry - and the scratch brief. A readiness cycle starts in a fresh session.
+**Preconditions.** An open R2/R3 route of another ticket (`<scratchDir>/route-state.json` naming
+it) does not stop this skill: planning is not execution, and Gate 3 lets the plan's own folders
+through - `<plansDir>/drafts/<ABBR>/`, `<plansDir>/readiness/<ABBR>/`, the roadmap and the ledger
+(`docs/WORKFLOW.md` § Branch policy). Two things wait while that route is open: an edit of a LANDED
+plan under `<plansDir>/active/` (behind the guard), and the readiness pass of Step 6 while another
+paid pass is in flight on this tree - the brief and session files under `<scratchDir>` are shared, so
+one paid pass at a time, an operator-held rule. The planning lock holds for the whole skill
+(`docs/WORKFLOW.md` § Planning lock): until the landing in Step 6 the only files written are the
+plan's own - `<plansDir>/drafts/<ABBR>/`, `<plansDir>/readiness/<ABBR>/`, the roadmap entry - and
+the scratch brief. A readiness cycle starts in a fresh session.
 
 ## Step 0.5 - Doctrine preflight
 

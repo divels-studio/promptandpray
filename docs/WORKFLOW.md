@@ -435,9 +435,10 @@ the contract Gate 2 reads (`docs/LOOP.md` § Enforcement of Writer-only writes).
 At dispatch of an R2/R3 ticket the COO writes the **route state**, `.aiwf/route-state.json` (kept
 out of git by the project's `.gitignore`), as `{ "ticket": "<REF>", "route": "R2"|"R3" }`, and on
 closing the ticket clears it by writing `{}`. While it names an R2/R3 route, **Gate 3** lets the
-main session write only `docs/**`, `.aiwf/**`, root-level `*.md`, the transfer surface and the
-roadmap (mechanics and limits: `docs/LOOP.md` § Enforcement of Writer-only writes). The guard only
-bites if the COO actually writes the file at dispatch - a convention, not an enforcement.
+main session write only `docs/**`, `.aiwf/**`, root-level `*.md`, the transfer surface, the
+roadmap and the planning folders `<plansDir>/drafts/**` and `<plansDir>/readiness/**` (mechanics
+and limits: `docs/LOOP.md` § Enforcement of Writer-only writes). The guard only bites if the COO
+actually writes the file at dispatch - a convention, not an enforcement.
 
 Six brief-authoring failures each cost a correction round:
 
@@ -754,10 +755,17 @@ the dialog is the backstop, the word comes first. When "write it into X's file" 
 a plugin's own repository and a consumer's copy - the COO settles which tree before writing, and
 asks when the tree cannot settle it.
 
-**A working tree carries one executing session.** Several sessions may be open at once; on one
-working tree exactly ONE is executing, and non-executing sessions may READ - zero repo writes, zero
-DB operations, zero paid auditor passes. An OPERATOR-HELD invariant: no hook can see sibling
-sessions.
+**A working tree carries one executing session - and, beside it, a planning session.** Several
+sessions may be open at once; on one working tree exactly ONE is executing a ticket. A PLANNING
+session (`/pnp:plan`) may run beside it: planning is not execution - it writes only its own
+`<plansDir>/drafts/<ABBR>/` and `<plansDir>/readiness/<ABBR>/`, the roadmap entry and the ledger
+line, commits by explicit paths at its landing, and never touches the open ticket's files; Gate 3
+lets exactly those paths through while the ticket's route is open. Every other non-executing session
+may READ - zero repo writes, zero DB operations, zero paid auditor passes. **One paid pass in flight
+per working tree:** the scratch files a pass uses (`<scratchDir>/review-brief.txt`,
+`<scratchDir>/last-review-session.txt`) are shared by every session on the tree, so a readiness pass
+starts only while no other pass is in flight there, and a ticket's pass waits for a readiness pass
+the same way. Both are OPERATOR-HELD invariants: no hook can see sibling sessions.
 
 ## Fail aggregation
 
