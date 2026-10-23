@@ -220,6 +220,11 @@ on this machine; the COO context is `pct * size / 100` - the number the statusli
 to its whole-percent precision. The session id is the one in the session's scratchpad path. This is
 the machine source `/pnp:plan` and the record skeleton read; nothing of it is payload. (machine)
 
+**`/pnp:update --apply` runs under auto mode** (operator rule 2026-10-23, „аутомод не блокира ... да не
+ми го искате повече"): the update engine's write of `aiwf.config.json` is NOT refused by auto mode
+(observed 2026-10-23, 0.3.5: applied, self-check 1368/1368). Never ask the operator to switch auto mode
+off for an apply. The payload sentence that says otherwise is a ROADMAP § DOCTR item. (machine)
+
 **Start number (a) at `/pnp:work`** (operator word 2026-10-18): at `/pnp:work`'s task question,
 before any plan file is read, the COO reads its context from the source above and prints it as
 start number (a) together with the task question; the operator may add `/context` for the

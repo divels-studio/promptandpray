@@ -349,7 +349,7 @@ rules around the doctrine. Every point went through the operator separately. Abb
 8. The auditor still raises blockers that were visible on the first pass too (it admits the violation [taken up -> ROADMAP § DOCTR]
    itself); HARD-005 made the contract instrumented, the behavior did not get fixed - how to enforce it
    structurally. `SP:52`, event ledger `SP` ~302, ~320.
-9. `last-review-session.txt` is per project (`<scratchDir>`), not per machine (the agent was wrong, [dropped]
+9. `last-review-session.txt` is per project (`<scratchDir>`), not per machine (the agent was wrong, [dropped; taken up 2026-10-23 -> ROADMAP § PARPLAN]
    `scripts/native/ps/codex-review.ps1:126`); the risk is only with parallel sessions in one project -
    a file per ticket (`last-review-session.<REF>.txt`). Low priority. `SP:44`, `SO:416-427`.
 10. The brief's write is confirmed BEFORE the dispatch - separate steps in `/pnp:review` (write and launch in [done]

@@ -28,6 +28,19 @@
   plan row, then on the operator's word a COLD pass 2 on gpt-5.6-sol/high over the same stamped folder
   with the same pass-1 brief, the plan row switched through `/pnp:roles --set` for that pass on its own
   apply word (ROADMAP § PASSCOST). Tag + push 0.3.4: the operator's two words. Next: DOCSTAGE (step 12).
+- 2026-10-23, PARPLAN-001 DONE (inserted before DOCSTAGE on the operator's complaint relayed from the
+  Silerax session - its planning was locked out while RDR-002 ran: „това е мноооого тъпо ... загуба на
+  време категорично"): release 0.3.5 - Gate 3 lets `<plansDir>/drafts/**` and `<plansDir>/readiness/**`
+  through while a route is open, so `/pnp:plan` runs beside an executing ticket; doctrine `4c86d4e`
+  (WORKFLOW § Branch policy: a planning session beside the executing one; ONE paid pass in flight per
+  tree, operator-held), code `c4d7dc2` (hook + self-check section GATE 3 PLANNING 36 rows + spike table
+  4 cases + schema description + migration 0030 note + bump; non-durable R2, no plan; Writer; Codex
+  code pass 1 cold `pass-with-notes` 0 blockers 1 P3 at 57,027 tokens; fact-check 100 claims / 0
+  false; VERIFY once at handoff: validate-payload 30 migrations 0.3.5, setup 470/0, update 445/0,
+  selfcheck CI form 1370/1370, spikes 342/0 by the Writer; self-install apply self-check 1368/1368).
+  The remainder - the per-ticket `review-brief` / `last-review-session` files, which would let two
+  paid passes run on one tree - is ROADMAP § PARPLAN. Tag + push 0.3.5: the operator's two words.
+  Next: DOCSTAGE (step 12) - its planning may now run beside a ticket.
 - RBC-001 done (`bf018ac`, record `31909bd`, amendment `90a2f81`). RBC-002 done (`a10110f`, record
   `744cc4b`): WORKFLOW + LOOP + REVIEW_CHECKLIST + overrides 54.6k -> 38.7k tokens (claude-opus-5-5
   via `claude -p`, base `90a2f81`), every rule homed (four rule-homes tables, homeless 0), the
@@ -105,6 +118,8 @@ plans). Step 6's judgment is below; step 7 waits for the release of step 10. The
     (DONE `58a2f59`, 0.3.4) + one paid pass gpt-5.6-sol/high, on the operator's word - over the next
     real Silerax plan's stamped folder (RDR), cold, beside its pass 1, not over the archived AIOCR
     (decided 2026-10-22, § Status).
+11b. **PARPLAN-001** (DONE 2026-10-23, release 0.3.5; § Status) - inserted here on the operator's
+    complaint: a planning session beside an executing one. The remainder is ROADMAP § PARPLAN.
 12. **DOCSTAGE** - after that. It rearranges files; it does not change what the COO does.
 13. SEEDFS, README, PORTABLE - unchanged, later.
 

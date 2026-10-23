@@ -73,6 +73,17 @@ leaves with one ledger row `<ABBR> dropped: <why>`.
 - Status: in progress
 - Born: 2026-10-18, operator word relayed by the arbitration session (the post-archive batch, „записвай пакетите")
 
+## PARPLAN - a planning session beside an executing one, to the end
+- Goal: two sessions on one working tree - one executing a ticket, one planning the next work - get in each other's way nowhere: not at the write guard (done), not at the paid pass (open)
+- Why: „това е мноооого тъпо ... отивам при ПНП да му се оплача, това е загуба на време категорично" (operator 2026-10-23, in the Silerax session, whose planning was locked out while RDR-002 ran)
+- Scope: in - the per-ticket scratch files (`review-brief.<REF>.txt`, `last-review-session.<REF>.txt`, the QA pair, `readiness-round.txt`) in the wrappers (`scripts/native/ps/codex-review.ps1`, `.sh`, the QA wrappers), the review/plan/qa skills and the self-check, so a readiness pass and a ticket's pass can be in flight on one tree at once and the "one paid pass in flight per tree" rule retires; out - a second EXECUTING session (one executing session per tree stays), any hook that sees sibling sessions
+  - 2026-10-23 PARPLAN-001 DONE (release 0.3.5, no plan) - Gate 3 lets `<plansDir>/drafts/**` and `<plansDir>/readiness/**` through while a route is open; the doctrine names the planning session beside the executing one [dev/backlogs/LEDGER.md rows of 2026-10-23]
+  - 2026-10-14 Silerax intake item 9 (was dropped as low priority; retriggered by this incident) - `last-review-session.txt` per ticket [dev/backlogs/CANDIDATES.md:352-354]
+- Size: S
+- Plans: none yet
+- Status: idea
+- Born: 2026-10-23, operator word „това е мноооого тъпо ... загуба на време категорично"
+
 ## PORTABLE - a consumer is not coupled to PnP
 - Goal: a clean clone of a consumer (Silerax) runs a planning cycle under another framework (GSD, installed `--claude --local`) with the PnP plugin disabled for that folder, proving the product does not depend on the plugin and giving a third measurement point (GSD vs `/pnp:plan` on the same module)
 - Why: „това може да стане чак след селективното четене, а в роадмапа може да влезе само като идея + доказване че двата консуматора не са тясно свързани със PnP" (operator 2026-10-18, relayed by the arbitration session)
@@ -119,6 +130,7 @@ Entries below were ported on 2026-10-18 from `dev/backlogs/CANDIDATES.md` (now h
   - 2026-10 - a product name is not a path: "write to <plugin> CANDIDATES" has two addresses - a Branch policy sentence (unsure) [dev/backlogs/CANDIDATES.md:818]
   - 2026-10 - two names for one set: "unplanned R2" vs "small R1 / non-durable R2" (unsure) [dev/backlogs/CANDIDATES.md:956]
   - 2026-10 - a doctrine sentence that enumerates the world is phrased as a checkable rule (unsure) [dev/backlogs/CANDIDATES.md:966]
+  - 2026-10-23 - `docs/LOOP.md` § Role boundaries says auto mode refuses "the config files an update writes"; the 0.3.5 `/pnp:update --apply` ran under auto mode and the engine's config write went through (operator: „аутомод не блокира") - the sentence is corrected to what was observed (the Edit/Write tool class on `.claude/settings.json`, `.claude/hooks/**`), or the refusal is reproduced and the sentence stays [dev/PROJECT_OVERRIDES.md § Environment, 2026-10-23]
   - 2026-10-16 alignment, unconsumed by GENERIC - eight rules that live only in the three projects' overrides, with no payload home: a dialog only when the ticket cannot continue (Q2), the operator channel carries counts never file:line (Q3), ticket-end cleanup of `.aiwf/` (Q4/C-056), independent units run in parallel by default (C-002), a lint baseline (C-045), a run judged against a recorded baseline JSON (C-064), the brief line `E2E: yes/no - because` (C-067), sessions start from the repo root (C-071) - each homed in the payload or confirmed project-only [dev/PROJECT_OVERRIDES.md § Communication, § Test policy; `drafts/align-2026-10-16/align-decision.md` in git history before its deletion on 2026-10-18]
 - Size: S
 - Plans: none yet
