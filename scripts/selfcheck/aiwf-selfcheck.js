@@ -2323,6 +2323,150 @@ function sectionGate3Surface(tmpRoot) {
 }
 
 // ---------------------------------------------------------------------------
+// SECTION 3b3 - Gate 3's planning folders (<plansDir>/drafts/** and <plansDir>/readiness/**)
+// ---------------------------------------------------------------------------
+// While a ticket is open the main session may also write every file under the two planning folders
+// directly under the resolved plansDir, so a second session can draft a plan and run its readiness
+// rounds beside the executing ticket. plansDir is held to the surface's containment terms (not
+// absolute, no `..`, inside the project, not under `.claude`), and an unusable route state opens
+// nothing. The allow rows are the change; the deny rows are the negative controls proving the folders
+// did not widen into the landed plans, a name prefix, a nested folder or a traversal.
+function sectionGate3Planning(tmpRoot) {
+  section('GATE 3 PLANNING - the main session may write <plansDir>/drafts/** and <plansDir>/readiness/** while a ticket is open, nothing more');
+  const stateOf = (route) => JSON.stringify({ ticket: 'PLANNING-FIXTURE', route });
+  const mkProject = (name, paths, stateRaw) => {
+    const root = path.join(tmpRoot, 'g3p-' + name);
+    fs.mkdirSync(path.join(root, '.aiwf'), { recursive: true });
+    fs.mkdirSync(path.join(root, '.claude', 'aiwf-native'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.aiwf', 'route-state.json'), stateRaw === undefined ? stateOf('R2') : stateRaw);
+    const config = { project: { name: 'Planning' } };
+    if (paths !== undefined) config.paths = paths;
+    fs.writeFileSync(path.join(root, '.claude', 'aiwf-native', 'aiwf.config.json'), JSON.stringify(config));
+    return root;
+  };
+  const G = (root, filePath, identity) => runHook(GATE1, Object.assign({ hook_event_name: 'PreToolUse', tool_name: 'Write',
+    tool_input: { file_path: filePath, content: 'x' } }, identity || {}), root);
+  const allow = (r) => r.decision === 'allow(passthrough)' && r.exit === 0;
+  const deny = (r) => r.decision === 'deny' && r.exit === 0;
+  const CLAUSE = 'plus the planning folders';
+  const planningText = (plansDir) => `${CLAUSE} ${plansDir}/drafts/** and ${plansDir}/readiness/** (gate 3)`;
+  const DRAFT = 'dev/backlogs/drafts/PX/PLAN_PX.md';
+
+  const CONF = mkProject('configured', { plansDir: 'dev/backlogs' });
+  const R3 = mkProject('r3', { plansDir: 'dev/backlogs' }, stateOf('R3'));
+  const SLASH = mkProject('slash', { plansDir: 'dev/backlogs/' });
+  // `route: "R9"` is a present-but-unusable state: the hook arms the guard with the plain allowlist.
+  const UNUSABLE = mkProject('unusable', { plansDir: 'dev/backlogs' }, stateOf('R9'));
+
+  // --- allow rows: the change itself --------------------------------------------------------------
+  for (const [p, why] of [
+    [DRAFT, 'a draft plan index'],
+    ['dev/backlogs/drafts/PX/tickets/PX-001.md', 'a draft ticket, any depth'],
+    ['dev/backlogs/readiness/PX/round-1.md', 'a readiness round'],
+    ['dev/backlogs/readiness/PX/ledger.md', 'the readiness ledger'],
+    ['dev/backlogs/readiness/PX/stamp.json', 'the readiness stamp - every file type, the folder is the unit'],
+    ['./dev/backlogs/drafts/PX/x.md', 'the host resolves the ./'],
+  ]) {
+    check(`main + R2 open + ${p} -> allow (${why})`, allow(G(CONF, p)));
+  }
+  check(`main + R3 open + ${DRAFT} -> allow (both active routes)`, allow(G(R3, DRAFT)));
+  check(`plansDir written dev/backlogs/ (trailing slash) + ${DRAFT} -> allow`, allow(G(SLASH, DRAFT)));
+  {
+    const r = G(SLASH, 'src/x.ts');
+    check('plansDir dev/backlogs/: the deny text of src/x.ts names dev/backlogs/drafts/** (no double slash)',
+      deny(r) && r.reason.includes(planningText('dev/backlogs')) && !r.reason.includes('//'), r.reason.slice(0, 70));
+  }
+  check(`WRITER + ${DRAFT} -> allow (the Writer is never gated)`,
+    allow(G(CONF, DRAFT, { agent_id: 'w1', agent_type: 'writer' })));
+
+  // --- deny rows: negative controls ---------------------------------------------------------------
+  for (const [p, why] of [
+    ['dev/backlogs/active/PX/PLAN_PX.md', 'landed plans stay behind the guard'],
+    ['dev/backlogs/archive/001_PLAN_X.md', 'the archive stays behind the guard'],
+    ['dev/backlogs/drafts.md', 'a name prefix is not the folder'],
+    ['dev/backlogs/draftsX/y.md', 'a longer folder name is not the folder'],
+    ['dev/backlogs/x/drafts/y.md', 'only directly under plansDir'],
+    ['dev/drafts/y.md', 'the name alone opens nothing outside plansDir'],
+    ['dev/backlogs/drafts/../../../src/x.ts', 'the resolved traversal lands in src/'],
+    ['dev/backlogs/drafts', 'the directory itself, not a file in it'],
+  ]) {
+    check(`main + R2 open + ${p} -> DENY (${why})`, deny(G(CONF, p)));
+  }
+  {
+    const r = G(UNUSABLE, DRAFT);
+    check(`main + UNUSABLE state (route "R9") + ${DRAFT} -> DENY, and the text has no planning clause`,
+      deny(r) && !r.reason.includes(CLAUSE), r.reason.slice(0, 70));
+  }
+  {
+    const r = G(CONF, 'src/x.ts');
+    check('the deny text names the folders: "plus the planning folders dev/backlogs/drafts/** and dev/backlogs/readiness/** (gate 3)"',
+      deny(r) && r.reason.includes(planningText('dev/backlogs')), r.reason.slice(0, 70));
+  }
+  {
+    const r = G(mkProject('claude', { plansDir: '.claude/plans' }), '.claude/plans/drafts/x.md');
+    check('plansDir .claude/plans: .claude/plans/drafts/x.md -> DENY, no planning clause (never under .claude)',
+      deny(r) && !r.reason.includes(CLAUSE), r.reason.slice(0, 70));
+  }
+  // The default plansDir puts the folders under docs/, allowed regardless - so the deny text is what
+  // proves the fallback resolved.
+  for (const [name, paths, why] of [
+    ['default', {}, 'plansDir absent'],
+    ['blank', { plansDir: '  ' }, 'blank plansDir'],
+  ]) {
+    const r = G(mkProject(name, paths), 'src/x.ts');
+    check(`fallback (${why}): a denied src/x.ts names docs/backlogs/drafts/** and docs/backlogs/readiness/**`,
+      deny(r) && r.reason.includes(planningText('docs/backlogs')), r.reason.slice(0, 70));
+  }
+
+  // --- platform rows: the folder test is the HOST's path identity ---------------------------------
+  // No skipWhen exists on check() rows, so the expected decision is computed from process.platform.
+  const FOLD = process.platform === 'win32' || process.platform === 'darwin';
+  const BACKSLASH_IS_SEPARATOR = process.platform === 'win32';
+  check(`(p1) main + R2 open + DEV/backlogs/drafts/PX/x.md -> ${FOLD ? 'allow' : 'DENY'} on ${process.platform} ` +
+    '(case-insensitive by default on win32/darwin; another folder on linux)',
+    FOLD ? allow(G(CONF, 'DEV/backlogs/drafts/PX/x.md')) : deny(G(CONF, 'DEV/backlogs/drafts/PX/x.md')));
+  check(`(p2) main + R2 open + dev\\backlogs\\drafts\\PX\\x.md -> ${BACKSLASH_IS_SEPARATOR ? 'allow' : 'DENY'} on ` +
+    `${process.platform} (a separator on win32; a filename character elsewhere)`,
+    BACKSLASH_IS_SEPARATOR ? allow(G(CONF, 'dev\\backlogs\\drafts\\PX\\x.md')) : deny(G(CONF, 'dev\\backlogs\\drafts\\PX\\x.md')));
+
+  // --- resolver rows: the exported resolvePlanningDirs called directly, no hook run ---------------
+  // Required only behind the entrypoint guard sectionGate3Surface asserts as a row (a hook without it
+  // would read this process's stdin and exit it); require() returns the module that section loaded.
+  let source = '';
+  try { source = fs.readFileSync(GATE1, 'utf8'); } catch (e) { source = ''; }
+  let hook = null;
+  if (/\brequire\.main === module\b/.test(source)) {
+    try { hook = require(GATE1); } catch (e) { hook = null; }
+  }
+  if (!check('the hook exports resolvePlanningDirs (these rows call the REAL resolver)',
+    hook != null && typeof hook.resolvePlanningDirs === 'function')) return;
+  const planningOf = (plansDir) => hook.resolvePlanningDirs(
+    { project: { name: 'Planning' }, paths: plansDir === undefined ? {} : { plansDir } }, CONF);
+  const expected = (p) => JSON.stringify({ plansDir: p, drafts: p + '/drafts', readiness: p + '/readiness' });
+  check('planning resolver control: plansDir dev/backlogs -> dev/backlogs, its drafts and readiness (the rows below can pass only by refusing)',
+    JSON.stringify(planningOf('dev/backlogs')) === expected('dev/backlogs'), JSON.stringify(planningOf('dev/backlogs')));
+  check('planning resolver: a padded "  dev/backlogs  " -> trimmed',
+    JSON.stringify(planningOf('  dev/backlogs  ')) === expected('dev/backlogs'), JSON.stringify(planningOf('  dev/backlogs  ')));
+  check('planning resolver: plansDir absent -> the schema default docs/backlogs',
+    JSON.stringify(planningOf(undefined)) === expected('docs/backlogs'), JSON.stringify(planningOf(undefined)));
+  check('planning resolver: a non-object config (null, an array, a string) -> null',
+    hook.resolvePlanningDirs(null, CONF) === null && hook.resolvePlanningDirs([], CONF) === null &&
+    hook.resolvePlanningDirs('x', CONF) === null);
+  const DRIVE = 'C:'; // composed so the provenance scan does not read a drive-letter path in this source
+  for (const [plansDir, why] of [
+    ['../x', 'a .. segment'],
+    [DRIVE + '/plans', 'win32-absolute'],
+    ['/abs', 'posix-absolute'],
+    ['.claude/plans', 'under .claude'],
+    ['.claude./plans', 'trailing dot stripped by Windows'],
+    ['.claude /plans', 'trailing space stripped by Windows'],
+  ]) {
+    const got = planningOf(plansDir);
+    check(`planning resolver: plansDir ${plansDir} -> null (${why})`, got === null, JSON.stringify(got));
+  }
+}
+
+// ---------------------------------------------------------------------------
 // SECTION 3c - the config schema and its interpreter
 // ---------------------------------------------------------------------------
 // Both directions are asserted: the shipped schema ACCEPTS a healthy config, and it REJECTS the
@@ -8527,6 +8671,7 @@ function main() {
     sectionGate3(tmpRoot);
     sectionGate3Toggle(tmpRoot);
     sectionGate3Surface(tmpRoot);
+    sectionGate3Planning(tmpRoot);
     sectionConfigSchema(tmpRoot);
     sectionMigrationPayload(tmpRoot);
     sectionHookWiring();

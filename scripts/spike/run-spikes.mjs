@@ -218,6 +218,16 @@ const gate3SurfaceCases = [
   { name: 'surface: main session -> the surface, UNUSABLE state (fixed allowlist only)', projectDir: surfaceUnusable, payload: writeEnvelope({}, path.join(surfaceUnusable, 'dev', 'backlogs', 'CANDIDATES.md')), expect: 'deny' },
 ];
 
+// Gate 3's planning folders (`<plansDir>/drafts/**`, `<plansDir>/readiness/**`). Plugin only, for the
+// same reason as the surface table: the reference predates the folders. Same fixtures (plansDir
+// dev/backlogs): a landed plan stays behind the guard, and an unusable state opens nothing.
+const gate3PlanningCases = [
+  { name: 'planning: main session -> drafts/PX/PLAN_PX.md, R2 open', projectDir: surfaceTicket, payload: writeEnvelope({}, path.join(surfaceTicket, 'dev', 'backlogs', 'drafts', 'PX', 'PLAN_PX.md')), expect: 'allow(passthrough)' },
+  { name: 'planning: main session -> readiness/PX/round-1.md, R2 open', projectDir: surfaceTicket, payload: writeEnvelope({}, path.join(surfaceTicket, 'dev', 'backlogs', 'readiness', 'PX', 'round-1.md')), expect: 'allow(passthrough)' },
+  { name: 'planning: main session -> active/PX/PLAN_PX.md, R2 open', projectDir: surfaceTicket, payload: writeEnvelope({}, path.join(surfaceTicket, 'dev', 'backlogs', 'active', 'PX', 'PLAN_PX.md')), expect: 'deny' },
+  { name: 'planning: main session -> drafts/PX/PLAN_PX.md, UNUSABLE state', projectDir: surfaceUnusable, payload: writeEnvelope({}, path.join(surfaceUnusable, 'dev', 'backlogs', 'drafts', 'PX', 'PLAN_PX.md')), expect: 'deny' },
+];
+
 // Gate 2: the Agent-dispatch envelope, from the live shape (subagent_type next to
 // description/prompt/model/run_in_background).
 const agentEnvelope = (toolInput, extra = {}) => ({
@@ -629,6 +639,20 @@ console.log('== Gate 3 transfer surface - paths.transferSurface (plugin only: th
 console.log('per case: [1] plugin decision matches the expectation  [2] plugin exited 0');
 console.log(`${pad('case', 62)} ${pad('expected', 18)} ${pad('plugin', 18)} ${pad('exit', 5)} verdict`);
 for (const c of gate3SurfaceCases) {
+  const got = runHook(path.join(PLUGIN_HOOKS, GATE1), c.payload, c.projectDir);
+  let ok = record(got.decision === c.expect);
+  ok = record(got.exit === 0) && ok;
+  const verdict = ok ? 'PASS' : 'FAIL';
+  const gotExit = got.exit === null ? 'null' : String(got.exit);
+  console.log(`${pad(c.name, 62)} ${pad(c.expect, 18)} ${pad(got.decision, 18)} ${pad(gotExit, 5)} ${verdict}`);
+  if (verdict === 'FAIL') console.log(`    plugin reason: ${got.reason || '(none)'}`);
+}
+
+console.log('');
+console.log('== Gate 3 planning folders - <plansDir>/drafts/** and <plansDir>/readiness/** (plugin only: the reference predates the folders) ==');
+console.log('per case: [1] plugin decision matches the expectation  [2] plugin exited 0');
+console.log(`${pad('case', 62)} ${pad('expected', 18)} ${pad('plugin', 18)} ${pad('exit', 5)} verdict`);
+for (const c of gate3PlanningCases) {
   const got = runHook(path.join(PLUGIN_HOOKS, GATE1), c.payload, c.projectDir);
   let ok = record(got.decision === c.expect);
   ok = record(got.exit === 0) && ok;

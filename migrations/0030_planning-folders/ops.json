@@ -1,0 +1,12 @@
+{
+  "migration": "0030_planning-folders",
+  "targetPluginVersion": "0.3.5",
+  "operations": [
+    {
+      "op": "note",
+      "id": "planning-folders-0-3-5",
+      "text": "0.3.5 lets a planning session run beside an executing one: while .aiwf/route-state.json names an R2/R3 ticket, Gate 3 now also lets the main session write every file under <plansDir>/drafts/** and <plansDir>/readiness/**, with <plansDir> held to the transfer surface's containment terms (not absolute, no '..', inside the project, never under .claude) and nothing opened while the route state is unusable. So /pnp:plan (draft, stamp, readiness rounds) can run in a second session while a ticket is open; landed plans under <plansDir>/active/ stay behind the guard. One paid review pass is in flight per working tree at a time, held by the operator: the review brief and the session files are shared. This update writes only the two version stamps in your config's bookkeeping (installedPluginVersion, lastMigrationApplied); the hook is payload, read at every tool call, so no file of yours changes.",
+      "docRefs": ["CHANGELOG.md", "docs/LOOP.md", "docs/WORKFLOW.md"]
+    }
+  ]
+}

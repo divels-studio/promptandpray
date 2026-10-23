@@ -4,6 +4,28 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.3.5] - 2026-10-23
+
+A planning session runs beside an executing one: while a ticket's route is open, Gate 3 lets the main
+session write the two planning folders.
+
+### Changed
+
+- **A planning session runs beside an executing one (PARPLAN-001)** - while
+  `.aiwf/route-state.json` names an R2/R3 ticket, Gate 3 also lets the main session write every file
+  under `<plansDir>/drafts/**` and `<plansDir>/readiness/**`, so `/pnp:plan` (draft, stamp, readiness
+  rounds) runs in a second session; landed plans stay behind the guard and the deny text names the
+  two folders.
+  - `<plansDir>` is held to the transfer surface's containment terms (not absolute, no `..`, inside
+    the project, never under `.claude`); an unusable route state opens nothing.
+  - Proven by the self-check section GATE 3 PLANNING and the spike table "Gate 3 planning folders".
+  - Doctrine (in the tree before this release): `docs/WORKFLOW.md` § Branch policy and § Ticket brief
+    contract, `docs/LOOP.md` § Enforcement of Writer-only writes, `docs/OPERATOR_PROTOCOL.md` Gate 3,
+    the plan, work and mission skills - one paid pass in flight per working tree, operator-held.
+    Migration `0030_planning-folders` carries the release note and writes only the version stamps.
+
+Retires local rules: none.
+
 ## [0.3.4] - 2026-10-22
 
 The plan-readiness blocker contract says what INFO is, so the paid pass stops filing wording as a

@@ -31,10 +31,14 @@
  *                                (`paths.transferSurface`, else `<plansDir>/PNP_CANDIDATES.md` - one
  *                                file, and only when it is contained, ends in `.md` and is not under
  *                                `.claude`) and the roadmap `<plansDir>/ROADMAP.md` on the same
- *                                terms; anything else DENIES.
+ *                                terms, plus every file under the planning folders
+ *                                `<plansDir>/drafts/**` and `<plansDir>/readiness/**` (plansDir held
+ *                                to the same containment, without the `.md` rule: the folder is the
+ *                                unit), so a plan can be drafted and readied beside the open ticket;
+ *                                anything else DENIES.
  *   - present but unreadable / not JSON / not an object / `route` present with any other value
  *                             -> guard ACTIVE under the SAME fixed allowlist (never the transfer
- *                                surface or the roadmap), denying with an "unusable state" reason. We cannot tell
+ *                                surface, the roadmap or the planning folders), denying with an "unusable state" reason. We cannot tell
  *                                whether a ticket is open, and this gate's direction is FAIL-CLOSED. Keeping the allowlist (rather than
  *                                denying everything) is what makes it self-healing instead of a trap:
  *                                `.aiwf/**` stays writable, so the fix is ONE allowed write.
@@ -152,12 +156,16 @@ const FOLD_CASE = process.platform === 'win32' || process.platform === 'darwin';
 const TRANSFER_SURFACE_BASENAME = 'PNP_CANDIDATES.md';
 const DEFAULT_PLANS_DIR = 'docs/backlogs'; // the schema default of paths.plansDir
 
-// `<plansDir>/<basename>`: the trimmed `paths.plansDir` when it is a non-blank string, else the
-// schema default.
-function plansDirFile(paths, basename) {
-  const plansDir = typeof paths.plansDir === 'string' && paths.plansDir.trim() !== ''
+// The trimmed `paths.plansDir` when it is a non-blank string, else the schema default - as written,
+// trailing separators NOT yet stripped.
+function plansDirRaw(paths) {
+  return typeof paths.plansDir === 'string' && paths.plansDir.trim() !== ''
     ? paths.plansDir.trim() : DEFAULT_PLANS_DIR;
-  return plansDir.replace(/[\\/]+$/, '') + '/' + basename;
+}
+
+// `<plansDir>/<basename>`: the plansDir above with its trailing separators stripped.
+function plansDirFile(paths, basename) {
+  return plansDirRaw(paths).replace(/[\\/]+$/, '') + '/' + basename;
 }
 
 // The transfer surface: the configured `paths.transferSurface` (trimmed) when it is a non-blank
@@ -192,12 +200,44 @@ function resolveRoadmap(config, projectDir) {
   return containedSurface(plansDirFile(paths, ROADMAP_BASENAME), projectDir);
 }
 
-// The containment rules both one-file allows share; `value` itself, or null when it may not be allowed.
+// The planning folders: `<plansDir>/drafts` and `<plansDir>/readiness`, where a second session drafts
+// a plan and runs its readiness rounds while a ticket is open. Every file under them is allowed (the
+// folder is the unit: a readiness stamp is `.json`), so plansDir itself is held to containedPath's
+// terms - not absolute on either dialect, no `..` segment, inside the project, not under `.claude`.
+// Returns `{ plansDir, drafts, readiness }` (forward slashes, no trailing slash), or null when no
+// folder may be allowed. An unusable config resolves to null. Pure: no filesystem access.
+const PLANNING_FOLDERS = { drafts: 'drafts', readiness: 'readiness' };
+function resolvePlanningDirs(config, projectDir) {
+  if (!isPlainObject(config)) return null;
+  const paths = isPlainObject(config.paths) ? config.paths : {};
+  const raw = plansDirRaw(paths);
+  // Judged as written AND once stripped: a drive root stripped of its separator is a bare drive
+  // letter and colon, which win32 does not call absolute.
+  if (path.win32.isAbsolute(raw) || path.posix.isAbsolute(raw)) return null;
+  const plansDir = raw.replace(/[\\/]+$/, '');
+  if (containedPath(plansDir, projectDir) === null) return null;
+  return {
+    plansDir,
+    drafts: plansDir + '/' + PLANNING_FOLDERS.drafts,
+    readiness: plansDir + '/' + PLANNING_FOLDERS.readiness,
+  };
+}
+
+// The rule both one-file allows share: a `.md` basename (which keeps the config and every code file
+// out), then containedPath; `value` itself, or null when it may not be allowed.
 function containedSurface(value, projectDir) {
+  const segs = value.split(/[\\/]/);
+  if (!segs[segs.length - 1].endsWith('.md')) return null;
+  return containedPath(value, projectDir);
+}
+
+// The containment every Gate 3 extra allow shares (the one-file allows above, and plansDir for the
+// planning folders): `value` itself, or null when it is absolute on either dialect, holds any `..`
+// segment, resolves to the project dir itself or outside it, or sits under `.claude`.
+function containedPath(value, projectDir) {
   if (path.win32.isAbsolute(value) || path.posix.isAbsolute(value)) return null;
   const segs = value.split(/[\\/]/);
   if (segs.includes('..')) return null;
-  if (!segs[segs.length - 1].endsWith('.md')) return null;
   const rel = path.relative(projectDir, path.resolve(projectDir, value));
   if (rel === '' || path.isAbsolute(rel)) return null;
   const relSegs = rel.split(path.sep).filter((s) => s !== '' && s !== '.');
@@ -217,6 +257,18 @@ function isTransferSurface(projectDir, surface, resolved) {
   const a = FOLD_CASE ? surfaceAbs.toLowerCase() : surfaceAbs;
   const b = FOLD_CASE ? resolved.toLowerCase() : resolved;
   return path.relative(a, b) === '';
+}
+
+// Is the resolved write target a file somewhere BELOW the folder `dir`? The same host path identity as
+// isTransferSurface; the folder itself (rel === '') is not a file in it, and a `..` first segment is
+// outside it.
+function isUnderDir(projectDir, dir, resolved) {
+  const dirAbs = path.resolve(projectDir, dir);
+  const a = FOLD_CASE ? dirAbs.toLowerCase() : dirAbs;
+  const b = FOLD_CASE ? resolved.toLowerCase() : resolved;
+  const rel = path.relative(a, b);
+  if (rel === '' || path.isAbsolute(rel)) return false;
+  return rel.split(path.sep)[0] !== '..';
 }
 
 // Reads the route state and reports WHETHER the guard is armed, never touching the tool payload.
@@ -266,10 +318,11 @@ function mainSessionDecision(input) {
   if (!routeWriteGuardEnabled(config)) return lib.allowPassthrough(); // enforcement.routeWriteGuard === false
   const st = readGuardState(projectDir);
   if (st.off) return lib.allowPassthrough(); // no ticket dispatched -> nothing about today's behaviour changes
-  // The transfer surface and the roadmap are extra allows for a TICKET state only; an unusable state
-  // keeps exactly the fixed allowlist below.
+  // The transfer surface, the roadmap and the planning folders are extra allows for a TICKET state
+  // only; an unusable state keeps exactly the fixed allowlist below.
   const surface = st.why !== 'unusable' ? resolveTransferSurface(config, projectDir) : null;
   const roadmap = st.why !== 'unusable' ? resolveRoadmap(config, projectDir) : null;
+  const planning = st.why !== 'unusable' ? resolvePlanningDirs(config, projectDir) : null;
 
   // WHY the guard is armed, in the deny text. An unusable state arms it exactly like an open ticket —
   // SAME fixed allowlist (without the transfer surface), different explanation. That equality is
@@ -299,12 +352,16 @@ function mainSessionDecision(input) {
   if (isAllowlisted(rel)) return lib.allowPassthrough();
   if (surface !== null && isTransferSurface(projectDir, surface, resolved)) return lib.allowPassthrough();
   if (roadmap !== null && isTransferSurface(projectDir, roadmap, resolved)) return lib.allowPassthrough();
+  if (planning !== null && isUnderDir(projectDir, planning.drafts, resolved)) return lib.allowPassthrough();
+  if (planning !== null && isUnderDir(projectDir, planning.readiness, resolved)) return lib.allowPassthrough();
 
   const plusSurface = surface !== null ? `, plus the transfer surface ${surface} (gate 3)` : '';
   const plusRoadmap = roadmap !== null ? `, plus the roadmap ${roadmap} (gate 3)` : '';
+  const plusPlanning = planning !== null
+    ? `, plus the planning folders ${planning.drafts}/** and ${planning.readiness}/** (gate 3)` : '';
   return lib.denyPreTool(
     `Blocked ${tool}: ${because}, so the MAIN SESSION may not write ${target} — while a ticket is open ` +
-    `it may write only docs/**, .aiwf/** and root-level *.md${plusSurface}${plusRoadmap}. Code-class work goes to the Writer ` +
+    `it may write only docs/**, .aiwf/** and root-level *.md${plusSurface}${plusRoadmap}${plusPlanning}. Code-class work goes to the Writer ` +
     `subagent (.claude/agents/writer.md), which this gate never blocks. ${HOW_TO_CLEAR} ${G3}`
   );
 }
@@ -342,4 +399,4 @@ if (require.main === module) lib.runFailClosed(async () => {
 });
 
 // Required (not run) by the self-check, which calls the resolver directly; as a hook nothing changes.
-module.exports = { resolveTransferSurface, resolveRoadmap, isAllowlisted };
+module.exports = { resolveTransferSurface, resolveRoadmap, resolvePlanningDirs, isAllowlisted };
