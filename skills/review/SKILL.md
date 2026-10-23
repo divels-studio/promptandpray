@@ -142,6 +142,10 @@ Class: plan | code | docs
   (the COO fills this in - `code` is the default when the line is absent; it names the row of the
   audit table that Step 0b resolves, and it is what "an executable artifact ends docs class" is
   judged against)
+Ticket: <TICKET_REF>
+  (a line of its own, first column: the wrapper keys the Reviewer's session-state file by it, so a
+  pass of another ticket or a plan's readiness pass on the same tree never overwrites this pass's
+  resume id; `<TICKET_REF>` is `A-Za-z0-9_.-`, 1-64 characters)
 
 SCOPE / DIFF:
 <the exact diff or a precise description of the files+ranges to review>
@@ -370,9 +374,12 @@ cat '<root>/{{config.paths.scratchDir}}/review-brief.txt' \
     --class <class> --resume
 ```
 
-With no id after it, the flag replays the session the wrapper recorded on its OWN last run - the
-Reviewer's own state file, `<root>/{{config.paths.scratchDir}}/last-review-session.txt`, which a QA
-run never touches - and sends the new brief into that same context. With an explicit id
+With no id after it, the flag replays the session the wrapper recorded on its OWN last run for THIS
+ticket - the Reviewer's own state file, `<root>/{{config.paths.scratchDir}}/last-review-session.<key>.txt`,
+keyed by the brief's `Ticket:` line (a plan pass: the `PLAN:` folder's last segment; a brief with
+neither line uses the legacy unkeyed file), which a QA run never touches - and sends the new brief
+into that same context. The resume brief therefore carries the same `Ticket:` (or `PLAN:`) line as the
+pass it resumes; a different key finds no recorded session and refuses. With an explicit id
 (`-ResumeId <id>` on PowerShell, `--resume <id>` on bash) it resumes exactly that session instead.
 With no recorded session and no id the wrapper refuses (exit 2) rather than quietly running a cold
 pass, because a silent cold pass spends the operator's quota on the very thing the resume was
@@ -409,8 +416,9 @@ and your progress; produce the verdict" - never a fresh dispatch carrying the fu
 The recovery is still a paid dispatch: tell the operator what is known of the dead pass - how long
 it ran, and its cost where the engine reported one - and take their word before it; never
 re-dispatch on your own. Bare means bare: `-Resume` / `--resume` with no id, off the Reviewer's
-own state file above; write the continuation prompt into the same `review-brief.txt` and
-re-invoke the block, which keeps the command text in the fixed set a permission rule matches.
+own state file above; write the continuation prompt - WITH the pass's `Ticket:` line, which is how
+the wrapper finds that pass's state file - into the same `review-brief.txt` and re-invoke the block,
+which keeps the command text in the fixed set a permission rule matches.
 For a plan-class pass the continuation prompt
 carries the three fixed lines of the readiness brief as well - the folder has not changed, so its
 stamp still holds, and the plan gate checks the continuation like any other plan brief.

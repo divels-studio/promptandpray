@@ -130,12 +130,19 @@ when one session is known to hold the tree.
 - **A bare resume refuses a state file it cannot write** (exit 2, naming the file). A file this
   wrapper cannot clear is one a previous run may have failed to clear, so its content cannot be
   trusted to be current; the escape hatch is an explicit id.
-- **The state file is PER ROLE.** `codex-review.ps1` / `codex-review.sh` read and write
-  `<scratchDir>/last-review-session.txt`; `codex-qa.ps1` / `codex-qa.sh` read and write
-  `<scratchDir>/last-qa-session.txt`. Neither names the other's file anywhere, so a QA run can never
-  hijack a Reviewer resume. `<scratchDir>` is `paths.scratchDir` from the project's
-  `.claude/aiwf-native/aiwf.config.json`, falling back to `.aiwf` when the config is missing,
-  unreadable or carries no key.
+- **The state file is PER ROLE and PER TICKET.** `codex-review.ps1` / `codex-review.sh` read and
+  write `<scratchDir>/last-review-session.<key>.txt`; `codex-qa.ps1` / `codex-qa.sh` read and write
+  `<scratchDir>/last-qa-session.<key>.txt`. Neither names the other's file anywhere, so a QA run can
+  never hijack a Reviewer resume. **The key comes from the brief on stdin**, the same way on a cold
+  run and on a bare resume: the first line `Ticket: <REF>` (`<REF>` = 1-64 characters of
+  `A-Za-z0-9_.-`, starting with a letter or digit), else the first line `PLAN: <folder>` (the key is
+  the folder's last segment, under the same character rule), else NO key and the legacy unkeyed file
+  `last-review-session.txt` / `last-qa-session.txt`. A `Ticket:` or `PLAN:` line whose value fails
+  the character rule is a refusal (exit 2) naming the line - never a silent fall-back to the shared
+  file, which is the collision the key removes. Two sessions on one tree - a ticket's pass and a
+  plan's readiness pass - therefore resume their own sessions. `<scratchDir>` is `paths.scratchDir`
+  from the project's `.claude/aiwf-native/aiwf.config.json`, falling back to `.aiwf` when the config
+  is missing, unreadable or carries no key.
 - **The surface.** On `linux`/`macos`: `--resume [<id>]` - the argument is OPTIONAL, and a following
   token starting with `-` is the next flag, never an id - plus `--resume-id <id>` as the explicit
   spelling. On `windows`: `-Resume` (a switch) plus `-ResumeId <id>`, because PowerShell cannot

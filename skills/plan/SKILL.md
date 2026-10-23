@@ -42,9 +42,11 @@ path below is written from `<root>`, and every command runs from `<root>`.
 it) does not stop this skill: planning is not execution, and Gate 3 lets the plan's own folders
 through - `<plansDir>/drafts/<ABBR>/`, `<plansDir>/readiness/<ABBR>/`, the roadmap and the ledger
 (`docs/WORKFLOW.md` § Branch policy). Two things wait while that route is open: an edit of a LANDED
-plan under `<plansDir>/active/` (behind the guard), and the readiness pass of Step 6 while another
-paid pass is in flight on this tree - the brief and session files under `<scratchDir>` are shared, so
-one paid pass at a time, an operator-held rule. The planning lock holds for the whole skill
+plan under `<plansDir>/active/` (behind the guard), and the WRITE-AND-LAUNCH of the readiness brief
+in Step 6 while another session is launching a pass on this tree - `<scratchDir>/review-brief.txt`
+is one shared fixed path, so the two dispatches take turns; once launched, the passes run side by
+side (the session-state file is keyed by this brief's `PLAN:` folder), an operator-held rule
+(`docs/WORKFLOW.md` § Branch policy). The planning lock holds for the whole skill
 (`docs/WORKFLOW.md` § Planning lock): until the landing in Step 6 the only files written are the
 plan's own - `<plansDir>/drafts/<ABBR>/`, `<plansDir>/readiness/<ABBR>/`, the roadmap entry - and
 the scratch brief. A readiness cycle starts in a fresh session.

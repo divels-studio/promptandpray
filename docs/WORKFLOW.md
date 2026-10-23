@@ -761,11 +761,14 @@ session (`/pnp:plan`) may run beside it: planning is not execution - it writes o
 `<plansDir>/drafts/<ABBR>/` and `<plansDir>/readiness/<ABBR>/`, the roadmap entry and the ledger
 line, commits by explicit paths at its landing, and never touches the open ticket's files; Gate 3
 lets exactly those paths through while the ticket's route is open. Every other non-executing session
-may READ - zero repo writes, zero DB operations, zero paid auditor passes. **One paid pass in flight
-per working tree:** the scratch files a pass uses (`<scratchDir>/review-brief.txt`,
-`<scratchDir>/last-review-session.txt`) are shared by every session on the tree, so a readiness pass
-starts only while no other pass is in flight there, and a ticket's pass waits for a readiness pass
-the same way. Both are OPERATOR-HELD invariants: no hook can see sibling sessions.
+may READ - zero repo writes, zero DB operations, zero paid auditor passes. **Paid passes of the two
+sessions may be in flight at once, but are DISPATCHED one at a time:** a pass's session id is recorded
+per ticket - `<scratchDir>/last-review-session.<key>.txt`, the key read by the wrapper from the
+brief's `Ticket:` line (a plan pass: its `PLAN:` folder) - so a readiness pass and a ticket's pass no
+longer overwrite each other's resume id; the brief file (`<scratchDir>/review-brief.txt`) stays ONE
+fixed path, because that constant command is what the permission rule matches, so two sessions
+write-and-launch it in turn, never in the same moment. Both are OPERATOR-HELD invariants: no hook
+can see sibling sessions.
 
 ## Fail aggregation
 

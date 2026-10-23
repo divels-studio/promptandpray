@@ -160,6 +160,9 @@ all mandatory. Point QA at the **artifacts**, not a browser:
 
 ```
 QA (artifact judge) ticket <TICKET_REF> against its acceptance criteria.
+Ticket: <TICKET_REF>
+  (a line of its own, first column: the wrapper keys QA's session-state file by it, so another
+  ticket's QA run on the same tree never overwrites this run's resume id; `A-Za-z0-9_.-`, 1-64 chars)
 
 EVIDENCE (read-only - do NOT run a browser, do NOT start a server):
   E2E artifacts from the orchestrator's test run (ABSOLUTE paths - resolve them before sending;
@@ -256,9 +259,11 @@ cat '<root>/{{config.paths.scratchDir}}/qa-brief.txt' \
   | bash "${CLAUDE_PLUGIN_ROOT}/scripts/native/sh/codex-qa.sh" --project-root '<root>' --resume
 ```
 
-With no id after it, the flag replays the session the wrapper recorded on its OWN last run - QA's
-own state file, `<root>/{{config.paths.scratchDir}}/last-qa-session.txt`, which a Reviewer run never
-touches - and sends the new brief into that same context. With an explicit id (`-ResumeId <id>` on
+With no id after it, the flag replays the session the wrapper recorded on its OWN last run for THIS
+ticket - QA's own state file, `<root>/{{config.paths.scratchDir}}/last-qa-session.<key>.txt`, keyed by
+the brief's `Ticket:` line (a brief without one uses the legacy unkeyed file), which a Reviewer run
+never touches - and sends the new brief into that same context; the resume brief carries the same
+`Ticket:` line as the run it resumes. With an explicit id (`-ResumeId <id>` on
 PowerShell, `--resume <id>` or `--resume-id <id>` on bash) it resumes exactly that session instead;
 an explicitly EMPTY id is refused (exit 2) rather than quietly falling back to the recorded one.
 With no recorded session and no id the wrapper refuses (exit 2) rather than quietly running a cold
