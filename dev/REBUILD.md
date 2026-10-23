@@ -38,9 +38,24 @@
   code pass 1 cold `pass-with-notes` 0 blockers 1 P3 at 57,027 tokens; fact-check 100 claims / 0
   false; VERIFY once at handoff: validate-payload 30 migrations 0.3.5, setup 470/0, update 445/0,
   selfcheck CI form 1370/1370, spikes 342/0 by the Writer; self-install apply self-check 1368/1368).
-  The remainder - the per-ticket `review-brief` / `last-review-session` files, which would let two
-  paid passes run on one tree - is ROADMAP § PARPLAN. Tag + push 0.3.5: the operator's two words.
-  Next: DOCSTAGE (step 12) - its planning may now run beside a ticket.
+  0.3.5 RELEASED the same day (tag `v0.3.5` on `6199414`, pushed with main on „давай").
+- 2026-10-23, PARPLAN-002 DONE (operator word „puskaj", audit „пускай аудитор"): release 0.3.6 - the
+  Codex session-state file keyed per ticket: the four wrappers read the key from the brief's `Ticket:`
+  line (else the `PLAN:` folder's last segment, else the legacy unkeyed file; an empty or invalid value
+  refuses, exit 2), so a ticket's pass and a plan's readiness pass on one tree keep their own resume
+  ids; the brief FILE path stays fixed (the constant command the permission rule matches - a per-ticket
+  brief file was rejected for that reason), so "one paid pass in flight per tree" narrowed to
+  "dispatched one at a time". Doctrine `da0c5c2` (WORKFLOW § Branch policy, CODEX_REVIEW_QA_RECIPE §
+  per role and per ticket, review/qa/plan skills - the `Ticket:` line in the review and QA brief
+  templates), code `e5358a5` (non-durable R2, no plan; Writer; Codex code pass 1 cold `fail` 1 P2 at
+  80,186 tokens - an empty `Ticket:` value slipped past `(.+?)` - correction round 1 `(.*?)` + 2 probes,
+  no verification pass under the suppression dual; fact-check 129 claims / 4 false fixed in a
+  micro-round - the migration text said "writes only the stamps", the engine also refreshes a stale
+  `$schema`; self-check CI form red 1404/1442 -> green 1442/1442, round 1 red 1440/1458 -> green
+  1458/1458; update-suite 445/0; validate-payload 31 migrations 0.3.6; self-install apply self-check
+  1456/1456, under auto mode). PARPLAN is done without a plan - the roadmap entry leaves (LEDGER
+  `done` row). Tag + push 0.3.6: the operator's two words. Next: DOCSTAGE (step 12) - its planning
+  runs beside a ticket now, its readiness pass beside a ticket's pass.
 - RBC-001 done (`bf018ac`, record `31909bd`, amendment `90a2f81`). RBC-002 done (`a10110f`, record
   `744cc4b`): WORKFLOW + LOOP + REVIEW_CHECKLIST + overrides 54.6k -> 38.7k tokens (claude-opus-5-5
   via `claude -p`, base `90a2f81`), every rule homed (four rule-homes tables, homeless 0), the
@@ -118,8 +133,10 @@ plans). Step 6's judgment is below; step 7 waits for the release of step 10. The
     (DONE `58a2f59`, 0.3.4) + one paid pass gpt-5.6-sol/high, on the operator's word - over the next
     real Silerax plan's stamped folder (RDR), cold, beside its pass 1, not over the archived AIOCR
     (decided 2026-10-22, § Status).
-11b. **PARPLAN-001** (DONE 2026-10-23, release 0.3.5; § Status) - inserted here on the operator's
-    complaint: a planning session beside an executing one. The remainder is ROADMAP § PARPLAN.
+11b. **PARPLAN** (DONE 2026-10-23: PARPLAN-001 release 0.3.5, PARPLAN-002 release 0.3.6; § Status) -
+    inserted here on the operator's complaint: a planning session beside an executing one - Gate 3
+    lets the planning folders through, the Codex session-state file is keyed per ticket. No plan; the
+    roadmap entry left.
 12. **DOCSTAGE** - after that. It rearranges files; it does not change what the COO does.
 13. SEEDFS, README, PORTABLE - unchanged, later.
 

@@ -73,17 +73,6 @@ leaves with one ledger row `<ABBR> dropped: <why>`.
 - Status: in progress
 - Born: 2026-10-18, operator word relayed by the arbitration session (the post-archive batch, „записвай пакетите")
 
-## PARPLAN - a planning session beside an executing one, to the end
-- Goal: two sessions on one working tree - one executing a ticket, one planning the next work - get in each other's way nowhere: not at the write guard (done), not at the paid pass (open)
-- Why: „това е мноооого тъпо ... отивам при ПНП да му се оплача, това е загуба на време категорично" (operator 2026-10-23, in the Silerax session, whose planning was locked out while RDR-002 ran)
-- Scope: in - the per-ticket scratch files (`review-brief.<REF>.txt`, `last-review-session.<REF>.txt`, the QA pair, `readiness-round.txt`) in the wrappers (`scripts/native/ps/codex-review.ps1`, `.sh`, the QA wrappers), the review/plan/qa skills and the self-check, so a readiness pass and a ticket's pass can be in flight on one tree at once and the "one paid pass in flight per tree" rule retires; out - a second EXECUTING session (one executing session per tree stays), any hook that sees sibling sessions
-  - 2026-10-23 PARPLAN-001 DONE (release 0.3.5, no plan) - Gate 3 lets `<plansDir>/drafts/**` and `<plansDir>/readiness/**` through while a route is open; the doctrine names the planning session beside the executing one [dev/backlogs/LEDGER.md rows of 2026-10-23]
-  - 2026-10-14 Silerax intake item 9 (was dropped as low priority; retriggered by this incident) - `last-review-session.txt` per ticket [dev/backlogs/CANDIDATES.md:352-354]
-- Size: S
-- Plans: none yet
-- Status: idea
-- Born: 2026-10-23, operator word „това е мноооого тъпо ... загуба на време категорично"
-
 ## PORTABLE - a consumer is not coupled to PnP
 - Goal: a clean clone of a consumer (Silerax) runs a planning cycle under another framework (GSD, installed `--claude --local`) with the PnP plugin disabled for that folder, proving the product does not depend on the plugin and giving a third measurement point (GSD vs `/pnp:plan` on the same module)
 - Why: „това може да стане чак след селективното четене, а в роадмапа може да влезе само като идея + доказване че двата консуматора не са тясно свързани със PnP" (operator 2026-10-18, relayed by the arbitration session)
