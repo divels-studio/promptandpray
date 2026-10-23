@@ -3219,6 +3219,21 @@ function psResumeFindings(root, { execProbes = false, tmpDir = null } = {}) {
       /\[System\.IO\.File\]::Open\(\$SessionState, 'Open', 'Write'\)/.test(s)
       && /if \(-not \$writable\)/.test(s)
       && /Write-Error "the recorded session file is not writable/.test(s));
+    // THE STATE FILE IS ALSO PER TICKET (PARPLAN-002). The key comes from the brief - the first
+    // `Ticket:` line, else the last segment of the first `PLAN:` folder - under one character rule;
+    // a failing value is exit 2, and the key is derived BEFORE the bare-resume branch reads anything.
+    // The legacy literal stays, asserted by the session-state row above (the brief with no key).
+    const keyStem = own.replace(/\.txt$/, '');
+    const keyAt = body.indexOf('$SessionKey = $keyValue');
+    const resumeAt = body.indexOf('if ($IsResume -and');
+    add(`ps-${short}-session-key`,
+      `${file} derives the session key from the brief (the Ticket: line, else the PLAN: folder's last segment, under the rule ${KEY_RULE_RE}), refuses a failing value with exit 2, names the keyed file ${keyStem}.<key>.txt, and does all of it BEFORE the bare-resume branch`,
+      body.includes(`'${KEY_TICKET_RE}'`) && body.includes(`'${KEY_PLAN_RE}'`)
+      && /if \(-not \[regex\]::IsMatch\(\$keyValue, '[^'\r\n]+'\)\) \{\r?\n\s*Write-Error [^\r\n]*\r?\n\s*exit 2\r?\n/.test(body)
+      && body.includes(`[regex]::IsMatch($keyValue, '${KEY_RULE_RE}')`)
+      && body.includes(`"${keyStem}.$SessionKey.txt"`)
+      && keyAt !== -1 && resumeAt !== -1 && keyAt < resumeAt,
+      `key derived at ${keyAt}, bare-resume branch at ${resumeAt}`);
 
     // ---- the same two claims, EXECUTED on this channel ----
     // Source text cannot prove that PowerShell left the bytes alone: the defect this replaces looked
@@ -3226,7 +3241,8 @@ function psResumeFindings(root, { execProbes = false, tmpDir = null } = {}) {
     // stub that puts the session id ONLY on stderr - as codex does - and writes a rollout into its
     // own $CODEX_HOME, and what is asserted is the hex the caller received and the id that landed.
     const psExecIds = [`ps-exec-${short}-bytes`, `ps-exec-${short}-session-capture`,
-      `ps-exec-${short}-session-fingerprint`, `ps-exec-${short}-resume-writable`];
+      `ps-exec-${short}-session-fingerprint`, `ps-exec-${short}-resume-writable`,
+      ...KEY_PROBE_IDS.map((k) => `ps-exec-${short}-${k}`)];
     if (wantsExec(...psExecIds)) {
       if (!PWSH) {
         add(`ps-exec-${short}-bytes`, `${file} EXECUTED: a PowerShell host is available to run the wrapper`, false,
@@ -3264,6 +3280,16 @@ function psResumeFindings(root, { execProbes = false, tmpDir = null } = {}) {
             `${file} EXECUTED: a bare -Resume against an UNWRITABLE state file exits 2, so a stale id nobody could clear cannot be replayed`,
             probe.status === 2 && /not writable/.test(probe.stderrText),
             `exit ${probe.status}: ${firstLine(probe.stderrText.replace(/\[[0-9;]*m/g, ''))}`);
+        }
+        // THE STATE FILE IS PER TICKET, EXECUTED (PARPLAN-002): one run per row of KEY_PROBES, the
+        // same table the bash channel runs, so the two channels are held to one key for one brief.
+        for (const k of KEY_PROBES) {
+          const rid = `ps-exec-${short}-${k.id}`;
+          if (!wantsExec(rid)) continue;
+          const probe = runPsWrapperWithStub(root, file, tmpDir,
+            { brief: k.brief, seedState: k.seed(short), extraArgs: k.resume ? '-Resume' : '' });
+          const v = psKeyView(probe, short);
+          add(rid, k.label(file, short, '-Resume'), k.ok(v, short), keyProbeDetail(v));
         }
       }
     }
@@ -3369,6 +3395,9 @@ function runPsWrapperWithStub(root, wrapper, tmpDir,
     stderrHex: (r.stderr || Buffer.alloc(0)).toString('hex'),
     stderrText: (r.stderr || Buffer.alloc(0)).toString('utf8'),
     state: (file) => { const t = readText(path.join(projectRoot, '.aiwf', file)); return t === null ? null : t.trim(); },
+    // Every name in the state directory, sorted - "no state file of any name was written" is a claim
+    // about the directory, not about the one name a row happens to look up.
+    stateFiles: () => stateDirFiles(projectRoot),
     // The stub leaves two traces when it runs: its rollout in its own $CODEX_HOME and its stdout
     // bytes. This stub records no argv, so "codex was invoked" is read off those two.
     stubInvoked: fs.existsSync(path.join(codexHome, 'sessions', '2026', '09', '17', `rollout-2026-09-17T18-00-00-${STUB_SESSION_ID}.jsonl`))
@@ -3417,6 +3446,32 @@ function psResumeControls() {
         apply: (r) => patchText(r, at, /if \(\$fingerprint -and \(Test-Path -LiteralPath \$sessionsDir\)\)/, 'if (Test-Path -LiteralPath $sessionsDir)') },
       { id: `ps-exec-${short}-resume-writable`, label: `${file}: a bare -Resume accepts a state file nobody could have cleared (executed)`,
         apply: (r) => patchText(r, at, /if \(-not \$writable\) \{/, 'if ($false) {') },
+      // The per-ticket key (PARPLAN-002): one sabotage per row, each a way the key could be wrong in
+      // production. Replacements are FUNCTIONS wherever the text carries a `$`, so String.replace
+      // never reads it as a substitution pattern.
+      { id: `ps-${short}-session-key`, label: `${file}: the character rule widened to any value`,
+        apply: (r) => patchText(r, at, `'${KEY_RULE_RE}'`, () => "'^.+$'") },
+      { id: `ps-exec-${short}-key-capture`, label: `${file}: the keyed file name dropped, every brief back on the shared file (executed)`,
+        apply: (r) => patchText(r, at, `"${keyStemOf(short)}.$SessionKey.txt"`, () => `'${SESSION_FILES[short]}'`) },
+      { id: `ps-exec-${short}-key-resume`, label: `${file}: the Ticket: line no longer read, so a keyed bare resume looks for the shared file (executed)`,
+        apply: (r) => patchText(r, at, `'${KEY_TICKET_RE}'`, () => `'${KEY_TICKET_RE.replace('Ticket:', 'Ticket-Ref:')}'`) },
+      { id: `ps-exec-${short}-key-foreign`, label: `${file}: a missing keyed file falls back to the shared one (executed)`,
+        apply: (r) => patchText(r, at, /(\$SessionState = Join-Path \(Join-Path \$ProjectRoot \$scratchRel\) \$SessionStateName)/,
+          (m) => `${m}\nif (-not (Test-Path -LiteralPath $SessionState)) { $SessionState = Join-Path (Join-Path $ProjectRoot $scratchRel) '${SESSION_FILES[short]}' }`) },
+      { id: `ps-exec-${short}-key-refuse-traversal`, label: `${file}: the character rule bypassed, so "../evil" reaches the file name (executed)`,
+        apply: (r) => patchText(r, at, 'if (-not [regex]::IsMatch($keyValue, ', () => 'if ($false -and -not [regex]::IsMatch($keyValue, ') },
+      { id: `ps-exec-${short}-key-refuse-space`, label: `${file}: the character rule widened to admit a space (executed)`,
+        apply: (r) => patchText(r, at, '[A-Za-z0-9_.-]{0,63}', () => '[A-Za-z0-9_. -]{0,63}') },
+      { id: `ps-exec-${short}-key-plan`, label: `${file}: the PLAN: folder's trailing separator no longer stripped (executed)`,
+        apply: (r) => patchText(r, at, "($m.Groups[1].Value -replace '[\\\\/]+$', '')", () => '($m.Groups[1].Value)') },
+      { id: `ps-exec-${short}-key-plan-backslash`, label: `${file}: the PLAN: folder split on / only, so a backslash path never yields its last segment (executed)`,
+        apply: (r) => patchText(r, at, "-split '[\\\\/]'", () => "-split '/'") },
+      { id: `ps-exec-${short}-key-ticket-wins`, label: `${file}: the PLAN: line read even when a Ticket: line was found (executed)`,
+        apply: (r) => patchText(r, at, 'if ($null -eq $keyLine) {', () => 'if ($true) {') },
+      { id: `ps-exec-${short}-key-refuse-empty-ticket`, label: `${file}: the Ticket: matcher back on (.+?), so an empty Ticket: line is skipped (executed)`,
+        apply: (r) => patchText(r, at, `'${KEY_TICKET_RE}'`, () => `'${KEY_TICKET_RE.replace('(.*?)', '(.+?)')}'`) },
+      { id: `ps-exec-${short}-key-refuse-empty-plan`, label: `${file}: the PLAN: matcher back on (.+?), so an empty PLAN: line is skipped (executed)`,
+        apply: (r) => patchText(r, at, `'${KEY_PLAN_RE}'`, () => `'${KEY_PLAN_RE.replace('(.*?)', '(.+?)')}'`) },
     );
   }
   return out;
@@ -3425,11 +3480,16 @@ function psResumeControls() {
 // The executed PowerShell probes cost a host start each, so - exactly as on the bash channel - they
 // run for the real payload, for the pristine control copy, and then only for the controls that
 // target one of them.
+// The per-ticket key probes (PARPLAN-002) are the rows of KEY_PROBES (defined with the stub
+// constants below); their ids are listed here because both id sets are built before that table.
+const KEY_PROBE_IDS = ['key-capture', 'key-resume', 'key-foreign', 'key-refuse-traversal', 'key-refuse-space',
+  'key-refuse-empty-ticket', 'key-refuse-empty-plan', 'key-plan', 'key-plan-backslash', 'key-ticket-wins'];
 const PS_EXEC_IDS = new Set([
   'ps-exec-review-bytes', 'ps-exec-review-session-capture',
   'ps-exec-qa-bytes', 'ps-exec-qa-session-capture',
   'ps-exec-review-session-fingerprint', 'ps-exec-qa-session-fingerprint',
   'ps-exec-review-resume-writable', 'ps-exec-qa-resume-writable',
+  ...['review', 'qa'].flatMap((s) => KEY_PROBE_IDS.map((k) => `ps-exec-${s}-${k}`)),
 ]);
 
 // ---------------------------------------------------------------------------
@@ -3621,6 +3681,21 @@ function shWrapperFindings(root, { execProbes = true, tmpDir = null } = {}) {
     add(id('resume-writable'),
       `${name} refuses a BARE --resume when the state file is not writable - a file this wrapper cannot clear may still hold the stale id it failed to clear`,
       /\[ -w "\$SESSION_STATE" \] \|\| fail "the recorded session file is not writable/.test(s));
+    // THE STATE FILE IS ALSO PER TICKET (PARPLAN-002) - the mirror of the PowerShell row: the same
+    // three expressions, a refusal for a failing value AND for a derivation that could not run (a
+    // node that never started must not degrade into "no key"), and all of it before the resume branch.
+    const keyStem = own.replace(/\.txt$/, '');
+    const keyAt = body.indexOf('SESSION_KEY="$(printf');
+    const resumeAt = body.indexOf('if [ "$RESUME" -eq 1 ] && [ -z "$RESUME_ID" ]');
+    add(id('session-key'),
+      `${name} derives the session key from the brief (the Ticket: line, else the PLAN: folder's last segment, under the rule ${KEY_RULE_RE}), refuses a failing value - and a derivation that could not run - with exit 2, names the keyed file ${keyStem}.<key>.txt, and does all of it BEFORE the bare-resume branch`,
+      body.includes(`/${KEY_TICKET_RE}/s.exec(l)`) && body.includes(`/${KEY_PLAN_RE}/s.exec(l)`)
+      && body.includes(`if (!/${KEY_RULE_RE}/.test(value)) return [3, line];`)
+      && /if \[ "\$KEY_STATUS" -eq 3 \]; then\n\s*fail "/.test(body)
+      && /elif \[ "\$KEY_STATUS" -ne 0 \]; then\n\s*fail "/.test(body)
+      && body.includes(`/${keyStem}.$SESSION_KEY.txt"`)
+      && keyAt !== -1 && resumeAt !== -1 && keyAt < resumeAt,
+      `key derived at ${keyAt}, bare-resume branch at ${resumeAt}`);
   }
 
   // The review wrapper is CLASS-AWARE (the mirror of the PowerShell assertion): /pnp:review passes
@@ -3842,6 +3917,16 @@ function shWrapperFindings(root, { execProbes = true, tmpDir = null } = {}) {
             probe.atoms === null ? `the wrapper did not reach codex (exit ${probe.status}): ${firstLine(probe.stderr)}`
               : `resumed ${JSON.stringify((probe.atoms || [])[2])}`);
         }
+        // THE STATE FILE IS PER TICKET, EXECUTED (PARPLAN-002): the PowerShell channel runs the same
+        // KEY_PROBES table, so one brief must give one key on both channels.
+        for (const k of KEY_PROBES) {
+          const rid = `sh-exec-${short}-${k.id}`;
+          if (!wantsExec(rid)) continue;
+          const probe = runWrapperWithStub(root, wrapper, tmpDir, k.resume ? ['--resume'] : [],
+            { brief: k.brief, seedState: k.seed(short) });
+          const v = shKeyView(probe);
+          add(rid, k.label(wrapper, short, '--resume'), k.ok(v, short), keyProbeDetail(v));
+        }
       }
       // THE CLASS BRANCH, EXECUTED. Everything above runs the classless path; source text cannot
       // prove that --class reaches the resolver and that the ROW's host is what codex is handed, so
@@ -3914,6 +3999,93 @@ const SEEDED_IDS = {
 };
 const SESSION_FILES = { review: 'last-review-session.txt', qa: 'last-qa-session.txt' };
 const OTHER_SESSION_FILE = { review: 'last-qa-session.txt', qa: 'last-review-session.txt' };
+
+// THE STATE FILE IS ALSO PER TICKET (PARPLAN-002). Each wrapper reads a KEY from the brief - the
+// first `Ticket:` line, else the last segment of the first `PLAN:` folder (trailing separators
+// stripped, split on both / and \) - and records the session in `<stem>.<key>.txt`; a brief with
+// neither line keeps the legacy file above, which is why every older executed row (STUB_BRIEF
+// carries no such line) still asserts the legacy name. A value failing the character rule is a
+// refusal, never a fall-back. The three expressions are the literal text both channels must carry.
+// The value group is `(.*?)`, never `(.+?)`: a line with an EMPTY value must be FOUND, so that it
+// fails the character rule and refuses, rather than be skipped for the next line or the legacy file.
+const KEY_TICKET_RE = '^Ticket:[ \\t]*(.*?)[ \\t]*$';
+const KEY_PLAN_RE = '^PLAN:[ \\t]*(.*?)[ \\t]*$';
+const KEY_RULE_RE = '^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$';
+const keyStemOf = (short) => SESSION_FILES[short].replace(/\.txt$/, '');
+const keyedSessionFile = (short, key) => `${keyStemOf(short)}.${key}.txt`;
+// The id a keyed probe finds already recorded - different from every other seeded id, so a run that
+// resumed some other file's session cannot pass for one that resumed this.
+const KEY_SEEDED_ID = 'abcd3333-0000-4000-8000-000000000003';
+/** Every name in a probe project's state directory, sorted ([] when the directory does not exist). */
+function stateDirFiles(projectRoot) {
+  try { return fs.readdirSync(path.join(projectRoot, '.aiwf')).sort(); } catch (e) { return []; }
+}
+const sameFiles = (got, want) => JSON.stringify([...got].sort()) === JSON.stringify([...want].sort());
+/** The stderr with colour codes and ALL whitespace removed: a host may wrap a long error line. */
+const squeezed = (s) => String(s || '').replace(/\x1b\[[0-9;]*m/g, '').replace(/\s+/g, '');
+const keyStateIs = (p, files) => sameFiles(p.stateFiles(), files);
+/**
+ * The key probes, run on BOTH channels and BOTH roles from this one table. `seed(short)` is the state
+ * directory before the run, `resume` makes the run a bare resume, and `ok(view, short)` reads what
+ * the run left behind through a channel-neutral view (psKeyView / shKeyView).
+ */
+const KEY_PROBES = [
+  { id: 'key-capture', brief: `Ticket: PX-001\n${STUB_BRIEF}`, resume: false, seed: () => null,
+    label: (f, s) => `${f} EXECUTED: a brief carrying "Ticket: PX-001" records the session in ${keyedSessionFile(s, 'PX-001')} and nowhere else - no legacy ${SESSION_FILES[s]}, no file of the other role`,
+    ok: (p, s) => p.state(keyedSessionFile(s, 'PX-001')) === STUB_SESSION_ID && keyStateIs(p, [keyedSessionFile(s, 'PX-001')]) },
+  { id: 'key-resume', brief: `Ticket: PX-001\n${STUB_BRIEF}`, resume: true, seed: (s) => ({ [keyedSessionFile(s, 'PX-001')]: KEY_SEEDED_ID }),
+    label: (f, s, flag) => `${f} ${flag} EXECUTED: the "Ticket: PX-001" brief resumes the id recorded in ${keyedSessionFile(s, 'PX-001')} (no legacy file exists to fall back to), and that file still holds it afterwards`,
+    ok: (p, s) => p.status === STUB_EXIT && p.invoked && (p.resumedId === undefined || p.resumedId === KEY_SEEDED_ID)
+      && p.state(keyedSessionFile(s, 'PX-001')) === KEY_SEEDED_ID && keyStateIs(p, [keyedSessionFile(s, 'PX-001')]) },
+  { id: 'key-foreign', brief: `Ticket: PX-002\n${STUB_BRIEF}`, resume: true,
+    seed: (s) => ({ [keyedSessionFile(s, 'PX-001')]: KEY_SEEDED_ID, [SESSION_FILES[s]]: SEEDED_IDS[SESSION_FILES[s]] }),
+    label: (f, s, flag) => `${f} ${flag} EXECUTED: a "Ticket: PX-002" brief finds nothing - PX-001's file and the legacy file sit there and are NOT taken - so it exits 2 naming ${keyedSessionFile(s, 'PX-002')}, and codex is never invoked`,
+    ok: (p, s) => p.status === 2 && !p.invoked && squeezed(p.stderr).includes(keyedSessionFile(s, 'PX-002'))
+      && p.state(keyedSessionFile(s, 'PX-001')) === KEY_SEEDED_ID && p.state(SESSION_FILES[s]) === SEEDED_IDS[SESSION_FILES[s]]
+      && keyStateIs(p, [keyedSessionFile(s, 'PX-001'), SESSION_FILES[s]]) },
+  { id: 'key-refuse-traversal', brief: `Ticket: ../evil\n${STUB_BRIEF}`, resume: false, seed: () => SEEDED_IDS,
+    label: (f) => `${f} EXECUTED: "Ticket: ../evil" fails the character rule - exit 2 naming the line, codex never invoked, no state file written, the seeded legacy files untouched`,
+    ok: (p) => p.status === 2 && !p.invoked && squeezed(p.stderr).includes('Ticket:../evil')
+      && keyStateIs(p, Object.keys(SEEDED_IDS)) && Object.entries(SEEDED_IDS).every(([f, v]) => p.state(f) === v) },
+  { id: 'key-refuse-space', brief: `Ticket: a b\n${STUB_BRIEF}`, resume: false, seed: () => null,
+    label: (f) => `${f} EXECUTED: "Ticket: a b" (a space inside the value) fails the character rule - exit 2 naming the line, codex never invoked, no state file of any name written`,
+    ok: (p) => p.status === 2 && !p.invoked && squeezed(p.stderr).includes('Ticket:ab') && keyStateIs(p, []) },
+  // An EMPTY value is a value that fails the rule: the line is found and refuses - it is never skipped
+  // for the PLAN: line below it, nor for the legacy file. The PLAN: line carries NO trailing blank on
+  // purpose: `PLAN:   ` was refused even by the old `(.+?)` matcher (it captured one blank), so only
+  // the truly empty line tells the two matchers apart.
+  { id: 'key-refuse-empty-ticket', brief: `Ticket:\nPLAN: dev/backlogs/drafts/AB\n${STUB_BRIEF}`, resume: false, seed: () => null,
+    label: (f, s) => `${f} EXECUTED: an EMPTY "Ticket:" line refuses - exit 2 naming the line, codex never invoked, no state file of any name written (never ${keyedSessionFile(s, 'AB')} from the PLAN: line below it, never the legacy file)`,
+    ok: (p) => p.status === 2 && !p.invoked && squeezed(p.stderr).includes('Ticket:') && keyStateIs(p, []) },
+  { id: 'key-refuse-empty-plan', brief: `PLAN:\n${STUB_BRIEF}`, resume: false, seed: () => SEEDED_IDS,
+    label: (f) => `${f} EXECUTED: an EMPTY "PLAN:" line (and no Ticket: line) refuses - exit 2, codex never invoked, the seeded legacy files untouched and nothing else written`,
+    ok: (p) => p.status === 2 && !p.invoked
+      && keyStateIs(p, Object.keys(SEEDED_IDS)) && Object.entries(SEEDED_IDS).every(([f, v]) => p.state(f) === v) },
+  { id: 'key-plan', brief: `PLAN: dev/backlogs/drafts/AB/\n${STUB_BRIEF}`, resume: false, seed: () => null,
+    label: (f, s) => `${f} EXECUTED: a brief with no Ticket: line and "PLAN: dev/backlogs/drafts/AB/" keys the session by the folder's last segment - ${keyedSessionFile(s, 'AB')}, the trailing slash stripped`,
+    ok: (p, s) => p.state(keyedSessionFile(s, 'AB')) === STUB_SESSION_ID && keyStateIs(p, [keyedSessionFile(s, 'AB')]) },
+  { id: 'key-plan-backslash', brief: `PLAN: dev\\backlogs\\drafts\\AB\\\n${STUB_BRIEF}`, resume: false, seed: () => null,
+    label: (f, s) => `${f} EXECUTED: the same PLAN: folder spelled with backslashes (and a trailing one) gives the same key - ${keyedSessionFile(s, 'AB')}`,
+    ok: (p, s) => p.state(keyedSessionFile(s, 'AB')) === STUB_SESSION_ID && keyStateIs(p, [keyedSessionFile(s, 'AB')]) },
+  { id: 'key-ticket-wins', brief: `Ticket: PX-003\nPLAN: dev/backlogs/drafts/AB\n${STUB_BRIEF}`, resume: false, seed: () => null,
+    label: (f, s) => `${f} EXECUTED: a brief carrying BOTH lines is keyed by the Ticket: line - ${keyedSessionFile(s, 'PX-003')}, never the PLAN: folder's ${keyedSessionFile(s, 'AB')}`,
+    ok: (p, s) => p.state(keyedSessionFile(s, 'PX-003')) === STUB_SESSION_ID && keyStateIs(p, [keyedSessionFile(s, 'PX-003')]) },
+];
+// The channel-neutral views. The PowerShell stub records no argv, so there the resumed id is read off
+// the review wrapper's own run header; the QA wrapper prints none, and its resume is proven by the
+// state file alone (a cold run would have recorded the stub's session id there instead).
+const psKeyView = (probe, short) => ({
+  status: probe.status, invoked: probe.stubInvoked, stderr: probe.stderrText, state: probe.state, stateFiles: probe.stateFiles,
+  resumedId: short === 'review' ? ((/codex-review: run resumed (\S+),/.exec(probe.stderrText) || [])[1] || null) : undefined,
+});
+const shKeyView = (probe) => ({
+  status: probe.status, invoked: probe.atoms !== null, stderr: probe.stderr, state: probe.state, stateFiles: probe.stateFiles,
+  resumedId: probe.atoms && probe.atoms[1] === 'resume' ? probe.atoms[2] : null,
+});
+const keyProbeDetail = (v) => `exit ${v.status}; codex ${v.invoked ? 'invoked' : 'never invoked'}`
+  + `${v.resumedId === undefined ? '' : `; resumed ${JSON.stringify(v.resumedId)}`}; state `
+  + `${v.stateFiles().map((f) => `${f}=${JSON.stringify(v.state(f))}`).join(', ') || '(no file)'}`
+  + `${v.status === 2 ? `; ${firstLine(String(v.stderr).replace(/\x1b\[[0-9;]*m/g, ''))}` : ''}`;
 // The FROZEN resume argv, as the wrapper source must spell it. `codex exec resume` has no -C and no
 // --sandbox (they do not exist on the subcommand) and -m, which does exist, is deliberately unused:
 // one uniform -c posture carries model, effort, sandbox_mode and approval_policy. The trailing `-`
@@ -4036,6 +4208,7 @@ function runWrapperWithStub(root, wrapper, tmpDir, extraArgs = [],
     cwdMark: readText(cwdOut),
     // null when the wrapper never wrote that role's state file - which is itself an assertion.
     state: (file) => { const t = readText(path.join(projectRoot, '.aiwf', file)); return t === null ? null : t.trim(); },
+    stateFiles: () => stateDirFiles(projectRoot),
   };
 }
 
@@ -4142,6 +4315,31 @@ function readOnlyWrapperControls(file, short) {
       apply: (r) => patchText(r, at, /\n *id="\$RESUME_ID"\n/, '\n    id=""\n') },
     { id: `sh-exec-${short}-session-ambiguous`, label: `${file}: "exactly one candidate" relaxed to "take the first", so a concurrent session can be recorded (executed)`,
       apply: (r) => patchText(r, at, /if \(mine\.length !== 1\) process\.exit\(0\);/, 'if (mine.length === 0) process.exit(0);\nmine.length = 1;') },
+    // The per-ticket key (PARPLAN-002), the mirror of the PowerShell controls: one sabotage per row.
+    // Replacements are FUNCTIONS wherever the text carries a `$`.
+    { id: `sh-${short}-session-key`, label: `${file}: the character rule widened to any value`,
+      apply: (r) => patchText(r, at, `/${KEY_RULE_RE}/`, () => '/^.+$/') },
+    { id: `sh-exec-${short}-key-capture`, label: `${file}: the keyed file name dropped, every brief back on the shared file (executed)`,
+      apply: (r) => patchText(r, at, `/${keyStemOf(short)}.$SESSION_KEY.txt"`, () => `/${SESSION_FILES[short]}"`) },
+    { id: `sh-exec-${short}-key-resume`, label: `${file}: the Ticket: line no longer read, so a keyed bare resume looks for the shared file (executed)`,
+      apply: (r) => patchText(r, at, `/${KEY_TICKET_RE}/`, () => `/${KEY_TICKET_RE.replace('Ticket:', 'Ticket-Ref:')}/`) },
+    { id: `sh-exec-${short}-key-foreign`, label: `${file}: a missing keyed file falls back to the shared one (executed)`,
+      apply: (r) => patchText(r, at, `SESSION_STATE="$PROJECT_ROOT_ABS/$SCRATCH_REL/${SESSION_FILES[short]}"\nfi\n`,
+        (m) => `${m}[ -f "$SESSION_STATE" ] || SESSION_STATE="$PROJECT_ROOT_ABS/$SCRATCH_REL/${SESSION_FILES[short]}"\n`) },
+    { id: `sh-exec-${short}-key-refuse-traversal`, label: `${file}: the character rule bypassed, so "../evil" reaches the file name (executed)`,
+      apply: (r) => patchText(r, at, 'return [3, line];', () => 'return [0, value];') },
+    { id: `sh-exec-${short}-key-refuse-space`, label: `${file}: the character rule widened to admit a space (executed)`,
+      apply: (r) => patchText(r, at, '[A-Za-z0-9_.-]{0,63}', () => '[A-Za-z0-9_. -]{0,63}') },
+    { id: `sh-exec-${short}-key-plan`, label: `${file}: the PLAN: folder's trailing separator no longer stripped (executed)`,
+      apply: (r) => patchText(r, at, 'm[1].replace(/[\\\\/]+$/, "")', () => 'm[1]') },
+    { id: `sh-exec-${short}-key-plan-backslash`, label: `${file}: the PLAN: folder split on / only, so a backslash path never yields its last segment (executed)`,
+      apply: (r) => patchText(r, at, '.split(/[\\\\/]/)', () => '.split("/")') },
+    { id: `sh-exec-${short}-key-ticket-wins`, label: `${file}: the PLAN: line read even when a Ticket: line was found (executed)`,
+      apply: (r) => patchText(r, at, 'if (line === null) for (const l of lines)', () => 'for (const l of lines)') },
+    { id: `sh-exec-${short}-key-refuse-empty-ticket`, label: `${file}: the Ticket: matcher back on (.+?), so an empty Ticket: line is skipped (executed)`,
+      apply: (r) => patchText(r, at, `/${KEY_TICKET_RE}/`, () => `/${KEY_TICKET_RE.replace('(.*?)', '(.+?)')}/`) },
+    { id: `sh-exec-${short}-key-refuse-empty-plan`, label: `${file}: the PLAN: matcher back on (.+?), so an empty PLAN: line is skipped (executed)`,
+      apply: (r) => patchText(r, at, `/${KEY_PLAN_RE}/`, () => `/${KEY_PLAN_RE.replace('(.*?)', '(.+?)')}/`) },
   ];
 }
 
@@ -4247,7 +4445,8 @@ const SH_EXEC_IDS = new Set(['sh-exec-host',
   'sh-exec-review-resume-writable', 'sh-exec-qa-resume-writable',
   'sh-exec-review-resume-records-id', 'sh-exec-qa-resume-records-id',
   'sh-exec-review-resume-argv', 'sh-exec-review-resume-cwd', 'sh-exec-review-resume-state',
-  'sh-exec-qa-resume-argv', 'sh-exec-qa-resume-cwd', 'sh-exec-qa-resume-state']);
+  'sh-exec-qa-resume-argv', 'sh-exec-qa-resume-cwd', 'sh-exec-qa-resume-state',
+  ...['review', 'qa'].flatMap((s) => KEY_PROBE_IDS.map((k) => `sh-exec-${s}-${k}`))]);
 
 function sectionShWrappers(tmpRoot) {
   section('WRAPPERS (bash channel) - locked flags, stdin-only delivery, LF + ASCII bytes, executed transport');

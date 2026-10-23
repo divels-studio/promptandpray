@@ -4,6 +4,27 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.3.6] - 2026-10-23
+
+The Codex session-state file is keyed per ticket, so a ticket's pass and a plan's readiness pass on
+one working tree keep their own resume ids.
+
+### Changed
+
+- **The Codex session-state file is keyed per ticket (PARPLAN-002)** - the review and QA wrappers
+  (both channels) read a key from the brief on stdin and record and resume the session in
+  `<scratchDir>/last-review-session.<key>.txt` (QA: `last-qa-session.<key>.txt`), on a cold run and a
+  bare resume alike; a brief with neither key line keeps the unkeyed file as before.
+  - The key rule: the first `Ticket: <REF>` line, else the last segment of the first `PLAN: <folder>`
+    line, under 1-64 characters of `A-Za-z0-9_.-` starting with a letter or digit.
+  - A `Ticket:` or `PLAN:` line failing the rule is a refusal (exit 2) naming the line, before any
+    state read and any engine start - never a fall-back to another state file.
+  - Doctrine (in the tree before this release, da0c5c2): `docs/CODEX_REVIEW_QA_RECIPE.md`,
+    `docs/WORKFLOW.md` § Branch policy, the `Ticket:` line in the review and QA skills' brief
+    templates, the review/qa/plan skills. Migration `0031_session-key` carries the release note and writes only the version stamps (and a stale `$schema` pointer).
+
+Retires local rules: none.
+
 ## [0.3.5] - 2026-10-23
 
 A planning session runs beside an executing one: while a ticket's route is open, Gate 3 lets the main

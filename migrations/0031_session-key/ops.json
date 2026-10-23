@@ -1,0 +1,12 @@
+{
+  "migration": "0031_session-key",
+  "targetPluginVersion": "0.3.6",
+  "operations": [
+    {
+      "op": "note",
+      "id": "session-key-0-3-6",
+      "text": "0.3.6 keys the Codex session-state file per ticket: the review and QA wrappers read a key from the brief on stdin - its first 'Ticket: <REF>' line, else the last segment of its first 'PLAN: <folder>' line - and record and resume the session in <scratchDir>/last-review-session.<key>.txt (QA: last-qa-session.<key>.txt), the same way on a cold run and on a bare resume, so a ticket's pass and a plan's readiness pass on one working tree keep their own resume ids; a brief with neither line keeps the unkeyed file as before. A key must be 1-64 characters of A-Za-z0-9_.- starting with a letter or digit, and a Ticket: or PLAN: line that fails the rule is a refusal (exit 2) naming the line, never a fall-back to another state file. The brief templates in the /pnp:review and /pnp:qa skills carry the 'Ticket: <REF>' line, and a resume brief carries the same line as the pass it resumes. This update writes the two version stamps in your config's bookkeeping (installedPluginVersion, lastMigrationApplied) and, when it is stale, the config's $schema pointer - nothing else; the wrappers are payload, run from the plugin root.",
+      "docRefs": ["CHANGELOG.md", "docs/CODEX_REVIEW_QA_RECIPE.md", "docs/WORKFLOW.md"]
+    }
+  ]
+}

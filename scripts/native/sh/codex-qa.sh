@@ -29,8 +29,12 @@
 # given (-C), and the project's roles.json is read from <projectRoot>/.claude/aiwf-native/roles.json.
 #
 # --resume [<id>] is OPTIONAL and takes an OPTIONAL argument: without one it replays the session id
-# THIS wrapper recorded last (<scratchDir>/last-qa-session.txt, QA's own file - a QA run can never
-# hijack a Reviewer resume and vice versa); with one it resumes that id verbatim. --resume-id <id>
+# THIS wrapper recorded last (<scratchDir>/last-qa-session.<key>.txt, QA's own file per role and per
+# ticket - a QA run can never hijack a Reviewer resume and vice versa, and two tickets never take each
+# other's session); with one it resumes that id verbatim. The key is read from the brief: its first
+# `Ticket: <REF>` line, else the last segment of its first `PLAN: <folder>` line, else no key and the
+# legacy unkeyed <scratchDir>/last-qa-session.txt; a value that is not 1-64 characters of
+# A-Za-z0-9_.- starting with a letter or digit is a refusal (exit 2). --resume-id <id>
 # is the same thing spelled with a mandatory value, and it implies --resume. Every run - cold or
 # resumed - records the session id afterwards from codex's OWN session store (never from this run's
 # output, which belongs to the caller), so the NEXT pass can be a resume instead of a second cold
@@ -116,12 +120,12 @@ if [ "$ROLE_ENGINE" != 'codex' ]; then
   fail "role 'qa' resolves to engine '$ROLE_ENGINE', not 'codex'; this Codex wrapper does not run - route through the Claude Agent branch of /pnp:qa."
 fi
 
-# THE SESSION STATE FILE IS PER ROLE, AND THIS WRAPPER TOUCHES ONLY QA'S.
-# `last-qa-session.txt` is written and read here and nowhere else, and the Reviewer wrapper's own
-# file is not named anywhere in this one - not even in a comment, so the crossed-state question can
-# be answered by a plain grep. One shared file would let a QA run overwrite the id a Reviewer
-# correction round is about to resume - a wrong-context review that still returns a confident
-# verdict.
+# THE SESSION STATE FILE IS PER ROLE AND PER TICKET, AND THIS WRAPPER TOUCHES ONLY QA'S.
+# `last-qa-session.<key>.txt` (or the unkeyed `last-qa-session.txt`) is written and read here and
+# nowhere else, and the Reviewer wrapper's own file is not named anywhere in this one - not even in a
+# comment, so the crossed-state question can be answered by a plain grep. One shared file would let
+# a QA run overwrite the id a Reviewer correction round is about to resume - a wrong-context review
+# that still returns a confident verdict. The key is derived from the brief further down.
 #
 # The scratch directory is the PROJECT's own: `paths.scratchDir` from its aiwf.config.json, with
 # `.aiwf` when the config is missing, unreadable or carries no key. The config is read by a real
@@ -142,7 +146,55 @@ SCRATCH_REL="$(PNP_CONFIG="$PROJECT_ROOT/.claude/aiwf-native/aiwf.config.json" n
 # path that moved with the cwd would be written somewhere nobody reads it.
 PROJECT_ROOT_ABS="$PROJECT_ROOT"
 if [ -d "$PROJECT_ROOT" ]; then PROJECT_ROOT_ABS="$(cd "$PROJECT_ROOT" && pwd)"; fi
-SESSION_STATE="$PROJECT_ROOT_ABS/$SCRATCH_REL/last-qa-session.txt"
+
+# SECURITY (locks the flag set): the prompt is delivered to Codex via STDIN ONLY - it never appears
+# on the command line, so no caller text (even one starting with "--", e.g. --ignore-user-config or
+# --dangerously-bypass-approvals-and-sandbox) can reach the option parser. The brief is read HERE,
+# before the state file is named, because the session key below comes out of it; it is refused
+# further down if EMPTY, before a paid pass is spent, and otherwise handed on unchanged.
+PROMPT="$(cat)"
+
+# THE STATE FILE IS ALSO PER TICKET. Two sessions on one working tree - two tickets' QA passes - must
+# not resume each other's conversation, so the file name carries a KEY read from the brief itself,
+# the same way on a cold run and on a bare --resume: the FIRST line `Ticket: <REF>`, else the LAST
+# segment of the FIRST line `PLAN: <folder>` (trailing separators stripped, split on both / and \),
+# else NO key and the legacy unkeyed file. The key must be 1-64 characters of A-Za-z0-9_.- starting
+# with a letter or digit; a value that fails the rule is a refusal (exit 2) naming the line, BEFORE
+# any state read and any engine start - never a silent fall-back to the unkeyed file, which is
+# exactly the collision the key removes.
+# The derivation is a node snippet for the same reason the snapshot is read by one: the PowerShell
+# mirror splits the brief into lines on LF, drops one trailing CR per line and matches every line on
+# its own, and this does the same thing with the same expressions, so both channels read one key out
+# of one brief. The brief travels on node's STDIN (no size limit), and a derivation that could not
+# run at all is a refusal too - a node that never started must not read as "no key".
+KEY_JS='
+const fs = require("fs");
+const key = (brief) => {
+  const lines = brief.split("\n").map((l) => (l.endsWith("\r") ? l.slice(0, -1) : l));
+  let line = null;
+  let value = "";
+  for (const l of lines) { const m = /^Ticket:[ \t]*(.*?)[ \t]*$/s.exec(l); if (m) { line = l; value = m[1]; break; } }
+  if (line === null) for (const l of lines) { const m = /^PLAN:[ \t]*(.*?)[ \t]*$/s.exec(l); if (m) { line = l; value = m[1].replace(/[\\/]+$/, "").split(/[\\/]/).pop(); break; } }
+  if (line === null) return [0, ""];
+  if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(value)) return [3, line];
+  return [0, value];
+};
+const [code, text] = key(fs.readFileSync(0, "utf8"));
+process.stdout.write(text);
+process.exitCode = code;
+'
+KEY_STATUS=0
+SESSION_KEY="$(printf '%s' "$PROMPT" | node -e "$KEY_JS")" || KEY_STATUS=$?
+if [ "$KEY_STATUS" -eq 3 ]; then
+  fail "the brief's line '$SESSION_KEY' does not give a usable session key: a Ticket: value - or the last segment of a PLAN: folder - must be 1-64 characters of A-Za-z0-9_.- starting with a letter or digit. Fix the line; this wrapper never falls back to another state file."
+elif [ "$KEY_STATUS" -ne 0 ]; then
+  fail "the session key could not be read from the brief (node exited $KEY_STATUS); refusing rather than falling back to another state file."
+fi
+if [ -n "$SESSION_KEY" ]; then
+  SESSION_STATE="$PROJECT_ROOT_ABS/$SCRATCH_REL/last-qa-session.$SESSION_KEY.txt"
+else
+  SESSION_STATE="$PROJECT_ROOT_ABS/$SCRATCH_REL/last-qa-session.txt"
+fi
 
 # --resume with no id means "the session THIS wrapper recorded last". A missing or empty state file
 # is a refusal with the path in it, never a silent cold run: a resume that quietly became a cold
@@ -197,11 +249,7 @@ if [ "$RESUME" -eq 1 ]; then
   cd "$PROJECT_ROOT" || fail "the project root is not a directory this wrapper can enter: $PROJECT_ROOT"
 fi
 
-# SECURITY (locks the flag set): the prompt is delivered to Codex via STDIN ONLY - it never appears
-# on the command line, so no caller text (even one starting with "--", e.g. --ignore-user-config or
-# --dangerously-bypass-approvals-and-sandbox) can reach the option parser. The brief is read here
-# first only to refuse an EMPTY one before spending a paid pass; it is then handed on unchanged.
-PROMPT="$(cat)"
+# The brief read above is refused here if EMPTY (or whitespace-only), before a paid pass is spent.
 if [ -z "$(printf '%s' "$PROMPT" | tr -d '[:space:]')" ]; then
   fail 'No prompt provided. Pipe the brief in: cat brief.txt | bash scripts/native/sh/codex-qa.sh --project-root <path>'
 fi

@@ -34,10 +34,14 @@
 
 .PARAMETER Resume
   Resume QA's LAST recorded codex session instead of starting a cold one. Without -ResumeId the id
-  comes from <scratchDir>\last-qa-session.txt - QA's OWN state file, so a QA run can never hijack a
-  Reviewer resume and vice versa. Every run, cold or resumed, records the session id afterwards from
-  codex's OWN session store - never from this run's output, which belongs to the caller and is
-  passed through untouched.
+  comes from <scratchDir>\last-qa-session.<key>.txt - QA's OWN state file, per role AND per ticket,
+  so a QA run can never hijack a Reviewer resume and vice versa, and two tickets never take each
+  other's session. The key is read from the brief: its first `Ticket: <REF>` line, else the last
+  segment of its first `PLAN: <folder>` line, else no key and the legacy unkeyed
+  <scratchDir>\last-qa-session.txt; a value that is not 1-64 characters of A-Za-z0-9_.- starting
+  with a letter or digit is a refusal (exit 2). Every run, cold or resumed, records the session id
+  afterwards from codex's OWN session store - never from this run's output, which belongs to the
+  caller and is passed through untouched.
 
 .PARAMETER ResumeId
   An explicit codex session id to resume; it implies -Resume. The bash mirror spells the two as ONE
@@ -78,11 +82,12 @@ if ($role.engine -ne 'codex') {
   exit 2
 }
 
-# THE SESSION STATE FILE IS PER ROLE, AND THIS WRAPPER TOUCHES ONLY QA'S.
-# last-qa-session.txt is written and read here and nowhere else, and the Reviewer wrapper's own file
-# is not named anywhere in this one - not even in a comment, so the crossed-state question can be
-# answered by a plain grep. One shared file would let a QA run overwrite the id a Reviewer correction
-# round is about to resume - a wrong-context review that still returns a confident verdict.
+# THE SESSION STATE FILE IS PER ROLE AND PER TICKET, AND THIS WRAPPER TOUCHES ONLY QA'S.
+# last-qa-session.<key>.txt (or the unkeyed last-qa-session.txt) is written and read here and
+# nowhere else, and the Reviewer wrapper's own file is not named anywhere in this one - not even in a
+# comment, so the crossed-state question can be answered by a plain grep. One shared file would let
+# a QA run overwrite the id a Reviewer correction round is about to resume - a wrong-context review
+# that still returns a confident verdict. The key is derived from the brief further down.
 #
 # The scratch directory is the PROJECT's own: paths.scratchDir from its aiwf.config.json, with
 # '.aiwf' when the config is missing, unreadable or carries no key. Same precedent as roles.json
@@ -100,10 +105,54 @@ if (Test-Path -LiteralPath $configPath) {
     $scratchRel = '.aiwf'
   }
 }
+
+# THE STATE FILE IS ALSO PER TICKET. Two sessions on one working tree - two tickets' QA passes - must
+# not resume each other's conversation, so the file name carries a KEY read from the brief itself,
+# the same way on a cold run and on a bare -Resume: the FIRST line `Ticket: <REF>`, else the LAST
+# segment of the FIRST line `PLAN: <folder>` (trailing separators stripped, split on both / and \),
+# else NO key and the legacy unkeyed file. The key must be 1-64 characters of A-Za-z0-9_.- starting
+# with a letter or digit; a value that fails the rule is a refusal (exit 2) naming the line, BEFORE
+# any state read and any engine start - never a silent fall-back to the unkeyed file, which is
+# exactly the collision the key removes.
+# The brief is split into lines on LF, one trailing CR dropped per line, and every line is matched on
+# its own (case-sensitive): the bash mirror reads the same key out of the same brief.
+$SessionKey = ''
+$keyLine = $null
+$keyValue = ''
+$briefLines = @()
+if ($Prompt) {
+  $briefLines = @($Prompt.Split([char]10) | ForEach-Object {
+    if ($_.Length -gt 0 -and $_[$_.Length - 1] -eq [char]13) { $_.Substring(0, $_.Length - 1) } else { $_ }
+  })
+}
+foreach ($briefLine in $briefLines) {
+  $m = [regex]::Match($briefLine, '^Ticket:[ \t]*(.*?)[ \t]*$')
+  if ($m.Success) { $keyLine = $briefLine; $keyValue = $m.Groups[1].Value; break }
+}
+if ($null -eq $keyLine) {
+  foreach ($briefLine in $briefLines) {
+    $m = [regex]::Match($briefLine, '^PLAN:[ \t]*(.*?)[ \t]*$')
+    if ($m.Success) {
+      $keyLine = $briefLine
+      $keyValue = @(($m.Groups[1].Value -replace '[\\/]+$', '') -split '[\\/]')[-1]
+      break
+    }
+  }
+}
+if ($null -ne $keyLine) {
+  if (-not [regex]::IsMatch($keyValue, '^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$')) {
+    Write-Error "the brief's line '$keyLine' does not give a usable session key: a Ticket: value - or the last segment of a PLAN: folder - must be 1-64 characters of A-Za-z0-9_.- starting with a letter or digit. Fix the line; this wrapper never falls back to another state file."
+    exit 2
+  }
+  $SessionKey = $keyValue
+}
+
 # Made absolute HERE, before the resume branch below changes the location: a state file path that
 # moved with the cwd would be written somewhere nobody reads it. [Path]::GetFullPath is deliberately
 # not used - it resolves against the .NET working directory, which is not PowerShell's own location.
-$SessionState = Join-Path (Join-Path $ProjectRoot $scratchRel) 'last-qa-session.txt'
+$SessionStateName = 'last-qa-session.txt'
+if ($SessionKey) { $SessionStateName = "last-qa-session.$SessionKey.txt" }
+$SessionState = Join-Path (Join-Path $ProjectRoot $scratchRel) $SessionStateName
 if (-not [System.IO.Path]::IsPathRooted($SessionState)) {
   $SessionState = Join-Path (Get-Location).Path $SessionState
 }
