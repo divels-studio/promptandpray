@@ -47,8 +47,13 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
    allowed before reporting. No active plan, and the operator names a new durable goal: that goal
    is planned through `/pnp:plan`, on the operator's word.
 3. **Reconstruct state.** From the chosen PLAN: mission status, the ticket ledger, the completion
-   records, the execution order, any recorded operator gates. From memory: the resume point and
-   machine-local facts. The resume point is a status of at most ~10 lines, rewritten WHOLE
+   records, the execution order, any recorded operator gates. From the scratch directory
+   (`{{config.paths.scratchDir}}`): list every file there that belongs to no open ticket or plan,
+   and settle each under the ticket-end rule before new work starts (`docs/WORKFLOW.md` § Durable
+   development history) - its content found standing in the tree by a grep of its headings and
+   items, or moved into git first; a file whose content stands nowhere else is
+   never deleted unmoved; the route state and the files of a ticket or plan still in flight stay.
+   From memory: the resume point and machine-local facts. The resume point is a status of at most ~10 lines, rewritten WHOLE
    whenever it changes and never appended to - history lives in git and the PLAN, and an appended
    note grows into a start-up cost of its own. From git: current branch, `git status` (identify
    uncommitted work - NEVER touch or stage foreign uncommitted files), the last ~10 commits.

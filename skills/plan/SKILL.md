@@ -275,6 +275,13 @@ the ledger's `## Plans` - `<ledger>` below is its path, resolved as
 <plansDir>/readiness/<ABBR> <plansDir>/ROADMAP.md <ledger>` and ONE docs commit (native dialog). The stamp survives the move byte for byte;
 a `--check` over `<plansDir>/active/<ABBR>` after the move confirms it.
 
+The landing ends with the scratch cleanup under the ticket-end rule (`docs/WORKFLOW.md` § Durable
+development history): a planning session closes no ticket and fills no record, so the rule is
+applied here directly - every file this cycle left in `<scratchDir>` is found standing in the tree
+(a grep of its headings and items, never its name - the readiness folder holds the round files) or
+is moved into git first; a file whose content stands nowhere else is never deleted unmoved; then
+the rest is deleted, the delete dialog the gate, no chat question.
+
 Each ticket is then started on its own word; the Writer brief is
 `${CLAUDE_PLUGIN_ROOT}/templates/briefs/writer-dispatch.md`. Each ticket closes with its completion
 record `<plansDir>/active/<ABBR>/records/<REF>.md`, written on

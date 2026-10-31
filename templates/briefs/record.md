@@ -41,7 +41,12 @@ invented follow-up.>
 or the plan's `readiness/<ABBR>/`. Then the directory is emptied of everything but the route state
 and the files of a ticket or plan still in flight - this ticket's files, the review and QA brief
 files and any leftover of earlier work alike - with no chat question; the delete dialog is the gate.
-Name what was deleted. The session's own temporary directory outside the repository is not covered.>
+Before a delete, every file is kept or moved first: its content is found standing in the tree - a
+grep of its headings and items, never its name - or it is moved into git first (ticket evidence to
+this record or `readiness/<ABBR>/`, anything else beside the plan it belongs to, a ledger row when it
+belongs to no plan); a file whose content stands nowhere else is never deleted unmoved. One line
+per file: where it moved, or where it already stood, then deleted. The session's own temporary
+directory outside the repository is not covered.>
 
 ## Closing checklist
 
@@ -54,7 +59,9 @@ Name what was deleted. The session's own temporary directory outside the reposit
   fifth roadmap write, `docs/WORKFLOW.md` § Durable development history);
 - every out-of-scope finding registered: a line on its area's roadmap entry, or a new ticket that
   waits for its own word;
-- the scratch evidence moved and the rest deleted (§ Scratch);
+- every scratch file found standing in the tree or moved into git before its delete - a file whose
+  content stands nowhere else is never deleted unmoved - and the rest deleted, each named with its
+  destination (§ Scratch);
 - the next ticket: this session or a fresh one, one line.
 
 ## Measurements

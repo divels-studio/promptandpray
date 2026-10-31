@@ -35,7 +35,12 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
    else. The overrides document carries the project's identity, hard rules and product truth - a
    session without it works without the product's boundaries.
 2. **Tree check.** Current branch, `git status`, the last ~5 commits. Identify uncommitted work -
-   NEVER touch or stage foreign uncommitted files; commit only by explicit paths.
+   NEVER touch or stage foreign uncommitted files; commit only by explicit paths. Then the scratch
+   directory (`{{config.paths.scratchDir}}`): list every file there that belongs to no open ticket
+   or plan, and settle each under the ticket-end rule before new work starts (`docs/WORKFLOW.md`
+   § Durable development history) - its content found standing in the tree by a grep of its
+   headings and items, or moved into git first; a file whose content stands nowhere else is
+   never deleted unmoved; the route state and the files of a ticket or plan still in flight stay.
 3. **Ask for the task** (in `{{config.operator.language}}`, briefly): what outcome, what is in and
    out of scope, any constraints. One round of questions, then work.
 4. **Classify and route.** R1 -> execute directly in this session and report. R2/R3 -> a ticket in

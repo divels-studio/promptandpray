@@ -542,7 +542,13 @@ tickets; no separate active BACKLOG file. The PLAN keeps:
    record: evidence worth keeping moves from the scratch directory into the record or the plan's
    `readiness/<ABBR>/`, and then the scratch directory (`paths.scratchDir`) is emptied of everything
    but the route state and the files of a ticket or plan still in flight - this ticket's files and
-   any leftover of earlier work alike - with no chat question: the delete dialog is the gate. The
+   any leftover of earlier work alike - with no chat question: the delete dialog is the gate.
+   **Before a delete in the scratch directory every file is kept or moved first:** its content is
+   found standing in the tree - checked by a grep of its headings and items, never by its name - or
+   it is moved into git first: ticket evidence to the record or `readiness/<ABBR>/`, anything else
+   beside the plan it belongs to, a ledger row when it belongs to no plan. A file whose content
+   stands nowhere else is never deleted unmoved. The record names, per file, where it moved or
+   where it already stood. The
    session's own temporary directory outside the repository is not covered; agents delete there
    freely. And the COO says in one line whether the next
    ticket stays in this session or wants a fresh one - a recommendation, not a stop: compaction is
