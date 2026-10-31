@@ -20,6 +20,7 @@ directory.
 - RBB - readiness/RBB/, archive/013_PLAN_RBB_2026-10-17/records/
 - RBC - readiness/RBC/, archive/015_PLAN_RBC_2026-10-18/records/
 - GENERIC - readiness/GENERIC/, archive/016_PLAN_GENERIC_2026-10-18/records/
+- RULEHOME - readiness/RULEHOME/, active/RULEHOME/records/
 
 ## Rows that belong to no plan
 
