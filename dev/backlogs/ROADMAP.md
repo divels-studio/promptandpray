@@ -25,7 +25,7 @@ leaves with one ledger row `<ABBR> dropped: <why>`.
 - Scope: in - the payload skeletons, skills, agent templates and doctrine sentences the research found (RESEARCH.md of the plan), one habit-guard hook and the gates' fail-closed guarantees, the Silerax overrides + memory diet through an operator-named live Silerax session; out - the split of the doctrine by stage (DOCSTAGE), Furnissimo (operator 2026-10-31: „Furnissimo ще го чистим друг път")
 - Size: S
 - Plans: PLAN_RULEHOME (`active/RULEHOME/`)
-- Status: planned
+- Status: in progress
 - Born: 2026-10-31, operator word „съгласен съм, разпиши обхвата на прозата + чернова за code тикета"
 
 ## README - the public README for a cold visitor
@@ -128,8 +128,8 @@ Entries below were ported on 2026-10-18 from `dev/backlogs/CANDIDATES.md` (now h
   - 2026-10 - a product name is not a path: "write to <plugin> CANDIDATES" has two addresses - a Branch policy sentence (unsure) [dev/backlogs/CANDIDATES.md:818]
   - 2026-10 - two names for one set: "unplanned R2" vs "small R1 / non-durable R2" (unsure) [dev/backlogs/CANDIDATES.md:956]
   - 2026-10 - a doctrine sentence that enumerates the world is phrased as a checkable rule (unsure) [dev/backlogs/CANDIDATES.md:966]
-  - 2026-10-23 - `docs/LOOP.md` § Role boundaries says auto mode refuses "the config files an update writes"; the 0.3.5 `/pnp:update --apply` ran under auto mode and the engine's config write went through (operator: „аутомод не блокира") - the sentence is corrected to what was observed (the Edit/Write tool class on `.claude/settings.json`, `.claude/hooks/**`), or the refusal is reproduced and the sentence stays [dev/PROJECT_OVERRIDES.md § Environment, 2026-10-23]
-  - 2026-10-16 alignment, unconsumed by GENERIC - eight rules that live only in the three projects' overrides, with no payload home: a dialog only when the ticket cannot continue (Q2), the operator channel carries counts never file:line (Q3), ticket-end cleanup of `.aiwf/` (Q4/C-056), independent units run in parallel by default (C-002), a lint baseline (C-045), a run judged against a recorded baseline JSON (C-064), the brief line `E2E: yes/no - because` (C-067), sessions start from the repo root (C-071) - each homed in the payload or confirmed project-only [dev/PROJECT_OVERRIDES.md § Communication, § Test policy; `drafts/align-2026-10-16/align-decision.md` in git history before its deletion on 2026-10-18]
+  - done f61817f (RULEHOME-001 C4) - 2026-10-23 - `docs/LOOP.md` § Role boundaries says auto mode refuses "the config files an update writes"; the 0.3.5 `/pnp:update --apply` ran under auto mode and the engine's config write went through (operator: „аутомод не блокира") - the sentence is corrected to what was observed (the Edit/Write tool class on `.claude/settings.json`, `.claude/hooks/**`), or the refusal is reproduced and the sentence stays [dev/PROJECT_OVERRIDES.md § Environment, 2026-10-23]
+  - Q2, Q3, Q4, C-002 done f61817f (RULEHOME-001); C-045, C-064, C-067, C-071 open (RULEHOME DECISIONS § Deferred) - 2026-10-16 alignment, unconsumed by GENERIC - eight rules that live only in the three projects' overrides, with no payload home: a dialog only when the ticket cannot continue (Q2), the operator channel carries counts never file:line (Q3), ticket-end cleanup of `.aiwf/` (Q4/C-056), independent units run in parallel by default (C-002), a lint baseline (C-045), a run judged against a recorded baseline JSON (C-064), the brief line `E2E: yes/no - because` (C-067), sessions start from the repo root (C-071) - each homed in the payload or confirmed project-only [dev/PROJECT_OVERRIDES.md § Communication, § Test policy; `drafts/align-2026-10-16/align-decision.md` in git history before its deletion on 2026-10-18]
 - Size: S
 - Plans: none yet
 - Status: idea
@@ -139,7 +139,7 @@ Entries below were ported on 2026-10-18 from `dev/backlogs/CANDIDATES.md` (now h
 - Goal: every skill says what the doctrine already decided - the QA trace mode, the report copy, the auto-mode refusal, the brief rule
 - Why: four decided rules have no sentence in the skill that executes them
 - Scope: in - the items below; out - new skills
-  - 2026-10-04 Silerax UIR-003 - E2E `--trace retain-on-failure` by default in the QA run (`skills/qa` still says `--trace on`) [dev/backlogs/CANDIDATES.md:556] [dev/backlogs/CANDIDATES.md:1133]
+  - done f61817f (RULEHOME-001 trace, D-17) - 2026-10-04 Silerax UIR-003 - E2E `--trace retain-on-failure` by default in the QA run (`skills/qa` still says `--trace on`) [dev/backlogs/CANDIDATES.md:556] [dev/backlogs/CANDIDATES.md:1133]
   - 2026-10-04 Silerax UIR-003 - the Writer copies the E2E JSON report into the scratch directory right after the run [dev/backlogs/CANDIDATES.md:565] [dev/backlogs/CANDIDATES.md:1135]
   - 2026-10 - one sentence in the setup/update skills: auto mode refuses settings writes and `/pnp:update --apply` (unsure) [dev/backlogs/CANDIDATES.md:1141]
   - 2026-10 - `/pnp:brief` says it is not offered when the state is durable (unsure) [dev/backlogs/CANDIDATES.md:1144]
