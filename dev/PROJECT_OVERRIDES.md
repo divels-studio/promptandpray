@@ -196,6 +196,13 @@ edits while a suite is running (RBA-001). (operator rule 2026-10-17)
   stay. (operator rule 2026-10-15)
 - Be concise; no reasoning narration. Explain concretely when architecture or product boundaries
   are involved.
+- **A question to the operator is a dialog** (operator rule 2026-10-16, restated 2026-10-31 after
+  the RULEHOME-002 sweep had deleted it as a payload duplicate - the payload names no tool): the
+  AskUserQuestion tool - numbered options, one topic, the consequence of each option, the
+  recommendation first - never a list in the chat; in words and counts, never with line numbers;
+  up to 4 points per dialog; everything that does not block the ticket goes into one list asked at
+  the ticket's end. *Expires* when the payload names the tool and the form (ROADMAP § DOCTR
+  2026-10-31). (product)
 
 ## Environment
 
