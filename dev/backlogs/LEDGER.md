@@ -20,7 +20,7 @@ directory.
 - RBB - readiness/RBB/, archive/013_PLAN_RBB_2026-10-17/records/
 - RBC - readiness/RBC/, archive/015_PLAN_RBC_2026-10-18/records/
 - GENERIC - readiness/GENERIC/, archive/016_PLAN_GENERIC_2026-10-18/records/
-- RULEHOME - readiness/RULEHOME/, active/RULEHOME/records/
+- RULEHOME - readiness/RULEHOME/ (its ledger.md: rulings, passes, events), archive/017_PLAN_RULEHOME_2026-10-31/ (executed in full 2026-10-31: 001 payload prose f61817f, 002 code 6bb25dc + release 0.3.7, 003 the Silerax harvest / removal / diet; records in the archive folder)
 
 ## Rows that belong to no plan
 

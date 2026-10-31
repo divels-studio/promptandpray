@@ -40,8 +40,52 @@ own in that session.
   (4) the two overrides pointers re-aimed (source lines 61-65 / 86). The 2026-10-31 change set had
   been agreed line by line between the two sessions (the Silerax COO's consensus message, the PnP
   session's AGREE) before the operator's word.
-- Step 4 - the diet: (pending - opens with the ONE operator dialog over the seven conflicts).
-- Step 5 - the Retires sweep 0.3.1..0.3.7: (pending).
+- Step 4 - the diet. Its plan: `records/silerax-harvest/diet.md` (`6847e27`, corrected in `3be7013`
+  after the Silerax COO verified every `delete` claim against the 0.3.7 payload before any delete:
+  3 false, 6 partial, all ruled - § Events). The seven conflicts were the operator's answers from
+  two AskUserQuestion dialogs in the PnP session (one re-asked after the operator's correction - no
+  line numbers); the deal-party term from the operator's own pick in the Silerax session
+  („Доставчик / купувач" - supplier on a purchase, buyer on a sale, reversing "counterparty, never
+  supplier"). In Silerax: the operator's word for the diet („давай да видим какво ще излезе"), then
+  THREE AskUserQuestion dialogs there over the deletions (11 covered rules: delete all; 10 pointer
+  memory files: delete all; 8 rule-carrying memory files: move then delete), then the Writer on a
+  brief carrying the two sessions' consensus and the operator's answers - the docs commit
+  `f39db082` (13 files, +381 / -329, a new `dev/DOCS_TRUST.md`; tree clean; the Silerax COO read
+  the whole diff). What moved: the COO-only rules into `.claude/aiwf-native/ORCHESTRATOR.md`'s
+  project-additions block (the verdict message, questions after the research, the checkpoint
+  habit, the per-pass brief copy, the plan-on-mockups and replaces-a-path rules, the QA-of-a-screen
+  and mockup-comparison rules, the visuals judged live, Codex after the round, canon-mockup
+  differences), the state and procedure blocks into `dev/DOCS_TRUST.md`, `docs/guides/TESTING.md`,
+  `dev/baselines/README.md`, `scripts/e2e-local/README.md` (§ Machine traps, 13 items),
+  `.githooks/README.md`, the roadmap's local header (ideas / defects, structure, TODO, audit
+  findings, closed work's local parts) and `dev/backlogs/drafts/ui-redesign/README.md`; the
+  "modules are not copied" rule and its DPU-003 proof into `dev/RESTART_STRATEGY.md` Б10; the
+  conflict answers written (the destructive class narrowed to writes, the session rule overridden
+  to 600k, `dev/backlogs/ROADMAP.md` leads and the root file frozen, the language rule with the
+  changelog and the quotes in the setup language, the term, dates as records fine - as deadlines
+  never unless the operator sets them). Memory: 10 pointer files deleted, 8 rule files moved then
+  deleted, the survivors - `MEMORY.md`, `feedback_mockup_from_site` (kept until the S0 line),
+  `project_ask_mcp_research`, `project_import_redesign`, `project_mission_resume`,
+  `project_ocr_providers_inactive`, `project_plan_order`, `project_prod_db_state`,
+  `reference_redesign_hub`, `user_oldschool_mvc` - state, reference and user facts only. Two
+  Silerax roadmap lines born (D-307, D-308, both S0: the mockup-authority conflict; the root vs
+  dev/backlogs roadmap analysis). Three pointers re-aimed into the moved sections (AGENTS.md
+  additions, docs/CANON.md x2); the stale scratch-rule line dropped from `project_mission_resume`.
+  Waiting rows: none. The code-class half (the context hook and its settings wiring removed, the
+  long-command guard's cited title, `fable-auditor.md` on the operator's dialog) follows through
+  Silerax's Writer, review route and commit dialog - DONE there (its COO's report): a docs
+  follow-up `c0ec98f7` (fable-auditor out of `dev/RESTART_STRATEGY.md`; the ORCHESTRATOR
+  additions' checkpoint rule no longer names the removed hook) and the code commit `34824824`
+  (5 files, +3 / -594: `context-gate.mjs` and its test deleted, its three `settings.json` events
+  removed with PreToolUse / permissions byte-identical, `fable-auditor.md` deleted on the
+  operator's dialog, `long-command-guard.mjs` cites payload `docs/LOOP.md` § Role boundaries,
+  `node --test` 11/11; Codex pass 1 cold `fail` on one blocker - the COO's stale
+  `.aiwf/checkpoint.md`, a scratch-only prose fix, no pass 2). Silerax tree clean at `34824824`.
+  Left on the Silerax side, outside this ticket: the `~/.claude/ctx` state files of the removed hook
+  and the statusline still writing there; `.aiwf/review-brief.txt` / `qa-brief.txt` for its scratch
+  cleanup.
+- Step 5 - the Retires sweep 0.3.1..0.3.7 over Silerax's overrides, memory and CLAUDE.md zone: the
+  table below (§ Retires sweep); its acts were the diet's rows.
 
 ## Decisions and deviations
 
@@ -87,7 +131,34 @@ own in that session.
   (PROJECT_OVERRIDES.md:674, :675, :677 - kept by the operator 2026-10-31)". Two rows read "broken"
   by the ticket's text (the file listed; the pointer hits) and are the operator's own decisions of
   2026-10-31, recorded above - the ticket's acceptance is amended by them, not failed.
-- Silerax's diet reports: (pending).
+- Silerax's diet, docs half (its COO's report after `f39db082`, verbatim): "`pnp-candidate` in
+  LEDGER.md -> no hit; `operator rule` in overrides -> 46 hits, all in rules that stay (the Writer
+  listed each); 17 moved key phrases -> 0 hits each in the overrides, each found in its new home;
+  memory survivors: MEMORY.md, feedback_mockup_from_site (kept, S0), project_ask_mcp_research,
+  project_import_redesign, project_mission_resume, project_ocr_providers_inactive,
+  project_plan_order, project_prod_db_state, reference_redesign_hub, user_oldschool_mvc; the three
+  dangling link names -> no hit." The ticket's Silerax rows thus: `pnp-candidate` none; each moved
+  phrase absent from the overrides and present in its home; every `operator rule` hit has a
+  `diet.md` row (46 stays); every memory file named in `diet.md` § Memory; the dangling names gone.
+- Silerax's code-class half (its COO's report, verbatim): "code item `34824824` (5 files, +3 /
+  -594): context-gate.mjs + its test deleted, its 3 settings.json events (UserPromptSubmit,
+  PostToolUse, SessionStart compact) removed, PreToolUse / permissions byte-identical, settings.json
+  parses; fable-auditor.md deleted (operator: delete); long-command-guard cites payload
+  docs/LOOP.md § Role boundaries (COO-verified :104-106), behaviour unchanged, `node --test` 11/11.
+  Codex pass 1 gpt-6-sol cold, 48,585 tokens, session 01a193d1-7211-7353-8e1b-612da24a49f5:
+  `fail`, 1 blocker = the COO's stale .aiwf/checkpoint.md (a scratch-only prose fix, no pass 2)".
+- Here, the ticket's own rows (2026-10-31, after `3be7013`): `git ls-files --
+  dev/backlogs/active/RULEHOME/records/silerax-harvest` -> the intake brief, `COO_SELF_ANALYSIS.md`,
+  `diet.md`, `ledger-rows.md`, seven `memory/*` files; `git log --format=%h -- <the folder>` ->
+  `3be7013 6847e27 15623e5 1d6cbfe` (the marker line in Silerax names `15623e5`); `git diff
+  --name-only HEAD -- docs skills templates scripts schema hooks migrations examples
+  .claude-plugin` -> empty; `diet.md` § Conflicts - 7 rows, every `answer` filled; the Silerax
+  memory directory (Glob) - 10 files, every name in `diet.md` § Memory (the 19 deleted ones too);
+  `ledger-rows.md` - every PnP row carries a disposition, every `roadmap:` one has its line.
+- The archiving backstop (guard (h)): `git grep -n -E 'operator (rule|word|correction|2026-10)' --
+  DECISIONS.md PLAN_RULEHOME.md` over the plan's process sections -> the hits counted in the
+  archiving commit's message; the plan had no `readiness/RULEHOME/ledger.md` from its landing, so
+  the rows for those points were written at the archiving (`readiness/RULEHOME/ledger.md`).
 - Here: `git ls-files -- dev/backlogs/active/RULEHOME/records/silerax-harvest` after `15623e5` ->
   the intake brief, `COO_SELF_ANALYSIS.md`, `ledger-rows.md`, seven `memory/*` files (`diet.md` comes
   with step 4).
@@ -142,7 +213,12 @@ sweep's record.
 
 ## Remaining debt
 
-(pending)
+- The payload's `~400k` session-rule number and the setup's language-per-record-class question are
+  ROADMAP lines (§ CTX, § SETUP, § DOCTR), born of the diet dialog - not this ticket's to fix.
+- The payload names no dialog tool: the consumer-local rule stays in two projects with an expiry
+  (ROADMAP § DOCTR).
+- Silerax's S0 lines D-307 (mockup authority) and D-308 (the two roadmap files) are Silerax's.
+- None else.
 
 ## Diff review
 
@@ -152,11 +228,25 @@ and the acceptance greps it runs.
 
 ## Scratch
 
-(pending)
+`.aiwf/` at the close holds `route-state.json` (`{}`) and `checkpoint.md` (the live mechanic,
+rewritten whole) and nothing of this ticket: no brief file (no pass here), no diff-review file (no
+Writer diff). The Temp directories outside the repository (`rulehome-002`, `rulehome-spike`, the
+tool-result dumps) are not covered. Nothing moved, nothing deleted.
 
 ## Closing checklist
 
-(pending)
+- the operator's own run on a real input: the ticket's product is Silerax's own tree - the
+  operator worked it live in the Silerax session (every delete through his dialogs, the three
+  deletion dialogs, the term dialog, the fable-auditor dialog); his words quoted above
+  („нулирай го, не го трий", „спрян е временно", „давай да видим какво ще излезе").
+- the diff review: no Writer diff here (§ Diff review); the Silerax COO read its whole diff.
+- the ticket's finding lines: none of its own on a roadmap entry; the 24 harvested lines + 4 born
+  of the diet dialog are the roadmap's fourth write, each with its pointer.
+- every out-of-scope finding registered: the CTX / SETUP / DOCTR lines; Silerax's D-307 / D-308.
+- the scratch: nothing to move, nothing to delete (§ Scratch).
+- the next ticket: none in this plan - all three closed; the plan archives in this commit; next is
+  `/pnp:plan DOCSTAGE` in a fresh session (operator 2026-10-31), input
+  `dev/backlogs/inputs/DOCSTAGE-2026-10-31.md`.
 
 ## Measurements
 

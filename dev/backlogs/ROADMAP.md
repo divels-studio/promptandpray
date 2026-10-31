@@ -19,15 +19,6 @@ leaves with one ledger row `<ABBR> dropped: <why>`.
 - Born: <date>, operator word „<quote>"
 ```
 
-## RULEHOME - every rule stands where the role that must obey it acts
-- Goal: a rule the loop depends on is carried by the artifact the role fills or reads at the moment it acts (a brief or record skeleton, the skill step, the role's own file) or by a hook, the payload holds no contradiction a role can trip on, and the first consumer (Silerax) keeps only product truth and true project rules in its overrides, none in memory
-- Why: „Основното което ме притеснява е че някои правила не се спазват, причините са ли двусмислия между воркфлоу и локални правила, или голям обем на локалните, правила, или просто цялата доктрина има неща които не са си на мястото" (operator 2026-10-31)
-- Scope: in - the payload skeletons, skills, agent templates and doctrine sentences the research found (RESEARCH.md of the plan), one habit-guard hook and the gates' fail-closed guarantees, the Silerax overrides + memory diet through an operator-named live Silerax session; out - the split of the doctrine by stage (DOCSTAGE), Furnissimo (operator 2026-10-31: „Furnissimo ще го чистим друг път")
-- Size: S
-- Plans: PLAN_RULEHOME (`active/RULEHOME/`)
-- Status: in progress
-- Born: 2026-10-31, operator word „съгласен съм, разпиши обхвата на прозата + чернова за code тикета"
-
 ## README - the public README for a cold visitor
 - Goal: a visitor who has never seen the loop understands what PnP is, installs it, runs one R2 ticket and takes an update from the root README.md alone
 - Why: „тоя план става сега история, тоя 11 отива някъде в обозримото бъдеще, предполагам мястото му е в новия роадмап"; the original ticket is HARD-011 in `archive/014_PLAN_HARD_2026-10-17.md` (§ HARD-011 (README-001))
