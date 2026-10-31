@@ -785,13 +785,14 @@ session (`/pnp:plan`) may run beside it: planning is not execution - it writes o
 line, commits by explicit paths at its landing, and never touches the open ticket's files; Gate 3
 lets exactly those paths through while the ticket's route is open. Every other non-executing session
 may READ - zero repo writes, zero DB operations, zero paid auditor passes. **Paid passes of the two
-sessions may be in flight at once, but are DISPATCHED one at a time:** a pass's session id is recorded
-per ticket - `<scratchDir>/last-review-session.<key>.txt`, the key read by the wrapper from the
-brief's `Ticket:` line (a plan pass: its `PLAN:` folder) - so a readiness pass and a ticket's pass no
-longer overwrite each other's resume id; the brief file (`<scratchDir>/review-brief.txt`) stays ONE
-fixed path, because that constant command is what the permission rule matches, so two sessions
-write-and-launch it in turn, never in the same moment. Both are OPERATOR-HELD invariants: no hook
-can see sibling sessions.
+sessions may be dispatched and in flight at once:** a pass's files are per ticket - the brief
+`<scratchDir>/<key>-review-brief.txt` (QA: `<key>-qa-brief.txt`) and the session id
+`<scratchDir>/last-review-session.<key>.txt`, the key read by the wrapper from the brief's `Ticket:`
+line (a plan pass: its `PLAN:` folder's last segment) - so a readiness pass and a ticket's pass
+overwrite neither each other's brief nor each other's resume id. The launch passes the brief's path
+through `-BriefFile` / `--brief-file`, so the command keeps a constant prefix a permission rule can
+match. One executing session per tree stays an OPERATOR-HELD invariant: no hook can see sibling
+sessions.
 
 ## Fail aggregation
 

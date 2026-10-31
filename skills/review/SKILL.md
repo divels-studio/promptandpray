@@ -17,8 +17,8 @@ row for the ticket's class once and dispatches one of two branches:
 - **engine `codex`** -> the canonical wrapper for this OS channel,
   `${CLAUDE_PLUGIN_ROOT}/scripts/native/ps/codex-review.ps1` or
   `${CLAUDE_PLUGIN_ROOT}/scripts/native/sh/codex-review.sh` (`docs/CODEX_REVIEW_QA_RECIPE.md`) -
-  read-only by a **hard OS `--sandbox read-only` cell**; the wrapper locks the flags and takes the
-  brief on stdin.
+  read-only by a **hard OS `--sandbox read-only` cell**; the wrapper locks the flags and reads the
+  brief from the per-ticket file `-BriefFile` / `--brief-file` names (stdin is the fallback).
 - **engine `claude`** -> the `reviewer` subagent via the **Agent tool** (the project's rendered
   reviewer agent) - read-only by a `Read/Grep/Glob`-only tool allowlist. **Gate 1 catches the
   Edit/Write family; the Claude review path is tool-availability + convention + git reversibility,
@@ -303,43 +303,47 @@ The implementation-review contract above is unchanged; this branch applies only 
 
 ## Step 3 - Dispatch on the resolved engine
 
-### Step 3 - codex branch (`$row.engine -eq 'codex'`) - invoke the wrapper (prompt via STDIN)
+### Step 3 - codex branch (`$row.engine -eq 'codex'`) - invoke the wrapper (brief through its file)
 
-Deliver the brief to the wrapper on **stdin** - never as a positional/argv argument. The wrapper
-calls the resolver itself, so no model is passed here - but **pass the class**: with `-Class` /
+Deliver the brief to the wrapper through its **brief file** - the path after `-BriefFile` /
+`--brief-file` - never as a positional/argv argument; the wrapper hands it to the engine on stdin.
+The wrapper calls the resolver itself, so no model is passed here - but **pass the class**: with `-Class` /
 `--class` the wrapper reads the model and the effort of that ROW instead of the Reviewer role's own
 triple. `/pnp:review` passes the class on every invocation.
 
-**Write the brief to the fixed path `<root>/{{config.paths.scratchDir}}/review-brief.txt`** (Write
-tool), then invoke the wrapper of this project's OS channel (`{{config.os}}`) with exactly that
-command, character for character:
+**Write the brief to the per-ticket file `<root>/{{config.paths.scratchDir}}/<key>-review-brief.txt`**
+(Write tool), `<key>` being exactly the key the wrapper reads for the session-state file below - the
+brief's `Ticket: <REF>` value, a plan pass the `PLAN:` folder's last segment - then invoke the
+wrapper of this project's OS channel (`{{config.os}}`) with exactly that command, character for
+character:
 
 **os `windows`:**
 
 ```powershell
-Get-Content '<root>/{{config.paths.scratchDir}}/review-brief.txt' -Raw | `
-  & "${CLAUDE_PLUGIN_ROOT}/scripts/native/ps/codex-review.ps1" -ProjectRoot '<root>' -Class <class>
+& "${CLAUDE_PLUGIN_ROOT}/scripts/native/ps/codex-review.ps1" -ProjectRoot '<root>' -Class <class> -BriefFile '<root>/{{config.paths.scratchDir}}/<key>-review-brief.txt'
 ```
 
 **os `linux` / `macos`:**
 
 ```bash
-cat '<root>/{{config.paths.scratchDir}}/review-brief.txt' \
-  | bash "${CLAUDE_PLUGIN_ROOT}/scripts/native/sh/codex-review.sh" --project-root '<root>' \
-    --class <class>
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/native/sh/codex-review.sh" --project-root '<root>' --class <class> --brief-file '<root>/{{config.paths.scratchDir}}/<key>-review-brief.txt'
 ```
 
-The path is fixed **on purpose**. A permission rule can only match a constant command string, so an
-invocation whose text changes every time - an inline here-string carrying the brief, or a
-session-scoped scratchpad path - must prompt the operator on every single dispatch and can never be
-allowlisted. Holding the brief in a file at a constant path is what makes the command constant.
-`<root>` and the plugin root are constants *for this project*, and `-Class` / `--class` takes one of
-exactly three literal tokens, so the command text is drawn from a small fixed set and is stable
-across sessions, tickets and correction rounds. Do not inline the brief into the command, and do
-not "improve" the path by making it unique per session or per ticket: either change silently
-reintroduces a dialog on every review.
+The command keeps a **constant prefix on purpose**. A permission rule matches a command by its
+prefix, so an invocation whose text changes at its start - an inline here-string carrying the
+brief, a pipe in front of the wrapper - must prompt the operator on every single dispatch and can
+never be allowlisted. Everything before the brief path is constant: `<root>` and the plugin root
+are constants *for this project*, and `-Class` / `--class` takes one of exactly three literal
+tokens; only the path after the flag varies, per ticket. A local allow rule is written on that
+prefix (the payload ships only the blanket allow). The brief file is per ticket - keyed like the
+session-state file - so two tickets' passes never overwrite each other's brief, and a readiness
+pass beside a ticket's pass writes its own. Do not inline the brief into the command and do not put
+a pipe in front of the wrapper: either change silently reintroduces a dialog on every review. The
+stdin form (`Get-Content '<file>' -Raw | & ...` / `cat '<file>' | bash ...`) still works as the
+fallback; the wrapper refuses the flag together with a non-empty stdin (exit 2).
 
-The brief must never be empty - an empty brief makes the wrapper exit 2. Write the file first and
+The brief must never be empty - an empty, whitespace-only, missing or unreadable brief file makes
+the wrapper exit 2 before any paid call. Write the file first and
 invoke in a LATER tool call, never in the same message: calls in one message may start together,
 and a wrapper that reads the file before the write lands audits the previous brief.
 
@@ -355,8 +359,9 @@ arrangement removes; the next dispatch overwrites it, and keeping it lets a corr
 re-dispatch without retransmitting the brief. At the ticket's close it IS deleted, by the ticket-end
 cleanup of the record skeleton's closing checklist - that one delete dialog is the gate.
 
-Two sessions dispatching a Reviewer in the same second would overwrite each other's brief. That is
-an accepted, visible failure mode: a re-dispatch, not a silent wrong verdict.
+Two dispatches for the SAME ticket in the same second would overwrite each other's brief (another
+ticket's or plan's pass writes another file). That is an accepted, visible failure mode: a
+re-dispatch, not a silent wrong verdict.
 
 **Run the wrapper in the BACKGROUND - `run_in_background: true`, with a timeout of at least
 3600000 ms. This is the default, not an optimisation:** a command expected to run over
@@ -372,22 +377,19 @@ no such cap and the harness notifies you on completion. Never re-run a timed-out
 foreground hoping it will fit this time.
 
 **A verification pass after a correction round may RESUME the previous session instead of paying for
-a cold one.** It is the same block with one flag added, so the command text stays in the same small
-fixed set a permission rule can match:
+a cold one.** It is the same launch with one flag added at its end, so the command keeps the same
+constant prefix a permission rule can match:
 
 **os `windows`:**
 
 ```powershell
-Get-Content '<root>/{{config.paths.scratchDir}}/review-brief.txt' -Raw | `
-  & "${CLAUDE_PLUGIN_ROOT}/scripts/native/ps/codex-review.ps1" -ProjectRoot '<root>' -Class <class> -Resume
+& "${CLAUDE_PLUGIN_ROOT}/scripts/native/ps/codex-review.ps1" -ProjectRoot '<root>' -Class <class> -BriefFile '<root>/{{config.paths.scratchDir}}/<key>-review-brief.txt' -Resume
 ```
 
 **os `linux` / `macos`:**
 
 ```bash
-cat '<root>/{{config.paths.scratchDir}}/review-brief.txt' \
-  | bash "${CLAUDE_PLUGIN_ROOT}/scripts/native/sh/codex-review.sh" --project-root '<root>' \
-    --class <class> --resume
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/native/sh/codex-review.sh" --project-root '<root>' --class <class> --brief-file '<root>/{{config.paths.scratchDir}}/<key>-review-brief.txt' --resume
 ```
 
 With no id after it, the flag replays the session the wrapper recorded on its OWN last run for THIS
@@ -433,8 +435,8 @@ The recovery is still a paid dispatch: tell the operator what is known of the de
 it ran, and its cost where the engine reported one - and take their word before it; never
 re-dispatch on your own. Bare means bare: `-Resume` / `--resume` with no id, off the Reviewer's
 own state file above; write the continuation prompt - WITH the pass's `Ticket:` line, which is how
-the wrapper finds that pass's state file - into the same `review-brief.txt` and re-invoke the block,
-which keeps the command text in the fixed set a permission rule matches.
+the wrapper finds that pass's state file - into the same `<key>-review-brief.txt` and re-invoke the
+block, which keeps the command's constant prefix a permission rule matches.
 For a plan-class pass the continuation prompt
 carries the three fixed lines of the readiness brief as well - the folder has not changed, so its
 stamp still holds, and the plan gate checks the continuation like any other plan brief.

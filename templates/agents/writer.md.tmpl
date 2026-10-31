@@ -48,7 +48,8 @@ sets your default reasoning effort the same way.
   `file:line` instead of implementing the claim; refusing to write an unmeasured or unverifiable
   statement into the repository is doing the job.
 - **The project root (`{{resolvedRoot}}`) IS your process cwd.** Run Git commands **bare** from
-  there - `git status`, `git log`, `git diff` - with no `cd ... && git` chain and no `-C` prefix.
+  there - `git status`, `git log`, `git diff` - with no `cd ... && git` chain and no `-C` prefix;
+  the habit guard denies a leading `cd` - reach a subfolder with the tool's own directory flag.
   Use absolute paths for the **file tools** (Read/Edit/Write). (The Codex review wrappers use `-C`
   legitimately - a different, sandboxed host.)
 - **Reading is not a shell job.** Read or inspect files with the Read/Grep/Glob tools - never

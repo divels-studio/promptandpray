@@ -32,7 +32,9 @@ Always invoke Reviewer/QA through the wrapper scripts. They are the canonical, s
 `scripts/native/ps/codex-review.ps1` and `scripts/native/ps/codex-qa.ps1` on the `windows` channel,
 `scripts/native/sh/codex-review.sh` and `scripts/native/sh/codex-qa.sh` on `linux`/`macos` (usage in
 the role sections below; `config.os` selects the channel). They pin the same locked flags **and**
-deliver the prompt via stdin so no prompt text can be parsed as a CLI option.
+deliver the prompt via stdin so no prompt text can be parsed as a CLI option. The review and QA
+wrappers read the brief from the file `-BriefFile <path>` / `--brief-file <path>` names - the launch
+form, a constant command prefix - and, without the flag, from their own stdin.
 
 **Do NOT put the prompt as a positional argument.** A positional `"<prompt>"` on argv reopens the
 option-injection hole the wrappers close (a prompt beginning with `--` would be parsed as a flag).
@@ -69,11 +71,19 @@ Hard requirements (do not change without re-proving the read-only posture):
   embedded in a splatted array) before it reaches codex, so an on-argv prompt cannot be protected.
   Stdin sidesteps option parsing entirely. The locked flags above are only trustworthy because no
   caller text reaches the option parser.
-- Prompt delivery per channel, same guarantee: on `windows` it is passed with `-Prompt` or piped in
-  (use `-Raw` for long briefs) and the wrapper routes it through stdin; on `linux`/`macos` the bash
-  wrappers have **no prompt flag at all** - the brief arrives on stdin and only on stdin, and any
-  unrecognised argument is refused with exit 2. An empty or whitespace-only brief is refused (exit 2)
-  on both, before a paid pass is spent.
+- Prompt delivery per channel, same guarantee: on `windows` the brief is read from the file
+  `-BriefFile <path>` names, passed with `-Prompt` or piped in (use `-Raw` for long briefs), and the
+  wrapper routes it through stdin; on `linux`/`macos` the bash wrappers have **no prompt flag at
+  all** - the brief arrives from the file `--brief-file <path>` names or on stdin, and any
+  unrecognised argument is refused with exit 2. The brief-file flag is the launch form the skills
+  use - a path on the command line, never prompt text - and stdin is the fallback (the 0.3.6 form);
+  a missing, unreadable, empty or whitespace-only brief file, or the flag together with a non-empty
+  stdin, is refused (exit 2). An empty or whitespace-only brief is refused (exit 2) on both, before a
+  paid pass is spent. QAL (`codex-qal.*`) takes no brief-file flag. Honest limit on `windows`: the
+  ambiguity check sees only a brief bound through the pipeline or `-Prompt` (either beside
+  `-BriefFile` is exit 2); bytes piped into `pwsh -File` from an outer shell are never bound and go
+  unseen, so the launch form is the `& <wrapper>.ps1 ...` call from the PowerShell tool, as the
+  skills write it.
 - **Every wrapper runs in the BACKGROUND by default** (`run_in_background: true`), with a timeout of
   at least 3600000 ms: a command expected to run over about five minutes runs in the background
   (`docs/LOOP.md` § Role boundaries). A foreground shell call is killed at its cap (10 minutes),
@@ -138,8 +148,8 @@ resume at all is `/pnp:review` Step 3 and `/pnp:qa` Step 3b.
 - **The state file is PER ROLE and PER TICKET.** `codex-review.ps1` / `codex-review.sh` read and
   write `<scratchDir>/last-review-session.<key>.txt`; `codex-qa.ps1` / `codex-qa.sh` read and write
   `<scratchDir>/last-qa-session.<key>.txt`. Neither names the other's file anywhere, so a QA run can
-  never hijack a Reviewer resume. **The key comes from the brief on stdin**, the same way on a cold
-  run and on a bare resume: the first line `Ticket: <REF>` (`<REF>` = 1-64 characters of
+  never hijack a Reviewer resume. **The key comes from the brief** (the brief file or stdin), the
+  same way on a cold run and on a bare resume: the first line `Ticket: <REF>` (`<REF>` = 1-64 characters of
   `A-Za-z0-9_.-`, starting with a letter or digit), else the first line `PLAN: <folder>` (the key is
   the folder's last segment, under the same character rule), else NO key and the legacy unkeyed file
   `last-review-session.txt` / `last-qa-session.txt`. A `Ticket:` or `PLAN:` line whose value fails
@@ -202,14 +212,21 @@ material blockers in one round.
 
 ```powershell
 scripts\native\ps\codex-review.ps1 -ProjectRoot <root> -Prompt "Review the diff on branch <b> for ticket <ref>. Risk threshold: <sev>. Stop condition: <cond>. Report pass/pass-with-notes/fail with all blockers in one round."
-# or, for a long brief:
-Get-Content .\review-brief.txt -Raw | scripts\native\ps\codex-review.ps1 -ProjectRoot <root>
+# or, for a long brief - the launch form, the brief in its per-ticket file:
+scripts\native\ps\codex-review.ps1 -ProjectRoot <root> -BriefFile <root>/<scratchDir>/<key>-review-brief.txt
+# the stdin fallback:
+Get-Content <root>/<scratchDir>/<key>-review-brief.txt -Raw | scripts\native\ps\codex-review.ps1 -ProjectRoot <root>
 ```
 
 ```bash
-# linux / macos - the brief arrives on stdin, there is no prompt flag
-cat ./review-brief.txt | bash scripts/native/sh/codex-review.sh --project-root <root>
+# linux / macos - the brief comes from --brief-file (or stdin), there is no prompt flag
+bash scripts/native/sh/codex-review.sh --project-root <root> --brief-file <root>/<scratchDir>/<key>-review-brief.txt
+# the stdin fallback:
+cat <root>/<scratchDir>/<key>-review-brief.txt | bash scripts/native/sh/codex-review.sh --project-root <root>
 ```
+
+`<key>` is the session-state key above - the brief's `Ticket:` line, a plan pass the `PLAN:`
+folder's last segment - so each ticket's brief has its own file.
 
 **The review class.** `codex-review.*` takes an optional `-Class plan|code|docs` (`--class` on the
 bash channel) and passes it to the resolver, so the `-m` model and the `model_reasoning_effort`
@@ -222,11 +239,11 @@ at its first column, is refused (exit 2) while the plan folder its `PLAN:` line 
 `plan-gate.js --check` - the mechanical contract or the stamp (`/pnp:review` § Plan-readiness mode).
 
 ```powershell
-Get-Content .\review-brief.txt -Raw | scripts\native\ps\codex-review.ps1 -ProjectRoot <root> -Class docs
+scripts\native\ps\codex-review.ps1 -ProjectRoot <root> -Class docs -BriefFile <root>/<scratchDir>/<key>-review-brief.txt
 ```
 
 ```bash
-cat ./review-brief.txt | bash scripts/native/sh/codex-review.sh --project-root <root> --class docs
+bash scripts/native/sh/codex-review.sh --project-root <root> --class docs --brief-file <root>/<scratchDir>/<key>-review-brief.txt
 ```
 
 ## Two QA surfaces (why the split)
@@ -255,8 +272,8 @@ scripts\native\ps\codex-qa.ps1 -ProjectRoot <root> -Prompt "QA (artifact judge) 
 ```
 
 ```bash
-# linux / macos - same brief, delivered on stdin
-cat ./qa-brief.txt | bash scripts/native/sh/codex-qa.sh --project-root <root>
+# linux / macos - same brief, from its per-ticket file (the stdin fallback as for the Reviewer)
+bash scripts/native/sh/codex-qa.sh --project-root <root> --brief-file <root>/<scratchDir>/<key>-qa-brief.txt
 ```
 
 If no usable artifacts exist (the run never produced them / they are unreadable), QA reports
@@ -293,7 +310,8 @@ widening.
 ## Notes
 
 - All three wrapper scripts - in both channels - are thin: they only prepend the proven, locked flags
-  and forward the prompt via stdin. Read them before trusting them. The bash channel additionally
+  and forward the prompt to Codex via stdin (the review and QA wrappers read it from
+  `-BriefFile` / `--brief-file` or from their own stdin). Read them before trusting them. The bash channel additionally
   shells out to `node` once to read the resolver's JSON snapshot: node is a hard prerequisite of this
   plugin, `jq` is not.
 - Reviewer and QA are read-only by OS sandbox. **QAL is not read-only** - its containment is

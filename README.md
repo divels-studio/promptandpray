@@ -19,7 +19,7 @@ Born in a real production project, then extracted and genericized.
 
 ## Status
 
-**v0.3.6. Public since 0.2.0.**
+**v0.3.7. Public since 0.2.0.**
 
 What is here:
 
@@ -47,7 +47,11 @@ What is here:
   session it raises a dialog on the git forms the `ask` rules never spell out - `git.exe` outside
   push/merge/rebase, any `git -C <path> ...`, a wrapper Claude Code does not strip such as `sudo` -
   while everything the harness already gates by itself (chained subcommands, `timeout`-style
-  wrappers, `NAME=value` prefixes) stays silent. The self-check holds its verb list against the
+  wrappers, `NAME=value` prefixes) stays silent. The same hook file carries the habit guard: for
+  every actor, on both shell tools, a deny with a hint for a pipe into `tail` / `head` /
+  `Select-Object -First|-Last`, a `cd` prefix and `git -c`. The deny-direction gates (Gate 1/3,
+  Gate 4) carry `onFailure: "block"` - observed on Claude Code 2.1.316, a hook that cannot start
+  blocks the call. The self-check holds its verb list against the
   shipped ask-ruleset, so a rule added there cannot silently outrun the gate. Both layers cover both
   shells: every ask rule ships as a `Bash(<X>)` / `PowerShell(<X>)` mirror pair, asserted in both
   directions, and the gate judges each command in its own tool's dialect - PowerShell splits

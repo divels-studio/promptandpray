@@ -22,7 +22,10 @@ explicit project root because the payload has no project of its own:
   `/pnp:update`, never a guessed row; a MISSING file keeps the factory fallback and adds the factory
   pass counts (2 / 1 / 1). Without the flag the output is byte-identical to what it always was.
 - `codex-review.*`, `codex-qa.*` - read-only Codex hosts; `-C` is the caller's project root, the
-  sandbox and approval flags are literals, the brief arrives on stdin. `codex-review.*` also takes
+  sandbox and approval flags are literals, the brief is read from the file `-BriefFile <path>` /
+  `--brief-file <path>` names (the skills' launch form: a missing, unreadable, empty or
+  whitespace-only file, or the flag beside a non-empty stdin, is exit 2) or, without the flag, from
+  stdin, and reaches Codex on stdin either way. `codex-review.*` also takes
   the optional `-Class` / `--class`, hands it to the resolver and uses that row's model and effort.
   The review wrapper passes every brief through `scripts/engine/plan-gate.js`: a `plan`-class run,
   or a brief carrying a `Class: plan` line at its first column, is refused (exit 2) while the plan

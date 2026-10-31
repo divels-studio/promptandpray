@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Invoke QA on the Codex engine (read-only artifact judge).
-# Bash mirror of scripts/native/ps/codex-qa.ps1 - same locked flags, same stdin-only contract.
+# Bash mirror of scripts/native/ps/codex-qa.ps1 - same locked flags, same stdin / brief-file contract.
 #
 # QA is the read-only "judge over evidence" surface. It does NOT drive a browser itself - a
 # Codex-launched browser cannot run under any restrictive sandbox (docs/QA_BROWSER_INVESTIGATION.md).
@@ -20,9 +20,17 @@
 # exploratory browsing there is a separate, operator-gated surface - QAL
 # (scripts/native/sh/codex-qal.sh) - which is NOT read-only. See docs/CODEX_REVIEW_QA_RECIPE.md.
 #
-# THE BRIEF ARRIVES ON STDIN, AND ONLY ON STDIN. There is deliberately no prompt flag: text that
-# never reaches the option parser cannot inject a CLI option. An empty or whitespace-only brief is
-# refused (exit 2) rather than sent.
+# THE BRIEF ARRIVES ON STDIN OR FROM A FILE, NEVER ON ARGV. There is deliberately no prompt flag:
+# text that never reaches the option parser cannot inject a CLI option. An empty or whitespace-only
+# brief is refused (exit 2) rather than sent.
+#
+# --brief-file <path> is OPTIONAL: the brief is read from that file instead of stdin - the per-ticket
+# brief file <scratchDir>/<key>-qa-brief.txt, keyed like the session-state file, so the launch command
+# keeps one constant prefix an allow rule can match. A missing, unreadable, empty or whitespace-only
+# file is exit 2 before any state read and any engine start; --brief-file together with a non-empty
+# brief on stdin is exit 2 (ambiguous). For that check stdin is read ONCE, bounded to 64 KiB and 2
+# seconds, so an open stdin never hangs the run; a stdin that fills the bound is refused unread. Without the flag the brief is read from stdin exactly as before. The
+# session key below is read from the brief whichever way it arrived.
 #
 # --project-root <path> is REQUIRED: the plugin payload has no project of its own, so the caller
 # (the /pnp:qa skill, Step 0) resolves the project root and passes it in. It is the cwd Codex is
@@ -41,17 +49,28 @@
 # read of the whole evidence set.
 #
 # EXAMPLE:
-#   cat .aiwf/qa-brief.txt | bash scripts/native/sh/codex-qa.sh --project-root /path/to/repo
-#   cat .aiwf/qa-brief.txt | bash scripts/native/sh/codex-qa.sh --project-root /path/to/repo --resume
+#   bash scripts/native/sh/codex-qa.sh --project-root /path/to/repo --brief-file .aiwf/<key>-qa-brief.txt
+#   bash scripts/native/sh/codex-qa.sh --project-root /path/to/repo --resume --brief-file .aiwf/<key>-qa-brief.txt
+#   cat .aiwf/<key>-qa-brief.txt | bash scripts/native/sh/codex-qa.sh --project-root /path/to/repo --resume
 set -euo pipefail
 
 PROJECT_ROOT=''
 RESUME=0
 RESUME_ID=''
+BRIEF_FILE=''
+HAS_BRIEF_FILE=0
 
 fail() {
   printf 'codex-qa: %s\n' "$1" >&2
   exit 2
+}
+
+# True when the text carries at least one non-whitespace character.
+has_text() {
+  case "$1" in
+    *[![:space:]]*) return 0 ;;
+  esac
+  return 1
 }
 
 while [ $# -gt 0 ]; do
@@ -76,12 +95,47 @@ while [ $# -gt 0 ]; do
       # an empty --class degrading into the classless host in the review wrapper.
       [ -n "$2" ] || fail '--resume-id was given an empty session id. Pass a real one, or use --resume with no argument to replay the recorded session.'
       RESUME=1; RESUME_ID="$2"; shift 2 ;;
+    --brief-file)
+      [ $# -ge 2 ] || fail '--brief-file needs a value (the path of the brief file).'
+      BRIEF_FILE="$2"; HAS_BRIEF_FILE=1; shift 2 ;;
     *)
-      fail "unknown argument '$1' - the brief is delivered on STDIN, never on argv." ;;
+      fail "unknown argument '$1' - the brief is delivered on STDIN or through --brief-file <path>, never on argv." ;;
   esac
 done
 
 [ -n "$PROJECT_ROOT" ] || fail 'no --project-root <path>. The plugin payload has no project of its own: pass the resolved project root.'
+
+# THE BRIEF FROM A FILE (--brief-file <path>). Read HERE, before the role resolution, any state read
+# and any engine start, so every refusal below costs nothing. The branch is on whether the flag was
+# SUPPLIED, never on its value: an explicitly empty path is a missing file, not "no flag". A brief that
+# also arrived on stdin makes the call ambiguous and is refused rather than one of the two silently
+# winning - and stdin is read with a BOUND, never to its end: `[ -t 0 ]` is a terminal (nothing
+# piped); otherwise ONE read takes at most 64 KiB within at most 2 seconds, so a stdin that is an
+# open pipe - silent, or one that delivered a byte and stays open - cannot hang the run. The read's
+# status is captured, not tested: 0 (the 64 KiB were read), 1 (end of input) and >128 (the time
+# bound hit; the bytes read so far stay in the variable) are all decided by the bytes alone. Two
+# cases are ambiguous: a stdin that fills the bound is refused unread (the cap reached means stdin
+# carries data beside the flag, whatever the 64 KiB were), and a shorter read that carries text. A
+# leading UTF-8 byte-order mark of the file is dropped, as the PowerShell mirror's UTF-8 read drops it.
+if [ "$HAS_BRIEF_FILE" -eq 1 ]; then
+  if [ ! -t 0 ]; then
+    STDIN_BRIEF=''
+    STDIN_STATUS=0
+    IFS= read -r -d '' -t 2 -N 65536 STDIN_BRIEF || STDIN_STATUS=$?
+    if [ "${#STDIN_BRIEF}" -ge 65536 ]; then
+      fail "--brief-file '$BRIEF_FILE' was given while stdin filled the 64 KiB bound - ambiguous (refused unread); pass the brief one way only."
+    fi
+    if has_text "$STDIN_BRIEF"; then
+      fail "--brief-file '$BRIEF_FILE' was given together with a brief on stdin - ambiguous; pass the brief one way only (stdin read status $STDIN_STATUS)."
+    fi
+  fi
+  if [ -z "$BRIEF_FILE" ] || [ ! -f "$BRIEF_FILE" ]; then
+    fail "the brief file does not exist (or is not a file): '$BRIEF_FILE'. Write the brief there first."
+  fi
+  PROMPT="$(cat -- "$BRIEF_FILE" 2>/dev/null)" || fail "the brief file could not be read: '$BRIEF_FILE'."
+  PROMPT="${PROMPT#$'\xEF\xBB\xBF'}"
+  has_text "$PROMPT" || fail "the brief file is empty or whitespace-only: '$BRIEF_FILE'. Write the brief there first."
+fi
 
 # Engine-neutral role resolution. This Codex wrapper only runs when the `qa` role is assigned to the
 # `codex` engine in the project's .claude/aiwf-native/roles.json. The MODEL comes from the resolver
@@ -151,8 +205,11 @@ if [ -d "$PROJECT_ROOT" ]; then PROJECT_ROOT_ABS="$(cd "$PROJECT_ROOT" && pwd)";
 # on the command line, so no caller text (even one starting with "--", e.g. --ignore-user-config or
 # --dangerously-bypass-approvals-and-sandbox) can reach the option parser. The brief is read HERE,
 # before the state file is named, because the session key below comes out of it; it is refused
-# further down if EMPTY, before a paid pass is spent, and otherwise handed on unchanged.
-PROMPT="$(cat)"
+# further down if EMPTY, before a paid pass is spent, and otherwise handed on unchanged. With
+# --brief-file it was read from that file above instead, and stdin is not read again.
+if [ "$HAS_BRIEF_FILE" -eq 0 ]; then
+  PROMPT="$(cat)"
+fi
 
 # THE STATE FILE IS ALSO PER TICKET. Two sessions on one working tree - two tickets' QA passes - must
 # not resume each other's conversation, so the file name carries a KEY read from the brief itself,
@@ -251,7 +308,7 @@ fi
 
 # The brief read above is refused here if EMPTY (or whitespace-only), before a paid pass is spent.
 if [ -z "$(printf '%s' "$PROMPT" | tr -d '[:space:]')" ]; then
-  fail 'No prompt provided. Pipe the brief in: cat brief.txt | bash scripts/native/sh/codex-qa.sh --project-root <path>'
+  fail 'No prompt provided. Pass --brief-file <path> or pipe the brief in: cat <key>-qa-brief.txt | bash scripts/native/sh/codex-qa.sh --project-root <path>'
 fi
 
 # THE SESSION ID IS READ FROM CODEX'S OWN SESSION STORE, NOT FROM THIS RUN'S OUTPUT.

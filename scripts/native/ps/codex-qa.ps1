@@ -22,9 +22,17 @@
 
 .PARAMETER Prompt
   The QA brief (which artifacts to read, acceptance criteria, risk threshold, stop condition).
-  Pass with -Prompt or pipe it (use -Raw for long briefs). It is delivered to Codex via STDIN
-  only and never placed on the command line, so a brief cannot inject a CLI option. Errors if
-  neither given.
+  Pass with -Prompt or pipe it (use -Raw for long briefs), or name its file with -BriefFile. It is
+  delivered to Codex via STDIN only and never placed on the command line, so a brief cannot inject
+  a CLI option. Errors if none is given.
+
+.PARAMETER BriefFile
+  The path of a file holding the QA brief (read as UTF-8) - the per-ticket brief file
+  <scratchDir>\<key>-qa-brief.txt, keyed like the session-state file, so the launch command keeps one
+  constant prefix an allow rule can match. A missing, unreadable, empty or whitespace-only file is
+  exit 2 before any state read and any engine start; -BriefFile together with a non-empty brief on
+  the pipeline (or -Prompt) is exit 2 (ambiguous). Without it the pipeline / -Prompt contract is
+  unchanged. The session key below is read from the brief whichever way it arrived.
 
 .PARAMETER ProjectRoot
   Absolute path to the project repository - the cwd Codex is given (`-C`). REQUIRED: the plugin
@@ -54,7 +62,13 @@
   scripts\native\ps\codex-qa.ps1 -ProjectRoot 'C:\repo' -Prompt "QA ticket Y: read the E2E report/traces under ... against criteria ..."
 
 .EXAMPLE
-  Get-Content .\qa-brief.txt -Raw | scripts\native\ps\codex-qa.ps1 -ProjectRoot 'C:\repo' -Resume
+  scripts\native\ps\codex-qa.ps1 -ProjectRoot 'C:\repo' -BriefFile .aiwf\<key>-qa-brief.txt
+
+.EXAMPLE
+  scripts\native\ps\codex-qa.ps1 -ProjectRoot 'C:\repo' -Resume -BriefFile .aiwf\<key>-qa-brief.txt
+
+.EXAMPLE
+  Get-Content .aiwf\<key>-qa-brief.txt -Raw | scripts\native\ps\codex-qa.ps1 -ProjectRoot 'C:\repo' -Resume
 #>
 [CmdletBinding()]
 param(
@@ -62,8 +76,41 @@ param(
   [string] $Prompt,
   [Parameter(Mandatory)][string] $ProjectRoot,
   [switch] $Resume,
-  [string] $ResumeId
+  [string] $ResumeId,
+  [string] $BriefFile
 )
+
+# THE BRIEF FROM A FILE (-BriefFile <path>). Read HERE, before the role resolution, any state read and
+# any engine start, so every refusal below costs nothing. The branch is on whether the parameter was
+# SUPPLIED, never on its value: an explicitly empty path is a missing file, not "no flag". A brief
+# that also arrived on the pipeline (or through -Prompt) makes the call ambiguous and is refused
+# rather than one of the two silently winning.
+if ($PSBoundParameters.ContainsKey('BriefFile')) {
+  if (-not [string]::IsNullOrWhiteSpace($Prompt)) {
+    Write-Error "-BriefFile '$BriefFile' was given together with a brief on the pipeline (or -Prompt) - ambiguous; pass the brief one way only."
+    exit 2
+  }
+  $briefPath = $BriefFile
+  if (-not [string]::IsNullOrWhiteSpace($briefPath) -and -not [System.IO.Path]::IsPathRooted($briefPath)) {
+    $briefPath = Join-Path (Get-Location).Path $briefPath
+  }
+  if ([string]::IsNullOrWhiteSpace($briefPath) -or -not (Test-Path -LiteralPath $briefPath -PathType Leaf)) {
+    Write-Error "the brief file does not exist (or is not a file): '$BriefFile'. Write the brief there first."
+    exit 2
+  }
+  $briefText = $null
+  try {
+    $briefText = [System.IO.File]::ReadAllText($briefPath, [System.Text.Encoding]::UTF8)
+  } catch {
+    Write-Error "the brief file could not be read: '$BriefFile' ($($_.Exception.Message))."
+    exit 2
+  }
+  if ([string]::IsNullOrWhiteSpace($briefText)) {
+    Write-Error "the brief file is empty or whitespace-only: '$BriefFile'. Write the brief there first."
+    exit 2
+  }
+  $Prompt = $briefText
+}
 
 # Engine-neutral role resolution. This Codex wrapper only runs when the `qa` role is assigned to
 # the `codex` engine in the project's .claude/aiwf-native/roles.json. The MODEL comes from the
@@ -233,7 +280,7 @@ if ($IsResume) {
 }
 
 if ([string]::IsNullOrWhiteSpace($Prompt)) {
-  Write-Error 'No prompt provided. Pass -Prompt "<brief>" or pipe one: Get-Content brief.txt -Raw | scripts\native\ps\codex-qa.ps1 -ProjectRoot <path>'
+  Write-Error 'No prompt provided. Pass -BriefFile <path>, -Prompt "<brief>", or pipe one: Get-Content <key>-qa-brief.txt -Raw | scripts\native\ps\codex-qa.ps1 -ProjectRoot <path>'
   exit 2
 }
 

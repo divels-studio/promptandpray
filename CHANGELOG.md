@@ -4,6 +4,77 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.3.7] - 2026-10-31
+
+Every rule stands where the role that must obey it acts: the brief and record skeletons, the
+rendered files and a hook carry the rules that broke while they lived away from the point of action.
+
+### Added
+
+- **The habit guard inside the Gate 4 hook (RULEHOME-002)** - a second responsibility of the
+  git-verb hook file (the hook files stay three), for every actor, both dialects, PowerShell
+  case-folded: it DENIES with a hint and never rewrites.
+  - A pipe into `tail`, `head`, or `Select-Object` / `Select` with `-First` / `-Last` - hint: run to
+    a log file outside the repository and Read it.
+  - `cd` / `chdir` / `pushd` / `Set-Location` / `sl` leading a top-level subcommand - hint: the
+    tool's own directory flag; `git -c <k=v>` - hint: drop `-c` (the ask rule stays the backstop).
+  - A recogniser, not a parser: nothing inside quotes or a nested shell is judged.
+- **`onFailure: "block"` on the deny-direction gates (RULEHOME-002)** - the Gate 1/3 and Gate 4
+  hook commands block the call when the hook cannot start; Gate 2 keeps its ASK direction and no
+  `onFailure`. Observed on Claude Code 2.1.316; the self-check cannot observe the host's failure
+  handling (`docs/LOOP.md` § Enforcement of Writer-only writes).
+- **Gate 4 judges `Monitor` in the Bash dialect (RULEHOME-002)** - git verbs and habits alike.
+- **`-BriefFile` / `--brief-file` and per-ticket brief files (RULEHOME-002)** - the review and QA
+  wrappers (both channels, not QAL) read the brief from the flag's path; without it stdin as in
+  0.3.6.
+  - A missing, unreadable, empty or whitespace-only file, or the flag beside a non-empty stdin, is
+    exit 2 before any paid call; the 0.3.6 key rule is unchanged.
+  - The skills write `<scratchDir>/<key>-review-brief.txt` (QA: `<key>-qa-brief.txt`; the plan
+    skill's round file `<key>-readiness-round.txt`) and launch with the path after the flag - a
+    constant command prefix, no pipe.
+- **The Writer brief's standing lines and the record's closing checklist (RULEHOME-001)** - the
+  Writer brief skeleton carries the payload's standing lines (HEAD guard, no dialogs, the
+  background threshold, the reply length, the commit with `Refs:`) plus one project-lines slot; the
+  record skeleton gains a diff-review section and a closing checklist.
+- **Nothing in the scratch directory is deleted unmoved (RULEHOME-002)** - before a delete every
+  file is found standing in the tree (a grep of its headings and items) or moved into git first;
+  the record names each file's destination; `/pnp:plan`, `/pnp:mission` and `/pnp:work` carry it.
+
+### Changed
+
+- **A QA pass after the review rides the ticket's word (RULEHOME-001)** - the first passes of two
+  roles on one R2 runtime route; each further pass still takes its own word.
+- **`/pnp:plan` Step 1 reads the recorded state first (RULEHOME-001)** - it asks only what has no
+  recorded answer.
+- **QA runs `--trace retain-on-failure` (RULEHOME-001)** - the JSON report is the evidence of a
+  passing test, the extracted trace that of a failed one; `BLOCKED` only when the JSON report is
+  missing or unreadable.
+- **One resume policy (RULEHOME-001)** - a verification pass resumes bare by default.
+- **Rule-bearing text is shown in the operator's language (RULEHOME-001)** - written in English,
+  shown in `operator.language`, the two saying the same.
+- **The fifth roadmap write (RULEHOME-001)** - a finding line is marked done with its pointer, or
+  removed, when the commit that closes it lands.
+- **One background threshold (RULEHOME-001)** - a command expected to run over about five minutes
+  runs in the background with a timeout of at least 3600000 ms, for every role.
+- **The Writer digest replaces the WORKFLOW reading (RULEHOME-001)** - the Writer agent carries a
+  digest of the ticket brief contract.
+- **The brief files' lifetime (RULEHOME-001)** - kept between the dispatches of one ticket, deleted
+  at its close by the ticket-end cleanup; the delete dialog is the gate.
+- **Paid passes of two sessions may be dispatched at once (RULEHOME-002)** - "dispatched one at a
+  time" is dropped: with per-ticket brief and state files only one executing session per tree stays
+  operator-held.
+
+### Fixed
+
+- **Four contradictions in the doctrine closed (RULEHOME-001)** - the handoff-file sentence, the
+  planner's Gate 2 exception, the auto-mode apply sentence, the six field names.
+
+**Consumer action:** the review / QA launch form changed - a local allow rule written on the 0.3.6
+pipe form stops matching; write it again on the new prefix (the payload ships only the blanket
+allow).
+
+Retires local rules: a QA pass after the review rides the ticket's word; the per-ticket review/QA brief file and its launch through the flag; one explicit resume policy; `/pnp:plan` asks only what is unrecorded; `--trace retain-on-failure`; rule-bearing text shown in the operator's language; no `cd` prefix, no pipe into `tail`/`head`, no `git -c` (now the habit guard); the ticket-end scratch cleanup with the delete dialog as the gate; the short operator channel (counts and names, never `file:line`); parallel-by-default units; `/pnp:update --apply` under auto mode.
+
 ## [0.3.6] - 2026-10-23
 
 The Codex session-state file is keyed per ticket, so a ticket's pass and a plan's readiness pass on

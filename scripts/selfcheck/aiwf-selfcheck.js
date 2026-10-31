@@ -1582,7 +1582,7 @@ function sectionGate4() {
   check('the SAME command from the Writer -> silent (the Writer is not a background agent)',
     silent(B(WRITER, 'git reset --hard')));
   check('non-writer subagent + a COMPOUND ask-class command -> DENY (the form does not buy a pass)',
-    denied(B({ agent_id: 'a2', agent_type: 'Explore' }, 'cd X && git reset --hard')));
+    denied(B({ agent_id: 'a2', agent_type: 'Explore' }, 'echo X && git reset --hard')));
   check('subagent identities are read by PRESENCE: agent_id alone -> DENY',
     denied(B({ agent_id: 'a3' }, 'git commit -m x')));
   check('agent_type explicitly null -> DENY (incomplete identity is not the main session)',
@@ -1664,8 +1664,12 @@ function sectionGate4() {
     asked(B(MAIN, 'git\ncommit -m x')));
   check('`git -ck=v reset --hard` (glued -c) -> ASK (the rule prefix is "git -c ", with the space)',
     asked(B(MAIN, 'git -cuser.name=x reset --hard')));
-  check('`git -c k=v commit -m y` -> silent (the control: Bash(git -c:*) matches this byte for byte)',
-    silent(B(MAIN, 'git -c user.name=x commit -m y')));
+  // The spaced `git -c k=v` form never reaches the rule test from the hook any more: the habit guard
+  // denies it first (drop -c). The rule-match half - Bash(git -c:*) matches it byte for byte - is
+  // pinned on shippedRuleMatches below, and the glued form above is the control that still asks.
+  check('`git -c k=v commit -m y` -> DENY by the habit guard (drop -c), not an ask',
+    denied(B(MAIN, 'git -c user.name=x commit -m y'))
+    && B(MAIN, 'git -c user.name=x commit -m y').reason.includes('habit'));
   check('one bad subcommand decides the whole command -> ASK (`git push ... && sudo git reset --hard`)',
     asked(B(MAIN, 'git push origin main && sudo git reset --hard')));
   check('a verb inside a command substitution -> ASK (the harness reaches in; this decomposition does not)',
@@ -1682,8 +1686,8 @@ function sectionGate4() {
   check('bare `git commit -m x` -> silent (the rule matches it directly)',
     silent(B(MAIN, 'git commit -m x')));
   check('bare `git push origin main` -> silent', silent(B(MAIN, 'git push origin main')));
-  check('`cd <path> && git commit -m y` -> silent (the harness matches the git SUBCOMMAND)',
-    silent(B(MAIN, `cd ${ROOT} && git commit -m y`)));
+  check('`echo <x> && git commit -m y` -> silent (the harness matches the git SUBCOMMAND)',
+    silent(B(MAIN, `echo ${ROOT} && git commit -m y`)));
   check('`timeout 30 git commit -m x` -> silent (a stripped wrapper leaves a rule-matched command)',
     silent(B(MAIN, 'timeout 30 git commit -m x')));
   check('`nice -n 10 git push origin main` -> silent (stripped wrapper with its own option)',
@@ -1743,8 +1747,8 @@ function sectionGate4() {
     silent(P(MAIN, 'git commit -m x')) && silent(P(MAIN, 'git push origin main'))
     && silent(P(MAIN, 'git.exe push origin main')));
   check('PowerShell: the documented separators split the command (`;`, `|`, `&&`, `||`)',
-    silent(P(MAIN, 'cd X; git commit -m y')) && silent(P(MAIN, 'cd X && git commit -m y'))
-    && silent(P(MAIN, 'cd X || git commit -m y')) && silent(P(MAIN, 'git commit -m y | Out-String')));
+    silent(P(MAIN, 'Write-Output X; git commit -m y')) && silent(P(MAIN, 'Write-Output X && git commit -m y'))
+    && silent(P(MAIN, 'Write-Output X || git commit -m y')) && silent(P(MAIN, 'git commit -m y | Out-String')));
   // `&` is the CALL OPERATOR in PowerShell, not a list separator. Splitting on it would manufacture
   // the fragment `git push` out of a command whose first token is `&` and call it rule-matched.
   check('PowerShell: `& git push` (the call operator) -> ASK, because `&` is not a separator there',
@@ -1786,6 +1790,120 @@ function sectionGate4() {
   // stricter of the two on every axis - so an unexpected tool can only make this gate ask more.
   check('an unknown tool_name is judged in the stricter dialect (`timeout 30 git commit` -> ASK, not silent)',
     asked(runHook(GATE4, envelope(MAIN, 'timeout 30 git commit -m x', 'SomeFutureShell'))));
+
+  // --- THE HABIT GUARD (D-14), the file's SECOND responsibility ---------------------------------
+  // Five shapes over the top-level subcommands, in the tool's own dialect (PowerShell case-folded),
+  // denied WITH A HINT for EVERY actor - identity is not consulted - and never rewritten. Every
+  // deny row runs once per actor, and every shape has its nearest PASS twin below: inside quotes or
+  // a nested shell, not after a pipe, a `-c` that is not the global one. The check runs BEFORE the
+  // git-verb logic, which the order row proves: a foreign subagent's `cd X && git reset --hard` is
+  // denied as a habit, not as a verb.
+  {
+    const T = (tool, identity, command) => runHook(GATE4, envelope(identity, command, tool));
+    const HINT_LOG = 'run to a log file outside the repository and Read it';
+    const HINT_DIR = "use the tool's own directory flag; a command runs from the repository root";
+    const HINT_C = 'drop -c; the warning it silences is noise';
+    const habitDenied = (r, hint) => denied(r) && r.reason.includes('[AIWF-G4 habit guard]')
+      && r.reason.includes('habit:') && r.reason.includes(hint);
+    const ACTORS = [MAIN, WRITER, SUB];
+    const HABIT_DENY = [
+      ['Bash', 'a pipe into tail', 'node scripts/x.js | tail -5', HINT_LOG],
+      ['Bash', 'a `|&` pipe into tail', 'node scripts/x.js |& tail -n 20', HINT_LOG],
+      ['Bash', 'a pipe into head', 'git log --oneline | head -3', HINT_LOG],
+      ['Bash', 'a pipe into head inside a command substitution (outside quotes is top-level)', 'X=$(git log | head -1)', HINT_LOG],
+      ['Bash', 'a pipe into Select-Object -First', 'npm test | Select-Object -First 5', HINT_LOG],
+      ['Bash', 'a pipe into Select -Last', 'npm test | Select -Last 5', HINT_LOG],
+      ['Bash', 'a cd prefix', 'cd scripts && node x.js', HINT_DIR],
+      ['Bash', 'cd as the first token of a LATER subcommand', 'node x.js; cd scripts', HINT_DIR],
+      ['Bash', 'a cd after a lone `&` (a background list: `&` IS a separator on Bash)', 'echo X & cd scripts', HINT_DIR],
+      ['Bash', 'a cd after `\\>&` (an ESCAPED `>` is no redirect, so the `&` is a lone one)', 'echo \\>& cd scripts', HINT_DIR],
+      ['Bash', 'a cd after a real redirect and then a lone `&`', 'node x 2>&1 & cd scripts', HINT_DIR],
+      ['Bash', 'chdir', 'chdir scripts', HINT_DIR],
+      ['Bash', 'pushd', 'pushd scripts && node x.js', HINT_DIR],
+      ['Bash', 'Set-Location', 'Set-Location scripts', HINT_DIR],
+      ['Bash', 'sl', 'sl scripts', HINT_DIR],
+      ['Bash', 'the global git -c <k=v>', 'git -c core.autocrlf=false status', HINT_C],
+      ['Bash', 'the global git.exe -c <k=v>', 'git.exe -c core.x=y log', HINT_C],
+      ['PowerShell', 'a pipe into tail', 'node x.js | tail -5', HINT_LOG],
+      ['PowerShell', 'a pipe into head', 'git log | head -3', HINT_LOG],
+      ['PowerShell', 'select-object -first (case-folded)', 'Get-Content x.log | select-object -first 5', HINT_LOG],
+      ['PowerShell', 'Select -Last', 'Get-Content x.log | Select -Last 3', HINT_LOG],
+      ['PowerShell', 'SELECT -FIRST (case-folded)', 'Get-Content x.log | SELECT -FIRST 2', HINT_LOG],
+      ['PowerShell', 'SL (case-folded)', 'SL scripts; node x.js', HINT_DIR],
+      ['PowerShell', 'Set-Location', 'Set-Location scripts', HINT_DIR],
+      ['PowerShell', 'cd', 'cd scripts', HINT_DIR],
+      ['PowerShell', 'CD (case-folded)', 'CD scripts', HINT_DIR],
+      ['PowerShell', 'chdir after `&&`', 'node x.js && chdir scripts', HINT_DIR],
+      ['PowerShell', 'pushd', 'pushd scripts', HINT_DIR],
+      ['PowerShell', 'the global git -c <k=v>', 'git -c core.autocrlf=false status', HINT_C],
+      ['PowerShell', 'GIT -c (the program name folds, the flag does not)', 'GIT -c core.x=y status', HINT_C],
+    ];
+    for (const [tool, label, command, hint] of HABIT_DENY) {
+      const rs = ACTORS.map((a) => T(tool, a, command));
+      check(`habit [${tool}] ${label} -> DENY with its hint, for the main session, the Writer and a foreign subagent`,
+        rs.every((r) => habitDenied(r, hint)), `${command} -> ${rs.map((r) => r.decision).join('/')}: ${rs[0].reason.slice(0, 90)}`);
+    }
+    // The PASS twins. A pass is asserted per actor as "no habit deny" (a foreign subagent may still be
+    // denied a gated git VERB - that is the other responsibility), and as plain silence for the main
+    // session, so a habit deny cannot hide behind a decision it does not own.
+    const HABIT_PASS = [
+      ['Bash', 'the VERIFY runbook\'s Portion 2 command (`cd` inside `sh -lc \'...\'`, a nested shell)',
+        'wsl.exe -u pnp -e sh -lc \'D=$(cat /tmp/pnp-011.dir) && cd "$D/fix" && node scripts/update/test-update.mjs > "$D/fix.log" 2>&1 && grep -q "checks: [0-9]*, failures: 0" "$D/fix.log"\''],
+      ['Bash', 'a `cd` inside double quotes', 'echo "cd scripts && ls"'],
+      ['Bash', 'a pipe into tail inside double quotes', 'echo "a | tail -5"'],
+      ['Bash', 'a pipe into head inside single quotes', "grep -n 'x | head -2' notes.txt"],
+      ['Bash', '`tail -n 5 x.log` as the FIRST command (no pipe)', 'tail -n 5 x.log'],
+      ['Bash', '`||` is not a pipe (`false || tail -5 x.log`)', 'false || tail -5 x.log'],
+      ['Bash', 'a pipe into Select-Object WITHOUT -First/-Last', 'ls | Select-Object -Property Name'],
+      ['Bash', '`CD` on Bash (no case folding there)', 'CD scripts'],
+      ['Bash', '`git -c` inside a quoted string', 'git commit -m "use git -c core.x=y"'],
+      ['Bash', '`git commit -c abc` (the commit option, not the global one)', 'git commit -c abc'],
+      ['Bash', '`git -C <path> status` (-C is a different option)', `git -C ${ROOT} status`],
+      // Shape (5) is the FIRST word `git` / `git.exe`, the second exactly `-c`, the third a `<k=v>`.
+      // Gate 4 still judges these as git forms, so the main session's answer is its own, not silence.
+      ['Bash', '`GIT -c core.x=y status` (no case folding on Bash)', 'GIT -c core.x=y status', 'ask'],
+      ['Bash', '`echo git -c core.x=y` (git is not the first word)', 'echo git -c core.x=y', 'ask'],
+      ['Bash', 'a bare `git -c` (no <k=v> after it)', 'git -c'],
+      ['Bash', 'a plain `git status`', 'git status'],
+      ['Bash', 'a `cd` inside `bash -c "..."`', 'bash -c "cd scripts && node x.js"'],
+      ['PowerShell', 'a `cd` and a pipe into select -first inside double quotes', 'Write-Output "cd x; Get-Content y | select -first 1"'],
+      ['PowerShell', 'a `Set-Location` inside `pwsh -Command \'...\'`', "pwsh -NoProfile -Command 'Set-Location scripts; node x.js'"],
+      ['PowerShell', 'a pipe into Select-Object WITHOUT -First/-Last', 'Get-ChildItem | Select-Object Name'],
+      ['PowerShell', '`git -C <path> status` (the -C flag does not fold into -c)', `git -C ${ROOT} status`],
+      ['PowerShell', '`git commit -c abc`', 'git commit -c abc'],
+      ['PowerShell', 'a plain `git status`', 'git status'],
+      ['PowerShell', '`echo X & cd scripts` (`&` is the call operator here: one segment, the control)', 'echo X & cd scripts'],
+    ];
+    for (const [tool, label, command, mainExpect = 'silent'] of HABIT_PASS) {
+      const rs = ACTORS.map((a) => T(tool, a, command));
+      const mainOk = mainExpect === 'ask' ? asked(rs[0]) : silent(rs[0]);
+      check(`habit [${tool}] PASS: ${label} -> no habit deny for any actor, ${mainExpect === 'ask' ? 'Gate 4\'s own ask' : 'silent'} for the main session`,
+        mainOk && rs.every((r) => r.exit === 0 && !String(r.reason).includes('habit')),
+        `${command} -> ${rs.map((r) => r.decision).join('/')}`);
+    }
+    {
+      const r = B(SUB, 'cd X && git reset --hard');
+      check('the habit check runs BEFORE the git-verb logic (a foreign subagent\'s `cd X && git reset --hard` is denied as a habit, not as a verb)',
+        habitDenied(r, HINT_DIR) && !r.reason.includes('"reset"'), r.reason.slice(0, 90));
+    }
+    // MONITOR (D-14 (d)): Bash-matched hooks run on Monitor commands, so this gate judges them in the
+    // BASH dialect - both responsibilities. `|&` is the discriminating separator: Bash splits on it,
+    // the PowerShell dialect does not, so an unknown tool name (the stricter dialect) is the control.
+    const M = (identity, command) => runHook(GATE4, envelope(identity, command, 'Monitor'));
+    check('Monitor: `cd scripts` -> habit DENY (judged in the Bash dialect)',
+      habitDenied(M(MAIN, 'cd scripts'), HINT_DIR) && habitDenied(M(SUB, 'cd scripts'), HINT_DIR));
+    check('Monitor: a `|&` pipe into tail -> habit DENY (`|&` is a separator only in the Bash dialect)',
+      habitDenied(M(MAIN, 'npm test |& tail -5'), HINT_LOG));
+    check('...the control: the same `|&` command under an unknown tool name is judged as PowerShell, where `|&` is no pipe -> silent',
+      silent(runHook(GATE4, envelope(MAIN, 'npm test |& tail -5', 'SomeFutureShell'))));
+    check('Monitor: the git-verb logic runs in the Bash dialect too (`timeout 30 git commit -m x` -> silent: a stripped wrapper)',
+      silent(M(MAIN, 'timeout 30 git commit -m x')));
+    {
+      const r = M(SUB, 'git reset --hard');
+      check('Monitor: a foreign subagent is DENIED an ask-class verb, and the deny names the Monitor tool',
+        denied(r) && r.reason.includes('"reset"') && r.reason.includes('Blocked Monitor command'), r.reason.slice(0, 70));
+    }
+  }
 
   // --- the verb list against the shipped ruleset, in the direction that can hide a hole --------
   let hook = null;
@@ -1979,6 +2097,48 @@ function sectionGate4() {
   check('everyGitFormIsRuleMatched is FALSE when the verb is in no mappable subcommand (the empty case)',
     hook.everyGitFormIsRuleMatched('git\ncommit -m x') === false
     && hook.recognisedVerb('git\ncommit -m x') === 'commit');
+
+  // --- the habit guard and Monitor, on the pure functions ----------------------------------------
+  // The hook rows above prove the decisions; these pin the decomposition the habit shapes are judged
+  // over - which separator a segment FOLLOWS, per dialect - and the Monitor mapping, each against
+  // the value that would make it wrong.
+  if (check('the gate exports the habit recogniser and its separator-aware splitter',
+    typeof hook.habitOf === 'function' && typeof hook.habitSegmentsOf === 'function')) {
+    const afterPipe = (command, tool) => hook.habitSegmentsOf(command, tool).map((s) => s.afterPipe);
+    check('habitSegmentsOf marks the segments that FOLLOW a pipe: `|` and `|&` on Bash, not `||`, `&&`, `;` or a newline',
+      JSON.stringify(afterPipe('a | b || c ; d |& e && f\ng')) === JSON.stringify([false, true, false, false, true, false, false]));
+    check('on PowerShell `|&` is no operator: `|` splits, the `&` stays in the next segment (the control)',
+      JSON.stringify(hook.habitSegmentsOf('a |& tail', 'PowerShell').map((s) => s.text.trim())) === JSON.stringify(['a', '& tail'])
+      && JSON.stringify(hook.habitSegmentsOf('a |& tail').map((s) => s.text.trim())) === JSON.stringify(['a', 'tail']));
+    check('on Bash a lone `&` IS a separator (a background list, not a pipe) - but never inside a redirect (`2>&1`, `<&0`, `&>`)',
+      JSON.stringify(afterPipe('echo X & cd scripts')) === JSON.stringify([false, false])
+      && hook.habitSegmentsOf('node x 2>&1 | tail -5').length === 2
+      && hook.habitSegmentsOf('node x 2>&1 && echo ok').length === 2
+      && hook.habitSegmentsOf('cmd &> out.log').length === 1
+      && hook.habitSegmentsOf('cmd <&0 x').length === 1
+      && hook.habitSegmentsOf('node x 2>&1 & cd scripts').length === 2
+      // the redirect exception reads the PLAIN preceding character: an escaped `\>` is text
+      && hook.habitSegmentsOf('echo \\>& cd scripts').length === 2);
+    check('on PowerShell `&` stays text (the call operator: the control), and quotes keep a separator as text',
+      hook.habitSegmentsOf('echo X & cd scripts', 'PowerShell').length === 1
+      && hook.habitSegmentsOf('echo "a | tail -5"').length === 1
+      && hook.habitSegmentsOf("echo 'a; cd x'").length === 1
+      && hook.habitSegmentsOf('echo `; cd x', 'PowerShell').length === 1);
+    check('habitOf names the shape and its hint, and returns null where nothing is judged',
+      (hook.habitOf('a | tail -5') || {}).shape === 'pipe into tail'
+      && /log file outside the repository/.test((hook.habitOf('a | head', 'PowerShell') || {}).hint || '')
+      && (hook.habitOf('Set-Location x', 'PowerShell') || {}).shape === 'cd prefix'
+      && (hook.habitOf('git -c a=b log') || {}).shape === 'git -c'
+      && hook.habitOf('tail -5 x.log') === null && hook.habitOf('git -C /p log') === null
+      && hook.habitOf('echo git -c a=b') === null && hook.habitOf('git -c') === null
+      && hook.habitOf('git -c log') === null && hook.habitOf('GIT -c a=b log') === null
+      && (hook.habitOf('GIT -c a=b log', 'PowerShell') || {}).shape === 'git -c'
+      && hook.habitOf(null) === null && hook.habitOf('') === null);
+  }
+  check('dialectOf maps Monitor to the Bash dialect, and keeps every other non-Bash name on PowerShell',
+    hook.dialectOf('Monitor') === hook.DIALECTS[hook.TOOL_BASH]
+    && hook.dialectOf('monitor') === hook.DIALECTS[hook.TOOL_POWERSHELL]
+    && hook.dialectOf('SomeFutureShell') === hook.DIALECTS[hook.TOOL_POWERSHELL]);
 }
 
 // ---------------------------------------------------------------------------
@@ -2798,7 +2958,57 @@ function sectionHookWiring() {
     check('the wiring counts really count (a copy with Gate 4 removed reports 2 scripts and 2 plugin-root references)',
       c.scripts === 2 && c.pluginRoot === 2, `${c.scripts} scripts / ${c.pluginRoot} refs`);
   }
+  // A HOOK THAT CANNOT START (D-05 (d)). The two DENY-direction hooks carry `onFailure: "block"` on
+  // their command object, so a missing interpreter blocks the call instead of letting it through;
+  // the Gate 2 command object carries NONE, because a block there would flip its ASK direction. What
+  // the host does with the key is not observable from here (the honest limit is docs/LOOP.md's) -
+  // this asserts the shipped contract, with a control per way it could be wrong on a patched copy.
+  {
+    const shape = onFailureShape(hooks);
+    check('onFailure "block" stands on exactly the Gate 1/3 and the Gate 4 command objects, and is ABSENT on Gate 2',
+      onFailureShapeOk(shape), JSON.stringify(shape));
+    const patched = (mutate) => { const copy = JSON.parse(JSON.stringify(hooks)); mutate(copy); return onFailureShape(copy); };
+    const cmdOf = (h, script) => ((h.hooks.PreToolUse || []).find((e) => JSON.stringify(e.hooks || []).includes(script)) || { hooks: [{}] }).hooks[0];
+    const controls = [
+      ['Gate 2 given onFailure "block" (its ASK direction flipped)', (h) => { cmdOf(h, 'pretooluse-dispatch-gate.js').onFailure = 'block'; }],
+      ['Gate 4 without onFailure', (h) => { delete cmdOf(h, 'pretooluse-git-verb-guard.js').onFailure; }],
+      ['Gate 1/3 without onFailure', (h) => { delete cmdOf(h, 'pretooluse-mutation-guard.js').onFailure; }],
+      ['Gate 4\'s value changed from "block"', (h) => { cmdOf(h, 'pretooluse-git-verb-guard.js').onFailure = 'continue'; }],
+      ['Gate 1/3\'s key moved from the command object to its matcher entry', (h) => {
+        const e = (h.hooks.PreToolUse || []).find((x) => JSON.stringify(x.hooks || []).includes('pretooluse-mutation-guard.js'));
+        delete e.hooks[0].onFailure; e.onFailure = 'block';
+      }],
+    ];
+    for (const [label, mutate] of controls) {
+      const s = patched(mutate);
+      check(`the onFailure contract can FAIL: ${label} on a copy -> reported`, !onFailureShapeOk(s), JSON.stringify(s));
+    }
+  }
 }
+
+// The `onFailure` value on each gate's COMMAND object ('(absent)' when the object has no such key,
+// '(no command)' when the gate is not wired), plus every occurrence of the key in the file - so a
+// copy at the matcher level, or on a fourth object, cannot hide behind three correct lookups.
+function onFailureShape(hooks) {
+  const entries = (hooks && hooks.hooks && Array.isArray(hooks.hooks.PreToolUse)) ? hooks.hooks.PreToolUse : [];
+  const of = (script) => {
+    for (const e of entries) {
+      for (const c of (Array.isArray(e.hooks) ? e.hooks : [])) {
+        if (c && typeof c.command === 'string' && c.command.includes(script)) {
+          return Object.prototype.hasOwnProperty.call(c, 'onFailure') ? c.onFailure : '(absent)';
+        }
+      }
+    }
+    return '(no command)';
+  };
+  return {
+    gate13: of('pretooluse-mutation-guard.js'),
+    gate2: of('pretooluse-dispatch-gate.js'),
+    gate4: of('pretooluse-git-verb-guard.js'),
+    keys: (JSON.stringify(hooks || {}).match(/"onFailure":/g) || []).length,
+  };
+}
+const onFailureShapeOk = (s) => s.gate13 === 'block' && s.gate4 === 'block' && s.gate2 === '(absent)' && s.keys === 2;
 
 // ---------------------------------------------------------------------------
 // SECTION - the marketplace manifest
@@ -2884,7 +3094,7 @@ function sectionMarketplace(tmpRoot) {
 // SECTION 5 - Codex wrapper flag locks (static source checks)
 // ---------------------------------------------------------------------------
 function sectionWrappers(tmpRoot) {
-  section('WRAPPERS - locked flags, stdin-only delivery, no hardcoded model or project root');
+  section('WRAPPERS - locked flags, stdin / brief-file delivery, no hardcoded model or project root');
   const PS = path.join(PLUGIN_ROOT, 'scripts', 'native', 'ps');
   const src = (f) => readText(path.join(PS, f));
   const reviewSrc = src('codex-review.ps1');
@@ -3242,7 +3452,8 @@ function psResumeFindings(root, { execProbes = false, tmpDir = null } = {}) {
     // own $CODEX_HOME, and what is asserted is the hex the caller received and the id that landed.
     const psExecIds = [`ps-exec-${short}-bytes`, `ps-exec-${short}-session-capture`,
       `ps-exec-${short}-session-fingerprint`, `ps-exec-${short}-resume-writable`,
-      ...KEY_PROBE_IDS.map((k) => `ps-exec-${short}-${k}`)];
+      ...KEY_PROBE_IDS.map((k) => `ps-exec-${short}-${k}`),
+      ...BF_PROBE_IDS.map((k) => `ps-exec-${short}-${k}`)];
     if (wantsExec(...psExecIds)) {
       if (!PWSH) {
         add(`ps-exec-${short}-bytes`, `${file} EXECUTED: a PowerShell host is available to run the wrapper`, false,
@@ -3291,6 +3502,20 @@ function psResumeFindings(root, { execProbes = false, tmpDir = null } = {}) {
           const v = psKeyView(probe, short);
           add(rid, k.label(file, short, '-Resume'), k.ok(v, short), keyProbeDetail(v));
         }
+        // THE BRIEF FILE, EXECUTED (D-13, contract D-15): one run per row of BRIEF_FILE_PROBES, the
+        // table the bash channel runs too. The brief arrives through -BriefFile; a row with `stdin`
+        // ALSO pipes one, which is the ambiguous case.
+        for (const k of BRIEF_FILE_PROBES) {
+          if (k.shOnly) continue;
+          const rid = `ps-exec-${short}-${k.id}`;
+          if (!wantsExec(rid)) continue;
+          const probe = runPsWrapperWithStub(root, file, tmpDir, {
+            brief: k.stdin === null ? STUB_BRIEF : k.stdin, pipeBrief: k.stdin !== null, flagBrief: k.file,
+            seedState: k.seed(short), extraArgs: k.resume ? '-Resume' : '',
+          });
+          const v = psKeyView(probe, short);
+          add(rid, k.label(file, short, '-BriefFile', '-Resume'), k.ok(v, short), keyProbeDetail(v));
+        }
       }
     }
   }
@@ -3308,9 +3533,11 @@ function psResumeFindings(root, { execProbes = false, tmpDir = null } = {}) {
 // plan-gate probes write their plan folder with it). `pathFor(bin)` replaces the PATH the
 // wrapper sees (the node-less probe); by default the stub's bin is prepended to the inherited PATH.
 // `roleRecord` replaces the roles' own host (default: the hostile model and effort).
+// `pipeBrief` false runs the wrapper with NOTHING on the pipeline; `flagBrief` passes -BriefFile -
+// a string is written to a file of its own first, BF_MISSING names a path that does not exist.
 function runPsWrapperWithStub(root, wrapper, tmpDir,
   { brief = STUB_BRIEF, writeRollout = true, foreignRollout = false, seedState = null, readOnlyState = null, extraArgs = '',
-    klass = undefined, prepare = null, pathFor = null, roleRecord = null } = {}) {
+    klass = undefined, prepare = null, pathFor = null, roleRecord = null, pipeBrief = true, flagBrief = undefined } = {}) {
   const home = fs.mkdtempSync(path.join(tmpDir, 'ps-exec-run-'));
   const bin = path.join(home, 'bin');
   const projectRoot = path.join(home, 'project');
@@ -3385,8 +3612,9 @@ function runPsWrapperWithStub(root, wrapper, tmpDir,
   let classArg = wrapper === 'codex-review.ps1' ? ' -Class code' : '';
   if (klass === null) classArg = '';
   else if (typeof klass === 'string') classArg = ` -Class ${klass}`;
-  const cmd = `Get-Content -LiteralPath '${briefFile}' -Raw | `
-    + `& '${path.join(root, 'scripts', 'native', 'ps', wrapper)}' -ProjectRoot '${projectRoot}'${classArg} ${extraArgs}; `
+  const flagArg = flagBrief === undefined ? '' : ` -BriefFile '${flagBriefPath(home, flagBrief)}'`;
+  const cmd = `${pipeBrief ? `Get-Content -LiteralPath '${briefFile}' -Raw | ` : ''}`
+    + `& '${path.join(root, 'scripts', 'native', 'ps', wrapper)}' -ProjectRoot '${projectRoot}'${classArg}${flagArg} ${extraArgs}; `
     + 'exit $LASTEXITCODE';
   const r = spawnSync(PWSH, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', cmd], { env });
   return {
@@ -3472,6 +3700,19 @@ function psResumeControls() {
         apply: (r) => patchText(r, at, `'${KEY_TICKET_RE}'`, () => `'${KEY_TICKET_RE.replace('(.*?)', '(.+?)')}'`) },
       { id: `ps-exec-${short}-key-refuse-empty-plan`, label: `${file}: the PLAN: matcher back on (.+?), so an empty PLAN: line is skipped (executed)`,
         apply: (r) => patchText(r, at, `'${KEY_PLAN_RE}'`, () => `'${KEY_PLAN_RE.replace('(.*?)', '(.+?)')}'`) },
+      // The brief file (D-13, contract D-15): one sabotage per probe, each a way the flag could be
+      // wrong in production - the file read and then dropped, a missing file left to an exception, an
+      // empty or a blank file let through to the later guards, two briefs at once accepted.
+      { id: `ps-exec-${short}-bf-capture`, label: `${file}: -BriefFile reads the file and then drops it (executed)`,
+        apply: (r) => patchText(r, at, '$Prompt = $briefText', () => '$null = $briefText') },
+      { id: `ps-exec-${short}-bf-missing`, label: `${file}: the missing-file refusal removed, so a missing brief file reaches the read (executed)`,
+        apply: (r) => patchText(r, at, 'if ([string]::IsNullOrWhiteSpace($briefPath) -or -not (Test-Path -LiteralPath $briefPath -PathType Leaf)) {', () => 'if ($false) {') },
+      { id: `ps-exec-${short}-bf-empty`, label: `${file}: the empty-file refusal removed, so an empty brief file reaches the state read (executed)`,
+        apply: (r) => patchText(r, at, 'if ([string]::IsNullOrWhiteSpace($briefText)) {', () => 'if ($false) {') },
+      { id: `ps-exec-${short}-bf-blank`, label: `${file}: the empty-file refusal narrowed to EMPTY, so a whitespace-only brief file passes (executed)`,
+        apply: (r) => patchText(r, at, '[string]::IsNullOrWhiteSpace($briefText)', () => '[string]::IsNullOrEmpty($briefText)') },
+      { id: `ps-exec-${short}-bf-both`, label: `${file}: -BriefFile AND a piped brief accepted together (executed)`,
+        apply: (r) => patchText(r, at, 'if (-not [string]::IsNullOrWhiteSpace($Prompt)) {', () => 'if ($false) {') },
     );
   }
   return out;
@@ -3484,12 +3725,18 @@ function psResumeControls() {
 // constants below); their ids are listed here because both id sets are built before that table.
 const KEY_PROBE_IDS = ['key-capture', 'key-resume', 'key-foreign', 'key-refuse-traversal', 'key-refuse-space',
   'key-refuse-empty-ticket', 'key-refuse-empty-plan', 'key-plan', 'key-plan-backslash', 'key-ticket-wins'];
+// The brief-file probes (D-13, contract D-15) are the rows of BRIEF_FILE_PROBES, on both channels;
+// `bf-idle` (an open stdin that never delivers) and `bf-open` (one that delivers a byte and then
+// stays open) are bash-only rows: the PowerShell pipeline binding has no open state to block on.
+const BF_PROBE_IDS = ['bf-capture', 'bf-missing', 'bf-empty', 'bf-blank', 'bf-both'];
+const BF_SH_PROBE_IDS = [...BF_PROBE_IDS, 'bf-idle', 'bf-open', 'bf-cap'];
 const PS_EXEC_IDS = new Set([
   'ps-exec-review-bytes', 'ps-exec-review-session-capture',
   'ps-exec-qa-bytes', 'ps-exec-qa-session-capture',
   'ps-exec-review-session-fingerprint', 'ps-exec-qa-session-fingerprint',
   'ps-exec-review-resume-writable', 'ps-exec-qa-resume-writable',
   ...['review', 'qa'].flatMap((s) => KEY_PROBE_IDS.map((k) => `ps-exec-${s}-${k}`)),
+  ...['review', 'qa'].flatMap((s) => BF_PROBE_IDS.map((k) => `ps-exec-${s}-${k}`)),
 ]);
 
 // ---------------------------------------------------------------------------
@@ -3927,6 +4174,18 @@ function shWrapperFindings(root, { execProbes = true, tmpDir = null } = {}) {
           const v = shKeyView(probe);
           add(rid, k.label(wrapper, short, '--resume'), k.ok(v, short), keyProbeDetail(v));
         }
+        // THE BRIEF FILE, EXECUTED (D-13, contract D-15): the BRIEF_FILE_PROBES table the PowerShell
+        // channel runs, plus the bash-only idle-stdin row. A row with `stdin` null pipes NOTHING (an
+        // immediate end of input), never the default brief.
+        for (const k of BRIEF_FILE_PROBES) {
+          const rid = `sh-exec-${short}-${k.id}`;
+          if (!wantsExec(rid)) continue;
+          const probe = runWrapperWithStub(root, wrapper, tmpDir, k.resume ? ['--resume'] : [],
+            { brief: k.stdin === null ? '' : k.stdin, flagBrief: k.file, seedState: k.seed(short),
+              idleStdin: typeof k.idle === 'string' ? k.idle : false });
+          const v = Object.assign(shKeyView(probe), { stdin: probe.stdin });
+          add(rid, k.label(wrapper, short, '--brief-file', '--resume'), k.ok(v, short), keyProbeDetail(v));
+        }
       }
       // THE CLASS BRANCH, EXECUTED. Everything above runs the classless path; source text cannot
       // prove that --class reaches the resolver and that the ROW's host is what codex is handed, so
@@ -4086,6 +4345,56 @@ const keyProbeDetail = (v) => `exit ${v.status}; codex ${v.invoked ? 'invoked' :
   + `${v.resumedId === undefined ? '' : `; resumed ${JSON.stringify(v.resumedId)}`}; state `
   + `${v.stateFiles().map((f) => `${f}=${JSON.stringify(v.state(f))}`).join(', ') || '(no file)'}`
   + `${v.status === 2 ? `; ${firstLine(String(v.stderr).replace(/\x1b\[[0-9;]*m/g, ''))}` : ''}`;
+
+// THE BRIEF FILE (D-13, contract D-15). With -BriefFile / --brief-file the brief is read from that
+// path; a missing, empty or whitespace-only file is exit 2 with its own one-line reason BEFORE any
+// state read and any engine start; the flag AND a non-empty stdin is exit 2 (ambiguous); and the key
+// rule reads the brief whichever way it arrived. The three refusals run as a BARE RESUME with no
+// state file at all: a guard that sat after the state read would answer "no recorded session"
+// instead, so the reason text pins where the refusal happens, not only that it happens. Without the
+// flag every older executed row above is the unchanged stdin contract.
+const BF_TICKET = 'PX-010';
+const BF_BRIEF = `Ticket: ${BF_TICKET}\n${STUB_BRIEF}`;
+const BF_STDIN_BRIEF = 'a second brief, arriving on stdin beside the file\n';
+const BF_MISSING = Symbol('no brief file at that path');
+const BF_IDLE_SLEEP_S = 25;
+const BF_IDLE_TIMEOUT_MS = 15000;
+/** The path a probe passes to the flag: its own file under the probe home, or one that does not exist. */
+function flagBriefPath(home, flagBrief) {
+  const p = path.join(home, flagBrief === BF_MISSING ? 'no-such-brief.txt' : 'flag-brief.txt');
+  if (flagBrief !== BF_MISSING) fs.writeFileSync(p, flagBrief);
+  return p;
+}
+const bfRefused = (reason) => (v) => v.status === 2 && !v.invoked && squeezed(v.stderr).includes(reason) && keyStateIs(v, []);
+const BRIEF_FILE_PROBES = [
+  { id: 'bf-capture', file: BF_BRIEF, stdin: null, resume: false, seed: () => null,
+    label: (f, s, flag) => `${f} ${flag} EXECUTED: the brief is read from the file - codex runs on it, and the key comes from the FILE's "Ticket: ${BF_TICKET}" line (${keyedSessionFile(s, BF_TICKET)}, nothing else written)`,
+    ok: (v, s) => v.status === STUB_EXIT && v.invoked && v.state(keyedSessionFile(s, BF_TICKET)) === STUB_SESSION_ID
+      && keyStateIs(v, [keyedSessionFile(s, BF_TICKET)]) && (v.stdin === undefined || v.stdin === BF_BRIEF) },
+  { id: 'bf-missing', file: BF_MISSING, stdin: null, resume: true, seed: () => null,
+    label: (f, s, flag, resume) => `${f} ${flag} <missing path> ${resume} EXECUTED: exit 2 naming the missing file, before the state read - codex never invoked, no state file written`,
+    ok: bfRefused('doesnotexist') },
+  { id: 'bf-empty', file: '', stdin: null, resume: true, seed: () => null,
+    label: (f, s, flag, resume) => `${f} ${flag} <empty file> ${resume} EXECUTED: exit 2 naming the empty file, before the state read - codex never invoked, no state file written`,
+    ok: bfRefused('isemptyorwhitespace-only') },
+  { id: 'bf-blank', file: ' \n\t\r\n', stdin: null, resume: true, seed: () => null,
+    label: (f, s, flag, resume) => `${f} ${flag} <whitespace-only file> ${resume} EXECUTED: exit 2 naming the blank file, before the state read - codex never invoked, no state file written`,
+    ok: bfRefused('isemptyorwhitespace-only') },
+  { id: 'bf-both', file: BF_BRIEF, stdin: BF_STDIN_BRIEF, resume: false, seed: () => null,
+    label: (f, s, flag) => `${f} ${flag} AND a non-empty brief on stdin EXECUTED: exit 2 (ambiguous) - codex never invoked, no state file written`,
+    ok: bfRefused('ambiguous') },
+  { id: 'bf-idle', file: BF_BRIEF, stdin: null, idle: '', shOnly: true, resume: false, seed: () => null,
+    label: (f, s, flag) => `${f} ${flag} with an OPEN stdin that never delivers EXECUTED: stdin is read once, bounded, so the run completes on the file (no hang)`,
+    ok: (v, s) => v.status === STUB_EXIT && v.invoked && v.state(keyedSessionFile(s, BF_TICKET)) === STUB_SESSION_ID },
+  { id: 'bf-open', file: BF_BRIEF, stdin: null, idle: 'x\n', shOnly: true, resume: false, seed: () => null,
+    label: (f, s, flag) => `${f} ${flag} with an OPEN stdin that delivers one line and then stays open EXECUTED: exit 2 (ambiguous) within the bounded read - codex never invoked, no hang`,
+    ok: bfRefused('ambiguous') },
+  // 65,536 spaces fill the read's cap, so the `x` behind them is never read: the bytes that WERE read
+  // carry no text, and only the "the cap was filled" test can refuse it.
+  { id: 'bf-cap', file: BF_BRIEF, stdin: null, idle: `${' '.repeat(65536)}x`, shOnly: true, resume: false, seed: () => null,
+    label: (f, s, flag) => `${f} ${flag} with an OPEN stdin that fills the 64 KiB bound with spaces before any text EXECUTED: exit 2 (ambiguous, refused unread) - codex never invoked`,
+    ok: bfRefused('ambiguous') },
+];
 // The FROZEN resume argv, as the wrapper source must spell it. `codex exec resume` has no -C and no
 // --sandbox (they do not exist on the subcommand) and -m, which does exist, is deliberately unused:
 // one uniform -c posture carries model, effort, sandbox_mode and approval_policy. The trailing `-`
@@ -4107,8 +4416,13 @@ const NUL_BYTE = String.fromCharCode(0);
  */
 // `prepare(projectRoot)` runs before the wrapper (the plan-gate probes write their plan folder
 // into the probe's project with it).
+// `flagBrief` passes --brief-file (a string is written to a file of its own first, BF_MISSING names a
+// path that does not exist); `idleStdin` (a string) replaces the piped brief with a stdin that
+// delivers exactly those bytes ('' for none) and then stays OPEN - a wrapper that reads it to its
+// end blocks, and the run is cut at BF_IDLE_TIMEOUT_MS.
 function runWrapperWithStub(root, wrapper, tmpDir, extraArgs = [],
-  { seedState = null, writeRollout = true, secondRollout = null, brief = STUB_BRIEF, readOnlyState = null, prepare = null, roleRecord = null } = {}) {
+  { seedState = null, writeRollout = true, secondRollout = null, brief = STUB_BRIEF, readOnlyState = null, prepare = null, roleRecord = null,
+    flagBrief = undefined, idleStdin = false } = {}) {
   const home = fs.mkdtempSync(path.join(tmpDir, 'sh-exec-'));
   const bin = path.join(home, 'bin');
   const projectRoot = path.join(home, 'project');
@@ -4190,8 +4504,18 @@ function runWrapperWithStub(root, wrapper, tmpDir, extraArgs = [],
     PNP_CWD_OUT: cwdOut,
     CODEX_HOME: codexHome,
   });
-  const r = spawnSync(BASH, [path.join(root, 'scripts', 'native', 'sh', wrapper), '--project-root', projectRoot, ...extraArgs],
-    { input: Buffer.from(brief, 'utf8'), env });
+  const flagArgs = flagBrief === undefined ? [] : ['--brief-file', flagBriefPath(home, flagBrief)];
+  const wrapperArgv = [path.join(root, 'scripts', 'native', 'sh', wrapper), '--project-root', projectRoot, ...flagArgs, ...extraArgs];
+  // The idle stdin is a process substitution whose writer sleeps with its stderr detached, so it
+  // holds none of the pipes this process waits on: the wrapper's own exit ends the run.
+  // The bytes travel through a FILE, not the environment: a 64 KiB payload is past what a Windows
+  // environment variable can carry.
+  const idleBytesFile = path.join(home, 'idle-stdin.bin');
+  if (typeof idleStdin === 'string') fs.writeFileSync(idleBytesFile, idleStdin);
+  const r = typeof idleStdin === 'string'
+    ? spawnSync(BASH, ['-c', `exec "$BASH" "$@" < <(exec 2>/dev/null; cat "$PNP_IDLE_FILE"; exec sleep ${BF_IDLE_SLEEP_S})`, 'pnp-idle-stdin', ...wrapperArgv],
+      { env: Object.assign({}, env, { PNP_IDLE_FILE: idleBytesFile }), timeout: BF_IDLE_TIMEOUT_MS })
+    : spawnSync(BASH, wrapperArgv, { input: Buffer.from(brief, 'utf8'), env });
   const recorded = readText(argvOut);
   const text = (buf) => (buf === null || buf === undefined ? '' : buf.toString('utf8'));
   return {
@@ -4340,6 +4664,24 @@ function readOnlyWrapperControls(file, short) {
       apply: (r) => patchText(r, at, `/${KEY_TICKET_RE}/`, () => `/${KEY_TICKET_RE.replace('(.*?)', '(.+?)')}/`) },
     { id: `sh-exec-${short}-key-refuse-empty-plan`, label: `${file}: the PLAN: matcher back on (.+?), so an empty PLAN: line is skipped (executed)`,
       apply: (r) => patchText(r, at, `/${KEY_PLAN_RE}/`, () => `/${KEY_PLAN_RE.replace('(.*?)', '(.+?)')}/`) },
+    // The brief file (D-13, contract D-15), the mirror of the PowerShell controls, plus the one the
+    // bash channel has alone: the readiness test dropped, so an idle stdin blocks the wrapper.
+    { id: `sh-exec-${short}-bf-capture`, label: `${file}: --brief-file reads the file and then drops it (executed)`,
+      apply: (r) => patchText(r, at, 'PROMPT="$(cat -- "$BRIEF_FILE" 2>/dev/null)"', () => 'PROMPT=""') },
+    { id: `sh-exec-${short}-bf-missing`, label: `${file}: the missing-file refusal removed, so a missing brief file reaches the read (executed)`,
+      apply: (r) => patchText(r, at, 'if [ -z "$BRIEF_FILE" ] || [ ! -f "$BRIEF_FILE" ]; then', () => 'if false; then') },
+    { id: `sh-exec-${short}-bf-empty`, label: `${file}: the empty-file refusal removed, so an empty brief file reaches the state read (executed)`,
+      apply: (r) => patchText(r, at, 'has_text "$PROMPT" || fail', () => 'true || fail') },
+    { id: `sh-exec-${short}-bf-blank`, label: `${file}: "has text" narrowed to "non-empty", so a whitespace-only brief file passes (executed)`,
+      apply: (r) => patchText(r, at, '*[![:space:]]*) return 0 ;;', () => '?*) return 0 ;;') },
+    { id: `sh-exec-${short}-bf-both`, label: `${file}: --brief-file AND a brief on stdin accepted together (executed)`,
+      apply: (r) => patchText(r, at, 'if has_text "$STDIN_BRIEF"; then', () => 'if false; then') },
+    { id: `sh-exec-${short}-bf-idle`, label: `${file}: the stdin read's time bound dropped, so an idle stdin blocks the run (executed)`,
+      apply: (r) => patchText(r, at, "IFS= read -r -d '' -t 2 -N 65536 STDIN_BRIEF", () => "IFS= read -r -d '' -N 65536 STDIN_BRIEF") },
+    { id: `sh-exec-${short}-bf-open`, label: `${file}: the bounded stdin read replaced by cat, so a stdin that stays open blocks the run (executed)`,
+      apply: (r) => patchText(r, at, "IFS= read -r -d '' -t 2 -N 65536 STDIN_BRIEF || STDIN_STATUS=$?", () => 'STDIN_BRIEF="$(cat)"') },
+    { id: `sh-exec-${short}-bf-cap`, label: `${file}: the "the cap was filled" refusal removed, so text behind 64 KiB of whitespace slips past (executed)`,
+      apply: (r) => patchText(r, at, 'if [ "${#STDIN_BRIEF}" -ge 65536 ]; then', () => 'if false; then') },
   ];
 }
 
@@ -4446,10 +4788,11 @@ const SH_EXEC_IDS = new Set(['sh-exec-host',
   'sh-exec-review-resume-records-id', 'sh-exec-qa-resume-records-id',
   'sh-exec-review-resume-argv', 'sh-exec-review-resume-cwd', 'sh-exec-review-resume-state',
   'sh-exec-qa-resume-argv', 'sh-exec-qa-resume-cwd', 'sh-exec-qa-resume-state',
-  ...['review', 'qa'].flatMap((s) => KEY_PROBE_IDS.map((k) => `sh-exec-${s}-${k}`))]);
+  ...['review', 'qa'].flatMap((s) => KEY_PROBE_IDS.map((k) => `sh-exec-${s}-${k}`)),
+  ...['review', 'qa'].flatMap((s) => BF_SH_PROBE_IDS.map((k) => `sh-exec-${s}-${k}`))]);
 
 function sectionShWrappers(tmpRoot) {
-  section('WRAPPERS (bash channel) - locked flags, stdin-only delivery, LF + ASCII bytes, executed transport');
+  section('WRAPPERS (bash channel) - locked flags, stdin / brief-file delivery, LF + ASCII bytes, executed transport');
   const findings = shWrapperFindings(PLUGIN_ROOT, { tmpDir: tmpRoot });
   for (const f of findings) check(f.name, f.ok, f.detail);
 

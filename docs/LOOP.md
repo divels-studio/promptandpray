@@ -97,7 +97,9 @@ tools, not shell commands (`cat`/`head`/`node -e`/shell loops) - the shell is fo
 (tests/git/build). Editing is not a shell job either: change tracked files with Edit / Write, never
 `sed -i`, a heredoc or a redirect - a shell edit can stall on a dialog nobody is watching, and a file
 whose text names a gated git verb trips Gate 4 when written through the shell. No command carries a
-`cd` prefix: it runs from the repository root and reaches a subfolder with the tool's own flag.
+`cd` prefix: it runs from the repository root and reaches a subfolder with the tool's own flag -
+the habit guard (§ Enforcement of Writer-only writes) denies the prefix, since Claude Code's
+working-directory variable returns only the main session to the root and no migration op carries it.
 Surgical edits over rewrites: a file is never rewritten whole when the result is the same, and a
 whole-file restructure that is needed is announced in one line first, with its reason. A command
 expected to run over about five minutes runs in the background for every role, with a timeout of at
@@ -206,7 +208,34 @@ dialects are not assumed identical, and each difference resolves towards asking:
 on `;`, `|` and (PS7+) `&&` / `||`, `&` is its call operator (`& git push` asks), no wrapper or
 `NAME=value` stripping is documented (`timeout 30 git commit` asks there), and recognition folds case
 (`GIT Push` is recognised) while the byte-exact rule test folds it on neither tool. `Monitor` runs
-its commands under the Bash rules and needs none of its own.
+its commands under the Bash rules and needs none of its own, and Gate 4 judges `tool_name: Monitor`
+in the Bash dialect - git verbs and habits alike.
+
+**The habit guard** is the second responsibility INSIDE the Gate 4 hook file (the hook files stay
+three), as Gate 3 lives inside the Gate 1 file. It judges every top-level subcommand, in both
+dialects (PowerShell case-folded as Gate 4 folds it), for EVERY actor - the main session, the
+Writer, any subagent - and DENIES five shapes with a hint; it never rewrites a command:
+
+- a pipe into `tail`, a pipe into `head`, a pipe into `Select-Object` / `Select` with `-First` /
+  `-Last` -> hint: run to a log file outside the repository and Read it (any pipe, not only a test
+  run: reading is not a shell job);
+- `cd` / `chdir` / `pushd` / `Set-Location` / `sl` as the first token of a top-level subcommand ->
+  hint: the tool's own directory flag;
+- the global `-c <k=v>` directly after `git` / `git.exe` -> hint: drop `-c` (the `git -c:*` ask rule
+  stays as the backstop).
+
+Honest limit: like Gate 4 it is a recogniser, not a parser - nothing inside quotes or a nested shell
+(`sh -lc '...'`, `bash -c "..."`) is judged, so a `cd` inside a nested shell passes.
+
+**A hook that cannot start blocks the call.** The Gate 1/3 and Gate 4 hook commands - the
+DENY-direction gates - carry `onFailure: "block"` in `hooks/hooks.json`, so a hook process that
+fails to start (a missing interpreter, a broken path) stops the tool call instead of letting it
+through. The Gate 2 command carries none: a block there would flip its ASK direction. Observed
+2026-10-31 on Claude Code 2.1.316: with the Gate 4 command naming an interpreter that does not
+exist, one shell call was blocked with `PreToolUse:PowerShell hook error: [<command>]: failed;
+blocking because onFailure is "block"`. Honest limit: the self-check runs the hook files through
+node and cannot observe the host's failure handling - the host's documented `onFailure` contract
+and that probe date stand for it.
 
 ## Commit gate (click-based, no tokens)
 
@@ -218,8 +247,8 @@ that attempt is the approval.
 
 ## Honest security model
 
-Gate 1, Gate 2, Gate 4 and the permission rules are **accident/role protection, not
-adversary-proofing**. The hooks trust the harness identity fields; the ask rules match by command
+Gate 1, Gate 2, Gate 4, the habit guard and the permission rules are **accident/role protection,
+not adversary-proofing**. The hooks trust the harness identity fields; the ask rules match by command
 prefix (per subcommand, past the stripped wrappers); for the main session and the Writer the
 push/merge/rebase boundary is declarative (`ask` dialog + the explicit-word doctrine + branch
 isolation) with Gate 4 adding the dialog on the git forms no rule spells out, while for every other

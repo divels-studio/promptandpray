@@ -24,7 +24,8 @@ QA's host is resolved once (Step 0b) and dispatched as one of two branches:
 - **engine `codex`** -> the wrapper of this OS channel,
   `${CLAUDE_PLUGIN_ROOT}/scripts/native/ps/codex-qa.ps1` or
   `${CLAUDE_PLUGIN_ROOT}/scripts/native/sh/codex-qa.sh` - read-only by a hard
-  OS `--sandbox read-only` cell; wrapper locks flags, brief on stdin.
+  OS `--sandbox read-only` cell; wrapper locks flags, brief from the per-ticket file
+  `-BriefFile` / `--brief-file` names (stdin is the fallback).
 - **engine `claude`** -> the `qa` subagent via the **Agent tool** (the project's rendered qa agent) -
   read-only by a `Read/Grep/Glob`-only tool allowlist. **Gate 1 catches the Edit/Write family; the
   Claude QA path is tool-availability + convention + git reversibility, with NO OS cell; the hard OS
@@ -216,34 +217,38 @@ OUTPUT CONTRACT (single round - return ALL material problems at once):
 
 ## Step 3b - Dispatch on the resolved engine
 
-### codex branch (`$role.engine -eq 'codex'`) - invoke the wrapper (prompt via STDIN)
+### codex branch (`$role.engine -eq 'codex'`) - invoke the wrapper (brief through its file)
 
-Deliver the brief on **stdin** - never positionally. The wrapper reads its model from the resolver,
-so no model is passed here.
+Deliver the brief through its **brief file** - the path after `-BriefFile` / `--brief-file` - never
+positionally; the wrapper hands it to the engine on stdin. The wrapper reads its model from the
+resolver, so no model is passed here.
 
-**Write the brief to the fixed path `<root>/{{config.paths.scratchDir}}/qa-brief.txt`** (Write tool -
-an empty brief makes the wrapper exit 2, so write the file first and invoke in a later tool call,
-never in the same message), then invoke the wrapper of this project's OS channel (`{{config.os}}`)
-with exactly that command, character for character:
+**Write the brief to the per-ticket file `<root>/{{config.paths.scratchDir}}/<key>-qa-brief.txt`**
+(Write tool), `<key>` being exactly the brief's `Ticket: <REF>` value - the key of QA's session-state
+file below. An empty, whitespace-only, missing or unreadable brief file makes the wrapper exit 2, so
+write the file first and invoke in a later tool call, never in the same message; then invoke the
+wrapper of this project's OS channel (`{{config.os}}`) with exactly that command, character for
+character:
 
 **os `windows`:**
 
 ```powershell
-Get-Content '<root>/{{config.paths.scratchDir}}/qa-brief.txt' -Raw | `
-  & "${CLAUDE_PLUGIN_ROOT}/scripts/native/ps/codex-qa.ps1" -ProjectRoot '<root>'
+& "${CLAUDE_PLUGIN_ROOT}/scripts/native/ps/codex-qa.ps1" -ProjectRoot '<root>' -BriefFile '<root>/{{config.paths.scratchDir}}/<key>-qa-brief.txt'
 ```
 
 **os `linux` / `macos`:**
 
 ```bash
-cat '<root>/{{config.paths.scratchDir}}/qa-brief.txt' \
-  | bash "${CLAUDE_PLUGIN_ROOT}/scripts/native/sh/codex-qa.sh" --project-root '<root>'
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/native/sh/codex-qa.sh" --project-root '<root>' --brief-file '<root>/{{config.paths.scratchDir}}/<key>-qa-brief.txt'
 ```
 
-The path is fixed **on purpose** - same reasoning as `/pnp:review` Step 3: a permission rule can
-only match a constant command string, so an inline here-string carrying the brief, or a
-session-scoped scratchpad path, must prompt the operator on every dispatch and can never be
-allowlisted. Do not inline the brief, and do not make the path unique per session or per ticket.
+The command keeps a **constant prefix on purpose** - same reasoning as `/pnp:review` Step 3: a
+permission rule matches a command by its prefix, so an inline here-string carrying the brief, or a
+pipe in front of the wrapper, must prompt the operator on every dispatch and can never be
+allowlisted; only the brief path after the flag varies, per ticket, and a local allow rule is
+written on the prefix. The brief file is per ticket, keyed like the session-state file. Do not
+inline the brief; the stdin form (a pipe in front of the wrapper) still works but is only the
+fallback, and the flag together with a non-empty stdin is refused (exit 2).
 
 **Run the wrapper in the BACKGROUND - `run_in_background: true`, by default, with a timeout of at
 least 3600000 ms:** a command expected to run over about five minutes runs in the background
@@ -256,21 +261,19 @@ pass that never needed recovering is still the better outcome. Same rule, same r
 `/pnp:review` Step 3.
 
 **A verification pass after a correction round may RESUME the previous session instead of paying for
-a cold one.** It is the same block with one flag added, so the command text stays in the same small
-fixed set a permission rule can match:
+a cold one.** It is the same launch with one flag added at its end, so the command keeps the same
+constant prefix a permission rule can match:
 
 **os `windows`:**
 
 ```powershell
-Get-Content '<root>/{{config.paths.scratchDir}}/qa-brief.txt' -Raw | `
-  & "${CLAUDE_PLUGIN_ROOT}/scripts/native/ps/codex-qa.ps1" -ProjectRoot '<root>' -Resume
+& "${CLAUDE_PLUGIN_ROOT}/scripts/native/ps/codex-qa.ps1" -ProjectRoot '<root>' -BriefFile '<root>/{{config.paths.scratchDir}}/<key>-qa-brief.txt' -Resume
 ```
 
 **os `linux` / `macos`:**
 
 ```bash
-cat '<root>/{{config.paths.scratchDir}}/qa-brief.txt' \
-  | bash "${CLAUDE_PLUGIN_ROOT}/scripts/native/sh/codex-qa.sh" --project-root '<root>' --resume
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/native/sh/codex-qa.sh" --project-root '<root>' --brief-file '<root>/{{config.paths.scratchDir}}/<key>-qa-brief.txt' --resume
 ```
 
 With no id after it, the flag replays the session the wrapper recorded on its OWN last run for THIS
@@ -315,8 +318,9 @@ and your progress; produce the verdict" - never a fresh dispatch carrying the fu
 The recovery is still a paid dispatch: tell the operator what is known of the dead pass - how long
 it ran, and its cost where the engine reported one - and take their word before it; never
 re-dispatch on your own. Bare means bare: `-Resume` / `--resume` with no id, off QA's own state
-file above; write the continuation prompt into the same `qa-brief.txt` and re-invoke the block,
-which keeps the command text in the fixed set a permission rule matches.
+file above; write the continuation prompt - WITH the pass's `Ticket:` line - into the same
+`<key>-qa-brief.txt` and re-invoke the block, which keeps the command's constant prefix a permission
+rule matches.
 
 **How the id gets recorded, and when it does not.** The wrapper does **not** read the engine's
 output - it touches neither stdout nor stderr, so what you see is the engine's own bytes. A

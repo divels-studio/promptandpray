@@ -1,6 +1,38 @@
 'use strict';
 /*
- * Gate 4 - PreToolUse(Bash|PowerShell). ASK-CLASS GIT VERBS, JUDGED BY WHO IS RUNNING THE COMMAND.
+ * Gate 4 - PreToolUse(Bash|PowerShell). ASK-CLASS GIT VERBS, JUDGED BY WHO IS RUNNING THE COMMAND -
+ * and, as this file's SECOND responsibility, THE HABIT GUARD (see "THE HABIT GUARD" below), the way
+ * Gate 3 lives inside the Gate 1 file: one node process per shell call, and three hook files stay
+ * three.
+ *
+ * THE HABIT GUARD. Five command shapes that cost a session context or correctness without gating
+ * anything are DENIED with a hint, for EVERY actor - the main session, the Writer and any subagent;
+ * identity is not consulted - and never rewritten (stripping a `cd` breaks a command that needs the
+ * subfolder, dropping a pipe floods the context, so the guard denies and explains). It runs after the
+ * payload validation and before the git-verb logic, in the dialect of the tool (PowerShell
+ * case-folded, as the verb recognition below folds it), over the TOP-LEVEL subcommands - the text
+ * between separators outside quotes (on Bash a lone `&`, a background list, is one of them; the `&`
+ * of a redirect such as `2>&1` or `&>file` is not - and a `>` / `<` makes it a redirect only as a
+ * PLAIN character, so after an escaped `\>` the `&` is a lone one again; on PowerShell `&` is the
+ * call operator):
+ *   (1)-(3) a segment that FOLLOWS a pipe and starts with `tail`, `head`, or `Select-Object` /
+ *           `Select` carrying `-First` / `-Last` - "run to a log file outside the repository and
+ *           Read it" (any pipe, not only a test run: reading is not a shell job);
+ *   (4)     `cd`, `chdir`, `pushd`, `Set-Location` or `sl` as the FIRST token of a subcommand -
+ *           "use the tool's own directory flag; a command runs from the repository root";
+ *   (5)     the global `-c <k=v>`: the subcommand's FIRST word is `git` / `git.exe` (folded on
+ *           PowerShell only), its SECOND word is exactly `-c` and its THIRD word carries `=` - "drop
+ *           -c". So `git commit -c abc`, `git -C <path>`, a bare `git -c`, `echo git -c k=v` and, on
+ *           Bash, `GIT -c k=v` are not this shape; the `git -c:*` ask rule stays in the ruleset as
+ *           the backstop, and Gate 4's own verb logic still judges those forms.
+ * Not judged: anything inside quotes, and therefore anything inside a nested shell whose script is a
+ * quoted argument (`sh -lc '...'`, `bash -c "..."`, `pwsh -Command '...'`). A recogniser, not a
+ * parser - the same honest limit as the verb recognition below: a separator inside `$( )`, `( )` or
+ * `{ }` outside quotes IS a top-level separator here, so `X=$(git log | head -1)` is a pipe into head.
+ *
+ * MONITOR. Bash-matched hooks run on the Monitor tool's commands, so `tool_name: Monitor` is judged in
+ * the BASH dialect by both responsibilities; every other name that is not exactly `Bash` stays on the
+ * stricter PowerShell dialect (see dialectOf).
  *
  * TWO SHELL TOOLS, ONE GATE. A permission rule is addressed to a TOOL, and a Windows session carries
  * a `PowerShell` tool next to `Bash`, so a gate wired on one of them left the same git verbs
@@ -106,7 +138,8 @@
  * repository - read the matcher in hooks/hooks.json and the rule prefixes in the ruleset - and the
  * self-check asserts the mirror in BOTH directions, so a rule added on one tool alone is a failure
  * rather than a quiet gap. `Monitor` needs no rules of its own: it runs its commands UNDER the Bash
- * permission rules and has no namespace of its own.
+ * permission rules and has no namespace of its own - which is also why this hook judges a Monitor
+ * payload in the Bash dialect.
  *   What remains is the CLASS, not an instance of it: a tool NEITHER layer sees. A future harness
  * tool that executes commands under some third namespace would be outside both the matcher above and
  * every rule in the ruleset, and a subagent whose allowlist carried it could reach a gated git verb
@@ -251,13 +284,17 @@ const DIALECTS = Object.freeze({
     caseInsensitiveVerb: true,
   }),
 });
-// ANYTHING THAT IS NOT EXACTLY "Bash" RESOLVES TO THE POWERSHELL DIALECT, and that default is the
-// decision, not an accident: PowerShell is the stricter of the two on every axis (a subset of the
-// separators, no wrapper stripping, case-insensitive recognition), so an unexpected or missing
-// `tool_name` can only make this gate ask MORE, never less. The pure functions below default the
-// other way, to `Bash`, because their callers are the self-check and the spike matrix, whose Bash
-// rows predate the second tool and name it explicitly nowhere.
-const dialectOf = (tool) => (tool === TOOL_BASH ? DIALECTS[TOOL_BASH] : DIALECTS[TOOL_POWERSHELL]);
+// ANYTHING THAT IS NOT EXACTLY "Bash" OR "Monitor" RESOLVES TO THE POWERSHELL DIALECT, and that
+// default is the decision, not an accident: PowerShell is the stricter of the two on every axis (a
+// subset of the separators, no wrapper stripping, case-insensitive recognition), so an unexpected or
+// missing `tool_name` can only make this gate ask MORE, never less. `Monitor` is the one named
+// exception: Bash-matched hooks run on its commands and it runs them under the Bash permission
+// rules, so its commands ARE Bash commands, and judging them as PowerShell would misread them (no
+// `|&`, no `&`, a backtick escape). The match is exact, like the one for "Bash". The pure functions
+// below default the other way, to `Bash`, because their callers are the self-check and the spike
+// matrix, whose Bash rows predate the second tool and name it explicitly nowhere.
+const TOOL_MONITOR = 'Monitor';
+const dialectOf = (tool) => (tool === TOOL_BASH || tool === TOOL_MONITOR ? DIALECTS[TOOL_BASH] : DIALECTS[TOOL_POWERSHELL]);
 
 // `git` / `git.exe` as a whole word - the MIRROR of the verb-token question below, decided by the
 // same two rules, and audited the same way.
@@ -475,6 +512,114 @@ function everyGitFormIsRuleMatched(command, tool = TOOL_BASH) {
   return withVerb.every((s) => shippedRuleMatches(s, tool));
 }
 
+// ---- THE HABIT GUARD (D-14) - the file's second responsibility --------------------------------
+// See the header for the five shapes and what is not judged. It reuses the dialect table and the
+// escape/quote rules of subcommandsOf, but needs one thing subcommandsOf drops: WHICH separator a
+// segment follows, because shapes (1)-(3) are "after a pipe". So the splitter below sits BESIDE
+// subcommandsOf rather than changing it, and the git logic above is untouched. Its separator sets
+// are the habit check's own. On Bash a lone `&` IS a top-level separator (a background list - the
+// command after it starts a new segment, which follows no pipe), EXCEPT where the `&` belongs to a
+// redirect: preceded by a PLAIN `>` or `<` (`2>&1`, `<&0` - not an escaped `\>`, not one inside
+// quotes) or followed by `>` (`&>file`); `&&` and `|&` are two-character operators and are matched
+// first. On PowerShell `&` is the call operator and stays
+// text, as it does for the verb decomposition.
+const HABIT_TAG = '[AIWF-G4 habit guard]';
+const HINT_LOG_FILE = 'run to a log file outside the repository and Read it';
+const HINT_DIRECTORY = "use the tool's own directory flag; a command runs from the repository root";
+const HINT_DASH_C = 'drop -c; the warning it silences is noise';
+const HABITS = Object.freeze({
+  tail: Object.freeze({ shape: 'pipe into tail', hint: HINT_LOG_FILE }),
+  head: Object.freeze({ shape: 'pipe into head', hint: HINT_LOG_FILE }),
+  select: Object.freeze({ shape: 'pipe into Select-Object -First/-Last', hint: HINT_LOG_FILE }),
+  cd: Object.freeze({ shape: 'cd prefix', hint: HINT_DIRECTORY }),
+  gitDashC: Object.freeze({ shape: 'git -c', hint: HINT_DASH_C }),
+});
+const HABIT_SEPARATORS = Object.freeze({
+  [TOOL_BASH]: Object.freeze({ two: ['&&', '||', '|&'], one: new Set([';', '|', '\n', '\r']), background: true }),
+  [TOOL_POWERSHELL]: Object.freeze({ two: ['&&', '||'], one: new Set([';', '|', '\n', '\r']), background: false }),
+});
+const HABIT_PIPES = new Set(['|', '|&']);
+const HABIT_SELECTS = ['Select-Object', 'Select'];
+const HABIT_SELECT_LIMITS = ['-First', '-Last'];
+const HABIT_DIRECTORY_CHANGERS = ['cd', 'chdir', 'pushd', 'Set-Location', 'sl'];
+// Shape (5) is exactly: the segment's FIRST word is `git` / `git.exe` (folded on PowerShell only, as
+// every word here is), its SECOND word is exactly `-c` - never folded on either tool, because git's
+// own `-C <path>` is another option - and its THIRD word carries `=` (the `<k=v>`).
+const HABIT_GIT_PROGRAMS = ['git', 'git.exe'];
+
+// The top-level segments of a command, each with whether it FOLLOWS a pipe. Quote-aware and
+// escape-aware exactly as subcommandsOf is: a separator inside quotes is text.
+function habitSegmentsOf(command, tool = TOOL_BASH) {
+  const dialect = dialectOf(tool);
+  const seps = HABIT_SEPARATORS[dialect.name];
+  const src = String(command);
+  const out = [];
+  let buf = '';
+  let quote = null;
+  let afterPipe = false;
+  // Whether the character just before is a PLAIN `>` or `<` - one this loop took as an ordinary
+  // character, never one it consumed as the escaped half of `\>` or as text inside quotes. Only
+  // then is the `&` after it part of a redirect.
+  let plainRedirectBefore = false;
+  for (let i = 0; i < src.length; i += 1) {
+    const ch = src[i];
+    if (ch === dialect.escape && quote !== "'" && i + 1 < src.length) { buf += ch + src[i + 1]; i += 1; plainRedirectBefore = false; continue; }
+    if (quote !== null) { buf += ch; if (ch === quote) quote = null; plainRedirectBefore = false; continue; }
+    if (ch === '"' || ch === "'") { quote = ch; buf += ch; plainRedirectBefore = false; continue; }
+    const two = src.slice(i, i + 2);
+    if (seps.two.includes(two)) { out.push({ text: buf, afterPipe }); buf = ''; afterPipe = HABIT_PIPES.has(two); i += 1; plainRedirectBefore = false; continue; }
+    if (seps.one.has(ch)) { out.push({ text: buf, afterPipe }); buf = ''; afterPipe = HABIT_PIPES.has(ch); plainRedirectBefore = false; continue; }
+    // The following-character test stays on the RAW next character: `&\>` is not `&>`.
+    if (seps.background && ch === '&' && !plainRedirectBefore && src[i + 1] !== '>') {
+      out.push({ text: buf, afterPipe }); buf = ''; afterPipe = false; plainRedirectBefore = false; continue;
+    }
+    buf += ch;
+    plainRedirectBefore = ch === '>' || ch === '<';
+  }
+  out.push({ text: buf, afterPipe });
+  return out;
+}
+
+// A segment's words, split on whitespace OUTSIDE quotes. A quoted word keeps its quotes, so `"cd"`
+// is never the word `cd`.
+function habitWordsOf(segment, dialect) {
+  const words = [];
+  let buf = '';
+  let quote = null;
+  for (let i = 0; i < segment.length; i += 1) {
+    const ch = segment[i];
+    if (ch === dialect.escape && quote !== "'" && i + 1 < segment.length) { buf += ch + segment[i + 1]; i += 1; continue; }
+    if (quote !== null) { buf += ch; if (ch === quote) quote = null; continue; }
+    if (ch === '"' || ch === "'") { quote = ch; buf += ch; continue; }
+    if (/\s/.test(ch)) { if (buf !== '') { words.push(buf); buf = ''; } continue; }
+    buf += ch;
+  }
+  if (buf !== '') words.push(buf);
+  return words;
+}
+
+// The habit a command carries, as { shape, hint }, or null. The first shape found, in segment order.
+function habitOf(command, tool = TOOL_BASH) {
+  if (typeof command !== 'string' || command.trim() === '') return null;
+  const dialect = dialectOf(tool);
+  const fold = (w) => (dialect.caseInsensitiveVerb ? w.toLowerCase() : w);
+  const isOneOf = (word, names) => names.some((n) => fold(n) === fold(word));
+  for (const segment of habitSegmentsOf(command, tool)) {
+    const words = habitWordsOf(segment.text, dialect);
+    if (words.length === 0) continue;
+    const first = words[0];
+    if (segment.afterPipe) {
+      if (isOneOf(first, ['tail'])) return HABITS.tail;
+      if (isOneOf(first, ['head'])) return HABITS.head;
+      // `-First:5` is the same parameter as `-First 5`, so the part before a colon is what counts.
+      if (isOneOf(first, HABIT_SELECTS) && words.slice(1).some((w) => isOneOf(w.split(':')[0], HABIT_SELECT_LIMITS))) return HABITS.select;
+    }
+    if (isOneOf(first, HABIT_DIRECTORY_CHANGERS)) return HABITS.cd;
+    if (words.length >= 3 && isOneOf(first, HABIT_GIT_PROGRAMS) && words[1] === '-c' && words[2].includes('=')) return HABITS.gitDashC;
+  }
+  return null;
+}
+
 // BOTH shell tools name their payload `command`. Anything else - a tool_input that is not an object,
 // a missing or blank command - is "nothing to recognise", which is a passthrough (see the header).
 function commandOf(input) {
@@ -512,6 +657,12 @@ if (require.main === module) {
     const toolName = toolNameOf(input);
     const command = commandOf(input);
     if (command === null) return lib.allowPassthrough();
+
+    // THE HABIT GUARD, before the git-verb logic and for every actor (identity is not read for it):
+    // a deny that names the habit and its hint, and nothing else - the command is never rewritten.
+    const habit = habitOf(command, toolName);
+    if (habit !== null) return lib.denyPreTool(`${HABIT_TAG} habit: ${habit.shape} - ${habit.hint}`);
+
     const verb = recognisedVerb(command, toolName);
     if (verb === null) return lib.allowPassthrough(); // the overwhelmingly common case: not a gated git command
 
@@ -563,6 +714,7 @@ if (require.main === module) {
 }
 
 module.exports = {
-  GIT_ASK_VERBS, TOOL_BASH, TOOL_POWERSHELL, DIALECTS, dialectOf,
+  GIT_ASK_VERBS, TOOL_BASH, TOOL_POWERSHELL, TOOL_MONITOR, DIALECTS, dialectOf,
   recognisedVerb, subcommandsOf, stripWrappers, shippedRuleMatches, everyGitFormIsRuleMatched,
+  HABITS, habitSegmentsOf, habitOf,
 };

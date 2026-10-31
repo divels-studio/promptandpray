@@ -1,0 +1,15 @@
+{
+  "migration": "0032_rule-homes",
+  "targetPluginVersion": "0.3.7",
+  "operations": [
+    { "op": "rerender-managed-region", "file": "CLAUDE.md", "region": "aiwf-core", "template": "templates/CLAUDE.md.tmpl#aiwf-core" },
+    { "op": "rerender-managed-region", "file": ".claude/aiwf-native/ORCHESTRATOR.md", "region": null, "template": "templates/ORCHESTRATOR.md.tmpl" },
+    { "op": "rerender-managed-region", "file": ".claude/agents/writer.md", "region": null, "template": "templates/agents/writer.md.tmpl" },
+    {
+      "op": "note",
+      "id": "brief-file-launch-0-3-7",
+      "text": "0.3.7 changes the review and QA launch form: the brief is written to a per-ticket file, <scratchDir>/<key>-review-brief.txt (QA: <key>-qa-brief.txt; the plan skill's round file <key>-readiness-round.txt), <key> being the session-state key of 0.3.6, and the wrapper reads it through -BriefFile <path> (PowerShell) / --brief-file <path> (bash), so the command keeps a constant prefix with no pipe in front of it. stdin stays the fallback; a missing, unreadable, empty or whitespace-only brief file, or the flag together with a non-empty stdin, is exit 2 before any paid call. A local allow rule you wrote on the 0.3.6 pipe form (Get-Content ... | & codex-review.ps1 ..., cat ... | bash codex-review.sh ...) stops matching: rewrite it on the new prefix - the payload ships only the blanket allow. The old fixed review-brief.txt / qa-brief.txt / readiness-round.txt files in your scratch directory are no longer read - leftovers for the scratch cleanup's keep-or-move check. The habit guard inside the git-verb hook now denies, for every actor, a pipe into tail / head / Select-Object -First|-Last, a leading cd / chdir / pushd / Set-Location / sl, and git -c <k=v>, each with a hint. This update re-renders the managed CLAUDE.md region, ORCHESTRATOR.md and the Writer agent; the wrappers and the hooks are payload, run from the plugin root.",
+      "docRefs": ["CHANGELOG.md", "docs/CODEX_REVIEW_QA_RECIPE.md", "docs/LOOP.md", "docs/WORKFLOW.md"]
+    }
+  ]
+}

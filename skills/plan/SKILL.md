@@ -41,13 +41,13 @@ path below is written from `<root>`, and every command runs from `<root>`.
 **Preconditions.** An open R2/R3 route of another ticket (`<scratchDir>/route-state.json` naming
 it) does not stop this skill: planning is not execution, and Gate 3 lets the plan's own folders
 through - `<plansDir>/drafts/<ABBR>/`, `<plansDir>/readiness/<ABBR>/`, the roadmap and the ledger
-(`docs/WORKFLOW.md` § Branch policy). Two things wait while that route is open: an edit of a LANDED
-plan under `<plansDir>/active/` (behind the guard), and the WRITE-AND-LAUNCH of the readiness brief
-in Step 6 while another session is launching a pass on this tree - `<scratchDir>/review-brief.txt`
-is one shared fixed path, so the two dispatches take turns; once launched, the passes run side by
-side (the session-state file is keyed by this brief's `PLAN:` folder), an operator-held rule
-(`docs/WORKFLOW.md` § Branch policy). The planning lock holds for the whole skill
-(`docs/WORKFLOW.md` § Planning lock): until the landing in Step 6 the only files written are the
+(`docs/WORKFLOW.md` § Branch policy). One thing waits while that route is open: an edit of a LANDED
+plan under `<plansDir>/active/` (behind the guard). The readiness pass of Step 6 does not wait: its
+brief, round and session-state files are keyed by the readiness brief's `PLAN:` folder's last
+segment, `<ABBR>` (`<scratchDir>/<ABBR>-review-brief.txt`, `<scratchDir>/<ABBR>-readiness-round.txt`),
+so it is dispatched and runs beside the ticket's pass (`docs/WORKFLOW.md` § Branch policy). The
+planning lock holds for the whole skill (`docs/WORKFLOW.md` § Planning lock): until the landing in
+Step 6 the only files written are the
 plan's own - `<plansDir>/drafts/<ABBR>/`, `<plansDir>/readiness/<ABBR>/`, the roadmap entry - and
 the scratch brief. A readiness cycle starts in a fresh session.
 
@@ -183,7 +183,8 @@ back to the planner (Step 4) and the folder is stamped again; the auditor never 
 is the ceiling of readiness passes. At `0` no pass is dispatched: go from Step 5 to the approval.
 
 **Pass 1 rides the standing word** - the operator's word that started this plan; ask for none. Write
-`<root>/<scratchDir>/review-brief.txt` (Write tool):
+`<root>/<scratchDir>/<ABBR>-review-brief.txt` (Write tool; `<ABBR>` is the `PLAN:` folder's last
+segment - the wrapper's session-state key):
 
 ```text
 COVERED BY: operator word "<quote>", <date>
@@ -197,16 +198,13 @@ In a LATER tool call, run the wrapper in the BACKGROUND (`run_in_background: tru
 round file. **os `windows`:**
 
 ```powershell
-Get-Content '<root>/<scratchDir>/review-brief.txt' -Raw | `
-  & "${CLAUDE_PLUGIN_ROOT}/scripts/native/ps/codex-review.ps1" -ProjectRoot '<root>' -Class plan > '<root>/<scratchDir>/readiness-round.txt'
+& "${CLAUDE_PLUGIN_ROOT}/scripts/native/ps/codex-review.ps1" -ProjectRoot '<root>' -Class plan -BriefFile '<root>/<scratchDir>/<ABBR>-review-brief.txt' > '<root>/<scratchDir>/<ABBR>-readiness-round.txt'
 ```
 
 **os `linux` / `macos`:**
 
 ```bash
-cat '<root>/<scratchDir>/review-brief.txt' \
-  | bash "${CLAUDE_PLUGIN_ROOT}/scripts/native/sh/codex-review.sh" --project-root '<root>' \
-    --class plan > '<root>/<scratchDir>/readiness-round.txt'
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/native/sh/codex-review.sh" --project-root '<root>' --class plan --brief-file '<root>/<scratchDir>/<ABBR>-review-brief.txt' > '<root>/<scratchDir>/<ABBR>-readiness-round.txt'
 ```
 
 The brief path, the background run, the session file and the resume policy are `/pnp:review` Step 3

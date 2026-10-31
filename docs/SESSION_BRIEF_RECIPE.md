@@ -42,8 +42,8 @@ and pastes it. That way every session starts from ONE recipe instead of being im
    reminder.
 7. **Loop.** The Writer's model pin (and "NEVER pass `model` when dispatching it"); the Writer brief
    as a pointer to the ticket (below); the review path
-   (`/pnp:review`, the brief at the fixed path `<scratchDir>/review-brief.txt`, the wrapper in the
-   background); the correction-round cap; extra review passes - only with the operator's word BEFORE
+   (`/pnp:review`, the brief in the per-ticket file `<scratchDir>/<key>-review-brief.txt` passed
+   through `-BriefFile` / `--brief-file`, the wrapper in the background); the correction-round cap; extra review passes - only with the operator's word BEFORE
    the dispatch; QA yes/no and why.
 8. **Subagent policy - MANDATORY clause** (memory seed: `subagent-delegation-belt-and-braces`),
    verbatim:
