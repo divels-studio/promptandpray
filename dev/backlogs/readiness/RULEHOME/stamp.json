@@ -1,13 +1,13 @@
 {
   "plan": "RULEHOME",
-  "contract": "086505db054747d7aa687da1e028e693cd582ff75bbfe108221e4132fb3ab5da",
+  "contract": "65a4407d9d5115af81a57f78bcc587557a7b8009d954b389c61e590d7be3afad",
   "files": {
     "DECISIONS.md": "18b79afb98d510f860c248870cb628abe7282f95a278fe8389c84358d465fd59",
-    "PLAN_RULEHOME.md": "0968c65104c141c129488709b7f330fe663602174c8c67542f6d0d61b8212ce0",
+    "PLAN_RULEHOME.md": "c9afa1b1c97a038386f5d64ff730288323dcde6ea39aa5aa92f073bccc230b30",
     "tickets/RULEHOME-001.md": "febb4fbca20e56bcbcc02bbb7f8e8e28a0d00f41d0ca4b1100638ea5221ee603",
     "tickets/RULEHOME-002.md": "0471d84264a185ad8a4459f0ec628af733c299176b6c9ce9c6c156b77d99f0d4",
     "tickets/RULEHOME-003.md": "ce751500c70c615d67df116d3a2070ce78626ba1f1cb923b9d3362d15516435e"
   },
   "xrefs": {},
-  "stampedAt": "2026-10-31T14:19:31.808Z"
+  "stampedAt": "2026-10-31T14:39:24.054Z"
 }

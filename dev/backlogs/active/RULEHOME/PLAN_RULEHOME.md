@@ -160,7 +160,10 @@ The content of the ticket's steps; the ticket keeps the pointers, the order and 
 
 - **Harvest layout** - `dev/backlogs/active/RULEHOME/records/silerax-harvest/`: `COO_SELF_ANALYSIS.md`
   (the copied file), `ledger-rows.md` (the harvested ledger rows), `memory/` (the incident memory
-  files), `diet.md` (step 4). Every harvested PnP idea - a `pnp-candidate` row, a "For PnP" part of
+  files), `diet.md` (step 4); and, already there, `2026-10-14-intake-brief.md` - the previous intake
+  (moved from `.aiwf/` at RULEHOME-001's close): its table is what PnP took on 2026-10-14 and its
+  marks (`[ПРЕНЕСЕН в PnP 2026-10-14 ...]`, `[ОТХВЪРЛЕН от PnP 2026-10-14]`) are what Silerax carries
+  - step 1 reads it before the re-scan, so nothing taken then is harvested twice. Every harvested PnP idea - a `pnp-candidate` row, a "For PnP" part of
   a self-analysis entry - is a row of `ledger-rows.md` with ONE value in its `disposition` column:
   `roadmap: <area>` (a line on that entry of `dev/backlogs/ROADMAP.md`), `done: <pointer>`, or
   `dropped: <why>`. The harvest commit here (its dialog) closes step 2.
