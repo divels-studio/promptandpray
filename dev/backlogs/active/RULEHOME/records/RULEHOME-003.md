@@ -31,7 +31,15 @@ own in that session.
   superseded memory-reading idea), the rest `roadmap:` - 24 lines written on `dev/backlogs/ROADMAP.md`
   (DOCSTAGE 2, BRIEFS 9, CTX 1, DOCTR 9, SKILLS 4, CODEX 2) in the same commit; the 31 rulings,
   events, rules and corrections of the consumer kept as `history`.
-- Step 3 - the removal in Silerax (its docs commit): (pending the Silerax COO's report).
+- Step 3 - the removal in Silerax, its docs commit `ba2ca6b9` (3 files, +11 / -1268, tree clean;
+  the Silerax COO's report verbatim in § Verification). The operator CHANGED the agreed set before
+  his word there: (1) `dev/backlogs/COO_SELF_ANALYSIS.md` NOT deleted - „нулирай го, не го трий,
+  махни всичко пренесено в пнп": reset to its header (lines 1-23) plus a reset note pointing at
+  `15623e5`; (2) the self-analysis rule NOT deleted - „спрян е временно, не завинаги": kept, its file
+  pointer re-aimed at the harvest; (3) the 48 ledger rows replaced by the one marker row, verbatim;
+  (4) the two overrides pointers re-aimed (source lines 61-65 / 86). The 2026-10-31 change set had
+  been agreed line by line between the two sessions (the Silerax COO's consensus message, the PnP
+  session's AGREE) before the operator's word.
 - Step 4 - the diet: (pending - opens with the ONE operator dialog over the seven conflicts).
 - Step 5 - the Retires sweep 0.3.1..0.3.7: (pending).
 
@@ -61,6 +69,7 @@ own in that session.
 | 2026-10-31 | ORCHESTRATOR § The operator-channel filter q2 ("a gate is a dialog or a word, not a paragraph") / WORKFLOW § How the COO speaks | operator-correction | the seven diet conflicts were asked as a numbered chat list; operator: „казвам го за последен път - въпроси се задават с диалози, а не в чата като прочетена книга - фурнисимо и силеракс го правят от ден 1, само тук се дънят нещата ... леко съм разочарован" - re-asked as two AskUserQuestion dialogs; the project rule (the dialog tool, its form) had been deleted from this repository's overrides in RULEHOME-002's sweep as a duplicate of the payload, which names no tool - a payload gap, ROADMAP § DOCTR |
 | 2026-10-31 | WORKFLOW § How the COO speaks (counts and names, never `file:line`) | operator-correction | the first dialog named overrides line numbers (":501", ":179"); operator: „дали мислиш че разбрах какво ме питаш на въпрос зададен с цифри + 501, 179, пешка на Г6, кон на А5?" - the question re-asked in words |
 | 2026-10-31 | the Retires sweep verdict (RULEHOME-002 record § Retires sweep, the dialog rule row) | catch (operator: „бате това няма ли го до сега?") | the 2026-10-16 dialog rule had been deleted from this repository's overrides as a duplicate of the payload; the payload carries "a gate is a dialog or a word" but neither the tool nor the form - the row's verdict was wrong; the rule restored in § Communication with the 2026-10-31 sharpening and an expiry on the payload (ROADMAP § DOCTR) |
+| 2026-10-31 | WORKFLOW § Verifying failure claims (a documentation claim is a hypothesis) | catch (the Silerax COO's verification of diet.md) | before its deletion dialog the Silerax COO checked every `delete` claim of diet.md against the 0.3.7 payload: rules covered 8 / partial 6 / not found 0, memory covered 9 / move-first 8 / lost 2 - three claims FALSE (the dialog rule "retired by 0.3.7", the verdict-message rule "covered", `dev/RESTART_STRATEGY.md` "the home" of the not-copied rule) and six partial; the PnP COO had written those rows from the Retires lines and RESEARCH § S2 without opening the payload for each - every row corrected in diet.md before any delete |
 
 ## Verification (what actually ran)
 
@@ -71,7 +80,14 @@ own in that session.
   -> empty.
 - `Get-FileHash` of `COO_SELF_ANALYSIS.md` on both sides -> equal (`98634649A2AFBB56BD21181199C1AE8400E413C7588D64352260489D51D0334A`);
   the seven memory copies -> `True` each.
-- Silerax's own acceptance rows (reported verbatim by its COO): (pending).
+- Silerax's own acceptance rows after step 3 (its COO's report, verbatim): "`git ls-files
+  dev/backlogs/COO_SELF_ANALYSIS.md` -> `dev/backlogs/COO_SELF_ANALYSIS.md` (kept by the operator);
+  harvested-row count -> `dev/backlogs/LEDGER.md:1`; `pnp-candidate` in LEDGER.md -> no hit;
+  `COO_SELF_ANALYSIS` in overrides/CLAUDE/AGENTS/.claude -> 3 hits, all in the kept rule
+  (PROJECT_OVERRIDES.md:674, :675, :677 - kept by the operator 2026-10-31)". Two rows read "broken"
+  by the ticket's text (the file listed; the pointer hits) and are the operator's own decisions of
+  2026-10-31, recorded above - the ticket's acceptance is amended by them, not failed.
+- Silerax's diet reports: (pending).
 - Here: `git ls-files -- dev/backlogs/active/RULEHOME/records/silerax-harvest` after `15623e5` ->
   the intake brief, `COO_SELF_ANALYSIS.md`, `ledger-rows.md`, seven `memory/*` files (`diet.md` comes
   with step 4).
