@@ -180,10 +180,6 @@ with the diff read; a fresh scan agent only when the COO cannot run it. Never a 
 any run go OUTSIDE the repository (the example cycle asserts a byte-identical tree). No micro-round
 edits while a suite is running (RBA-001). (operator rule 2026-10-17)
 
-**Independent units run in parallel by default** (operator rules 2026-10-02, 2026-10-05) -
-independent steps, large mechanical Writer work split across Writers from the dispatch, a scan
-beside an auditor pass - subject to the portions rule above.
-
 ## Status and release artifacts
 
 - status page: root `README.md` § Status (what is here / what is not here yet - kept true per release)
@@ -200,14 +196,6 @@ beside an auditor pass - subject to the portions rule above.
   stay. (operator rule 2026-10-15)
 - Be concise; no reasoning narration. Explain concretely when architecture or product boundaries
   are involved.
-- **Operator channel stays short** (operator rule 2026-09-22, sharpened 2026-10-16): the numbers the
-  operator acts on - counts of blockers, passes, gates, cost - never `file:line`, test ids or code
-  names; the evidence lives in briefs and records.
-- **A dialog only when the ticket cannot continue** (operator rule 2026-10-16; Silerax 2026-10-05):
-  AskUserQuestion (numbered options, one topic, a global/module label, the consequence of each
-  option) ONLY for a product or UX decision the ticket needs; everything else goes into a "questions
-  for the operator" list asked once at the ticket's end; up to 4 points per dialog, decisions
-  recorded once at the end with one edit; never ask what is already recorded.
 
 ## Environment
 
@@ -219,11 +207,6 @@ writes `~/.claude/ctx/<session id>.pct` (used percent) and `.size` (window token
 on this machine; the COO context is `pct * size / 100` - the number the statusline itself prints,
 to its whole-percent precision. The session id is the one in the session's scratchpad path. This is
 the machine source `/pnp:plan` and the record skeleton read; nothing of it is payload. (machine)
-
-**`/pnp:update --apply` runs under auto mode** (operator rule 2026-10-23, „аутомод не блокира ... да не
-ми го искате повече"): the update engine's write of `aiwf.config.json` is NOT refused by auto mode
-(observed 2026-10-23, 0.3.5: applied, self-check 1368/1368). Never ask the operator to switch auto mode
-off for an apply. The payload sentence that says otherwise is a ROADMAP § DOCTR item. (machine)
 
 **Start number (a) at `/pnp:work`** (operator word 2026-10-18): at `/pnp:work`'s task question,
 before any plan file is read, the COO reads its context from the source above and prints it as
@@ -244,9 +227,11 @@ schema/ migrations/ config authority; ordered payload migrations
 examples/           the committed example project + cycle data (payload; asserted by the self-check)
 dev/                the plugin's OWN development: this doc, answers.json, backlogs/{active,archive,drafts,readiness}
 .claude/ CLAUDE.md  the self-install (project layer rendered by /pnp:setup from dev/answers.json)
-.aiwf/              scratch (gitignored): ONLY the live loop mechanics - route-state.json,
-                    review-brief.txt, last-review-session.txt, readiness-round.txt, checkpoint.md
-                    (HARD-024) - and the artifacts of the CURRENT ticket
+.aiwf/              scratch (gitignored): ONLY the live loop mechanics - route-state.json, the
+                    per-ticket files <key>-review-brief.txt, <key>-qa-brief.txt,
+                    last-review-session.<key>.txt, last-qa-session.<key>.txt,
+                    <key>-readiness-round.txt (0.3.7), checkpoint.md (HARD-024) - and the
+                    artifacts of the CURRENT ticket
 ```
 
 **Where things are written** - the generic block is the managed `CLAUDE.md` region (0.3.1); this
@@ -274,9 +259,6 @@ overrides). Correction-round cap: `loop.correctionRoundsCap` = 2.
   session rule (`docs/WORKFLOW.md` § Plan readiness review).
   *Expires* when the payload carries the mechanism (candidate: CANDIDATES § „Таван на контекста“).
   (product)
-- **Ticket-end cleanup** (operator rule 2026-10-06, widened 2026-10-16): everything the ticket
-  created under `.aiwf/` is deleted with no chat question (the delete dialog is the gate), after
-  anything worth keeping moved to `readiness/<ABBR>/` or the record.
 
 ## Product boundary checks (rendered into the Reviewer)
 

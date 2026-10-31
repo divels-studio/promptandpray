@@ -35,8 +35,9 @@ arbitrate engineering decisions):
 - **the commit click / the push word** - a commit is approved by its native Yes/No dialog alone, the
   operator types nothing; push/merge/rebase need an explicit word in chat AND their own dialog
   (payload `docs/WORKFLOW.md` § Commit & Push Authority);
-- **every review pass beyond the first** - only the first pass rides the ticket's word; each further
-  pass takes its own word, one word per pass;
+- **every review pass beyond the first** - only the first pass rides the ticket's word, and a QA pass
+  that follows the review in an R2 runtime route rides it too; each further pass takes its own word,
+  one word per pass;
 - **destructive or system-changing operations** (payload `docs/WORKFLOW.md` § Commit & Push Authority);
 - **product / UX calls** - what the user sees or loses.
 
@@ -53,7 +54,9 @@ Full mapping: payload `docs/LOOP.md` § Routing mapped to native.
 **Dispatching the Writer (R2/R3).** Through the **Agent tool** with `subagent_type: "writer"` - the
 only repo writer. **Never pass `model`**: the Writer's model is pinned in its frontmatter and the
 override would replace the pin (payload `docs/LOOP.md` § Role boundaries). Every Writer brief carries
-`Ticket: <REF>` on a **line of its own** - Gate 2 reads it. This project's Gate 2 mode is
+`Ticket: <REF>` on a **line of its own** - Gate 2 reads it. The one exception is the planner of
+`/pnp:plan`: dispatched as the `writer` type before any ticket exists, it carries no `Ticket:` line,
+and Gate 2 raises one dialog for it. This project's Gate 2 mode is
 `off-plan`: `always` = a Yes/No dialog on every Writer dispatch; `off-plan`
 = silent when `<REF>` names a ticket in `dev/backlogs/active/PLAN_*.md` or an `<ABBR>/`
 folder there, a dialog otherwise. **Who audits the ticket, on which engine and with how many passes
@@ -139,9 +142,10 @@ All in payload `docs/WORKFLOW.md`:
   `cd D:\promptandpray && claude --plugin-dir D:\pnp-live` and enter with `/pnp:mission`. The plugin
   loads from `D:\pnp-live`, a detached git worktree of `main`, never from this repo itself: with
   `--plugin-dir` pointing at the working directory, auto mode returns "no verdict" on every in-repo
-  write (measured 2026-09-23). After every commit on `main`, refresh the live copy - no `-C`, no
-  `cd` (operator rule 2026-10-17): `Start-Process git -ArgumentList 'checkout','--detach','main'
-  -WorkingDirectory 'D:\pnp-live' -NoNewWindow -Wait`. Plans live in `dev/backlogs/`, the project's
+  write (measured 2026-09-23). After every commit on `main`, refresh the live copy (operator rule
+  2026-10-17; the form that needs neither `-C` nor `cd`, both gated by the hooks since 0.3.7):
+  `Start-Process git -ArgumentList 'checkout','--detach','main' -WorkingDirectory 'D:\pnp-live'
+  -NoNewWindow -Wait`. Plans live in `dev/backlogs/`, the project's
   identity and hard rules in `dev/PROJECT_OVERRIDES.md` (read it first - `dev/README.md` is the map).
 - The payload is code: any change under `skills/ docs/ templates/ scripts/ schema/ hooks/
   migrations/ examples/ .claude-plugin/` is R2 through the Writer; the auditor is the audit table's

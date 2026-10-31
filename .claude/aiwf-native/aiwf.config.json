@@ -1,13 +1,13 @@
 {
   "$schema": "D:/pnp-live/schema/aiwf.config.schema.json",
   "_aiwf": {
-    "installedPluginVersion": "0.3.6",
-    "lastMigrationApplied": "0031_session-key",
+    "installedPluginVersion": "0.3.7",
+    "lastMigrationApplied": "0032_rule-homes",
     "managedRegions": {
       ".claude/aiwf-native/roles.json": "0.2.19",
-      ".claude/agents/writer.md": "0.2.20",
-      "CLAUDE.md#aiwf-core": "0.3.1",
-      ".claude/aiwf-native/ORCHESTRATOR.md": "0.3.1",
+      ".claude/agents/writer.md": "0.3.7",
+      "CLAUDE.md#aiwf-core": "0.3.7",
+      ".claude/aiwf-native/ORCHESTRATOR.md": "0.3.7",
       "AGENTS.md": "0.2.20"
     },
     "ownedAskRules": [

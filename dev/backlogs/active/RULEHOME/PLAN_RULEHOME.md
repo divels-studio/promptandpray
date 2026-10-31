@@ -42,7 +42,7 @@ X4); any write in `D:\Stratex` by this repository's session (D-07).
 | ref | title | implements | status | record |
 |---|---|---|---|---|
 | RULEHOME-001 | payload prose: the skeletons, skills, templates and doctrine sentences of D-03, the QA word, the QA evidence, the brief files' lifetime | D-01 D-03 D-09 D-12 D-16 D-17 D-18 | closed f61817f | `records/RULEHOME-001.md` |
-| RULEHOME-002 | payload code: two spikes, the habit guard, the gates' guarantees, the per-ticket brief path with its prose, release 0.3.7 | D-02 D-04 D-05 D-06 D-13 D-14 D-15 D-16 | open | - |
+| RULEHOME-002 | payload code: three spikes, the habit guard, the gates' guarantees, the per-ticket brief path with its prose, release 0.3.7 | D-02 D-04 D-05 D-06 D-13 D-14 D-15 D-16 | closed 6bb25dc (code), 6c4e627 (scratch-keep prose) | `records/RULEHOME-002.md` |
 | RULEHOME-003 | Silerax: harvest, removal, diet, Retires sweep | D-02 D-07 D-08 D-09 D-10 | open | - |
 
 ## Order and gates

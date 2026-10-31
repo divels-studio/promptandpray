@@ -45,7 +45,7 @@ development history.
 
 Before dispatching an auditor pass that costs the operator, the COO writes the covering operator
 word INTO the brief. For a review brief that is the **first line of the brief file**
-(`<scratchDir>/review-brief.txt`), in the fixed form:
+(`<scratchDir>/<key>-review-brief.txt`), in the fixed form:
 
 ```text
 COVERED BY: operator word "<quote>", <date>
@@ -55,9 +55,10 @@ One line, quoted verbatim from the operator's own message, so that compliance is
 project artifact instead of being remembered by the session that had the most reason to forget it.
 
 **Its suppression dual.** A pass the doctrine already licences quotes THAT word and asks for no new
-one: the first pass of a route rides the ticket's standing word, and writing the standing word into
-the line is the whole of the obligation there. Asking for a fresh word where one is already standing
-is the opposite failure, and it costs the operator exactly as much. Which passes need their own word
+one: the first pass of a route rides the ticket's standing word - so does a QA pass that follows the
+review in an R2 runtime route, the first pass of a second role on that route - and writing the
+standing word into the line is the whole of the obligation there. Asking for a fresh word where one
+is already standing is the opposite failure, and it costs the operator exactly as much. Which passes need their own word
 is payload `docs/WORKFLOW.md` § The operator does not arbitrate engineering decisions.
 
 ## Verdict and dispatch
@@ -94,6 +95,9 @@ Four countable yes/no triggers. A decision escalates when:
 2. it touches access policy / tenancy / security-definer surfaces;
 3. its blast radius crosses the current ticket's boundary;
 4. two sessions/roles disagree in writing.
+
+A plan-recorded bar, pin, threshold or cap is a recorded decision: a ticket that would move it fires
+trigger 1, with no "tuning" reading.
 
 **A fired trigger makes escalation MANDATORY** - no word gates it. The COO announces the escalation
 in one line and prepares the brief: the casus, the `file:line` evidence, and WHICH trigger fired. No

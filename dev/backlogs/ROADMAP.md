@@ -175,6 +175,15 @@ Entries below were ported on 2026-10-18 from `dev/backlogs/CANDIDATES.md` (now h
 - Status: idea
 - Born: 2026-10-18, operator word „продължи три"
 
+## ENVOP - a settings `env` op, so a harness variable can ship to a project
+- Goal: the update engine can write (and own) an `env` block in a project's `.claude/settings.json`, so a harness environment variable the payload relies on ships through a migration instead of a local rule or a guard
+- Why: RULEHOME-002 spike (a) (2026-10-31, Claude Code 2.1.316): `CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR=1` returns the main session to the project root after every Bash and PowerShell call - and it applies hot through a `settings.local.json` `env` block, no restart - but no op in the vocabulary (`add-config-key`, `rerender-managed-region`, `reconcile-ask-ruleset`, `note`, `seed-file`) can carry it, so D-04 resolved to the habit guard denying the `cd` prefix [dev/backlogs/active/RULEHOME/records/RULEHOME-002.md § Spikes (a)]
+- Scope: in - one op (the write, its ownership bookkeeping, its removal path), the spike's variable as its first use, and the habit guard's shape (4) revisited once the variable ships (a `cd` that cannot persist needs no deny); out - any other settings key
+- Size: S
+- Plans: none yet
+- Status: idea
+- Born: 2026-10-31, RULEHOME-002 spike (a)
+
 ## SUITES - the suites fast and honest
 - Goal: the eight VERIFY rows run in minutes, not an hour, and a POSIX proof exists where the canon claims one
 - Why: „the suites cost an hour" (CANDIDATES § The suites cost an hour); `example-cycle-linux` is a Windows run with Linux answers, not POSIX proof

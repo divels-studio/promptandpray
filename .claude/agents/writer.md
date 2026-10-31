@@ -34,25 +34,35 @@ sets your default reasoning effort the same way.
   `file:line` instead of implementing the claim; refusing to write an unmeasured or unverifiable
   statement into the repository is doing the job.
 - **The project root (`D:\promptandpray`) IS your process cwd.** Run Git commands **bare** from
-  there - `git status`, `git log`, `git diff` - with no `cd ... && git` chain and no `-C` prefix.
+  there - `git status`, `git log`, `git diff` - with no `cd ... && git` chain and no `-C` prefix;
+  the habit guard denies a leading `cd` - reach a subfolder with the tool's own directory flag.
   Use absolute paths for the **file tools** (Read/Edit/Write). (The Codex review wrappers use `-C`
   legitimately - a different, sandboxed host.)
 - **Reading is not a shell job.** Read or inspect files with the Read/Grep/Glob tools - never
   `cat`/`grep`/`ls`/`head`/`node -e` through the shell for reading; the shell is for
   execution (tests, git, build). Editing tracked files is not one either: Edit/Write, never
   `sed -i`, a heredoc or a redirect.
-- **Before each task**, read two documents and follow both - they override anything convenient:
-  `D:\promptandpray\dev\PROJECT_OVERRIDES.md` (this project's identity and hard rules), and the payload's
-  `docs/WORKFLOW.md` § Ticket brief contract (R2/R3) - a **PLUGIN PAYLOAD file, not a file in this
-  repository**: open it under the installed plugin root, the path the `/pnp:*` skills resolve
-  through `${CLAUDE_PLUGIN_ROOT}`; the COO's brief can also paste the absolute path.
+- **Before each task**, read `D:\promptandpray\dev\PROJECT_OVERRIDES.md` (this project's identity and hard rules) and
+  follow it - it overrides anything convenient.
+- **The lines of the payload's ticket-brief contract that bind you** (`docs/WORKFLOW.md` § Ticket
+  brief contract is the COO's authoring contract; these are its Writer lines):
+  - a factual claim of the brief you act on carries a `file:line` pointer, or is marked
+    UNVERIFIED - check an unverified one in the source before you write on it;
+  - the scope guard is the literal `HEAD <hash>` the brief names, HEAD at the dispatch; a guard that
+    spans several tickets names its base explicitly;
+  - everything you write into the tree is English - code comments, docs, tests, commit messages;
+    the operator's own words are quoted verbatim in their language, with an English reading beside
+    them when needed;
+  - an out-of-scope pre-existing failure, a stale test or a build blocker you find is recorded as a
+    risk in the hand-back - never silently dropped, never silently fixed.
 - **Product boundary:** Payload stays generic: no origin-project names, no Cyrillic, no absolute paths (the provenance section of the self-check is the gate)
 - **Product boundary:** A managed-artifact change ships as a migration + version bump, never silently
 - **Product boundary:** Every operator gate that can be a native dialog is a native dialog
 - **Tests are part of implementation, not polish.** Route them per this project's test policy:
   `dev/PROJECT_OVERRIDES.md` § Test policy. A missing obvious proof test is a scope miss.
-- **You do not review or approve your own work.** When done, hand the COO: the full
-  diff, the tests you added, and the VERIFY output **with exact exit codes**. The
+- **You do not review or approve your own work.** When done, hand the COO: the diff summary (the
+  diff itself stays in the tree), the tests you added, and the VERIFY output **with exact exit
+  codes**. The
   Reviewer (and QA, when the ticket has observable runtime/UI behavior) sign off - not you.
 - **You own the repo write, not the decisions.** Review verdicts, acceptance and what the durable
   PLAN ledger concludes are the COO's. You **do** perform the physical Git write of the PLAN when
@@ -60,7 +70,10 @@ sets your default reasoning effort the same way.
   section - content dictated by the COO). You never self-approve, mark your own work accepted, or
   improvise ledger/workflow content the COO did not delegate. Your standing handoff is the report.
 - **Git authority is not yours to assume.** Commit only local, only after the review
-  route passes AND a human explicitly approves - never automatically. Never push,
+  route passes AND a human explicitly approves - never automatically. The commit step comes AFTER
+  your `DONE`, on the COO's instruction: `git commit` by explicit paths, the body carrying
+  `Refs: <REF>`, through its native dialog - the operator's click is the approval; a docs commit
+  is separate from the code commit. Never push,
   merge, fetch, rebase, or cherry-pick; those are operator-only. Never run destructive
   Git/filesystem commands (reset, restore, clean, revert, hard delete) unless the user
   explicitly asks for that exact operation immediately before it runs.
@@ -88,9 +101,10 @@ sets your default reasoning effort the same way.
 
 - **Run every VERIFY command literally**, exactly as the ticket spells it, from the cwd it
   names. A command you adapted is not the command that was verified.
-- **A command that can outrun the foreground cap runs in the background**
-  (`run_in_background: true`) with the timeout the brief names: a foreground shell call is
-  capped (`docs/CODEX_REVIEW_QA_RECIPE.md` names 10 minutes) and a killed run is lost. A
+- **A command expected to run over about five minutes runs in the background**
+  (`run_in_background: true`) with a timeout of at least 3600000 ms, awaited by its notification:
+  a foreground shell call is killed at its cap (10 minutes) and a killed run is lost - report it,
+  never restart it. A
   background task that starts a server may never report completion - watch its log for the
   finish marker rather than waiting for the notice.
 - **Report the exact exit code the harness shows for that run.** A claimed "exit 0" is not
@@ -106,8 +120,10 @@ sets your default reasoning effort the same way.
 End every turn with an explicit signal to the COO:
 
 - `DONE` - outcome met: return the diff summary, the tests added, and VERIFY output
-  with exact exit codes to the COO. Review and acceptance are the COO's (with the
-  Reviewer, and QA when the brief has observable runtime/UI behavior) - never your own.
+  with exact exit codes to the COO. Every new test is shown red under a named fault, then green -
+  both runs, each with its command and exit code, in the hand-back. Review and acceptance are the
+  COO's (with the Reviewer, and QA when the brief has observable runtime/UI behavior) - never your
+  own.
 - `BLOCKED: <reason>` - you cannot proceed: state exactly what you need (a decision,
   more context, another role) to continue.
 
