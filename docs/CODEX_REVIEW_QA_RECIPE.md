@@ -74,9 +74,11 @@ Hard requirements (do not change without re-proving the read-only posture):
   wrappers have **no prompt flag at all** - the brief arrives on stdin and only on stdin, and any
   unrecognised argument is refused with exit 2. An empty or whitespace-only brief is refused (exit 2)
   on both, before a paid pass is spent.
-- **Every wrapper runs in the BACKGROUND by default** (`run_in_background: true`). A foreground shell
-  call is capped at 10 minutes, while an external engine at `effort: high` on a real diff routinely
-  runs longer and is killed mid-reasoning (exit 143). The run ends there and the verdict does not
+- **Every wrapper runs in the BACKGROUND by default** (`run_in_background: true`), with a timeout of
+  at least 3600000 ms: a command expected to run over about five minutes runs in the background
+  (`docs/LOOP.md` § Role boundaries). A foreground shell call is killed at its cap (10 minutes),
+  while an external engine at `effort: high` on a real diff routinely runs longer and is killed
+  mid-reasoning (exit 143). The run ends there and the verdict does not
   arrive - passes on a paid engine are an operator quota gate, so a timeout kill spends the
   operator's budget and returns no verdict. What the run had already read is recoverable - see
   "Resuming a session" below - and that changes nothing about this rule: recovery costs a further
@@ -89,9 +91,12 @@ Hard requirements (do not change without re-proving the read-only posture):
 
 A correction round does not have to pay for a second cold read of the whole repository. Every run of
 `codex-review.*` and `codex-qa.*` - cold or resumed - records this run's session id into a state
-file, and a later pass can replay that session with the new brief. A verification pass resumes
-with the explicit id recorded at pass 1 (`-ResumeId <id>` / `--resume-id <id>`); a bare resume only
-when one session is known to hold the tree.
+file, and a later pass can replay that session with the new brief. The state file is keyed per
+ticket - by the brief's `Ticket:` line, a plan pass by its `PLAN:` folder - so a verification pass
+resumes BARE by default (`-Resume` / `--resume` with no id): it replays this ticket's own last
+session even when another ticket's pass ran on the same tree. An explicit id (`-ResumeId <id>` /
+`--resume-id <id>`) is for a session the state file no longer names. The policy of which passes
+resume at all is `/pnp:review` Step 3 and `/pnp:qa` Step 3b.
 
 - **THE WRAPPERS DO NOT TOUCH EITHER OUTPUT STREAM, and the id does not come from the output at
   all.** Codex prints its configuration banner - the part carrying `session id:` - on **stderr**,

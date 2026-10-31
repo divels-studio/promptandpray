@@ -4,5 +4,7 @@ A characterization inherited from a scan agent ("this is legacy", "nothing else 
 tests cover it") is raw material. Relaying it to the operator as established fact launders a guess
 into a conclusion.
 
-Every fact reported to the operator carries the check that produced it: the command, the `file:line`,
-or the number. If the check does not exist yet, either run it or label the statement unverified.
+Every fact reported to the operator rests on the check that produced it: the command, the
+`file:line` or the number, kept in the brief or the record - the operator channel itself carries
+the counts and names. If the check does not exist yet, either run it or label the statement
+unverified.

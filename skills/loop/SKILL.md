@@ -31,9 +31,12 @@ Argument: the ticket ref or goal being run.
 
 Notation: `{{config.some.key}}` in this document means *substitute the value you read in step 2*.
 
-Read the authority before driving the loop: `{{config.paths.overridesDoc}}` (this project's
-identity and hard rules), the plugin's `docs/WORKFLOW.md` (routing + the ticket-brief contract),
-and `docs/LOOP.md` (the one-page native mapping).
+**Doctrine preflight before driving the loop:** read the plugin's `docs/WORKFLOW.md` and
+`docs/LOOP.md` IN FULL, this project's `{{config.paths.overridesDoc}}` IN FULL, AND
+`.claude/aiwf-native/ORCHESTRATOR.md` (your rendered standing rules) IN FULL - the four documents
+of `/pnp:work` Step 1. **Its suppression dual** is `/pnp:plan`'s: skip the read when this session
+already read the current text of all four (`git diff <the HEAD noted at that read> -- <the four
+paths>` returns empty); after a context compaction all four are read again.
 
 ## Roles (who may do what)
 
@@ -64,11 +67,15 @@ and `docs/LOOP.md` (the one-page native mapping).
    `{{config.paths.plansDir}}/active/<ABBR>/` before implementation.
 2. **Writer implements.** Delegate the concrete ticket to the `writer` subagent (Agent tool,
    `subagent_type: "writer"`) with the brief `${CLAUDE_PLUGIN_ROOT}/templates/briefs/writer-dispatch.md`:
-   the `Ticket:` line, the pointer to `tickets/<REF>.md` and its Code Map, the standing lines - the
+   the `Ticket:` line, the pointer to `tickets/<REF>.md` and its Code Map, the payload's standing
+   lines the template carries (the `HEAD` hash filled at this dispatch), and its one `Project lines:`
+   slot for this project's own rules, or `none` - the
    ticket file carries the outcome, scope, acceptance, risk threshold and stop condition, so the
    brief does not restate them. Tests are part of implementation, not polish. The Writer returns
    `DONE` (+ diff + tests + VERIFY output with exact exit codes) or `BLOCKED: <reason>`.
-   Carry `Ticket: <REF>` on a line of its own in the brief. Gate 2 then decides in the project's
+   Carry `Ticket: <REF>` on a line of its own in the brief - the one exception is the planner of
+   `/pnp:plan`, dispatched as the `writer` type before any ticket exists, with no `Ticket:` line and
+   one Gate 2 dialog. Gate 2 then decides in the project's
    configured mode (`enforcement.dispatchGate`): `always` = every dispatch surfaces a native
    **Yes/No** dialog and the operator clicks; `off-plan` = a ref found in
    `{{config.paths.plansDir}}/active/PLAN_*.md` or `active/<ABBR>/` passes silently and everything

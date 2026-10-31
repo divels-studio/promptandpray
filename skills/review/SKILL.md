@@ -136,6 +136,9 @@ mandatory (without them the Reviewer can loop forever) - take them from the tick
 authored. **For a plan-readiness check, use the readiness brief shape below instead.**
 
 ```
+COVERED BY: operator word "<quote>", <date>
+  (the first line of the brief: the operator's word this pass rides, quoted verbatim - the
+  ticket's standing word for a first pass, the pass's own word for any later one)
 Review the diff for ticket <TICKET_REF> on branch <branch>.
 
 Class: plan | code | docs
@@ -161,7 +164,13 @@ declares why the previous pass could not see it (`docs/WORKFLOW.md` § Fail aggr
 
 EVIDENCE PACK (a first `code`-class pass carries one; see below for what it is and is not):
 <the file:line evidence the COO already holds - the worklist pointers and the anchors the ticket
-was authored against>
+was authored against. The pack is a selection made by the audited side: read the tree past it, run
+your own probes, and report an incomplete pack as a finding.>
+
+PRODUCT BOUNDARY CHECKS:
+<one line per entry of `config.review.productBoundaryChecks`, verbatim - or `none`. A Codex host
+reads no `.claude/agents/` file, and the root `AGENTS.md` it reads is role-free, so this slot is
+how the project's boundaries reach it.>
 
 RISK THRESHOLD: <which defect severity blocks - e.g. "block on correctness/security/data-loss;
 note-only for style">
@@ -186,6 +195,10 @@ raise a blocker that was already visible):
 
 Substitute the checklist path when you write the brief: the Reviewer runs outside this session and
 cannot expand `${CLAUDE_PLUGIN_ROOT}` itself, so paste the resolved absolute path.
+
+**Before the dispatch, grep the diff for narrowed tests:** `skip`, `only`, `todo` and reduced test
+sets, with one decision recorded per hit in `<scratchDir>/<REF>-diff-review.md` - green by narrowing
+is not accepted (`docs/REVIEW_CHECKLIST.md` § Test quality).
 
 **The evidence pack, and the one thing it is not.** A first `code`-class pass carries an evidence
 pack: the `file:line` evidence the COO already holds from authoring the ticket - the worklist
@@ -336,16 +349,19 @@ starts: for `-Class plan` / `--class plan`, or a brief carrying the `Class: plan
 refusal spends nothing - fix what it names, stamp again and invoke again.
 
 `{{config.paths.scratchDir}}` is kept out of git by the project's own `.gitignore` (setup writes no
-ignore entry), so the brief never enters a commit. Never delete the
-file afterwards - `rm` is an `ask` rule and cleanup would pop the very dialog this arrangement
-removes. The next dispatch overwrites it, and keeping it lets a correction round re-dispatch
-without retransmitting the brief.
+ignore entry), so the brief never enters a commit. Between the dispatches of one ticket the file
+is not deleted - `rm` is an `ask` rule and a cleanup per pass would pop the very dialog this
+arrangement removes; the next dispatch overwrites it, and keeping it lets a correction round
+re-dispatch without retransmitting the brief. At the ticket's close it IS deleted, by the ticket-end
+cleanup of the record skeleton's closing checklist - that one delete dialog is the gate.
 
 Two sessions dispatching a Reviewer in the same second would overwrite each other's brief. That is
 an accepted, visible failure mode: a re-dispatch, not a silent wrong verdict.
 
-**Run the wrapper in the BACKGROUND - `run_in_background: true`. This is the default, not an
-optimisation.** A foreground shell call is capped at 10 minutes; an external review engine at
+**Run the wrapper in the BACKGROUND - `run_in_background: true`, with a timeout of at least
+3600000 ms. This is the default, not an optimisation:** a command expected to run over
+about five minutes runs in the background (`docs/LOOP.md` § Role boundaries). A foreground shell
+call is killed at its cap (10 minutes); an external review engine at
 `effort: high` on a real diff routinely runs longer and is killed mid-reasoning (exit 143). The run
 ends there and the verdict does not arrive - passes on a paid external engine are an **operator
 quota gate**, so a timeout kill has already spent the operator's budget and hands you nothing to

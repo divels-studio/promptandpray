@@ -38,10 +38,13 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
    NEVER touch or stage foreign uncommitted files; commit only by explicit paths.
 3. **Ask for the task** (in `{{config.operator.language}}`, briefly): what outcome, what is in and
    out of scope, any constraints. One round of questions, then work.
-4. **Classify and route.** R1 -> execute directly in this session and report. R2/R3 -> requires a
-   ticket in a plan under `{{config.paths.plansDir}}/active/` (plansDir is the PARENT of `active/`,
+4. **Classify and route.** R1 -> execute directly in this session and report. R2/R3 -> a ticket in
+   a plan under `{{config.paths.plansDir}}/active/` (plansDir is the PARENT of `active/`,
    `archive/`, `drafts/` and `readiness/`): extend a PLAN with the ticket brief (risk threshold +
-   stop condition) - a NEW durable plan goes through `/pnp:plan` - state the routing as a decision
+   stop condition) - a NEW durable plan goes through `/pnp:plan`. A non-durable R2 - below the
+   durable-record threshold of `docs/WORKFLOW.md` § Durable development history - needs no plan: its
+   own brief carries the contract fields and its COO routing line, and in `off-plan` mode its Writer
+   dispatch raises the Gate 2 dialog, since no active plan names it. State the routing as a decision
    with a one-line why, then STOP and wait for the operator's word before dispatching. One prefix per plan: a new plan is
    `PLAN_<ABBR>.md` (or a folder `active/<ABBR>/` whose index is `PLAN_<ABBR>.md`) and its tickets
    are `<ABBR>-<NNN>`, sequential and never reused, so the ref is the address of its plan file rather
@@ -59,7 +62,8 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
   push/merge/rebase need an explicit word plus their dialog), review passes BEYOND THE FIRST (a
   pass beyond `review.plan.passes`, a correction round past the cap - each its own explicit word,
   as does every auditor pass after the first one of a route: only the first rides the ticket's
-  standing word - one word per pass),
+  standing word, and a QA pass that follows the review in an R2 runtime route rides it too - one
+  word per pass),
   destructive or system-changing operations, and product/UX choices (stop-and-wait when 2+
   variants exist).
 - The Writer is the only repo writer for R2/R3; dispatch via the Agent tool with a `Ticket: <REF>`
@@ -74,4 +78,5 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
   `*.md`, plus the transfer surface, the roadmap `<plansDir>/ROADMAP.md` and the planning folders
   `<plansDir>/drafts/**` and `<plansDir>/readiness/**` (Gate 3, armed by writing `.aiwf/route-state.json` at dispatch
   and cleared with `{}` on close); VERIFY commands run literally with exact exit codes; every claim
-  to the operator carries its evidence (command / file:line / number).
+  to the operator is checked against the tree first - its evidence (command / file:line / number)
+  stands in the brief or the record, while the operator channel carries the counts and names.

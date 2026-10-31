@@ -59,7 +59,8 @@ and pastes it. That way every session starts from ONE recipe instead of being im
 ## The Writer brief - a pointer to a frozen ticket
 
 The Writer brief is `templates/briefs/writer-dispatch.md`: the `Ticket: <REF>` line, "read
-`tickets/<REF>.md` and the files its Code Map names", and the project's standing lines - it does not
+`tickets/<REF>.md` and the files its Code Map names", the payload's standing lines the template
+itself carries, and one `Project lines:` slot for this project's own rules (or `none`) - it does not
 restate the goal, the files, the decisions, the scope or the VERIFY commands. A handover brief
 carries that ticket pointer, never a copy of the ticket. A new durable plan goes through
 `/pnp:plan`.

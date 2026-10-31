@@ -102,12 +102,17 @@ Surgical edits over rewrites: a file is never rewritten whole when the result is
 whole-file restructure that is needed is announced in one line first, with its reason. A command
 expected to run over about five minutes runs in the background for every role, with a timeout of at
 least 3600000 ms, awaited by its notification; a run killed by the cap is not restarted but
-reported, and every brief repeats this. Auto mode refuses agent edits to `.claude/settings.json`,
-`.claude/hooks/**` and the config files an update writes, even with the operator's word: the COO
-asks the operator to switch auto mode off in its first reply, and if still blocked stops and
-explains - never a bypass through `sed`, a heredoc or a redirect; the operator may hand-edit from
-the COO's exact lines. The Writer's reply is short - about 25 lines: blockers, deviations, failed
-checks and the handoff path, the details in the handoff file.
+reported, and every brief repeats this. Auto mode refuses Edit/Write-tool edits to
+`.claude/settings.json` and `.claude/hooks/**`, even with the operator's word: the COO asks the
+operator to switch auto mode off in its first reply, and if still blocked stops and explains - never
+a bypass through `sed`, a heredoc or a redirect; the operator may hand-edit from the COO's exact
+lines. The update engine's own config write is a different case: `/pnp:update --apply` was observed
+running through under auto mode, so an apply does not ask in advance for auto mode to be switched
+off; a host that does refuse it is handled by `/pnp:update` Step 3 (run it again in a mode that
+asks). The
+Writer's reply is its report, and it is short - about 25 lines: blockers, deviations, failed checks
+and the VERIFY exit codes, with no separate handoff document. The diff stays in the tree, where the
+COO reads it whole.
 
 ## Enforcement of Writer-only writes
 

@@ -101,7 +101,7 @@ precondition rather than starting one.
 
 ```powershell
 # cwd: <root>/{{config.verify.e2e.cwd}}  - scope to the ticket's spec
-{{config.verify.e2e.runner}} {{config.verify.e2e.specDir}}/<ticket>.spec.ts --trace on --output {{config.verify.e2e.outputDir}}
+{{config.verify.e2e.runner}} {{config.verify.e2e.specDir}}/<ticket>.spec.ts --trace retain-on-failure --output {{config.verify.e2e.outputDir}}
 ```
 
 No `>` redirect and **no inline env** - nothing that could disturb the permission match on the
@@ -110,15 +110,17 @@ runner config (a `json` reporter writing next to `{{config.verify.e2e.outputDir}
 creates the parent dir).
 
 Why the two flags (do not drop them):
-- **`--trace on`** - a typical repo config traces only on retry, and with zero local retries a
-  *passing* run would leave **zero** traces, so QA would self-`BLOCKED`. `on` forces a `trace.zip`
-  for every test.
+- **`--trace retain-on-failure`** - a typical repo config traces only on retry, and with zero local
+  retries a *failing* run would leave no trace to judge it by. `retain-on-failure` records every
+  test and keeps the `trace.zip` of each FAILED one; a passing test is judged from the JSON report,
+  which needs no trace.
 - **`--output {{config.verify.e2e.outputDir}}`** - pins the artifact dir to a known path the
   project's own `.gitignore` keeps out of git (setup writes no ignore entry).
 
 **Guaranteed artifacts** (before extraction):
-- the JSON report, **always** (config reporter);
-- `{{config.verify.e2e.outputDir}}/**/trace.zip` - a trace per test, **always** (`--trace on`);
+- the JSON report, **always** (config reporter) - the evidence of a passing test;
+- `{{config.verify.e2e.outputDir}}/**/trace.zip` - a trace per FAILED test (`--trace
+  retain-on-failure`); none for a passing one;
 - screenshots - **only on failure** (also embedded in the trace).
 
 ## Step 2b - Extract traces for the QA host (the orchestrator does the unzip)
@@ -148,9 +150,9 @@ Each trace's internals (`0-trace.trace`, `test.trace`, `0-trace.network`, `resou
 under `{{config.verify.e2e.outputDir}}/**/trace-extracted/` for QA to Read/Grep directly.
 
 **Artifacts to pass QA in Step 3** (post-extraction):
-- the JSON report - **always**;
-- `{{config.verify.e2e.outputDir}}/**/trace-extracted/` - the **unzipped** trace internals per test,
-  **always** (Step 2b). Pass this dir, **not** the `.zip`;
+- the JSON report - **always**; it is the evidence of a passing test;
+- `{{config.verify.e2e.outputDir}}/**/trace-extracted/` - the **unzipped** trace internals per
+  FAILED test (Step 2b), passed when it exists. Pass this dir, **not** the `.zip`;
 - screenshots - **only on failure** (also embedded in the trace).
 
 ## Step 3 - Build the QA brief (which artifacts, criteria, thresholds, verdict contract)
@@ -159,6 +161,9 @@ Pull acceptance criteria, **risk threshold**, and **stop condition** from the CO
 all mandatory. Point QA at the **artifacts**, not a browser:
 
 ```
+COVERED BY: operator word "<quote>", <date>
+  (the first line of the brief: the operator's word this run rides, quoted verbatim - the ticket's
+  standing word for the QA pass that follows the review, the run's own word for any later one)
 QA (artifact judge) ticket <TICKET_REF> against its acceptance criteria.
 Ticket: <TICKET_REF>
   (a line of its own, first column: the wrapper keys QA's session-state file by it, so another
@@ -167,12 +172,18 @@ Ticket: <TICKET_REF>
 EVIDENCE (read-only - do NOT run a browser, do NOT start a server):
   E2E artifacts from the orchestrator's test run (ABSOLUTE paths - resolve them before sending;
   QA cannot expand config values or plugin variables itself):
-    - JSON report (always present): <abs path to the runner's JSON report>
-    - Trace internals (always present, UNZIPPED per test - Step 2b):
+    - JSON report (always present - the evidence of a passing test): <abs path to the runner's JSON report>
+    - Trace internals (present per FAILED test only, UNZIPPED - Step 2b; omit the line when no test failed):
       <abs path>/**/trace-extracted/
       (Read/Grep the .trace/.network files directly - the Claude QA host cannot open a .zip)
     - Screenshots: only if a test FAILED (also embedded in the trace) - read only if present.
-  Judge from the JSON + trace internals against the criteria below.
+  Judge a passing test from the JSON report, a failed one from the JSON + its trace internals,
+  against the criteria below. A passing test without a trace is complete evidence, never a gap.
+
+PRODUCT BOUNDARY CHECKS:
+<one line per entry of `config.review.productBoundaryChecks`, verbatim - or `none`. A Codex host
+reads no `.claude/agents/` file, and the root `AGENTS.md` it reads is role-free, so this slot is
+how the project's boundaries reach it.>
 
 LOGIN CONTEXT (as exercised by the spec): this project's E2E fixture account, per its own test
 setup, unless the ticket brief overrides it. Reference the env var NAMES only - never paste
@@ -192,13 +203,14 @@ authority minimum.)
 OUTPUT CONTRACT (single round - return ALL material problems at once):
   First line: exactly one of `pass` / `pass-with-notes` / `fail` (per the review checklist at
   <absolute path to the plugin's docs/REVIEW_CHECKLIST.md>)
-  - OR `BLOCKED`, allowed ONLY as a precondition failure (the artifacts are missing/empty/
-  unreadable, or the run never produced them). Never use `BLOCKED` to defer a real defect.
+  - OR `BLOCKED`, allowed ONLY as a precondition failure: the JSON report is missing, empty or
+  unreadable, or the run never produced it. Never `BLOCKED` for a passing test without a trace, and
+  never to defer a real defect.
     - `pass`            = every criterion verified at/above the risk threshold from the evidence.
     - `pass-with-notes` = verified; only narrow, local, non-blocking notes remain.
     - `fail`            = a criterion fails / a blocker is evidenced. List blockers first, each
                           citing the artifact (test name, screenshot/trace path, JSON assertion).
-    - `BLOCKED`         = precondition only: no usable artifacts to judge; report and stop.
+    - `BLOCKED`         = precondition only: no usable JSON report to judge; report and stop.
   You are read-only: report with evidence, never fix.
 ```
 
@@ -233,8 +245,10 @@ only match a constant command string, so an inline here-string carrying the brie
 session-scoped scratchpad path, must prompt the operator on every dispatch and can never be
 allowlisted. Do not inline the brief, and do not make the path unique per session or per ticket.
 
-**Run the wrapper in the BACKGROUND - `run_in_background: true`, by default.** A foreground shell
-call is capped at 10 minutes; an external engine at `effort: high` routinely exceeds it and is
+**Run the wrapper in the BACKGROUND - `run_in_background: true`, by default, with a timeout of at
+least 3600000 ms:** a command expected to run over about five minutes runs in the background
+(`docs/LOOP.md` § Role boundaries). A foreground shell call is killed at its cap (10 minutes); an
+external engine at `effort: high` routinely exceeds it and is
 killed mid-run (exit 143), by which point the operator's paid quota is spent and no verdict has
 arrived. What the run had already read is recoverable (the interruption rule below), and that
 changes nothing about this rule: recovery costs a further dispatch and the operator's attention, so a
@@ -321,8 +335,11 @@ The block of this project's OS channel is the **only canonical wrapper path** - 
 `windows`, bash on os `linux`/`macos` (same foreign-shell caveat as `/pnp:review`, and the same
 rule: the channels are mirrors, never alternatives). `{{config.paths.scratchDir}}` is kept out of
 git by the project's own `.gitignore` (setup writes no ignore entry), so the brief never enters a
-commit. Never delete it afterwards - `rm` is an `ask` rule and cleanup would pop the very dialog
-this arrangement removes; the next dispatch overwrites the file.
+commit. Between the dispatches of one ticket it is not deleted - `rm` is an `ask` rule and a
+cleanup per run would pop the very dialog this arrangement removes; the next dispatch overwrites the
+file, and a correction round re-dispatches without retransmitting it. At the ticket's close it IS
+deleted, by the ticket-end cleanup of the record skeleton's closing checklist - that one delete
+dialog is the gate.
 
 ### claude branch (`$role.engine -eq 'claude'`) - dispatch the qa subagent
 

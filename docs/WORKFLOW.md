@@ -46,6 +46,11 @@ delegate: 3+ independent files, 2+ verify tracks, or a docs/code/test cross-chec
 evidence gathering. **Never delegable:** the final architecture decision, the final
 code-integration decision, and the final synthesis/handoff.
 
+**Independent units run in parallel by default** - independent steps, a large mechanical worklist
+split across Writers from the dispatch, a scan beside an auditor pass - within any machine limits
+the project's overrides document names. **Its suppression dual:** units that depend on each other's
+result, or that those limits forbid together, run one after the other.
+
 **Discovery precedes dispatch.** When the delegation triggers are met, the COO runs the cheap-agent
 discovery BEFORE authoring the R2/R3 brief, and the brief carries the harvested evidence: a concrete
 worklist with `file:line` pointers, not reading assignments. A Writer that must scan broadly to learn
@@ -123,9 +128,10 @@ offered as questions. The operator's gates are exactly:
 - the commit click / the push word (a commit is the native dialog alone; push/merge/rebase need an
   explicit word plus their dialog);
 - review passes BEYOND THE FIRST: only the FIRST pass of a route rides the ticket's standing word -
-  the implementation pass, or the first readiness pass; a further configured readiness pass, the
-  verification pass after a correction round that touched code, a pass beyond `review.plan.passes`,
-  a correction round past the cap and any pass beyond the contract are each dispatched on the
+  the implementation pass, or the first readiness pass - and a QA pass that follows the review in an
+  R2 runtime route rides it too, being the first pass of a second role on the same route; a further
+  configured readiness pass, the verification pass after a correction round that touched code, a
+  pass beyond `review.plan.passes`, a correction round past the cap and any pass beyond the contract are each dispatched on the
   operator's own word, asked for before the dispatch, one word per pass;
 - destructive or system-changing operations;
 - product/UX choices (what the user sees or loses as functionality).
@@ -149,7 +155,9 @@ or a plain example, never a newly built static mockup.
 ### How the COO speaks to the operator
 
 1. **Plainly.** Answer the question and stop. One decision, one line; numbers and names rather
-   than categories - not the debt / blocker / follow-up / trade-off vocabulary. A dialog is named
+   than categories - not the debt / blocker / follow-up / trade-off vocabulary. The channel carries
+   counts and names, never a `file:line`, a test id or a code identifier: the evidence lives in the
+   briefs and the records. A dialog is named
    by what it approves ("the commit of the ticket's code"), and the operator is never told which
    button to press.
 2. **Invent no debts and no follow-up tickets.** Closing a ticket, ask whether the thing blocks
@@ -217,8 +225,9 @@ Eight rules.
   wins over the host's ergonomic directives; the host's safety and permission rules are never
   overridden, nor reinterpreted by the session in either direction.
 - **(g) The doctrine-write gate.** A rule-bearing write - memory or file - is shown to the operator
-  and lands only on approval; purely factual statuses (where the work stands, what the tree holds,
-  which ticket is next) are exempt. An operator remark is a standing rule only when the operator
+  and lands only on approval. It is SHOWN in `operator.language` and written into the tree in
+  English, the two saying the same. Purely factual statuses (where the work stands, what the tree
+  holds, which ticket is next) are exempt. An operator remark is a standing rule only when the operator
   declares it so; a rule record names whose generalisation it is, and the origin 'the operator said
   it' does not exempt the write from this gate. At the moment the COO would record an operator
   remark as a rule, it asks ONCE, in place - 'for this ticket, or from now on?' - and only 'from now
@@ -418,14 +427,17 @@ subagent and the Reviewer/QA - is tagged `[R1]`/`[R2]`/`[R3]` and contains, comp
 
 ```text
 Outcome            - what the finished work delivers
-Scope / out of scope
-Acceptance criteria - testable
+Scope              - in and out of scope
+Acceptance         - testable criteria
 Risk threshold     - which defect severity blocks (given to Reviewer/QA)
 Stop condition     - when Reviewer/QA have enough evidence and must stop
-Verify policy      - checks/proof required, by risk; the project's VERIFY runbook, when it has one
+Verify             - checks/proof required, by risk; the project's VERIFY runbook, when it has one
 Assignee
 Working branch     - only when different from the default integration branch
 ```
+
+The first six names are the six headings a plan ticket carries, the ones the mechanical plan gate
+checks (§ Plan readiness review).
 
 `Risk threshold` and `Stop condition` are mandatory for every R2/R3 brief.
 
@@ -528,11 +540,14 @@ tickets; no separate active BACKLOG file. The PLAN keeps:
    rule-class events - a violation, a catch, an operator correction - are rows of its `## Events`
    section, not of the ledger. Two acts ride the
    record: evidence worth keeping moves from the scratch directory into the record or the plan's
-   `readiness/<ABBR>/`, and what is left to delete is listed beside the record's commit (a delete
-   is the operator's dialog); and the COO says in one line whether the next ticket stays in this
-   session or wants a fresh one - a recommendation, not a stop: compaction is tolerable inside a
-   ticket, while a plan's planning and readiness are not a boundary. The record lands in its own docs
-   commit, separate from the code commit. A ticket whose outcome is visible in the running product
+   `readiness/<ABBR>/`, and then the scratch directory (`paths.scratchDir`) is emptied of everything
+   but the route state and the files of a ticket or plan still in flight - this ticket's files and
+   any leftover of earlier work alike - with no chat question: the delete dialog is the gate. The
+   session's own temporary directory outside the repository is not covered; agents delete there
+   freely. And the COO says in one line whether the next
+   ticket stays in this session or wants a fresh one - a recommendation, not a stop: compaction is
+   tolerable inside a ticket, while a plan's planning and readiness are not a boundary. The record
+   lands in its own docs commit, separate from the code commit. A ticket whose outcome is visible in the running product
    closes only after the operator's own run on a real input, their words recorded in the record;
    offline proof never replaces it. **A number describing the state of the system is
    measured or it is not stated:** anything a reader may rely on as a current fact and regress
@@ -559,7 +574,8 @@ under the same grammar: `git mv <plansDir>/active/<ABBR>/
 The plan's line under the ledger's `## Plans` is rewritten to the archive path, and the archiving of
 the last plan of a roadmap entry takes the entry out of `<plansDir>/ROADMAP.md`: the roadmap holds
 only live entries, and an idea dropped before its plans are done leaves it with one ledger row
-`<ABBR> dropped: <why>`. **The roadmap is written at exactly three events and never otherwise:**
+`<ABBR> dropped: <why>`. **The roadmap is written at exactly three entry events, plus the two
+list writes below, and never otherwise:**
 (1) an entry is born -> `Status: idea` (`researching` when `/pnp:plan` dispatches the research
 agents); (2) a plan lands in `active/` -> `Plans:` gains it, `Status: planned`, and the first
 ticket's dispatch - the moment the COO writes `.aiwf/route-state.json` - sets `Status: in
@@ -567,9 +583,10 @@ progress`; (3) the last plan under the entry is archived -> the entry leaves the
 may be an area** - a module or theme whose goal is "no known open defect" - whose `Scope: in -` list
 collects the findings born during work, one indented line each (`<date> <origin> - <what>
 [<pointer>]`), until the list is worth a plan; the plan is born over the list and its tickets come
-from the lines. That list is the fourth write: it grows at a finding's birth, while `Status` and
-`Plans` change at the three events only. An installation older than the roadmap ports its live
-candidates once - each row to an area or goal entry, the old row marked `taken up -> ROADMAP §
+from the lines. That list is the fourth write: it grows at a finding's birth. The fifth write closes
+a line: when the commit that closes a finding lands, its line is marked `done <pointer>` or removed.
+`Status` and `Plans` change at the three events only. An installation older than the roadmap ports
+its live candidates once - each row to an area or goal entry, the old row marked `taken up -> ROADMAP §
 <ABBR>`, `done` or `dropped: <why>` - and from then on reads the roadmap alone for open work. Archiving also greps the plan's process sections for rule-class points without a pointer row -
 fail-capable, with a positive control (the grep run once over a plan known to carry such a point,
 seen to report) - the backstop under guard (h). The trigger is the checkable fact - every ticket

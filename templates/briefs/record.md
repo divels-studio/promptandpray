@@ -30,10 +30,32 @@ verdict with its engine and pass number, or `no auditor` and why.>
 <What is left and where it went - a ticket, the roadmap, the ledger - or `None.`; never an
 invented follow-up.>
 
+## Diff review
+
+<The COO's reading of the whole diff, folded in from `<scratchDir>/<REF>-diff-review.md`
+(`docs/WORKFLOW.md` § The COO write boundary runs along artifact class, not size).>
+
 ## Scratch
 
-<What evidence moved out of the scratch directory and where; what is left to delete there, listed
-for the operator's delete dialog.>
+<What evidence moved out of the scratch directory (`paths.scratchDir`) and where - into this record
+or the plan's `readiness/<ABBR>/`. Then the directory is emptied of everything but the route state
+and the files of a ticket or plan still in flight - this ticket's files, the review and QA brief
+files and any leftover of earlier work alike - with no chat question; the delete dialog is the gate.
+Name what was deleted. The session's own temporary directory outside the repository is not covered.>
+
+## Closing checklist
+
+<Each line answered before the record's commit, or `n/a` with its why:>
+
+- the operator's own run on a real input, their words quoted - when the outcome is visible in the
+  running product; offline proof never replaces it;
+- the diff review folded in above;
+- the ticket's finding lines on their roadmap area entry marked `done <commit>` or removed (the
+  fifth roadmap write, `docs/WORKFLOW.md` § Durable development history);
+- every out-of-scope finding registered: a line on its area's roadmap entry, or a new ticket that
+  waits for its own word;
+- the scratch evidence moved and the rest deleted (§ Scratch);
+- the next ticket: this session or a fresh one, one line.
 
 ## Measurements
 

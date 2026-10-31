@@ -149,8 +149,10 @@ BRIEF
 `-ProjectRoot` is used for ONE thing: locating the project's `roles.json` for the preflight. It is
 deliberately NOT the Codex cwd - QAL's cwd is always the unique throwaway scratch dir.
 
-**Run the wrapper in the BACKGROUND - `run_in_background: true`, by default.** A foreground shell
-call is capped at 10 minutes; a live agentic-browser run at `effort: high` will normally exceed that
+**Run the wrapper in the BACKGROUND - `run_in_background: true`, by default, with a timeout of at
+least 3600000 ms:** a command expected to run over about five minutes runs in the background
+(`docs/LOOP.md` § Role boundaries). A foreground shell call is killed at its cap (10 minutes); a
+live agentic-browser run at `effort: high` will normally exceed that
 and be killed mid-run (exit 143), spending the operator's paid quota for nothing. QAL is already an
 operator-gated exception, so a wasted pass is the most expensive kind. Same rule as `/pnp:review`
 Step 3 - with one extra consequence here: a killed QAL run can leave its scratch directory behind,

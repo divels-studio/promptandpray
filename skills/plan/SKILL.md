@@ -71,9 +71,13 @@ measured (Step 6). Never estimate. *Temporary:* the measurement steps of this sk
 approval number, `## Measurements`) stay until the first plan measured with them has been judged;
 then they are removed from this skill.
 
-Before the entry is written, ask the operator three things in one message: which real inputs they
-can supply (samples, fixtures, documents), what must stay as it is, and what retires soon. The
-answers are data for the research briefs and the decisions, never a word to start.
+**The recorded state comes first.** Before the entry is written, read what is already recorded on
+the goal: its roadmap entry, the DECISIONS of the earlier plans on its area, and the project's status
+documents (named in its overrides document). Then ask the operator, in one message, only the
+questions among these that have no recorded answer: which real inputs they can supply (samples,
+fixtures, documents), what must stay as it is, and what retires soon. **Its suppression dual:** when
+all of them are recorded, ask nothing and cite where each answer stands. The answers are data for
+the research briefs and the decisions, never a word to start.
 
 Open `<plansDir>/ROADMAP.md`. If the goal has an entry, use it; otherwise write one, in exactly this
 format, the operator's words verbatim where they are the source:
