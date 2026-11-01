@@ -1,0 +1,14 @@
+{
+  "plan": "DOCSTAGE",
+  "contract": "2551faaf3b63b701bcb11eb1a979cdcf5f6dc69a691cc4b65d28fe54b62fdf34",
+  "files": {
+    "DECISIONS.md": "3a516a3d328591f4e3af599488b7d51f9d10ea7a490c7f05952acd28c9ed9454",
+    "PLAN_DOCSTAGE.md": "33e4da1504322fb051f96a60c39c13f95d1631c98ff470a38da3348f3568c875",
+    "tickets/DOCSTAGE-001.md": "3821332c6d51d9707515260b4707ba269cff002ccaf278b6211e964fafcd293e",
+    "tickets/DOCSTAGE-002.md": "09d94395d435c6dcff375489feee472fe272cb854d2e9713368f9b795d2d82f7"
+  },
+  "xrefs": {
+    "RULEHOME/D-16": "716dcf226c65af287f027a2486db37b340c1a8ad2925b617abd1e427ca441ccf"
+  },
+  "stampedAt": "2026-11-01T16:09:33.190Z"
+}
