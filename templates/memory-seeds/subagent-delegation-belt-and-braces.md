@@ -1,6 +1,6 @@
 # Repeat the delegation policy in every handoff prompt [R]
 
-Reinforces payload `docs/WORKFLOW.md` - "COO owns broad scans".
+Reinforces `.claude/aiwf-native/ORCHESTRATOR.md` - "COO owns broad scans".
 
 The cheap-subagent policy (an explicit model always; mechanical scans at the cheapest tier;
 evidence-with-judgment one tier up; the top tier never delegated for scans) is written into EVERY

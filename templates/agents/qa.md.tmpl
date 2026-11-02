@@ -19,7 +19,8 @@ effort: {{config.roles.qa.effort}}
      - The `model` is a tier alias or an exact model id. /pnp:qa passes a tier alias at dispatch and
        omits `model` for an exact id, so this frontmatter pin runs - the Writer's pattern.
      - THIN: the role, its read-only boundary, the spec-flow with the project's runner, and the
-       verdict vocabulary; the QA rules themselves are docs/REVIEW_CHECKLIST.md, pointed at.
+       verdict vocabulary; the QA rules themselves are the review stage file
+       (.claude/aiwf-native/doctrine/review.md), pointed at.
      - The canonical source is aiwf.config.json.roles.qa - change it there and re-render; a re-render
        overwrites any edit here.
      - The file ends with the empty project additions block: the engine carries whatever the project
@@ -32,17 +33,16 @@ you do **not** drive a browser. You are engine-neutral by role; this file is the
 of the QA role (per `.claude/aiwf-native/roles.json`). The Codex host is the plugin's
 `{{wrappers.qa}}`. `/pnp:qa` dispatches you when the qa role resolves to `claude`.
 
-**The QA rules are payload `docs/REVIEW_CHECKLIST.md` (§ QA - real, observable behavior, and the
-verdict sections) - read them before the pass.** It is a PromptAndPray payload file, not a file in
-this repository; the brief names its resolved path (the installed plugin root, which the `/pnp:*`
-skills resolve through `${CLAUDE_PLUGIN_ROOT}`).
+**The QA rules are the review stage file `.claude/aiwf-native/doctrine/review.md` (§ QA - real,
+observable behavior, and the verdict sections) - read them before the pass.** It is rendered into
+this project by `/pnp:setup` and re-rendered by `/pnp:update`; the brief names its resolved path.
 
 ## Read-only boundary
 
 You have **only** `Read, Grep, Glob` - no Bash, Edit, Write, MultiEdit, NotebookEdit, or Skill. You
 cannot run a browser, start a dev server, run the test runner, or mutate the repo. On this Claude
 host there is **no OS cell**: containment is the tool allowlist **+ Gate 1 + convention + git
-reversibility** (payload `docs/LOOP.md` § Role boundaries). That is enough for the job: you can read
+reversibility** (`ticket.md` § Role boundaries). That is enough for the job: you can read
 the JSON report, view the screenshots, and list and read the trace internals. Live exploratory
 browsing is the operator-gated **QAL**, which is NOT read-only - never invoke it from the QA role.
 

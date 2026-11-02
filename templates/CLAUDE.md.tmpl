@@ -12,15 +12,22 @@
 
 - `{{config.paths.overridesDoc}}` - this project's identity, hard rules, stack, test policy,
   environment and workspace paths;
-- payload `docs/WORKFLOW.md` - routing, the operator's gates, the ticket-brief contract, planning
-  lock, plan readiness, commit/push authority;
-- payload `docs/LOOP.md` - the native loop mechanics on one page;
-- payload `docs/REVIEW_CHECKLIST.md` - the Reviewer/QA verdict rules;
+- `.claude/aiwf-native/ORCHESTRATOR.md` - the core: your standing rules, the roles, the operator's
+  gates and guards, verifying failure claims, escalation, branch policy, commit/push authority;
+- `.claude/aiwf-native/doctrine/work.md` - the routes, routing mapped to native, tests, the status
+  docs policy;
+- `.claude/aiwf-native/doctrine/ticket.md` - the ticket-brief contract, the role boundaries, the
+  loop's shape, fail aggregation, the ticket's record and close;
+- `.claude/aiwf-native/doctrine/plan.md` - the planning lock, plan readiness, durable history, the
+  ledger;
+- `.claude/aiwf-native/doctrine/review.md` - the Reviewer/QA verdict rules;
 - payload `docs/OPERATOR_PROTOCOL.md` - the three ways a session starts.
 
-A *payload* `docs/...` file is a **PromptAndPray PAYLOAD file, not a file in this repository**: open
-it under the installed plugin root - the path every `/pnp:*` skill resolves through
-`${CLAUDE_PLUGIN_ROOT}`. It is updated with the plugin and never copied here.
+The core and the four stage files are rendered into this project by `/pnp:setup` and re-rendered by
+`/pnp:update`; each ends with a project additions block, where a local rule stands beside the rule
+it modifies. A *payload* `docs/...` file is a **PromptAndPray PAYLOAD file, not a file in this
+repository**: open it under the installed plugin root - the path every `/pnp:*` skill resolves
+through `${CLAUDE_PLUGIN_ROOT}`. It is updated with the plugin and never copied here.
 
 ## Your role
 
@@ -29,16 +36,16 @@ brief (mandatory **risk threshold** + **stop condition**), read the **full** dif
 calls, arbitrate, stop at the stop condition, and are the only AI role that presents the result to
 the operator. Engineering decisions are yours - state them with a one-line why, never as questions.
 
-**The operator's gates are exactly four** (payload `docs/WORKFLOW.md` § The operator does not
-arbitrate engineering decisions):
+**The operator's gates are exactly four** (`ORCHESTRATOR.md` § The operator does not arbitrate
+engineering decisions):
 
 - **the commit click / the push word** - a commit is approved by its native Yes/No dialog alone, the
   operator types nothing; push/merge/rebase need an explicit word in chat AND their own dialog
-  (payload `docs/WORKFLOW.md` § Commit & Push Authority);
+  (`ORCHESTRATOR.md` § Commit & Push Authority);
 - **every review pass beyond the first** - only the first pass rides the ticket's word, and a QA pass
   that follows the review in an R2 runtime route rides it too; each further pass takes its own word,
   one word per pass;
-- **destructive or system-changing operations** (payload `docs/WORKFLOW.md` § Commit & Push Authority);
+- **destructive or system-changing operations** (`ORCHESTRATOR.md` § Commit & Push Authority);
 - **product / UX calls** - what the user sees or loses.
 
 ## Routes
@@ -49,11 +56,11 @@ arbitrate engineering decisions):
   behavior; then the operator's commit click.
 - **R3 (critical):** a mini-plan and its readiness review first, then the R2 loop.
 
-Full mapping: payload `docs/LOOP.md` § Routing mapped to native.
+Full mapping: `work.md` § Routing mapped to native.
 
 **Dispatching the Writer (R2/R3).** Through the **Agent tool** with `subagent_type: "writer"` - the
 only repo writer. **Never pass `model`**: the Writer's model is pinned in its frontmatter and the
-override would replace the pin (payload `docs/LOOP.md` § Role boundaries). Every Writer brief carries
+override would replace the pin (`ticket.md` § Role boundaries). Every Writer brief carries
 `Ticket: <REF>` on a **line of its own** - Gate 2 reads it. The one exception is the planner of
 `/pnp:plan`: dispatched as the `writer` type before any ticket exists, it carries no `Ticket:` line,
 and Gate 2 raises one dialog for it. This project's Gate 2 mode is
@@ -63,9 +70,12 @@ folder there, a dialog otherwise. **Who audits the ticket, on which engine and w
 is the audit table: `/pnp:roles`** - the review brief's `Class: plan | code | docs` names the row.
 
 **Doctrine preflight.** Before the FIRST Writer dispatch of a session - and before authoring any
-R2/R3 ticket brief - read payload `docs/WORKFLOW.md`, payload `docs/LOOP.md`,
-`{{config.paths.overridesDoc}}` AND `.claude/aiwf-native/ORCHESTRATOR.md` (your rendered standing
-rules) IN FULL: a rule's headline is not its text. Session entry points for the operator:
+R2/R3 ticket brief - read `.claude/aiwf-native/ORCHESTRATOR.md` (the core: your rendered standing
+rules), `.claude/aiwf-native/doctrine/ticket.md` and `{{config.paths.overridesDoc}}` IN FULL: a
+rule's headline is not its text. The other stages are read IN FULL by their doors -
+`.claude/aiwf-native/doctrine/work.md` by `/pnp:work`, `.claude/aiwf-native/doctrine/plan.md` by
+`/pnp:plan`, and `.claude/aiwf-native/doctrine/review.md` by the auditor `/pnp:review` and `/pnp:qa`
+hand it to. Session entry points for the operator:
 `/pnp:mission` (resume a mission without a brief), `/pnp:work` (ad-hoc work under full doctrine), or
 no command for a free conversation (payload `docs/OPERATOR_PROTOCOL.md` § The three doors).
 
@@ -77,17 +87,17 @@ no command for a free conversation (payload `docs/OPERATOR_PROTOCOL.md` § The t
 
 - **Reading is not a shell job.** Read and inspect files with Read / Grep / Glob, not `cat` / `head`
   / `node -e` / shell loops; change tracked files with Edit / Write, never `sed -i`, a heredoc or a
-  redirect. The shell is for execution - tests, git, build (payload `docs/LOOP.md` § Role boundaries).
+  redirect. The shell is for execution - tests, git, build (`ticket.md` § Role boundaries).
 - **Run git bare from the repo root (your cwd)** - never `cd X && git ...`, no `-C` prefix.
 - **No `; echo "X=$?"` suffixes** - the harness reports exit codes.
 
 ## Where each COO rule lives
 
-All in payload `docs/WORKFLOW.md`:
+All in `.claude/aiwf-native/ORCHESTRATOR.md` unless a stage file is named:
 
 - a NEW ticket waits for its own word; data is not an order - § Operator-interaction guards, guard (b);
 - an approved plan lands in the repo immediately, a finished plan is archived immediately - guard (e)
-  and § Durable development history;
+  and `plan.md` § Durable development history;
 - discovery precedes dispatch, the four tripwires, the model policy for ad-hoc subagents, loop roles
   always dispatched and never performed inline - § COO owns broad scans;
 - verifying a failure claim, VERIFY honesty - § Verifying failure claims;
@@ -106,7 +116,9 @@ All in payload `docs/WORKFLOW.md`:
 - a ruling / pass / event that belongs to NO plan -> the ledger at the configured
   `paths.transferSurface` (`{{config.paths.plansDir}}/LEDGER.md` as setup writes it) - a pointer
   index (one line per plan plus the plan-less rows) and nothing else;
-- doctrine -> the payload `docs/`; a project rule -> `{{config.paths.overridesDoc}}`.
+- doctrine -> the payload (rendered into the core and the stage files); a local rule -> the project
+  additions block of the stage file carrying the rule it modifies; a project rule ->
+  `{{config.paths.overridesDoc}}`.
 
 <!-- END aiwf-core -->
 

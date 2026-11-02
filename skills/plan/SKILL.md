@@ -41,26 +41,27 @@ path below is written from `<root>`, and every command runs from `<root>`.
 **Preconditions.** An open R2/R3 route of another ticket (`<scratchDir>/route-state.json` naming
 it) does not stop this skill: planning is not execution, and Gate 3 lets the plan's own folders
 through - `<plansDir>/drafts/<ABBR>/`, `<plansDir>/readiness/<ABBR>/`, the roadmap and the ledger
-(`docs/WORKFLOW.md` § Branch policy). One thing waits while that route is open: an edit of a LANDED
+(`ORCHESTRATOR.md` § Branch policy). One thing waits while that route is open: an edit of a LANDED
 plan under `<plansDir>/active/` (behind the guard). The readiness pass of Step 6 does not wait: its
 brief, round and session-state files are keyed by the readiness brief's `PLAN:` folder's last
 segment, `<ABBR>` (`<scratchDir>/<ABBR>-review-brief.txt`, `<scratchDir>/<ABBR>-readiness-round.txt`),
-so it is dispatched and runs beside the ticket's pass (`docs/WORKFLOW.md` § Branch policy). The
-planning lock holds for the whole skill (`docs/WORKFLOW.md` § Planning lock): until the landing in
+so it is dispatched and runs beside the ticket's pass (`ORCHESTRATOR.md` § Branch policy). The
+planning lock holds for the whole skill (`plan.md` § Planning lock): until the landing in
 Step 6 the only files written are the
 plan's own - `<plansDir>/drafts/<ABBR>/`, `<plansDir>/readiness/<ABBR>/`, the roadmap entry - and
 the scratch brief. A readiness cycle starts in a fresh session.
 
 ## Step 0.5 - Doctrine preflight
 
-Read the plugin's `docs/WORKFLOW.md` and `docs/LOOP.md`, this project's
-`{{config.paths.overridesDoc}}` and `.claude/aiwf-native/ORCHESTRATOR.md` IN FULL - the four
-documents of `/pnp:work` Step 1 - before Step 1, and note `git rev-parse HEAD` at that read.
+Read `.claude/aiwf-native/ORCHESTRATOR.md` (the core: your rendered standing rules),
+`.claude/aiwf-native/doctrine/plan.md` (the plan stage: the planning lock, the readiness cycle, the
+durable history and the ledger) and this project's `{{config.paths.overridesDoc}}` IN FULL before
+Step 1, and note `git rev-parse HEAD` at that read.
 
 **Its suppression dual.** Skip the read when this session already read the current text of all
-four: `git diff <the HEAD noted at that read> -- <the four paths>` returns empty. Any other result -
+three: `git diff <the HEAD noted at that read> -- <the three paths>` returns empty. Any other result -
 a line of diff, or an error such as a path outside the repository - means read them again. After a
-context compaction all four are read again, whatever the diff says.
+context compaction all three are read again, whatever the diff says.
 
 ## Step 1 - The roadmap entry
 
@@ -95,7 +96,7 @@ format, the operator's words verbatim where they are the source:
 
 An entry is a goal worth at least one plan; a task of a few lines is not an entry. The roadmap holds
 only live entries: the entry leaves it when its last plan is archived, and an idea dropped before
-then leaves with one ledger row `<ABBR> dropped: <why>` (`docs/WORKFLOW.md` § Durable development
+then leaves with one ledger row `<ABBR> dropped: <why>` (`plan.md` § Durable development
 history).
 
 `<ABBR>` is 2 to 8 uppercase letters `A-Z` and is never reused: Glob `<plansDir>/active/`,
@@ -229,7 +230,7 @@ separately, never counted as carried.
 `D-NN`, or the COO names a risk (security, tenancy, concurrency, transactions) after a substantive
 revision, and `$row.passes` is at least 2. Ask for it in one sentence naming the trigger. Its brief
 carries `round-1.md` verbatim - findings and dispositions - and requires every NEW finding to declare
-why pass 1 could not see it (`docs/WORKFLOW.md` § Fail aggregation). A resumed pass 2 needs that word
+why pass 1 could not see it (`ticket.md` § Fail aggregation). A resumed pass 2 needs that word
 too and its compensations (`/pnp:review` Step 3).
 
 **Approval.** Report to the operator in a few lines: the tickets and their order, the passes run with
@@ -264,16 +265,16 @@ Then move the untracked folder with the shell (not a git verb: nothing tracked i
 `Move-Item <plansDir>/drafts/<ABBR> <plansDir>/active/<ABBR>`; os `linux`/`macos`:
 `mv <plansDir>/drafts/<ABBR> <plansDir>/active/<ABBR>`. Update the roadmap entry's `Plans:` and
 `Status: planned` lines - the roadmap is written at exactly three events and never otherwise
-(`docs/WORKFLOW.md` § Durable development history): the entry's birth (`idea`; `researching` when
+(`plan.md` § Durable development history): the entry's birth (`idea`; `researching` when
 Step 2 dispatches the research agents), this landing (`planned`; the first ticket's dispatch - the
 route-state write - sets `in progress`), and the archiving of its last plan (the entry leaves). Under
 the ledger's `## Plans` - `<ledger>` below is its path, resolved as
-`docs/WORKFLOW.md` § The ledger states - write the plan's line:
+`plan.md` § The ledger states - write the plan's line:
 `<ABBR> - readiness/<ABBR>/, active/<ABBR>/records/`. Then `git add <plansDir>/active/<ABBR>
 <plansDir>/readiness/<ABBR> <plansDir>/ROADMAP.md <ledger>` and ONE docs commit (native dialog). The stamp survives the move byte for byte;
 a `--check` over `<plansDir>/active/<ABBR>` after the move confirms it.
 
-The landing ends with the scratch cleanup under the ticket-end rule (`docs/WORKFLOW.md` § Durable
+The landing ends with the scratch cleanup under the ticket-end rule (`ticket.md` § Durable
 development history): a planning session closes no ticket and fills no record, so the rule is
 applied here directly - every file this cycle left in `<scratchDir>` is found standing in the tree
 (a grep of its headings and items, never its name - the readiness folder holds the round files) or
@@ -283,4 +284,4 @@ the rest is deleted, the delete dialog the gate, no chat question.
 Each ticket is then started on its own word; the Writer brief is
 `${CLAUDE_PLUGIN_ROOT}/templates/briefs/writer-dispatch.md`. Each ticket closes with its completion
 record `<plansDir>/active/<ABBR>/records/<REF>.md`, written on
-`${CLAUDE_PLUGIN_ROOT}/templates/briefs/record.md` (`docs/WORKFLOW.md` § Durable development history).
+`${CLAUDE_PLUGIN_ROOT}/templates/briefs/record.md` (`ticket.md` § Durable development history).

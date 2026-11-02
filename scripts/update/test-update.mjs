@@ -1779,6 +1779,70 @@ section('15d - the ticket byte cap migration: the shipped 0028 writes plan.ticke
 }
 
 // ---------------------------------------------------------------------------
+section('15e - the stage-file migration: the shipped 0033 creates the four stage files on an installation without them, and carries their additions blocks');
+{
+  // The REAL operations of the shipped 0033, replayed as a fixture migration (the 15c pattern).
+  const STAGES = ['work', 'ticket', 'plan', 'review'];
+  const stageRel = (s) => `.claude/aiwf-native/doctrine/${s}.md`;
+  const realOps = readJson(path.join(PLUGIN_ROOT, 'migrations', '0033_doctrine-stages', 'ops.json'));
+  const ops = (realOps && Array.isArray(realOps.operations)) ? realOps.operations : [];
+  check('[stages-0] the shipped 0033 creates the four stage files first, each from its own template, and ends with one note',
+    ops.length === 10
+    && STAGES.every((s, i) => ops[i].op === 'rerender-managed-region' && ops[i].file === stageRel(s) && ops[i].region === null
+      && ops[i].template === `templates/doctrine/${s}.md.tmpl` && ops[i].ifRecorded === undefined)
+    && ops[4].file === 'CLAUDE.md' && ops[4].region === 'aiwf-core'
+    && ops[5].file === ORCH_REL && ops[6].file === WRITER_REL
+    && ops[7].file === '.claude/agents/reviewer.md' && ops[7].ifRecorded === true
+    && ops[8].file === '.claude/agents/qa.md' && ops[8].ifRecorded === true
+    && ops[9].op === 'note' && ops[9].id === 'doctrine-stages-0-3-8',
+  () => JSON.stringify(ops, null, 2));
+  const payload = makePayload('stages', { version: '0.2.0', migrations: [{ id: '0002_stages', version: '0.2.0', ops }] });
+  /** Ages a fresh install to one from before the stage files: the four files and their records gone. */
+  const ageToNoStages = (p) => {
+    for (const s of STAGES) fs.rmSync(at(p, stageRel(s)), { force: true });
+    const cfg = readJson(at(p, CONFIG_REL));
+    for (const s of STAGES) delete cfg._aiwf.managedRegions[stageRel(s)];
+    writeJson(at(p, CONFIG_REL), cfg);
+  };
+  // --- an installation without the stage files -> all four created, recorded, and the migration stamped
+  {
+    const p = project('stages-absent');
+    check('install exits 0', install(p).status === 0);
+    check('[stages-1] control: a fresh install already renders and records the four stage files',
+      STAGES.every((s) => exists(at(p, stageRel(s))) && has(bookkeeping(p).managedRegions, stageRel(s))));
+    ageToNoStages(p);
+    check('control: the installation is aged to one without the stage files',
+      STAGES.every((s) => !exists(at(p, stageRel(s))) && !has(bookkeeping(p).managedRegions, stageRel(s))));
+    const a = update(p, ['--apply'], { payload });
+    const created = STAGES.filter((s) => a.out.includes(`${stageRel(s)}: created from the payload render`));
+    check('[stages-2] the apply exits 0 and says each of the four stage files was created',
+      a.status === 0 && created.length === 4, why(a));
+    check('[stages-3] each stage file is on disk, ends with its empty additions block, and is recorded at the payload version',
+      STAGES.every((s) => (read(at(p, stageRel(s))) || '').replace(/\r\n/g, '\n').trimEnd().endsWith('<!-- project additions -->\n<!-- /project additions -->')
+        && bookkeeping(p).managedRegions[stageRel(s)] === '0.2.0'),
+      JSON.stringify(bookkeeping(p).managedRegions));
+    check('[stages-4] and the migration is stamped', bookkeeping(p).lastMigrationApplied === '0002_stages', String(bookkeeping(p).lastMigrationApplied));
+  }
+  // --- a stage file with an old body and a local rule in its block -> the render wins, the block is carried
+  {
+    const p = project('stages-carry');
+    check('install exits 0', install(p).status === 0);
+    const file = at(p, stageRel('ticket'));
+    const BLOCK = '<!-- project additions -->\n## Role boundaries\n\nThis project\'s own rule beside the one it modifies.\n<!-- /project additions -->';
+    const OLD_LINE = 'A line an older release rendered.';
+    const now = (read(file) || '').replace(/\r\n/g, '\n');
+    const aged = `${OLD_LINE}\n${now.split('<!-- project additions -->\n<!-- /project additions -->').join(BLOCK)}`;
+    fs.writeFileSync(file, aged, 'utf8');
+    check('control: the stage file carries the block and the old line before the update', aged.includes(BLOCK) && aged.includes(OLD_LINE));
+    const a = update(p, ['--apply'], { payload });
+    const after = read(file) || '';
+    check('[stages-5] the re-render writes the payload render and carries the project additions block verbatim, exactly once',
+      a.status === 0 && a.out.includes(`${stageRel('ticket')}: the payload render written (project additions carried)`)
+      && after.split(BLOCK).length - 1 === 1 && !after.includes(OLD_LINE), why(a));
+  }
+}
+
+// ---------------------------------------------------------------------------
 section('16 - a release never touches examples/: the example bump is numbered when it is built, against the payload it lands in');
 {
   const NOTE_ONLY = [{ op: 'note', id: 'fake-release', text: 'A release the example bump has to follow.', docRefs: ['docs/LOOP.md'] }];

@@ -1,6 +1,6 @@
 # An approved plan lands in the repository immediately [R]
 
-Reinforces payload `docs/WORKFLOW.md` - "Operator-interaction guards", gate (e).
+Reinforces `.claude/aiwf-native/ORCHESTRATOR.md` - "Operator-interaction guards", gate (e).
 
 At the moment of approval, in the same session, without being reminded: the plan lands in the
 plans directory (`<plansDir>/active/`, moved there from the untracked draft under

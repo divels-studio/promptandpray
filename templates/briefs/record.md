@@ -1,7 +1,7 @@
 # <REF> - <title>
 
 <The ticket's completion record, written by the COO immediately after the ticket's commit
-(`docs/WORKFLOW.md` § Durable development history). Fill every section; a section with nothing to
+(`ticket.md` § Durable development history). Fill every section; a section with nothing to
 say carries `None.`. Keep pointers, not retellings.>
 
 ## What landed
@@ -18,7 +18,7 @@ its one-line why.>
 
 <One row per rule-class event inside this ticket - a violation, a catch, or an operator
 correction - shaped `| <date> | <rule or D-id> | violation|catch|operator-correction | <pointer> |`,
-or `None.`. A ticket's events live here, not on the ledger (`docs/WORKFLOW.md` § The ledger).>
+or `None.`. A ticket's events live here, not on the ledger (`plan.md` § The ledger).>
 
 ## Verification (what actually ran)
 
@@ -33,7 +33,7 @@ invented follow-up.>
 ## Diff review
 
 <The COO's reading of the whole diff, folded in from `<scratchDir>/<REF>-diff-review.md`
-(`docs/WORKFLOW.md` § The COO write boundary runs along artifact class, not size).>
+(`ticket.md` § The COO write boundary runs along artifact class, not size).>
 
 ## Scratch
 
@@ -56,7 +56,7 @@ directory outside the repository is not covered.>
   running product; offline proof never replaces it;
 - the diff review folded in above;
 - the ticket's finding lines on their roadmap area entry marked `done <commit>` or removed (the
-  fifth roadmap write, `docs/WORKFLOW.md` § Durable development history);
+  fifth roadmap write, `plan.md` § Durable development history);
 - every out-of-scope finding registered: a line on its area's roadmap entry, or a new ticket that
   waits for its own word;
 - every scratch file found standing in the tree or moved into git before its delete - a file whose
@@ -70,7 +70,7 @@ directory outside the repository is not covered.>
 |---|---|---|
 | <n, counted from an auditor's verdict> | <tokens, or `-` when no source> | <file or `-`> |
 
-<Correction rounds are counted from an auditor's verdict (`docs/WORKFLOW.md` § Loop shape and its
+<Correction rounds are counted from an auditor's verdict (`ticket.md` § Loop shape and its
 overrides); a ticket with no auditor carries `0 (no auditor)`. The session size is read from the
 machine source the project's overrides document names (a file its statusline writes); with no such
 source it is `-` - never asked at a record's close, never estimated. Temporary: this row stays until

@@ -4,6 +4,54 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.3.8] - 2026-11-02
+
+The doctrine by stage: a session reads only the doctrine of the stage it is in, whole, by
+construction of its entry command, and a project's local rule lives next to the rule it modifies.
+
+### Added
+
+- **Four stage files, rendered as managed artifacts (DOCSTAGE-001, DOCSTAGE-002)** - every rule of
+  the loop stands in exactly one of `.claude/aiwf-native/ORCHESTRATOR.md` (the core) and
+  `.claude/aiwf-native/doctrine/work.md`, `ticket.md`, `plan.md`, `review.md`.
+  - Templates under `templates/doctrine/`; setup renders them, migration `0033_doctrine-stages`
+    creates them on an existing installation.
+  - Each ends with an empty project additions block - the home of a local rule, opening with the
+    heading of the rule it modifies; a re-render carries it.
+  - Setup reserves the four paths and the `doctrine` directory against an overrides document,
+    transfer surface or roadmap configured onto them.
+- **A Step 0.5 doctrine read in `/pnp:review`, `/pnp:qa` and `/pnp:qal` (DOCSTAGE-002)** - the core
+  and `ticket.md` IN FULL, so a session that starts cold on one of them reads its stage.
+
+### Changed
+
+- **Every entry door reads its stage IN FULL from the rendered file (DOCSTAGE-002)** - `/pnp:work`
+  the core, `work.md` and the overrides document, then `ticket.md` at an R2/R3 route;
+  `/pnp:mission` `ticket.md` before a dispatch; `/pnp:plan` `plan.md`; `/pnp:arbiter` the core; the
+  auditor is handed `review.md`.
+  - Each read carries the suppression dual `git diff <HEAD at the read> -- <paths>`, which now fires
+    in a consumer too: the paths are in its tree.
+- **The payload documents shrink, none leaves (DOCSTAGE-002)** - `docs/WORKFLOW.md` is the map of the
+  stage files plus § Reproducibility; `docs/LOOP.md` keeps the enforcement hooks, the commit gate,
+  the honest security model and a new § Role hosts table; `docs/REVIEW_CHECKLIST.md` is a pointer
+  stub. Every payload pointer to them is re-aimed at `<stage>.md § <heading>`.
+- **The templates contract (DOCSTAGE-002)** - a stage template IS the rule's one copy; the other
+  rendered files stay thin and point at the stage files (`templates/README.md`).
+- **A QA `BLOCKED` pauses the loop and consumes no correction round (DOCSTAGE-002)** - the rule now
+  stands in `/pnp:qa` at the verdict step.
+
+### Removed
+
+- **`/pnp:loop` (DOCSTAGE-002)** - the command restated the routing table and was not used; the
+  table is `work.md` § Routing mapped to native. The self-check accepts a retired command name only
+  inside a shipped migration's text.
+
+**Consumer action:** a local rule in your overrides document that modifies a doctrine rule may move
+into the project additions block of the stage file carrying that rule - on your word; the update
+moves nothing of yours.
+
+Retires local rules: none
+
 ## [0.3.7] - 2026-10-31
 
 Every rule stands where the role that must obey it acts: the brief and record skeletons, the

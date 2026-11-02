@@ -66,7 +66,7 @@ const OFF_PLAN = 'off-plan';        // the ONLY value that leaves "always"; comp
 const CONFIG_REL = path.join('.claude', 'aiwf-native', 'aiwf.config.json');
 const DEFAULT_PLANS_DIR = 'docs/backlogs'; // the schema default for paths.plansDir
 const TAG = '[AIWF gate 2: Writer dispatch]';
-// The machine-readable brief convention (payload docs/WORKFLOW.md, "Ticket brief contract"): a
+// The machine-readable brief convention (ticket.md § Ticket brief contract): a
 // dedicated line of its own, so a ref merely mentioned in prose cannot be mistaken for the ticket
 // being worked.
 const TICKET_LINE = /^[ \t]*Ticket:[ \t]*([A-Za-z0-9][A-Za-z0-9_-]*)[ \t]*$/m;
@@ -122,8 +122,8 @@ function plansDirOf(projectDir, config) {
   return path.join(projectDir, rel, 'active');
 }
 
-// Is `<REF>` in an active PLAN? One prefix per plan (payload docs/WORKFLOW.md, "Durable development
-// history"): a plan is `PLAN_<ABBR>.md` - a monolith file, or the index of a plan FOLDER
+// Is `<REF>` in an active PLAN? One prefix per plan (plan.md § Durable development
+// history): a plan is `PLAN_<ABBR>.md` - a monolith file, or the index of a plan FOLDER
 // `<ABBR>/PLAN_<ABBR>.md` with its ticket files `<ABBR>/tickets/<ABBR>-<NNN>.md` - and every ticket
 // in it is `<ABBR>-<NNN>`, so the ref ADDRESSES its plan instead of merely describing the work:
 // `ABC-007` is read out of `PLAN_ABC.md`, else `ABC/PLAN_ABC.md`, else `ABC/tickets/ABC-007.md`,

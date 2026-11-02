@@ -46,6 +46,19 @@ Arguments: the ticket ref and an optional scope hint.
 
 Notation: `{{config.some.key}}` in this document means *substitute the value you read in step 2*.
 
+## Step 0.5 - Doctrine read
+
+Read `.claude/aiwf-native/ORCHESTRATOR.md` (the core) and `.claude/aiwf-native/doctrine/ticket.md`
+(the ticket stage: the brief contract, the roles' boundaries, the loop's shape, fail aggregation)
+IN FULL before Step 0b, and note `git rev-parse HEAD` at that read - a session that starts cold on
+this skill reads its stage by construction.
+
+**Its suppression dual.** Skip the read when this session already read the current text of both:
+`git diff <the HEAD noted at that read> -- .claude/aiwf-native/ORCHESTRATOR.md
+.claude/aiwf-native/doctrine/ticket.md` returns empty - the case of a session that entered by
+`/pnp:work` or `/pnp:mission`. Any other result - a line of diff, or an error - means read them
+again. After a context compaction both are read again, whatever the diff says.
+
 ## Step 0b - Resolve the row for this ticket's review class (run the resolver once)
 
 Two reads, one command. **First** take the `Class:` line of the ticket brief the COO authored -
@@ -116,7 +129,7 @@ reviews first-hand and the fact-check gate still runs. `/pnp:roles --show` print
 Say in one line which row you took and where it came from (`class=docs -> review.docs: codex
 gpt-5.6-sol/high, 1 pass`), so the COO's record shows the host was resolved, not defaulted. A
 docs-class ticket that gained an executable artifact is code class - the same rule that ends R1
-(`docs/WORKFLOW.md` § Routes).
+(`work.md` § Routes).
 
 ## Step 1 - Gather the review scope (read-only)
 
@@ -160,7 +173,7 @@ SCOPE / DIFF:
 CARRIED BLOCKERS
 <the previous pass's blocker list, quoted exactly as it was returned - or `none - this is pass 1`.
 A verification pass after a correction round fills this in, and every NEW blocker it raises
-declares why the previous pass could not see it (`docs/WORKFLOW.md` § Fail aggregation).>
+declares why the previous pass could not see it (`ticket.md` § Fail aggregation).>
 
 EVIDENCE PACK (a first `code`-class pass carries one; see below for what it is and is not):
 <the file:line evidence the COO already holds - the worklist pointers and the anchors the ticket
@@ -183,8 +196,9 @@ the correction-round cap and the `review.plan.passes` ceiling are unchanged.)
 OUTPUT CONTRACT (single round - return ALL material blockers at once; a later round may not
 raise a blocker that was already visible):
   First line: exactly one of `pass` / `pass-with-notes` / `fail`
-  (per the review checklist at <absolute path to the plugin's docs/REVIEW_CHECKLIST.md> -
-  plan readiness returns its own findings table instead - see "Plan-readiness mode").
+  (per the review stage file at <absolute path of <root>/.claude/aiwf-native/doctrine/review.md>,
+  read IN FULL before the pass - plan readiness returns its own findings table instead - see
+  "Plan-readiness mode").
     - `pass`            = no blocker at or above the risk threshold; nothing left to note.
     - `pass-with-notes` = acceptable now; only narrow, local, non-blocking notes remain.
     - `fail`            = at least one blocker at/above threshold. List blockers first (each with
@@ -198,7 +212,7 @@ cannot expand `${CLAUDE_PLUGIN_ROOT}` itself, so paste the resolved absolute pat
 
 **Before the dispatch, grep the diff for narrowed tests:** `skip`, `only`, `todo` and reduced test
 sets, with one decision recorded per hit in `<scratchDir>/<REF>-diff-review.md` - green by narrowing
-is not accepted (`docs/REVIEW_CHECKLIST.md` § Test quality).
+is not accepted (`review.md` § Test quality).
 
 **The evidence pack, and the one thing it is not.** A first `code`-class pass carries an evidence
 pack: the `file:line` evidence the COO already holds from authoring the ticket - the worklist
@@ -220,7 +234,8 @@ tiers, so it takes the safe direction and runs the gate. Such a pass costs the o
 external quota or top-tier tokens, and the Reviewer's job is to verify DECISIONS - not to discover
 that a path, a line number, a count or a command in the text does not exist. Those are checkable by
 anything that can read the tree, and finding them at review price is the most expensive way to find
-them (`docs/WORKFLOW.md` § "COO-authored text is reviewed like the Writer's").
+them (`ticket.md` § The COO write boundary runs along artifact class, not size - "COO-authored text
+is reviewed like the Writer's").
 
 Dispatch it with the **Agent tool**, `subagent_type: "Explore"` (or whichever read-only scan agent
 this harness ships), `model: sonnet`, and exactly this task - written here so it is reusable
@@ -293,7 +308,7 @@ the approval and the landing - is `/pnp:plan`. This mode is the pass itself, and
   pass 1 returned a BLOCKER that reverses a recorded decision, or the COO names a risk (security,
   tenancy, concurrency, transactions) after a substantive revision. Its brief carries
   `readiness/<ABBR>/round-1.md` verbatim - findings and dispositions - and every NEW finding declares
-  why pass 1 could not see it (`docs/WORKFLOW.md` § Fail aggregation). This skill does not loop the
+  why pass 1 could not see it (`ticket.md` § Fail aggregation). This skill does not loop the
   passes itself.
 - **The round file.** The COO writes `<plansDir>/readiness/<ABBR>/round-<N>.md`: the findings table
   verbatim plus a disposition column (`fixed` / `rejected: <why>` / `deferred` / `asked`).
@@ -365,7 +380,7 @@ re-dispatch, not a silent wrong verdict.
 
 **Run the wrapper in the BACKGROUND - `run_in_background: true`, with a timeout of at least
 3600000 ms. This is the default, not an optimisation:** a command expected to run over
-about five minutes runs in the background (`docs/LOOP.md` § Role boundaries). A foreground shell
+about five minutes runs in the background (`ticket.md` § Role boundaries). A foreground shell
 call is killed at its cap (10 minutes); an external review engine at
 `effort: high` on a real diff routinely runs longer and is killed mid-reasoning (exit 143). The run
 ends there and the verdict does not arrive - passes on a paid external engine are an **operator
@@ -420,7 +435,7 @@ below: **resume answers "is the DELTA sound"; cold answers "is the WHOLE still s
   question, so its verification reverts to cold or to the operator's call** - the delta is no longer
   a delta against the design that was audited.
 - **A readiness pass after the first may resume only with its compensations, and only on the
-  operator's word** - the carried blocker list (`docs/WORKFLOW.md` § Fail aggregation), a re-read
+  operator's word** - the carried blocker list (`ticket.md` § Fail aggregation), a re-read
   from disk rather than from the session's memory of the file, and an independent search for
   consumers.
 - **Retire a warm session at its first compaction.** What a resume saves shrinks as the resumed
@@ -481,7 +496,7 @@ the folder fails its contract or its stamp is stale.
   parameter takes precedence over the agent file's frontmatter, so the row's alias is what runs;
 - **an exact model id is NOT passed - `model` is omitted.** The Agent tool's `model` takes a tier
   alias and nothing else, so an exact id is not a value it can carry; with `model` omitted, the
-  pin in the rendered agent's frontmatter is what runs - the Writer's pattern (`docs/LOOP.md`
+  pin in the rendered agent's frontmatter is what runs - the Writer's pattern (`ticket.md`
   § Role boundaries).
 
 **Fail closed on a pin mismatch.** The reviewer agent file carries ONE pin for every Claude-hosted
@@ -525,6 +540,6 @@ the round waits for the word.
 
 The COO then owes the OPERATOR its own report of that verdict:
 the verdict plus one or two sentences of its substance, before the next dispatch - what the pass
-confirmed, or what its blockers are (`docs/WORKFLOW.md` § How the COO speaks to the operator).
+confirmed, or what its blockers are (`ORCHESTRATOR.md` § How the COO speaks to the operator).
 Verbatim to the COO, two sentences to the operator; a bare "pass, moving on" hides an audit the
 operator paid for.

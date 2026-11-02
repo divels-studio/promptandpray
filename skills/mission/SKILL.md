@@ -30,12 +30,18 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
 
 ## Steps
 
-1. **Doctrine preflight (mandatory).** Read the plugin's `docs/WORKFLOW.md` and `docs/LOOP.md` IN
-   FULL, this project's `{{config.paths.overridesDoc}}` IN FULL, AND
-   `.claude/aiwf-native/ORCHESTRATOR.md` (your rendered standing rules) IN FULL, before anything
-   else. The project's `CLAUDE.md` is a thin entry point and does not carry the gate texts; the
-   overrides document is where the project's identity, hard rules and product truth live, so a
-   session without it works without the product's boundaries.
+1. **Doctrine preflight (mandatory).** Read `.claude/aiwf-native/ORCHESTRATOR.md` (the core: your
+   rendered standing rules) and this project's `{{config.paths.overridesDoc}}` IN FULL, before
+   anything else, and note `git rev-parse HEAD` at that read; the plan index and the ticket follow
+   in steps 2-3. The project's `CLAUDE.md` is a thin entry point and does not carry the gate texts;
+   the overrides document is where the project's identity, hard rules and product truth live, so a
+   session without it works without the product's boundaries. Before the dispatch of an R2/R3
+   ticket, read `.claude/aiwf-native/doctrine/ticket.md` (the ticket stage: the brief contract, the
+   roles' boundaries, the loop's shape, the ticket's close) IN FULL.
+   **Its suppression dual.** Skip a read when this session already read the current text of its
+   files: `git diff <the HEAD noted at that read> -- <their paths>` returns empty. Any other result -
+   a line of diff, or an error - means read them again. After a context compaction they are read
+   again, whatever the diff says.
 2. **Identify the active mission.** List `{{config.paths.plansDir}}/active/PLAN_*.md` and `active/<ABBR>/` -
    plansDir is the PARENT of `active/`, `archive/`, `drafts/` and `readiness/`, and only `active/`
    holds candidates (an archived plan is finished by definition). A plan created under the current
@@ -49,7 +55,7 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
 3. **Reconstruct state.** From the chosen PLAN: mission status, the ticket ledger, the completion
    records, the execution order, any recorded operator gates. From the scratch directory
    (`{{config.paths.scratchDir}}`): list every file there that belongs to no open ticket or plan,
-   and settle each under the ticket-end rule before new work starts (`docs/WORKFLOW.md` § Durable
+   and settle each under the ticket-end rule before new work starts (`ticket.md` § Durable
    development history) - its content found standing in the tree by a grep of its headings and
    items, or moved into git first; a file whose content stands nowhere else is
    never deleted unmoved; the route state and the files of a ticket or plan still in flight stay.

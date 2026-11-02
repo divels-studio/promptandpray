@@ -617,6 +617,14 @@ try {
       fs.existsSync(path.join(PROJECT, 'AGENTS.md')) && typeof entry === 'string' && /^\d+\.\d+\.\d+$/.test(entry),
       JSON.stringify(entry));
   }
+  // The four stage files of the doctrine are managed artifacts of every installation in the same way.
+  {
+    const regions = ((readJson(path.join(PROJECT, ...CONFIG_REL.split('/'))) || {})._aiwf || {}).managedRegions || {};
+    const missing = ['work', 'ticket', 'plan', 'review'].map((s) => `.claude/aiwf-native/doctrine/${s}.md`)
+      .filter((rel) => !fs.existsSync(path.join(PROJECT, ...rel.split('/'))) || typeof regions[rel] !== 'string' || !/^\d+\.\d+\.\d+$/.test(regions[rel]));
+    check('the four stage files are on disk and recorded under their own keys after the cycle (a payload version)',
+      missing.length === 0, missing.join(', ') || 'all four');
+  }
 } catch (e) {
   // An unexpected throw is a FAILED cycle, never a quiet one: it is recorded as a check so the
   // summary below cannot report "0 failures" for a run that did not finish.

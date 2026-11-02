@@ -129,7 +129,7 @@ function refRegex(ref) {
 //   - a FOLDER `active/<ABBR>/`: the index `PLAN_<ABBR>.md` and the ticket files
 //     `tickets/<ABBR>-NNN.md`; `DECISIONS.md`, `RESEARCH.md` and `records/` belong to the plan but
 //     are not where a ticket lives, so no reader looks there.
-// The grammar is the doctrine's own (payload docs/WORKFLOW.md, "one prefix per plan").
+// The grammar is the doctrine's own (plan.md § Durable development history, "one prefix per plan").
 const PLAN_ABBR_RE = /^[A-Z]{2,8}$/;
 const PLAN_FILE_RE = /^PLAN_.*\.md$/;
 const PLAN_TICKET_FILE_RE = /^([A-Z]{2,8})-(\d{3})\.md$/;

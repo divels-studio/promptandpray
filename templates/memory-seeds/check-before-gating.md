@@ -1,6 +1,6 @@
 # Check first, then ask [R]
 
-Reinforces payload `docs/WORKFLOW.md` - "Operator-interaction guards", gate (d).
+Reinforces `.claude/aiwf-native/ORCHESTRATOR.md` - "Operator-interaction guards", gate (d).
 
 A precondition a tool can verify is verified, and the result is shown in one line. Escalate to the
 operator only on a POSITIVE finding - something really is in the way. This covers demands as much as

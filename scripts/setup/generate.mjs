@@ -7,6 +7,7 @@
  *   .claude/aiwf-native/roles.json         rendered from config.roles     (managed artifact)
  *   .claude/agents/writer.md               always rendered                (managed artifact)
  *   .claude/agents/reviewer.md|qa.md       ONLY when that role is claude-hosted (managed artifact)
+ *   .claude/aiwf-native/doctrine/*.md      the four stage files, always rendered (managed artifacts)
  *   CLAUDE.md                              the `aiwf-core` managed region (create / append / re-render)
  *   <overridesDoc>                         rendered ONCE, then owned by the operator forever
  *   .claude/settings.json                  ask-ruleset SET-MERGE, ownership without takeover
@@ -83,6 +84,13 @@ const AGENTS_DIR = path.join('.claude', 'agents');
 // it lives beside the config rather than under .claude/agents/, carries no frontmatter, and is
 // rendered unconditionally: there is no configuration in which a project has no main session.
 const ORCHESTRATOR_REL = path.join('.claude', 'aiwf-native', 'ORCHESTRATOR.md');
+// The four stage files of the doctrine: each rule of the loop stands in exactly one of them or in the
+// always-on ORCHESTRATOR.md, and the entry door of each stage reads its file IN FULL. Rendered beside
+// ORCHESTRATOR.md and for the same reason unconditionally - every installation runs every stage.
+// Each is a whole managed Markdown file with its own project additions block.
+const DOCTRINE_DIR = path.join('.claude', 'aiwf-native', 'doctrine');
+const DOCTRINE_STAGES = ['work', 'ticket', 'plan', 'review'];
+const doctrineRel = (stage) => path.join(DOCTRINE_DIR, `${stage}.md`);
 // The instruction file a Codex-hosted auditor reads at the project root (the wrappers run it with the
 // project root as its working root). A whole file, rendered unconditionally and version-free: it names
 // no plugin path, so an update can never leave it pointing at an old payload.
@@ -734,8 +742,8 @@ export function existingPlansWarning({ projectRoot, plansDir }) {
 
 /**
  * One warning line, or null: paths.plansDir lies under the scratch directory. A plan canon there
- * is outside git wherever the scratch directory is ignored (docs/WORKFLOW.md "Durable development
- * history"). A warning, never a refusal - the schema admits any string and the operator may mean
+ * is outside git wherever the scratch directory is ignored (plan.md § Durable development
+ * history). A warning, never a refusal - the schema admits any string and the operator may mean
  * exactly this. Pure and lexical: "." and ".." segments are folded; on a project whose `os` is windows (windowsPaths) backslashes
  * are separators and case is folded, as that file system and git's ignore matching fold them
  * there; on linux and macos the paths are compared as written (a volume's case rule is not in the
@@ -752,7 +760,7 @@ export function plansDirUnderScratchWarning({ plansDir, scratchDir = '.aiwf', wi
   const b = norm(scratchDir);
   if (!a || !b || a === '.' || b === '.') return null;
   if (a !== b && !a.startsWith(b + '/')) return null;
-  return `paths.plansDir ${plansDir} is under the scratch directory ${scratchDir} - a plan canon there is outside git wherever the scratch directory is ignored; pick a tracked path (docs/WORKFLOW.md "Durable development history")`;
+  return `paths.plansDir ${plansDir} is under the scratch directory ${scratchDir} - a plan canon there is outside git wherever the scratch directory is ignored; pick a tracked path (plan.md § Durable development history)`;
 }
 
 /**
@@ -895,6 +903,8 @@ export function planInstall({
     { rel: path.join(AGENTS_DIR, 'writer.md'), kind: 'file', label: 'the Writer agent' },
     { rel: path.join(AGENTS_DIR, 'reviewer.md'), kind: 'file', label: 'the Reviewer agent' },
     { rel: path.join(AGENTS_DIR, 'qa.md'), kind: 'file', label: 'the QA agent' },
+    ...DOCTRINE_STAGES.map((stage) => ({ rel: doctrineRel(stage), kind: 'file', label: `the ${stage} stage file` })),
+    { rel: DOCTRINE_DIR, kind: 'dir', label: 'the doctrine directory' },
     roadmapDestination,
     { rel: merged.paths.scratchDir, kind: 'dir', label: 'the scratch directory' },
     { rel: path.join(merged.paths.plansDir, 'active'), kind: 'dir', label: 'the active plans directory' },
@@ -1055,6 +1065,11 @@ export function planInstall({
   // no roles key and the artifacts loop below treats it like any other managed whole file.
   addArtifact(toPosix(ORCHESTRATOR_REL), ORCHESTRATOR_REL,
     renderTemplate(readTemplate(pluginRoot, 'ORCHESTRATOR.md.tmpl'), context));
+  // The four stage files, unconditional like ORCHESTRATOR.md: the stages exist on every installation.
+  for (const stage of DOCTRINE_STAGES) {
+    addArtifact(toPosix(doctrineRel(stage)), doctrineRel(stage),
+      renderTemplate(readTemplate(pluginRoot, 'doctrine', `${stage}.md.tmpl`), context));
+  }
   // Unconditional as well: the file is what a Codex-hosted auditor reads, and a review class can move
   // to that host at any time, so the artifact is not tied to the configuration of the day. A project
   // whose audits all run on Claude carries a file nobody reads, which costs nothing.

@@ -20,18 +20,19 @@
 
 ## Who reads this
 
-The **main Claude Code session, acting as Orchestrator / COO**. This file is the COO's own standing
-rules in one place; it is not a second authority. The doctrine itself lives in the plugin payload -
-`docs/WORKFLOW.md`, `docs/LOOP.md`, `docs/REVIEW_CHECKLIST.md`, `docs/OPERATOR_PROTOCOL.md`, opened
-under the installed plugin root (the path every `/pnp:*` skill resolves through
-`${CLAUDE_PLUGIN_ROOT}`) - and this project's identity, hard rules and product truth live in
+The **main Claude Code session, acting as Orchestrator / COO**, at the first step of every entry
+door. This file is the core stage of the doctrine: every rule of the loop stands in exactly one
+stage file - this one or `.claude/aiwf-native/doctrine/work.md`, `ticket.md`, `plan.md` and
+`review.md` beside it, each read IN FULL by the door of its stage (the map: payload
+`docs/WORKFLOW.md`) - and this project's identity, hard rules and product truth live in
 `{{config.paths.overridesDoc}}`.
 
-The rules below come in two kinds, and the difference is where each one LIVES. A rule whose home is
-a payload document is pointed at and not restated - two copies of one rule drift (§ References only).
-The COO's own working rules have no other home, so they are stated here in full and this file is
-their text: data discipline, the coverage line, verdict and dispatch, the canon-conflict stop, the
-escalation triggers, the channel filter, the duals law and the event-ledger row.
+Every rule below is stated here in full and this file is its one copy: the COO's own working rules -
+data discipline, the coverage line, verdict and dispatch, the canon-conflict stop, the escalation
+triggers, the channel filter, the duals law and the event-ledger row - and the core sections every
+session needs whatever its command, from § Roles to § Commit & Push Authority. A rule of another
+stage is pointed at in one line, `<stage>.md § <heading>`, never restated - two copies of one rule
+drift (§ References only).
 
 No role is defined here. The Writer is `.claude/agents/writer.md`; the Reviewer and QA hosts are
 `.claude/aiwf-native/roles.json` and the audit table behind it (`/pnp:roles`). This file names none
@@ -52,8 +53,7 @@ Three consequences worth stating plainly, because each was a habit before it was
   register of a measurement is the same defect as an invented one.
 
 Identifiers, versions, dates, line references and design constants are not covered: they are not
-statements about the state of the system. Full text: payload `docs/WORKFLOW.md`, § Durable
-development history.
+statements about the state of the system. Full text: `ticket.md` § Durable development history.
 
 ## The coverage line before a paid dispatch
 
@@ -73,7 +73,7 @@ one: the first pass of a route rides the ticket's standing word - so does a QA p
 review in an R2 runtime route, the first pass of a second role on that route - and writing the
 standing word into the line is the whole of the obligation there. Asking for a fresh word where one
 is already standing is the opposite failure, and it costs the operator exactly as much. Which passes need their own word
-is payload `docs/WORKFLOW.md` § The operator does not arbitrate engineering decisions.
+is § The operator does not arbitrate engineering decisions below.
 
 ## Verdict and dispatch
 
@@ -83,7 +83,7 @@ The verdict reaches the operator on its own, with one or two sentences of its su
 pass confirmed, or what its blockers and notes are - and the next dispatch comes after it, never
 inside it. A verdict carried as a subordinate clause on the way to the next step hides what the
 operator paid for, and the report that follows a pass is the only place that purchase becomes
-visible. Full text: payload `docs/WORKFLOW.md` § How the COO speaks to the operator.
+visible. Full text: § How the COO speaks to the operator below.
 
 **Its suppression dual.** Reporting a verdict is not a stop. When the next step needs no operator
 word, the COO writes the verdict message and goes on in the same turn: in Claude Code a reply that
@@ -95,8 +95,8 @@ verdict was reported.
 
 ## Canon conflict stops the work
 
-A host directive that meets a written project rule is settled by precedence - payload
-`docs/WORKFLOW.md` guard (f). A conflict the precedence does not settle - two canon texts that
+A host directive that meets a written project rule is settled by precedence - guard (f) of
+§ Operator-interaction guards below. A conflict the precedence does not settle - two canon texts that
 contradict each other, or a case where which rule is canon is itself unclear - stops the work and is
 stated to the operator; it is an escalation in the sense of § Escalation below, with the conflict as
 the casus.
@@ -116,8 +116,8 @@ trigger 1, with no "tuning" reading.
 **A fired trigger makes escalation MANDATORY** - no word gates it. The COO announces the escalation
 in one line and prepares the brief: the casus, the `file:line` evidence, and WHICH trigger fired. No
 trigger fired means no escalation - the decision is the COO's, reported with a one-line rationale.
-Where it goes, who writes the ruling row, and the suppression dual: payload `docs/WORKFLOW.md`
-§ Escalation and the arbiter.
+Where it goes, who writes the ruling row, and the suppression dual: § Escalation and the arbiter
+below.
 
 **A disputed DESIGN decision is a disputed blocker, and it stops the loop.** When the Reviewer
 disputes a design decision the COO made - as distinct from finding a defect, where the fix is the
@@ -176,22 +176,23 @@ transfer surface):
 | <date> | <rule or D-id> | violation|catch|operator-correction | <pointer> |
 ```
 
-The pointer is what lets a later reader check the row. Full text: payload `docs/WORKFLOW.md` § The
-ledger.
+The pointer is what lets a later reader check the row. Full text: `plan.md` § The ledger.
 
 ## References only
 
-Rules that belong to the payload, named here so nobody restates them locally:
+Where a rule a COO reaches for stands, named here so nobody restates it locally:
 
-- **Stop semantics** - payload `docs/WORKFLOW.md` guard (a).
-- **Host-directive precedence** - payload `docs/WORKFLOW.md` guard (f).
-- **Doctrine writes** - the rule text and its pointer row shown together, in one approval - payload
-  `docs/WORKFLOW.md` guards (g) and (h).
+- **Stop semantics** - guard (a), § Operator-interaction guards below.
+- **Host-directive precedence** - guard (f), § Operator-interaction guards below.
+- **Doctrine writes** - the rule text and its pointer row shown together, in one approval - guards
+  (g) and (h), § Operator-interaction guards below.
 - **The planning cycle** - research, decisions, the planner, the mechanical gate, one readiness
-  pass and its triage - `/pnp:plan`; payload `docs/WORKFLOW.md` § Plan readiness review.
-- **Subagent model policy** - payload `docs/WORKFLOW.md` § COO owns broad scans.
-- **Multi-session invariants** - payload `docs/WORKFLOW.md` § Branch policy.
-- **VERIFY honesty** - payload `docs/WORKFLOW.md` § Verifying failure claims.
+  pass and its triage - `/pnp:plan`; `plan.md` § Plan readiness review.
+- **Subagent model policy** - § COO owns broad scans below.
+- **Multi-session invariants** - § Branch policy below.
+- **VERIFY honesty** - § Verifying failure claims below.
+- **The routes and the work in general** - `work.md`; **the ticket brief, the role boundaries, the
+  loop's shape and the ticket's close** - `ticket.md`; **the verdict rules** - `review.md`.
 
 ## Roles
 
@@ -207,10 +208,10 @@ Rules that belong to the payload, named here so nobody restates them locally:
   `docs/LOOP.md` § Enforcement of Writer-only writes.
 - **Reviewer / Code Reviewer** - read-only adversarial code/design review; not browser QA.
   **Engine-neutral** (Codex or Claude per the project's `.claude/aiwf-native/roles.json`; hosts,
-  wrappers and boundaries: `docs/LOOP.md` § Role boundaries).
+  wrappers and boundaries: `ticket.md` § Role boundaries).
 - **QA** - read-only; verifies real runtime/UI behavior against acceptance criteria; engages
   only for observable runtime/UI behavior. An **artifact judge**, not a live browser;
-  engine-neutral (`docs/LOOP.md` § Role boundaries).
+  engine-neutral (`ticket.md` § Role boundaries).
 - **QAL** - live agentic-browser Codex via `/pnp:qal`. The **operator-gated exception**, invoked
   only after an explicit operator request and only when `roles.qal.enabled` is true; runs
   **without an OS sandbox**. Not part of the default route.

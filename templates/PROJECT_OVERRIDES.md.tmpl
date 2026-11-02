@@ -11,10 +11,11 @@
 > overwrite it - at most they append a "review these sections" note. Everything here is
 > project-specific.
 >
-> The generic doctrine is **PLUGIN PAYLOAD - not files in this repository**: the PromptAndPray
-> payload's `docs/WORKFLOW.md`, `docs/LOOP.md` and `docs/REVIEW_CHECKLIST.md`, which live under the
-> installed plugin root (the `/pnp:*` skills resolve that path through `${CLAUDE_PLUGIN_ROOT}`) and
-> are updated with the plugin, never copied in here.
+> The generic doctrine is **rendered from the PromptAndPray payload, never copied in here**: the core
+> `.claude/aiwf-native/ORCHESTRATOR.md` and the four stage files `.claude/aiwf-native/doctrine/*.md`,
+> re-rendered by `/pnp:update` whenever a release changes them. A local rule that modifies one of
+> their rules goes into the project additions block of that stage file; this document keeps the
+> project's own identity, hard rules and product truth.
 >
 > Every role reads this file before starting work. Keep it short and true; a stale identity section
 > is worse than none.
@@ -46,7 +47,7 @@ placeholders and write real ones, or delete the section.)*
   - <e.g. container or linked-environment commands>
 - Do not change files outside the requested scope.
 - Planning lock: when the operator invokes `/plan` or explicitly asks for planning before
-  implementation, stay planning-only (full rules: the payload doc `docs/WORKFLOW.md` § Planning lock).
+  implementation, stay planning-only (full rules: `plan.md` § Planning lock).
 - **Commit authority:** local commit only, and only after the review route passes and a human
   explicitly approves. No automatic commits.
 - **Push authority:** push / merge / rebase only with the operator's **explicit word**, executed via
@@ -114,7 +115,7 @@ The literal VERIFY commands live in `aiwf.config.json`:
 
 ## Status and release artifacts
 
-The documents the "status / release docs policy" in the payload doc `docs/WORKFLOW.md` applies to, in this project:
+The documents the status / release docs policy (`work.md` § Status / release docs policy) applies to, in this project:
 
 - status page: <path or "none">
 - changelog: <path or "none">
@@ -158,7 +159,7 @@ by the operator. Never stash, clean, reset, or otherwise hide the dirty/untracke
 ## Loop shape (this project's overrides of the generic defaults)
 
 These are the shape parameters the plugin lets a project set. The gates around them are payload
-mechanics and are **not** editable here (see the payload doc `docs/WORKFLOW.md` § Loop shape and its overrides).
+mechanics and are **not** editable here (see `ticket.md` § Loop shape and its overrides).
 
 - **One reviewer, not two** - no "two independent reviewers" requirement.
 - **Correction rounds are capped at {{config.loop.correctionRoundsCap}}** for the implementation
@@ -185,9 +186,9 @@ for this project. Empty is a valid answer.
 ## Workflow
 
 Routing (R1/R2/R3), the four roles, the ticket-brief contract, and commit/push mechanics are defined
-in the plugin payload - `docs/WORKFLOW.md`, with the one-page native mapping in `docs/LOOP.md`
-and the verdict rules in `docs/REVIEW_CHECKLIST.md`, all of them under the installed plugin root,
-not in this repository. Durable knowledge lives in Git under
+in the rendered stage files - the core `.claude/aiwf-native/ORCHESTRATOR.md`, routing in
+`work.md`, the brief and the roles' boundaries in `ticket.md`, the verdict rules in `review.md` -
+rendered from the plugin payload, never edited by hand. Durable knowledge lives in Git under
 `{{config.paths.plansDir}}/active/` - `PLAN_<ABBR>.md` or a folder `active/<ABBR>/` (a draft under
 `drafts/` until it lands, its readiness history under `readiness/<ABBR>/`; finished plans move to
 `{{config.paths.plansDir}}/archive/`);

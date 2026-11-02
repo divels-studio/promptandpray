@@ -1,8 +1,9 @@
 # Operator protocol - the three doors
 
 > How you start a session with PromptAndPray. One page, written for someone seeing the system for
-> the first time. The full rules live in `docs/WORKFLOW.md` and `docs/LOOP.md` - this page is only
-> the entrance.
+> the first time. The full rules live in the stage files rendered into your project - the core
+> `.claude/aiwf-native/ORCHESTRATOR.md` and `.claude/aiwf-native/doctrine/` (the map:
+> `docs/WORKFLOW.md`) - this page is only the entrance.
 
 ## The three doors
 

@@ -29,15 +29,20 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
 
 ## Steps
 
-1. **Doctrine preflight (mandatory).** Read the plugin's `docs/WORKFLOW.md` and `docs/LOOP.md` IN
-   FULL, this project's `{{config.paths.overridesDoc}}` IN FULL, AND
-   `.claude/aiwf-native/ORCHESTRATOR.md` (your rendered standing rules) IN FULL, before anything
-   else. The overrides document carries the project's identity, hard rules and product truth - a
-   session without it works without the product's boundaries.
+1. **Doctrine preflight (mandatory).** Read `.claude/aiwf-native/ORCHESTRATOR.md` (the core: your
+   rendered standing rules), `.claude/aiwf-native/doctrine/work.md` (the work stage: the routes and
+   the rules of work in general) and this project's `{{config.paths.overridesDoc}}` IN FULL, before
+   anything else, and note `git rev-parse HEAD` at that read. The overrides document carries the
+   project's identity, hard rules and product truth - a session without it works without the
+   product's boundaries.
+   **Its suppression dual.** Skip the read when this session already read the current text of all
+   three: `git diff <the HEAD noted at that read> -- <the three paths>` returns empty. Any other
+   result - a line of diff, or an error - means read them again. After a context compaction all
+   three are read again, whatever the diff says.
 2. **Tree check.** Current branch, `git status`, the last ~5 commits. Identify uncommitted work -
    NEVER touch or stage foreign uncommitted files; commit only by explicit paths. Then the scratch
    directory (`{{config.paths.scratchDir}}`): list every file there that belongs to no open ticket
-   or plan, and settle each under the ticket-end rule before new work starts (`docs/WORKFLOW.md`
+   or plan, and settle each under the ticket-end rule before new work starts (`ticket.md`
    § Durable development history) - its content found standing in the tree by a grep of its
    headings and items, or moved into git first; a file whose content stands nowhere else is
    never deleted unmoved; the route state and the files of a ticket or plan still in flight stay.
@@ -47,9 +52,12 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
    a plan under `{{config.paths.plansDir}}/active/` (plansDir is the PARENT of `active/`,
    `archive/`, `drafts/` and `readiness/`): extend a PLAN with the ticket brief (risk threshold +
    stop condition) - a NEW durable plan goes through `/pnp:plan`. A non-durable R2 - below the
-   durable-record threshold of `docs/WORKFLOW.md` § Durable development history - needs no plan: its
+   durable-record threshold of `plan.md` § Durable development history - needs no plan: its
    own brief carries the contract fields and its COO routing line, and in `off-plan` mode its Writer
-   dispatch raises the Gate 2 dialog, since no active plan names it. State the routing as a decision
+   dispatch raises the Gate 2 dialog, since no active plan names it. The moment the task routes
+   R2/R3, before the brief is authored, read `.claude/aiwf-native/doctrine/ticket.md` (the ticket
+   stage: the brief contract, the roles' boundaries, the loop's shape, the ticket's close) IN FULL,
+   under the dual of step 1 over its own path. State the routing as a decision
    with a one-line why, then STOP and wait for the operator's word before dispatching. One prefix per plan: a new plan is
    `PLAN_<ABBR>.md` (or a folder `active/<ABBR>/` whose index is `PLAN_<ABBR>.md`) and its tickets
    are `<ABBR>-<NNN>`, sequential and never reused, so the ref is the address of its plan file rather

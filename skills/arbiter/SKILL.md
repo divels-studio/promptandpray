@@ -19,7 +19,7 @@ nothing is disputed.
 **Why `Bash` is in the tool list, and what it does NOT license.** Step 0 is an interlock, not a
 description: it RUNS `git rev-parse` and the real `--check` entrypoint, and a skill with no shell
 cannot honour its own first step. The read-only posture of this session is BEHAVIOURAL - it comes
-from the doctrine below and from the one-executing-session invariant (`docs/WORKFLOW.md`
+from the doctrine below and from the one-executing-session invariant (`ORCHESTRATOR.md`
 § Branch policy), not from the absence of a tool. Read the "What this session never does" section
 before you use the shell for anything that is not Step 0.
 
@@ -43,14 +43,17 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
 
 ## Step 1 - Load the regulation
 
-Read `docs/WORKFLOW.md` § Escalation and the arbiter IN FULL, under the installed plugin root (the
-path `${CLAUDE_PLUGIN_ROOT}` resolves to). That section is the authority for everything this session
-does: the four countable triggers, what a fired trigger obliges, what the arbiter may and may not
-touch, and where the ruling lands afterwards. Read it before the brief, not after - a case read
-first shapes which rule you go looking for.
+Read `<root>/.claude/aiwf-native/ORCHESTRATOR.md` - the rendered core of the doctrine - IN FULL. Its
+§ Escalation and § Escalation and the arbiter are the authority for everything this session does:
+the four countable triggers, what a fired trigger obliges, what the arbiter may and may not touch,
+and where the ruling lands afterwards; its § Branch policy carries the one-executing-session
+invariant this session runs under. Read it before the brief, not after - a case read first shapes
+which rule you go looking for - and note `git rev-parse HEAD` at that read.
 
-Read § Branch policy of the same document as well, for the one-executing-session invariant this
-session runs under.
+**Its suppression dual.** Skip the read when this session already read the current text:
+`git diff <the HEAD noted at that read> -- .claude/aiwf-native/ORCHESTRATOR.md` returns empty. Any
+other result - a line of diff, or an error - means read it again. After a context compaction it is
+read again, whatever the diff says.
 
 ## Step 2 - Take the parked brief
 
@@ -75,7 +78,7 @@ say so in the ruling; do not go looking for the overwritten text.
 
 ## Step 3 - Read the ruling ledger
 
-The rulings live in two places (`docs/WORKFLOW.md` § The ledger), read in this order:
+The rulings live in two places (`plan.md` § The ledger), read in this order:
 
 1. **The plan's own rows.** When the brief carries a `Ticket: <ABBR>-<NNN>` line, read
    `<root>/{{config.paths.plansDir}}/readiness/<ABBR>/ledger.md` - that plan's rulings.

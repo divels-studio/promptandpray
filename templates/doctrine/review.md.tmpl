@@ -23,15 +23,15 @@ and named by the reviewer and QA agents.
 Verdict authority for the **Reviewer** (code/design) and **QA** (runtime/UI). Both roles are
 **engine-neutral** - a read-only Codex wrapper (brief on **stdin**, OS `--sandbox read-only`;
 recipe: `docs/CODEX_REVIEW_QA_RECIPE.md`) or the `reviewer` / `qa` Claude subagent
-(`Read/Grep/Glob` only, no OS cell); hosts and boundaries: `docs/LOOP.md` § Role boundaries. Either
+(`Read/Grep/Glob` only, no OS cell); hosts and boundaries: `ticket.md` § Role boundaries. Either
 way they report; they do not fix, stage, commit, or push. Routing and the ticket-brief contract
-live in `docs/WORKFLOW.md`.
+live in `work.md` § Routes and `ticket.md` § Ticket brief contract (R2/R3).
 
 ## Plan readiness (before implementation)
 
 For durable R2 and all R3 plans, the Reviewer performs ONE read-only pass over the plan folder
 before execution approval, on the plan row of the audit table; when a second pass runs and what
-guards the first is `docs/WORKFLOW.md` § Plan readiness review.
+guards the first is `plan.md` § Plan readiness review.
 
 Read the complete folder against the tree and check only the six readiness checks of that section -
 the classes of `docs/READINESS_CLASSES.md` (class 15: for every write, the lock and what runs beside
@@ -59,7 +59,7 @@ Every R2/R3 brief hands the Reviewer and QA:
 Neither role is obligated to invent findings; absence of defects at the given threshold is a valid
 `pass`. Stop when the stop condition is met - do not keep digging. The implementation loop is capped
 at `loop.correctionRoundsCap` correction rounds; plan readiness follows its own pass economy
-(`docs/WORKFLOW.md` § Plan readiness review).
+(`plan.md` § Plan readiness review).
 
 ---
 
@@ -213,7 +213,7 @@ R2).
 - Verify what the software DOES against the acceptance criteria, not code style.
 - QA is an **artifact judge**, not a live browser: it never drives a browser and never starts a dev
   server; it reads the artifacts the orchestrator's test run produced (JSON report, traces,
-  screenshots) and judges them against the criteria (the spec-flow: `docs/LOOP.md` § Role
+  screenshots) and judges them against the criteria (the spec-flow: `ticket.md` § Role
   boundaries). Never invoke QAL - the operator-gated live surface, NOT read-only - from the QA role.
 - Never claim PASS without a real reproduction backed by concrete artifact evidence: exact
   test/flow, account/tenant context if relevant, expected vs actual result, the JSON assertion or
@@ -230,7 +230,7 @@ visible. For each blocker: name the exact failing surface and require proof on t
 forbid proxy closure (adapter-only, type-only, unit-only, prose-only, generic green test).
 
 **On a pass 2 the Reviewer is handed the previous list and owes a declaration for anything outside
-it** (what the brief carries: `docs/WORKFLOW.md` § Fail aggregation); every NEW blocker
+it** (what the brief carries: `ticket.md` § Fail aggregation); every NEW blocker
 declares why it was not visible on the previous pass - a blocker with no declaration is a contract
 violation, reported separately from the verdict. Name the origin in one clause (born of the revision
 between the passes, or a fact the previous pass did not open); if the brief arrived WITHOUT the

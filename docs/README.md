@@ -3,11 +3,12 @@
 The generic doctrine shipped as plugin payload. Project-specific direction never lives here -
 it lives in the generated project overrides document (`paths.overridesDoc`).
 
-- `WORKFLOW.md` - the active authority: roles, routing R1/R2/R3, the ticket-brief contract, the
-  planning lock, plan readiness, the operator-interaction guards, commit/push authority.
-- `LOOP.md` - the one-page mapping of that workflow onto native Claude Code (roles, the three
-  gates, the honest security model).
-- `REVIEW_CHECKLIST.md` - the Reviewer/QA verdict rules and defect classes.
+- `WORKFLOW.md` - the map: the stage files every rule of the loop stands in (rendered into the
+  project from `templates/ORCHESTRATOR.md.tmpl` and `templates/doctrine/`), the step that reads
+  each, and reproducibility.
+- `LOOP.md` - the role hosts, the enforcement hooks (Gate 1-4 and the habit guard), the commit gate
+  and the honest security model.
+- `REVIEW_CHECKLIST.md` - a pointer stub: the verdict rules are the review stage file.
 - `CODEX_REVIEW_QA_RECIPE.md` - how the Codex-hosted review roles are invoked, and why each locked
   flag is locked.
 - `QA_BROWSER_INVESTIGATION.md` - the conclusion the QA/QAL split rests on.

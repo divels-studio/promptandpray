@@ -1,6 +1,6 @@
 ---
 name: setup
-description: Install PromptAndPray into this project - interview, dry-run preview, generate the project layer (config, roles, agents, the rendered Orchestrator role, overrides doc, managed CLAUDE.md region, permission rules), self-check, and print the memory seeds.
+description: Install PromptAndPray into this project - interview, dry-run preview, generate the project layer (config, roles, agents, the rendered Orchestrator role, the four doctrine stage files, overrides doc, managed CLAUDE.md region, permission rules), self-check, and print the memory seeds.
 allowed-tools: Read, Grep, Glob, Bash
 ---
 
@@ -42,8 +42,9 @@ Notation: `{{config.some.key}}` in this document means *substitute the value you
   refuses anything outside those three fail-closed: an unknown channel would name wrappers that do
   not exist, and an installation this version cannot run is worse than a refusal.
 - **Files already at the managed paths** - `CLAUDE.md` with an `aiwf-core` region,
-  `.claude/aiwf-native/roles.json`, `.claude/aiwf-native/ORCHESTRATOR.md`, `.claude/agents/*.md`,
-  the Codex auditor's `AGENTS.md` at the project root: setup **overwrites** them from the render and
+  `.claude/aiwf-native/roles.json`, `.claude/aiwf-native/ORCHESTRATOR.md`, the four stage files
+  `.claude/aiwf-native/doctrine/work.md`, `ticket.md`, `plan.md` and `review.md`,
+  `.claude/agents/*.md`, the Codex auditor's `AGENTS.md` at the project root: setup **overwrites** them from the render and
   names each one in the report as `overwrote: <path>`. Nothing asks. If the operator wants to keep
   text from such a file, it goes into the overrides document, or into the file's
   `<!-- project additions -->` ... `<!-- /project additions -->` block (each marker on its own line,
@@ -94,7 +95,7 @@ then whatever is typed - and each can print one warning line:
 - `<overridesDoc> already exists - setup seeds that document once and never rewrites it ...` - the
   install is correct and writes nothing there, which is invisible unless it is said.
 - `paths.plansDir` under the scratch directory - a plan canon there is outside git wherever the
-  scratch directory is ignored (`docs/WORKFLOW.md` § Durable development history); the generator
+  scratch directory is ignored (`plan.md` § Durable development history); the generator
   repeats it as a note.
 
 None is a blocker: all three describe a project an operator may want exactly as it is. The

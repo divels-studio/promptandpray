@@ -14,7 +14,8 @@ Gate 1 + the tool allowlist, not an OS cell) - see those agent files, not this r
   (a sentinel write returns a non-zero exit and an access-denied error, and creates no file) and
   still exposes the user's Codex tooling (because user config is loaded).
 - **Roles / definitions:** the project's rendered `reviewer` / `qa` agents, with the per-role host in
-  `.claude/aiwf-native/roles.json`. Verdict rules: `docs/REVIEW_CHECKLIST.md`.
+  `.claude/aiwf-native/roles.json`. Verdict rules: the review stage file
+  `.claude/aiwf-native/doctrine/review.md`.
 - **Auth smoke turn:** model discovery alone does not prove Codex authentication - confirm the host
   is authenticated with a real smoke turn before trusting a review/QA run.
 - **Note:** this recipe is invocation only. Hook/gate wiring lives in the plugin's `hooks/`.
@@ -86,7 +87,7 @@ Hard requirements (do not change without re-proving the read-only posture):
   skills write it.
 - **Every wrapper runs in the BACKGROUND by default** (`run_in_background: true`), with a timeout of
   at least 3600000 ms: a command expected to run over about five minutes runs in the background
-  (`docs/LOOP.md` § Role boundaries). A foreground shell call is killed at its cap (10 minutes),
+  (`ticket.md` § Role boundaries). A foreground shell call is killed at its cap (10 minutes),
   while an external engine at `effort: high` on a real diff routinely runs longer and is killed
   mid-reasoning (exit 143). The run ends there and the verdict does not
   arrive - passes on a paid engine are an operator quota gate, so a timeout kill spends the

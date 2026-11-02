@@ -1,6 +1,6 @@
 # An operator stop freezes every mutating action [R]
 
-Reinforces payload `docs/WORKFLOW.md` - "Operator-interaction guards", gate (a).
+Reinforces `.claude/aiwf-native/ORCHESTRATOR.md` - "Operator-interaction guards", gate (a).
 
 On a stop or an interrupt, the answer is exactly three things:
 

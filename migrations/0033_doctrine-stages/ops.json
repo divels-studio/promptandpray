@@ -1,0 +1,21 @@
+{
+  "migration": "0033_doctrine-stages",
+  "targetPluginVersion": "0.3.8",
+  "operations": [
+    { "op": "rerender-managed-region", "file": ".claude/aiwf-native/doctrine/work.md", "region": null, "template": "templates/doctrine/work.md.tmpl", "createIfAbsent": true },
+    { "op": "rerender-managed-region", "file": ".claude/aiwf-native/doctrine/ticket.md", "region": null, "template": "templates/doctrine/ticket.md.tmpl", "createIfAbsent": true },
+    { "op": "rerender-managed-region", "file": ".claude/aiwf-native/doctrine/plan.md", "region": null, "template": "templates/doctrine/plan.md.tmpl", "createIfAbsent": true },
+    { "op": "rerender-managed-region", "file": ".claude/aiwf-native/doctrine/review.md", "region": null, "template": "templates/doctrine/review.md.tmpl", "createIfAbsent": true },
+    { "op": "rerender-managed-region", "file": "CLAUDE.md", "region": "aiwf-core", "template": "templates/CLAUDE.md.tmpl#aiwf-core" },
+    { "op": "rerender-managed-region", "file": ".claude/aiwf-native/ORCHESTRATOR.md", "region": null, "template": "templates/ORCHESTRATOR.md.tmpl" },
+    { "op": "rerender-managed-region", "file": ".claude/agents/writer.md", "region": null, "template": "templates/agents/writer.md.tmpl" },
+    { "op": "rerender-managed-region", "file": ".claude/agents/reviewer.md", "region": null, "template": "templates/agents/reviewer.md.tmpl", "ifRecorded": true },
+    { "op": "rerender-managed-region", "file": ".claude/agents/qa.md", "region": null, "template": "templates/agents/qa.md.tmpl", "ifRecorded": true },
+    {
+      "op": "note",
+      "id": "doctrine-stages-0-3-8",
+      "text": "0.3.8 splits the loop's doctrine by stage. Every rule stands in exactly one stage file, rendered into your project as a managed artifact: .claude/aiwf-native/ORCHESTRATOR.md (the core, read by every entry door) and .claude/aiwf-native/doctrine/work.md, ticket.md, plan.md and review.md - created on your installation by the first four operations. Each entry door now reads its stage IN FULL from these rendered files instead of the payload documents: /pnp:work reads the core, work.md and your overrides document, and ticket.md when a task routes R2/R3; /pnp:mission reads ticket.md before a dispatch; /pnp:plan reads plan.md; /pnp:review, /pnp:qa and /pnp:qal read the core and ticket.md at their first step, and the auditor is handed review.md. In the payload, docs/WORKFLOW.md is now the map of the stage files, docs/LOOP.md keeps the enforcement hooks, the commit gate, the honest security model and a role-hosts table, and docs/REVIEW_CHECKLIST.md is a pointer stub; a pointer of yours to a section of them now resolves in the stage file the map names. The loop command is removed: its one unique rule (a QA BLOCKED pauses the loop and consumes no correction round) now stands in /pnp:qa. FOUR EMPTY PROJECT ADDITIONS BLOCKS now exist, one at the end of each stage file, carried across every re-render like the block of ORCHESTRATOR.md. A local rule of yours moves into the block of the stage file carrying the rule it modifies, opening with that rule's heading - on your operator's word, never by this update, which moves nothing of yours. This update also re-renders the managed CLAUDE.md region, ORCHESTRATOR.md, the Writer agent, and the Reviewer and QA agents where this installation has them.",
+      "docRefs": ["CHANGELOG.md", "docs/WORKFLOW.md", "docs/LOOP.md"]
+    }
+  ]
+}

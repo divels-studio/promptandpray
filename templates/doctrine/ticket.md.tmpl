@@ -167,7 +167,7 @@ the gate.
   dispatches either the Codex wrapper (`scripts/native/ps/codex-review.ps1` /
   `scripts/native/sh/codex-review.sh`, same `-Class` / `--class`) **or** the `reviewer` Claude
   subagent (`Read/Grep/Glob` only). Adversarial code/design review; reports `pass` /
-  `pass-with-notes` / `fail` per `docs/REVIEW_CHECKLIST.md` (a plan-readiness pass returns a findings
+  `pass-with-notes` / `fail` per `review.md` (a plan-readiness pass returns a findings
   table and a `BLOCKERS:` line instead); never edits. On the **codex** host the read-only boundary
   is a hard OS cell (`--sandbox read-only`); on the **claude** host it is tool-availability + Gate 1
   + convention + git reversibility, with NO OS cell.
@@ -190,13 +190,13 @@ the gate.
   mechanism; neither is "safe") in a throwaway scratch cwd with a disposable browser profile - hygiene,
   not a guarantee; its "never writes the repo" is a convention, not a cell. QA stays the default.
 - **Arbiter** - not a loop role: an on-demand, cold-start second view opened through `/pnp:arbiter`
-  on a fired escalation trigger, read-only on the tree; the doctrine is `docs/WORKFLOW.md`
+  on a fired escalation trigger, read-only on the tree; the doctrine is `ORCHESTRATOR.md`
   § Escalation and the arbiter.
 - **Operator** - the human; the sole authority for commit approval, push, merge, branch switches,
   destructive/system-changing operations, and for authorizing a QAL (unsandboxed live-browser) run.
 
 The session rule (a readiness cycle in a fresh session; ~400k tokens as a ticket boundary):
-`docs/WORKFLOW.md` § Plan readiness review.
+`plan.md` § Plan readiness review.
 
 **Reading is not a shell job (all roles).** Read or inspect files and config with the Read/Grep/Glob
 tools, not shell commands (`cat`/`head`/`node -e`/shell loops) - the shell is for execution
@@ -266,8 +266,8 @@ Not configurable:
 ## Fail aggregation
 
 Reviewer and QA must return ALL visible material problems in a single round; a later round may not
-raise a blocker that was already visible earlier (the role's side: `docs/REVIEW_CHECKLIST.md`
-§ Fail aggregation (both roles)).
+raise a blocker that was already visible earlier (the role's side: `review.md` § Fail aggregation
+(both roles)).
 
 **In the plan-readiness cycle the mechanism is HANDING the list:** the pass-2 brief carries
 `<plansDir>/readiness/<ABBR>/round-1.md` verbatim - the findings and the COO's dispositions - and a

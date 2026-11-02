@@ -60,6 +60,19 @@ a guarantee. The chosen-flag rationale lives in the wrapper header and
 
 Notation: `{{config.some.key}}` in this document means *substitute the value you read in step 2*.
 
+## Step 0.5 - Doctrine read
+
+Read `.claude/aiwf-native/ORCHESTRATOR.md` (the core) and `.claude/aiwf-native/doctrine/ticket.md`
+(the ticket stage: the roles' boundaries, QAL's among them) IN FULL before Step 0b, and note
+`git rev-parse HEAD` at that read - a session that starts cold on this skill reads its stage by
+construction.
+
+**Its suppression dual.** Skip the read when this session already read the current text of both:
+`git diff <the HEAD noted at that read> -- .claude/aiwf-native/ORCHESTRATOR.md
+.claude/aiwf-native/doctrine/ticket.md` returns empty - the case of a session that entered by
+`/pnp:work` or `/pnp:mission`. Any other result - a line of diff, or an error - means read them
+again. After a context compaction both are read again, whatever the diff says.
+
 ## Step 0b - Preflight (fail-closed, all three conditions)
 
 QAL runs only when ALL THREE hold. Any other state = refuse with one line of explanation.
@@ -151,7 +164,7 @@ deliberately NOT the Codex cwd - QAL's cwd is always the unique throwaway scratc
 
 **Run the wrapper in the BACKGROUND - `run_in_background: true`, by default, with a timeout of at
 least 3600000 ms:** a command expected to run over about five minutes runs in the background
-(`docs/LOOP.md` § Role boundaries). A foreground shell call is killed at its cap (10 minutes); a
+(`ticket.md` § Role boundaries). A foreground shell call is killed at its cap (10 minutes); a
 live agentic-browser run at `effort: high` will normally exceed that
 and be killed mid-run (exit 143), spending the operator's paid quota for nothing. QAL is already an
 operator-gated exception, so a wasted pass is the most expensive kind. Same rule as `/pnp:review`

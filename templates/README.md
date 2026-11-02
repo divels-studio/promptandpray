@@ -1,7 +1,7 @@
 # templates/
 
-Rendered-into-the-project artifacts: the managed CLAUDE.md region, agent files,
-the project overrides document, roles, the permission ask-ruleset, memory seeds.
+Rendered-into-the-project artifacts: the managed CLAUDE.md region, the doctrine's stage files, agent
+files, the project overrides document, roles, the permission ask-ruleset, memory seeds.
 
 The placeholder syntax is exactly what `scripts/setup/generate.mjs` implements and nothing more:
 `{{config.<dotpath>}}`, the render-time `{{resolvedRoot}}` (never render `config.project.root` raw -
@@ -22,13 +22,22 @@ edits the template (why the file is conditional, which placeholder is render-tim
 editor and has no reader in the rendered artifact. Placeholders inside it are never substituted,
 so the contract can name a placeholder literally.
 
-The rendered Markdown artifacts are **thin**: the project data, the role's own behaviour contract,
-and one pointer per rule cluster to the payload document that holds the rule - a rule is never
-copied into a template. Every whole-file Markdown template (`ORCHESTRATOR.md.tmpl`, `agents/*.tmpl`,
+**The doctrine lives in templates.** Every rule of the loop stands in exactly ONE stage template and
+nowhere else: `ORCHESTRATOR.md.tmpl` (the core, read by every entry door) and
+`doctrine/work.md.tmpl`, `doctrine/ticket.md.tmpl`, `doctrine/plan.md.tmpl` and
+`doctrine/review.md.tmpl`, rendered into the project as `.claude/aiwf-native/ORCHESTRATOR.md` and
+`.claude/aiwf-native/doctrine/<stage>.md`. The template IS the rule's one copy - the payload `docs/`
+keep no second one (`docs/WORKFLOW.md` is the map of the stage files) - and a reference to a rule of
+another stage is one line `<stage>.md § <heading>`, never a restatement. The other rendered Markdown
+artifacts stay **thin**: the project data, the role's own behaviour contract, and one pointer per
+rule cluster to the stage file that holds the rule - a rule is never copied into them.
+
+Every whole-file Markdown template (`ORCHESTRATOR.md.tmpl`, `doctrine/*.tmpl`, `agents/*.tmpl`,
 `AGENTS.md.tmpl`) ends with an empty project additions block; the engine carries whatever the
 project writes between its two marker lines across every re-render (`generate.mjs`
-`carryProjectAdditions`). `CLAUDE.md.tmpl` carries none: everything outside its `aiwf-core` markers
-is already the project's.
+`carryProjectAdditions`). In a stage file that block is the home of a local rule: it sits beside the
+rule it modifies and opens with that rule's heading. `CLAUDE.md.tmpl` carries none: everything
+outside its `aiwf-core` markers is already the project's.
 
 `{{wrappers.*}}` is the OS channel, COMPUTED from `config.os` by `wrapperContext()` (both engines
 import the same function): `dir`, `ext`, `shell`, and the payload-relative path of each wrapper -
@@ -38,7 +47,7 @@ engine has no conditional block - the branch is taken in code, once.
 `memory-seeds/` holds one lesson per file. `/pnp:setup` PRINTS them for the operator's own memory
 tool at the end of a run and never writes them into any store: the store's format and location are
 machine-local and are not the plugin's to assume. Seeds marked `[R]` are deliberate reinforcements
-of a payload doctrine rule with a history of being violated - they point at the doctrine section
+of a doctrine rule with a history of being violated - they point at the stage file's section
 rather than restating it.
 
 `briefs/` holds the agent contracts the skills send - `research.md`, `planner.md`,

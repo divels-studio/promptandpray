@@ -103,22 +103,22 @@ everything cheap.
 
 | Route | What it is | Native execution |
 |---|---|---|
-| **R1 - routine** | Small, low-risk change | Done **directly in the main session**. No subagents, no Reviewer, no QA, no loop - but a ticket that gains an executable artifact (script, hook) is re-classified out of R1 and takes the code loop (`WORKFLOW.md` § Routes). |
+| **R1 - routine** | Small, low-risk change | Done **directly in the main session**. No subagents, no Reviewer, no QA, no loop - but a ticket that gains an executable artifact (script, hook) is re-classified out of R1 and takes the code loop (§ Routes). |
 | **R2 - product (non-runtime)** | Product change with no observable runtime/UI surface | `COO -> Writer subagent -> /pnp:review -> COO`. Correction rounds capped at `loop.correctionRoundsCap`. |
 | **R2 - product (runtime/UI)** | Observable runtime/UI behavior | `COO -> Writer subagent -> /pnp:review -> /pnp:qa -> COO`. Same cap. |
 | **R3 - critical** | Migrations / access policy / auth / destructive / push | Plan-first: COO-approved mini-plan + plan-readiness review (Reviewer, read-only) **before** Writer starts, on `r3/<topic>`, then Writer -> `/pnp:review` -> `/pnp:qa` (if runtime) -> COO synthesis -> **operator** commit/merge gate. |
 
 The review engine and the pass count come from the ticket's class, in both R2 rows and in R3: the
-brief's `Class: plan | code | docs` names a row of the audit table (`docs/WORKFLOW.md` § Routes),
+brief's `Class: plan | code | docs` names a row of the audit table (§ Routes),
 which `/pnp:review` resolves through the role resolver's reviewer-only `-Class` / `--class` flag -
 engine, model, effort and `passes` in one snapshot. A Claude-hosted row dispatches the rendered
 `reviewer` agent under the dispatch contract (`ticket.md` § Role boundaries). Before every diff pass above the
 scan tier `/pnp:review` Step 2b runs the fact-check gate; a plan pass has the mechanical plan gate
-instead (`docs/WORKFLOW.md` § The COO write boundary runs along artifact class, not size; the
+instead (`ticket.md` § The COO write boundary runs along artifact class, not size; the
 planning cycle is `/pnp:plan`).
 
-`/pnp:loop` states this sequence as a convention. There is **no runtime state machine and no
-counters** - the loop is convention + the native click-based permission gates only.
+There is **no runtime state machine and no counters** - the loop is convention + the native
+click-based permission gates only.
 
 ## Tests
 

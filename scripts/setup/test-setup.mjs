@@ -181,6 +181,11 @@ check('writer agent always rendered', exists(at(p1, '.claude/agents/writer.md'))
 // installation whatever the review hosts are, so there is no configuration in which this file is
 // legitimately absent.
 check('the Orchestrator role is always rendered', exists(at(p1, '.claude/aiwf-native/ORCHESTRATOR.md')));
+// The four stage files of the doctrine are unconditional for the same reason: every installation runs
+// every stage, whatever its review hosts are.
+const STAGE_FILES = ['work', 'ticket', 'plan', 'review'].map((s) => `.claude/aiwf-native/doctrine/${s}.md`);
+check('the four stage files are always rendered', STAGE_FILES.every((rel) => exists(at(p1, rel))),
+  STAGE_FILES.filter((rel) => !exists(at(p1, rel))).join(', ') || 'all four');
 check('reviewer agent rendered (claude-hosted)', exists(at(p1, '.claude/agents/reviewer.md')));
 check('NO qa agent rendered (codex-hosted role has no Claude agent file)', !exists(at(p1, '.claude/agents/qa.md')));
 check('CLAUDE.md written with the managed markers',
@@ -241,7 +246,7 @@ check('memory seeds are PRINTED for the operator', r1.out.includes('MEMORY SEEDS
   const regions = bk.managedRegions || {};
   const keys = Object.keys(regions).sort();
   check('managedRegions covers exactly the rendered artifacts',
-    keys.join(',') === ['.claude/agents/reviewer.md', '.claude/agents/writer.md', '.claude/aiwf-native/ORCHESTRATOR.md', '.claude/aiwf-native/roles.json', 'AGENTS.md', 'CLAUDE.md#aiwf-core'].sort().join(','),
+    keys.join(',') === ['.claude/agents/reviewer.md', '.claude/agents/writer.md', '.claude/aiwf-native/ORCHESTRATOR.md', ...STAGE_FILES, '.claude/aiwf-native/roles.json', 'AGENTS.md', 'CLAUDE.md#aiwf-core'].sort().join(','),
     keys.join(', '));
   // The render itself, against the production render path rather than against a copy of the
   // expectation: the same two exported functions the generator renders through, over the config
@@ -266,6 +271,21 @@ check('memory seeds are PRINTED for the operator', r1.out.includes('MEMORY SEEDS
       rendered ? JSON.stringify(String(rendered).split('\n')[0]).slice(0, 80) : '-');
     check('and the TEMPLATE still carries a contract block, so the render above stripped something',
       tmpl !== null && tmpl.includes('<!-- TEMPLATE CONTRACT') && !String(rendered).includes('TEMPLATE CONTRACT'));
+  }
+  // The four stage files, each held to the production render path like the Orchestrator role above,
+  // and each ending with its own empty project additions block - the home of a local rule.
+  for (const stage of ['work', 'ticket', 'plan', 'review']) {
+    const tmpl = read(path.join(PLUGIN_ROOT, 'templates', 'doctrine', `${stage}.md.tmpl`));
+    const rendered = read(at(p1, `.claude/aiwf-native/doctrine/${stage}.md`));
+    const expected = tmpl === null ? null : renderTemplate(tmpl, templateContext(cfg, p1));
+    check(`[setup-stage-${stage}-1] the ${stage} stage file is exactly the template render`, rendered !== null && rendered === expected,
+      rendered === null ? 'the file is missing' : `${rendered.length} bytes vs ${expected === null ? 'no template' : expected.length}`);
+    const lines = String(rendered || '').replace(/\r\n/g, '\n').trimEnd().split('\n');
+    check(`[setup-stage-${stage}-2] it carries the project name, no placeholder, no contract block, and ends with one empty additions block`,
+      !!rendered && rendered.includes(baseAnswers().project.name) && !rendered.includes('{{') && !rendered.includes('TEMPLATE CONTRACT')
+      && lines.slice(-2).join('\n') === '<!-- project additions -->\n<!-- /project additions -->'
+      && rendered.split('<!-- project additions -->').length === 2,
+      rendered ? JSON.stringify(lines.slice(-2)) : '-');
   }
   // The Codex auditor's instruction file: UNCONDITIONAL like the Orchestrator role, a whole file at
   // the project root. Its bytes are held to the production render path, and its shape to the
@@ -581,6 +601,19 @@ section('10 - a pre-existing artifact on a fresh install is overwritten and name
     r.status === 1 && r.out.includes('paths.overridesDoc ("AGENTS.md")') && r.out.includes('the Codex auditor instruction file')
     && diffSnapshots(before, snapshot(po)).length === 0, why(r, true));
 }
+// The same second writer pointed at a stage file of the doctrine, or at the directory holding them:
+// the stage files are written by setup and update alone, so either path is a blocker before any write.
+for (const [label, overridesDoc, named] of [
+  ['a stage file', '.claude/aiwf-native/doctrine/work.md', 'the work stage file'],
+  ['the doctrine directory', '.claude/aiwf-native/doctrine', 'the doctrine directory'],
+]) {
+  const po = project(`overrides-is-doctrine-${label.replace(/[^a-z]+/gi, '-')}`);
+  const before = snapshot(po);
+  const r = install(po, baseAnswers({ paths: { ...baseAnswers().paths, overridesDoc } }), ['--no-seeds']);
+  check(`[setup-stage-collide] paths.overridesDoc on ${label} ("${overridesDoc}") is refused before any write (exit 1, names both)`,
+    r.status === 1 && r.out.includes(`paths.overridesDoc ("${overridesDoc}")`) && r.out.includes(named)
+    && diffSnapshots(before, snapshot(po)).length === 0, why(r, true));
+}
 
 // ---------------------------------------------------------------------------
 section('11 - an existing CLAUDE.md gets the region APPENDED, never a rewrite');
@@ -734,7 +767,7 @@ section('12b - a project that already has plans is WARNED about, on both paths, 
 section('12c - a plansDir under the scratch directory is WARNED about, on both paths, and never blocked');
 {
   // A plan canon under the scratch directory is outside git wherever the scratch directory is
-  // ignored (docs/WORKFLOW.md "Durable development history"). The schema admits the path and the
+  // ignored (plan.md § Durable development history). The schema admits the path and the
   // operator may mean exactly this, so setup says it - at the plans question and as a note in the
   // plan/report - and refuses nothing. A project of its own: the 12b project is already installed
   // and does not serve a new dry-run.
@@ -1594,13 +1627,14 @@ section('24 - the transfer surface: seeded once at the resolved path, never mana
   check('and no Candidates section - it points at ROADMAP.md instead', !SKELETON.includes('## Candidates')
     && SKELETON.includes('Ideas live in `ROADMAP.md` under the plans'),
   SKELETON.split('\n').filter((l) => l.includes('ROADMAP')).join(' | ').slice(0, 160));
-  // The skeleton IS the one the doctrine prints: the fenced block of docs/WORKFLOW.md § The ledger,
-  // byte for byte - two copies of one skeleton that could drift are one copy too many.
+  // The skeleton IS the one the doctrine prints: the fenced block of the plan stage file's
+  // § The ledger (templates/doctrine/plan.md.tmpl), byte for byte - two copies of one skeleton that
+  // could drift are one copy too many.
   {
-    const wf = lf(read(path.join(PLUGIN_ROOT, 'docs', 'WORKFLOW.md')) || '');
-    const fence = wf.match(/```markdown\n(# Ledger\n[\s\S]*?\n)```/);
-    check('the skeleton is the fenced block of docs/WORKFLOW.md § The ledger, byte for byte',
-      !!fence && fence[1] === SKELETON, fence ? `${fence[1].length} vs ${SKELETON.length} bytes` : 'no fenced # Ledger block in WORKFLOW.md');
+    const stage = lf(read(path.join(PLUGIN_ROOT, 'templates', 'doctrine', 'plan.md.tmpl')) || '');
+    const fence = stage.match(/```markdown\n(# Ledger\n[\s\S]*?\n)```/);
+    check('the skeleton is the fenced block of templates/doctrine/plan.md.tmpl § The ledger, byte for byte',
+      !!fence && fence[1] === SKELETON, fence ? `${fence[1].length} vs ${SKELETON.length} bytes` : 'no fenced # Ledger block in templates/doctrine/plan.md.tmpl');
   }
 
   // --- the DEFAULT path: no transferSurface key at all ----------------------

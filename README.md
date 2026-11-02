@@ -19,7 +19,7 @@ Born in a real production project, then extracted and genericized.
 
 ## Status
 
-**v0.3.7. Public since 0.2.0.**
+**v0.3.8. Public since 0.2.0.**
 
 What is here:
 
@@ -29,7 +29,7 @@ What is here:
   `/plugin marketplace update`, `/plugin update pnp@promptandpray`, `/reload-plugins` and
   `/pnp:update` inside the project - and `/pnp:roles` prints, on one screen, who audits what in
   the installation that took it.
-- **Thirteen commands** as skills: `loop`, `brief`, `mission`, `work`, `plan`, `review`, `qa`, `qal`,
+- **Twelve commands** as skills: `brief`, `mission`, `work`, `plan`, `review`, `qa`, `qal`,
   `roles`, `arbiter`, `setup`, `update`, `selfcheck` - each opening with the same Step 0, because a skill
   inside a plugin has no project of its own: resolve the project root, read the config, and stop
   against the version interlock if migrations are pending. `update` and `selfcheck` are the two
@@ -70,6 +70,11 @@ What is here:
   overwritten; your own text lives in the overrides document, outside the managed region of
   `CLAUDE.md`, and in the one `<!-- project additions -->` block a rendered Markdown file may carry,
   which every re-render keeps verbatim.
+- **The doctrine by stage**: every rule of the loop stands in exactly one stage file, rendered into
+  the project as a managed artifact - the core `.claude/aiwf-native/ORCHESTRATOR.md`, read by every
+  entry door, and `.claude/aiwf-native/doctrine/work.md`, `ticket.md`, `plan.md` and `review.md`,
+  each read IN FULL by the door of its stage and each ending with its own project additions block,
+  the home of a local rule beside the rule it modifies. `docs/WORKFLOW.md` is the map of them.
 - **The update engine and the migration runner**: an ordered migration manifest that overwrites
   managed artifacts (each keeping its project additions block), asks only for a new config key that
   needs your value, and prints the `CHANGELOG.md` blocks between your installed version and the
@@ -111,8 +116,8 @@ What is **not** here yet:
 | name | what it is |
 |---|---|
 | **PromptAndPray** | the product and the repository. |
-| **`pnp`** | the command namespace: `/pnp:setup`, `/pnp:loop`, `/pnp:review`, and the rest. |
-| **AIWF** | the internal name of the loop itself - `aiwf.config.json`, `.aiwf/`, `_aiwf`, the doctrine under `docs/`. Nothing renames it. |
+| **`pnp`** | the command namespace: `/pnp:setup`, `/pnp:work`, `/pnp:review`, and the rest. |
+| **AIWF** | the internal name of the loop itself - `aiwf.config.json`, `.aiwf/`, `_aiwf`, the doctrine under `.claude/aiwf-native/`. Nothing renames it. |
 
 ## Install
 
@@ -195,10 +200,9 @@ node scripts/ci/run-example-cycle.mjs
 
 | command | what it does |
 |---|---|
-| `/pnp:loop` | the working-loop convention itself: the routes R1/R2/R3, the roles, the hard rules. Read before driving a ticket. |
 | `/pnp:brief` | composes the session brief that opens the next fresh session, by one recipe every time. |
 | `/pnp:mission` | resumes the active mission with no session brief - reconstructs state from the durable PLAN, memory and git, then waits for the operator's word. |
-| `/pnp:work` | an ad-hoc session under the full doctrine: loads it, checks the tree, asks for the task, routes it. |
+| `/pnp:work` | an ad-hoc session under the full doctrine: reads the core and the work stage, checks the tree, asks for the task, routes it - and reads the ticket stage when the task routes R2/R3. |
 | `/pnp:plan` | the planning cycle for one durable plan: roadmap entry, research, decisions, the planner, the mechanical gate, ONE readiness pass with the COO's triage, the operator's approval, the landing commit. |
 | `/pnp:review` | the Reviewer over the current diff, or a plan folder in plan-readiness mode. Read-only; returns pass / pass-with-notes / fail for a diff, one findings table and a `BLOCKERS: <n> INFO: <m>` line for a plan. |
 | `/pnp:qa` | QA as an artifact judge over what an end-to-end run produced. Only for tickets with observable runtime behavior. |
@@ -222,7 +226,7 @@ you gave for the ticket, every further one, configured or the one beyond the cei
 of its own. `/pnp:roles` prints the whole table and changes any of it. What is deliberately NOT in the
 table: the fact-check gate, which runs before every diff pass above the scan tier - nor the
 mechanical plan gate, which keeps a plan-class pass from starting without a current stamp over a
-plan folder that meets its contract (`docs/WORKFLOW.md` § Plan readiness review).
+plan folder that meets its contract (`plan.md` § Plan readiness review).
 
 ## FAQ
 

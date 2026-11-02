@@ -512,7 +512,9 @@ const FIXTURE_SUPPRESSED = ['Bash(git stash:*)'];
 // against each other): a shared source would make those comparisons tautological.
 const REVIEW_CLASSES = ['plan', 'code', 'docs'];
 // The managed artifacts the fixture writes, in the bookkeeping's key form.
-const FIXTURE_MANAGED_KEYS = ['CLAUDE.md#aiwf-core', '.claude/aiwf-native/roles.json', '.claude/aiwf-native/ORCHESTRATOR.md', '.claude/agents/writer.md', '.claude/agents/reviewer.md', 'AGENTS.md'];
+// The four stage files of the doctrine, rendered unconditionally beside ORCHESTRATOR.md.
+const FIXTURE_STAGE_KEYS = ['work', 'ticket', 'plan', 'review'].map((s) => `.claude/aiwf-native/doctrine/${s}.md`);
+const FIXTURE_MANAGED_KEYS = ['CLAUDE.md#aiwf-core', '.claude/aiwf-native/roles.json', '.claude/aiwf-native/ORCHESTRATOR.md', ...FIXTURE_STAGE_KEYS, '.claude/agents/writer.md', '.claude/agents/reviewer.md', 'AGENTS.md'];
 
 function writeFixture(root, pluginVersion) {
   const mk = (rel) => fs.mkdirSync(path.join(root, rel), { recursive: true });
@@ -583,6 +585,9 @@ function writeFixture(root, pluginVersion) {
   // document the main session reads, not an agent anything dispatches. It is unconditional here for
   // the same reason it is unconditional in the generator: every installation has a main session.
   put('.claude/aiwf-native/ORCHESTRATOR.md', '# Orchestrator standing rules - Fixture\n\nFixture body.\n');
+  // The four stage files: managed WHOLE FILES, unconditional like the Orchestrator role.
+  mk('.claude/aiwf-native/doctrine');
+  for (const rel of FIXTURE_STAGE_KEYS) put(rel, '# Stage - Fixture\n\nFixture body.\n');
   // The Codex auditor's instruction file: a managed WHOLE FILE at the project root, unconditional like
   // the Orchestrator role.
   put('AGENTS.md', '# AGENTS - Fixture\n\nFixture body.\n');
@@ -1040,7 +1045,7 @@ function sectionGate2Mode(tmpRoot) {
 // ---------------------------------------------------------------------------
 // SECTION 2b2 - one prefix per plan: the ref is a LOOKUP, not a description
 // ---------------------------------------------------------------------------
-// The convention (payload docs/WORKFLOW.md, "Durable development history"): a plan file is
+// The convention (the plan stage file, plan.md § Durable development history): a plan file is
 // `PLAN_<ABBR>.md` and every ticket in it is `<ABBR>-<NNN>`. Two things are asserted here, and they
 // are the two halves of what the convention is worth:
 //   1. Gate 2 really uses it as an ADDRESS - `AB-001` is read out of `PLAN_AB.md` directly, with no
@@ -1063,7 +1068,7 @@ function sectionGate2Mode(tmpRoot) {
 //   outside the grammar is not a plan folder and stays ignored, exactly as Gate 2 ignores it.
 // The plan-shape grammar is NOT restated here: it is required from the payload's aiwf-lib.js, the
 // same definitions Gate 2 and setup read (PLAN_FILE_RE, PLAN_ABBR_RE, PLAN_TICKET_FILE_RE). The
-// grammar is the doctrine's own (payload docs/WORKFLOW.md, "one prefix per plan": 2-8 uppercase
+// grammar is the doctrine's own (plan.md, "one prefix per plan": 2-8 uppercase
 // letters, and a three-digit number) - prose and pattern have to say the same thing, or one of them
 // is decoration.
 const AIWF_LIB = path.join(PLUGIN_ROOT, 'scripts', 'engine', 'aiwf-lib.js');
@@ -6786,14 +6791,14 @@ function projectLayerFindings(projectRoot, pluginRoot, opts) {
   addObservation('scratch-ignored', 'scratchDir ignored by git (observed)',
     typeof paths.scratchDir !== 'string' ? 'config paths unusable - nothing to observe' : scratchIgnored(projectRoot, paths.scratchDir));
   // A plansDir under the scratch directory is outside git wherever the scratch directory is ignored
-  // (docs/WORKFLOW.md "Durable development history"). A lexical prefix test over the configured
+  // (plan.md § Durable development history). A lexical prefix test over the configured
   // paths; case and backslashes fold on a project whose `os` is windows. An os outside the schema's
   // enum reads "unusable" here and fails config-schema-valid below - it never reads "outside".
   addObservation('plans-under-scratch', 'plansDir under scratchDir (observed)',
     typeof paths.plansDir !== 'string' || typeof paths.scratchDir !== 'string' || !['windows', 'linux', 'macos'].includes(cfg.os)
       ? 'config paths or os unusable - nothing to observe'
       : plansDirUnderScratch(paths.plansDir, paths.scratchDir, cfg.os === 'windows')
-        ? `under the scratch directory ${paths.scratchDir} - nothing there is the Git canon while the scratch directory is ignored (docs/WORKFLOW.md "Durable development history")`
+        ? `under the scratch directory ${paths.scratchDir} - nothing there is the Git canon while the scratch directory is ignored (plan.md § Durable development history)`
         : 'outside the scratch directory');
   // An E2E output directory inside an app root whose build traces its files. Added ONLY when the
   // predicate answers true - an untraced project, or a predicate that could not answer, prints nothing.
@@ -7539,7 +7544,7 @@ function listFiles(dir, filter, acc) {
   return acc;
 }
 
-function sectionPayloadIntegrity() {
+function sectionPayloadIntegrity(tmpRoot) {
   section('PAYLOAD INTEGRITY - skills, cross-references, command prefix');
   const skillsDir = path.join(PLUGIN_ROOT, 'skills');
   const skillDirs = fs.existsSync(skillsDir)
@@ -7663,20 +7668,128 @@ function sectionPayloadIntegrity() {
   }
 
   // Command prefix: the payload speaks /pnp:, never the originating project's prefix.
-  const KNOWN_FUTURE = ['setup', 'update', 'selfcheck'];
+  const { badPrefix, unknown: unknownCommands } = commandRefFindings(PLUGIN_ROOT, payloadFiles, skillDirs);
+  check('no payload file uses a foreign command prefix', badPrefix.length === 0, badPrefix.join('; '));
+  check('every /pnp:<cmd> reference names a shipped or planned skill (a retired one only under migrations/)',
+    unknownCommands.length === 0, unknownCommands.slice(0, 6).join('; '));
+  // A retired command is RETIRED: its skill directory is gone, or the map entry is a lie that would
+  // excuse nothing (the reference resolves to the skill anyway).
+  const stillShipped = Object.keys(RETIRED_COMMANDS).filter((cmd) => skillDirs.includes(cmd));
+  check('every retired command is really gone from skills/', stillShipped.length === 0,
+    stillShipped.length ? stillShipped.join(', ') : Object.keys(RETIRED_COMMANDS).map((c) => `/pnp:${c} (retired ${RETIRED_COMMANDS[c]})`).join(', '));
+  // The negative control, on a scratch copy: a shipped migration that names a retired command is
+  // history and passes, while the same name planted in a doc outside migrations/ is reported. A rule
+  // that accepted the retired name everywhere would pass the first half and fail the second.
+  {
+    const ctl = path.join(tmpRoot, 'retired-command-ctl');
+    const put = (rel, text) => {
+      const dst = path.join(ctl, ...rel.split('/'));
+      fs.mkdirSync(path.dirname(dst), { recursive: true });
+      fs.writeFileSync(dst, text, 'utf8');
+      return dst;
+    };
+    // Built from the map, so this file itself carries no retired command reference to sweep. The
+    // migration note is written here rather than copied from a shipped one: the suites run this
+    // check against payload copies whose manifest is truncated, where a named migration is absent.
+    const retired = `/pnp:${Object.keys(RETIRED_COMMANDS)[0]}`;
+    const history = put('migrations/0000_history/NOTES.md', `# 0000_history\n\n- A shipped note that names ${retired}.\n`);
+    const doc = put('docs/README.md', readText(path.join(PLUGIN_ROOT, 'docs', 'README.md')) || '# docs/\n');
+    const clean = commandRefFindings(ctl, [history, doc], skillDirs).unknown;
+    fs.appendFileSync(doc, `\nSee ${retired}.\n`, 'utf8');
+    const planted = commandRefFindings(ctl, [history, doc], skillDirs).unknown;
+    check('and that rule can fail: a retired name planted outside migrations/ in a scratch copy is reported, the migration history is not',
+      (readText(history) || '').includes(retired) && clean.length === 0
+      && planted.length === 1 && planted[0] === `docs/README.md -> ${retired}`,
+      `clean=${JSON.stringify(clean)} planted=${JSON.stringify(planted)}`);
+  }
+
+  // THE DOORS READ THEIR STAGE (D-06). Each entry door names the rendered stage file it reads and says
+  // IN FULL in the same paragraph - a title is not the text. Pinned positively, per door and path.
+  const doorMissing = doorReadFindings(PLUGIN_ROOT);
+  check('every entry door names its rendered stage file IN FULL (work, mission, plan, review, qa, qal, arbiter, the CLAUDE.md region)',
+    doorMissing.length === 0, doorMissing.length ? doorMissing.slice(0, 6).join('; ') : `${DOOR_READS.length} doors`);
+  // The negative control, on a scratch copy of the doors: a door whose stage path was taken out, and a
+  // door whose IN FULL was taken out, are each reported - and only they.
+  {
+    const ctl = path.join(tmpRoot, 'door-read-ctl');
+    for (const [rel] of DOOR_READS) {
+      const dst = path.join(ctl, ...rel.split('/'));
+      fs.mkdirSync(path.dirname(dst), { recursive: true });
+      fs.copyFileSync(path.join(PLUGIN_ROOT, ...rel.split('/')), dst);
+    }
+    const clean = doorReadFindings(ctl);
+    const sabotage = (rel, from, to) => {
+      const f = path.join(ctl, ...rel.split('/'));
+      fs.writeFileSync(f, (readText(f) || '').split(from).join(to), 'utf8');
+    };
+    sabotage('skills/work/SKILL.md', '.claude/aiwf-native/doctrine/work.md', '(the stage file)');
+    sabotage('skills/arbiter/SKILL.md', 'IN FULL', 'in part');
+    const broken = doorReadFindings(ctl);
+    check('and that pin can fail: a door copy without its stage path, and one without IN FULL, are each reported',
+      clean.length === 0 && broken.length === 2
+      && broken.includes('skills/work/SKILL.md -> .claude/aiwf-native/doctrine/work.md')
+      && broken.includes('skills/arbiter/SKILL.md -> .claude/aiwf-native/ORCHESTRATOR.md'),
+      `clean=${JSON.stringify(clean)} broken=${JSON.stringify(broken)}`);
+  }
+}
+
+// The /pnp: commands named in the payload that need no skill directory: the three names
+// KNOWN_FUTURE has always accepted, and
+// the RETIRED ones - each with the version that removed it - accepted ONLY in a file under
+// migrations/, because a shipped migration's text is history and is never rewritten. A retired name
+// anywhere else is a dangling command reference like any other.
+const KNOWN_FUTURE = ['setup', 'update', 'selfcheck'];
+const RETIRED_COMMANDS = { loop: '0.3.8' };
+
+/** { badPrefix, unknown } over `files` (absolute paths under `root`): the foreign prefix, and every
+ *  /pnp:<cmd> that names no skill, no planned command, and no retired command inside migrations/. */
+function commandRefFindings(root, files, skillDirs) {
   const badPrefix = [];
-  const unknownCommands = [];
-  for (const f of payloadFiles) {
+  const unknown = [];
+  for (const f of files) {
+    const rel = path.relative(root, f).split(path.sep).join('/');
     const src = readText(f) || '';
-    if (/\/aiwf:/.test(src)) badPrefix.push(path.relative(PLUGIN_ROOT, f));
+    if (/\/aiwf:/.test(src)) badPrefix.push(rel);
+    const history = rel.startsWith('migrations/');
     for (const m of src.match(/\/pnp:[a-z-]+/g) || []) {
       const cmd = m.slice(5);
-      if (!skillDirs.includes(cmd) && !KNOWN_FUTURE.includes(cmd)) unknownCommands.push(`${path.relative(PLUGIN_ROOT, f)} -> ${m}`);
+      if (skillDirs.includes(cmd) || KNOWN_FUTURE.includes(cmd)) continue;
+      if (history && Object.prototype.hasOwnProperty.call(RETIRED_COMMANDS, cmd)) continue;
+      unknown.push(`${rel} -> ${m}`);
     }
   }
-  check('no payload file uses a foreign command prefix', badPrefix.length === 0, badPrefix.join('; '));
-  check('every /pnp:<cmd> reference names a shipped or planned skill',
-    unknownCommands.length === 0, unknownCommands.slice(0, 6).join('; '));
+  return { badPrefix, unknown };
+}
+
+// Each entry door and the rendered paths it must name IN FULL (D-06): work its stage; mission, review,
+// qa and qal the ticket stage; plan its stage; review and qa also the review stage they hand the
+// auditor; arbiter the core; the CLAUDE.md region the core and the four stage names.
+const STAGE_PATH = (s) => `.claude/aiwf-native/doctrine/${s}.md`;
+const CORE_PATH = '.claude/aiwf-native/ORCHESTRATOR.md';
+const DOOR_READS = [
+  ['skills/work/SKILL.md', [STAGE_PATH('work')]],
+  ['skills/mission/SKILL.md', [STAGE_PATH('ticket')]],
+  ['skills/plan/SKILL.md', [STAGE_PATH('plan')]],
+  ['skills/review/SKILL.md', [STAGE_PATH('ticket'), STAGE_PATH('review')]],
+  ['skills/qa/SKILL.md', [STAGE_PATH('ticket'), STAGE_PATH('review')]],
+  ['skills/qal/SKILL.md', [STAGE_PATH('ticket')]],
+  ['skills/arbiter/SKILL.md', [CORE_PATH]],
+  ['templates/CLAUDE.md.tmpl', [CORE_PATH, 'doctrine/work.md', 'doctrine/ticket.md', 'doctrine/plan.md', 'doctrine/review.md']],
+];
+
+/** Every `<door> -> <path>` pair of DOOR_READS under `root` with no paragraph naming both the path and
+ *  IN FULL; a missing door file is reported as such. */
+function doorReadFindings(root) {
+  const missing = [];
+  for (const [rel, wanted] of DOOR_READS) {
+    const src = readText(path.join(root, ...rel.split('/')));
+    if (src === null) { missing.push(`${rel} (missing)`); continue; }
+    const paragraphs = src.replace(/\r\n/g, '\n').split(/\n[ \t]*\n/);
+    for (const p of wanted) {
+      if (!paragraphs.some((para) => para.includes(p) && para.includes('IN FULL'))) missing.push(`${rel} -> ${p}`);
+    }
+  }
+  return missing;
 }
 
 // ---------------------------------------------------------------------------
@@ -9224,7 +9337,7 @@ function main() {
     sectionRunHeader(tmpRoot);
     sectionResolver(tmpRoot);
     sectionRolesCommand(tmpRoot, pluginVersion);
-    sectionPayloadIntegrity();
+    sectionPayloadIntegrity(tmpRoot);
     sectionProvenance(tmpRoot);
     sectionExampleFixture(tmpRoot);
     sectionProjectLayer(PROJECT, selfAuthored);

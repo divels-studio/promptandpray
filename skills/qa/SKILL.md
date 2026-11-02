@@ -53,6 +53,19 @@ Arguments: the ticket ref and an optional acceptance-criteria hint.
 
 Notation: `{{config.some.key}}` in this document means *substitute the value you read in step 2*.
 
+## Step 0.5 - Doctrine read
+
+Read `.claude/aiwf-native/ORCHESTRATOR.md` (the core) and `.claude/aiwf-native/doctrine/ticket.md`
+(the ticket stage: the brief contract, the roles' boundaries, the loop's shape) IN FULL before
+Step 0a, and note `git rev-parse HEAD` at that read - a session that starts cold on this skill reads
+its stage by construction.
+
+**Its suppression dual.** Skip the read when this session already read the current text of both:
+`git diff <the HEAD noted at that read> -- .claude/aiwf-native/ORCHESTRATOR.md
+.claude/aiwf-native/doctrine/ticket.md` returns empty - the case of a session that entered by
+`/pnp:work` or `/pnp:mission`. Any other result - a line of diff, or an error - means read them
+again. After a context compaction both are read again, whatever the diff says.
+
 ## Step 0a - Gate: does this ticket have observable runtime/UI behavior?
 
 QA engages **only** when the ticket brief declares observable runtime/UI behavior. If the change is
@@ -202,8 +215,8 @@ single round. (Throughput target only; does NOT change the correction-round cap 
 authority minimum.)
 
 OUTPUT CONTRACT (single round - return ALL material problems at once):
-  First line: exactly one of `pass` / `pass-with-notes` / `fail` (per the review checklist at
-  <absolute path to the plugin's docs/REVIEW_CHECKLIST.md>)
+  First line: exactly one of `pass` / `pass-with-notes` / `fail` (per the review stage file at
+  <absolute path of <root>/.claude/aiwf-native/doctrine/review.md> - read it IN FULL before the pass)
   - OR `BLOCKED`, allowed ONLY as a precondition failure: the JSON report is missing, empty or
   unreadable, or the run never produced it. Never `BLOCKED` for a passing test without a trace, and
   never to defer a real defect.
@@ -252,7 +265,7 @@ fallback, and the flag together with a non-empty stdin is refused (exit 2).
 
 **Run the wrapper in the BACKGROUND - `run_in_background: true`, by default, with a timeout of at
 least 3600000 ms:** a command expected to run over about five minutes runs in the background
-(`docs/LOOP.md` § Role boundaries). A foreground shell call is killed at its cap (10 minutes); an
+(`ticket.md` § Role boundaries). A foreground shell call is killed at its cap (10 minutes); an
 external engine at `effort: high` routinely exceeds it and is
 killed mid-run (exit 143), by which point the operator's paid quota is spent and no verdict has
 arrived. What the run had already read is recoverable (the interruption rule below), and that
@@ -359,7 +372,7 @@ Edit/Write). It returns the verdict; it never fixes.
 - **an exact model id is NOT passed - `model` is omitted.** The Agent tool's `model` takes a tier
   alias and nothing else, so an exact id is not a value it can carry; with `model` omitted, the pin
   in the rendered qa agent's frontmatter (rendered from `roles.qa.model`) is what runs - the
-  Writer's pattern (`docs/LOOP.md` § Role boundaries).
+  Writer's pattern (`ticket.md` § Role boundaries).
 
 **Effort (Claude branch):** the Agent tool has **no per-invocation `effort` parameter**, so QA's
 reasoning effort comes from its **agent frontmatter** (`effort:` in the rendered qa agent), kept in
@@ -373,8 +386,13 @@ verbatim to the COO. Corrections route back to the Writer (within the correction
 failing spec or missing coverage returns to the Writer to fix the code and/or the `.spec`); the
 commit gate stays the COO's/operator's call.
 
+**A QA `BLOCKED` is not a Writer defect:** it is an operator precondition (nothing is serving the
+app under test, and the Writer is forbidden to start a server). On `BLOCKED` the COO **pauses** the
+loop and asks the operator to start the app, then re-runs `/pnp:qa`. It does **not** consume a
+correction round and is **not** routed to the Writer.
+
 The COO then owes the OPERATOR its own report of that verdict:
 the verdict plus one or two sentences of its substance, before the next dispatch - what the run
-confirmed, or what its blockers and notes are (`docs/WORKFLOW.md` § How the COO speaks to the
+confirmed, or what its blockers and notes are (`ORCHESTRATOR.md` § How the COO speaks to the
 operator). Verbatim to the COO, two sentences to the operator; a bare "pass, moving on" hides an
 audit the operator paid for.

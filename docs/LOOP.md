@@ -1,120 +1,24 @@
-# The AIWF native working loop (one page)
+# The AIWF native working loop - hosts and enforcement
 
-How the four-role loop of `docs/WORKFLOW.md` runs **natively inside Claude Code** - Writer as a
-native subagent, Reviewer/QA as **engine-neutral** read-only review roles (Codex **or** Claude per
-the project's `.claude/aiwf-native/roles.json`), the COO orchestrating in-session. A native
-**mapping**, not a new authority: `docs/WORKFLOW.md` and your project's overrides document remain
-the source of truth.
+The rules of the loop stand in the stage files rendered into your project (the map:
+`docs/WORKFLOW.md`): the routing table is `work.md` § Routing mapped to native, the roles' boundaries
+and the dispatch contract are `ticket.md` § Role boundaries. This page keeps the reference behind
+them that no stage read needs: where each role is hosted, the enforcement hooks, the commit gate and
+the honest security model.
 
-## Routing mapped to native
+## Role hosts
 
-| Route | What it is | Native execution |
+| role | host | cell |
 |---|---|---|
-| **R1 - routine** | Small, low-risk change | Done **directly in the main session**. No subagents, no Reviewer, no QA, no loop - but a ticket that gains an executable artifact (script, hook) is re-classified out of R1 and takes the code loop (`WORKFLOW.md` § Routes). |
-| **R2 - product (non-runtime)** | Product change with no observable runtime/UI surface | `COO -> Writer subagent -> /pnp:review -> COO`. Correction rounds capped at `loop.correctionRoundsCap`. |
-| **R2 - product (runtime/UI)** | Observable runtime/UI behavior | `COO -> Writer subagent -> /pnp:review -> /pnp:qa -> COO`. Same cap. |
-| **R3 - critical** | Migrations / access policy / auth / destructive / push | Plan-first: COO-approved mini-plan + plan-readiness review (Reviewer, read-only) **before** Writer starts, on `r3/<topic>`, then Writer -> `/pnp:review` -> `/pnp:qa` (if runtime) -> COO synthesis -> **operator** commit/merge gate. |
+| COO / Orchestrator | the main Claude Code session | none |
+| Writer | Claude subagent `.claude/agents/writer.md`, Agent tool `subagent_type: "writer"` | none |
+| Reviewer | per audit-table row: the Codex wrapper `codex-review`, or the Claude subagent `reviewer` | Codex: OS `--sandbox read-only`; Claude: `Read/Grep/Glob` allowlist, no OS cell |
+| QA | per `roles.json`: the Codex wrapper `codex-qa`, or the Claude subagent `qa` | as the Reviewer |
+| QAL | the Codex wrapper `codex-qal` only | none - `--sandbox danger-full-access` |
+| Arbiter | a separate Claude Code session, `/pnp:arbiter` | none |
+| Operator | the human | - |
 
-The review engine and the pass count come from the ticket's class, in both R2 rows and in R3: the
-brief's `Class: plan | code | docs` names a row of the audit table (`docs/WORKFLOW.md` § Routes),
-which `/pnp:review` resolves through the role resolver's reviewer-only `-Class` / `--class` flag -
-engine, model, effort and `passes` in one snapshot. A Claude-hosted row dispatches the rendered
-`reviewer` agent under the dispatch contract (§ Role boundaries). Before every diff pass above the
-scan tier `/pnp:review` Step 2b runs the fact-check gate; a plan pass has the mechanical plan gate
-instead (`docs/WORKFLOW.md` § The COO write boundary runs along artifact class, not size; the
-planning cycle is `/pnp:plan`).
-
-`/pnp:loop` states this sequence as a convention. There is **no runtime state machine and no
-counters** - the loop is convention + the native click-based permission gates only.
-
-## Role boundaries
-
-- **COO / Orchestrator** (main session) - plans, authors the ticket brief with a mandatory **risk
-  threshold** and **stop condition**, delegates, reads the **full** diff, arbitrates, stops at the
-  stop condition, and is the only role that presents the result to the operator. Does **not** write
-  implementation code in the R2/R3 cycle; in **R1** the main session implements directly - the
-  deliberate exception, not a violation.
-- **Writer** - the **only** repo writer. A native Claude subagent (`.claude/agents/writer.md`),
-  invoked via the **Agent tool** with `subagent_type: "writer"`. Never approves its own work;
-  returns the diff, the tests it added, and VERIFY output with exact exit codes. It does not decide
-  acceptance or invent ledger content; it performs the Git PLAN write only when the COO explicitly
-  delegates that specific mutation. Several Writers may run on ONE ticket when its worklist splits
-  into file sets that do not overlap: the brief records the split, and one VERIFY and one commit
-  close the ticket. The Agent tool's `isolation: "worktree"` is not the instrument for it (its copy
-  starts from the default branch, not the branch checked out). The planner of `/pnp:plan` runs as
-  the `writer` agent type and writes only its plan folder under `<plansDir>/drafts/<ABBR>/`.
-  **Dispatch contract - do NOT pass `model` to the Agent tool for the Writer.** The Writer's model
-  is pinned in its frontmatter (a tier alias or an exact model id); the Agent tool's `model`
-  override takes precedence over frontmatter and takes only a tier alias (`sonnet|opus|haiku|fable`),
-  so passing one silently discards the pin. To change the Writer's model, change
-  `roles.writer.model` in the config and re-render. A Claude-hosted Reviewer, QA or review row takes
-  a tier alias or an exact model id: `/pnp:review` and `/pnp:qa` pass `model` ONLY for a tier alias
-  and omit it for an exact id, so the rendered agent's frontmatter pin applies. The Reviewer has ONE
-  agent file with ONE pin, shared by every Claude-hosted row, so such a row takes a tier alias or
-  exactly `roles.reviewer.model` (a tier alias when the Reviewer is Codex-hosted and the file
-  carries `fable`): setup, `/pnp:update` and `/pnp:roles` refuse anything else before writing, and
-  `/pnp:review` fails closed at dispatch when the row's exact id and the file's pin disagree.
-- **Reviewer** - read-only, **engine-neutral**: the host is data in `.claude/aiwf-native/roles.json`,
-  resolved by the role resolver of this project's OS channel - `scripts/native/ps/aiwf-roles.ps1` on
-  `windows`, `scripts/native/sh/aiwf-roles.sh` on `linux`/`macos` (`config.os` selects it; the two
-  channels mirror each other flag for flag). `/pnp:review` resolves the class's row once and
-  dispatches either the Codex wrapper (`scripts/native/ps/codex-review.ps1` /
-  `scripts/native/sh/codex-review.sh`, same `-Class` / `--class`) **or** the `reviewer` Claude
-  subagent (`Read/Grep/Glob` only). Adversarial code/design review; reports `pass` /
-  `pass-with-notes` / `fail` per `docs/REVIEW_CHECKLIST.md` (a plan-readiness pass returns a findings
-  table and a `BLOCKERS:` line instead); never edits. On the **codex** host the read-only boundary
-  is a hard OS cell (`--sandbox read-only`); on the **claude** host it is tool-availability + Gate 1
-  + convention + git reversibility, with NO OS cell.
-- **QA** - read-only, **engine-neutral** the same way: `/pnp:qa` dispatches either the Codex wrapper
-  (`scripts/native/ps/codex-qa.ps1` / `scripts/native/sh/codex-qa.sh`) **or** the `qa` Claude
-  subagent, **only** when the ticket has observable runtime/UI behavior. QA is an **artifact
-  judge**, not a live browser: a Codex-launched browser cannot run under the read-only sandbox
-  (`docs/QA_BROWSER_INVESTIGATION.md`), so the browser lives in the **test runner**. The spec-flow:
-  the **Writer** authors/extends an E2E `.spec` from the acceptance criteria -> **the orchestrator**
-  runs the configured runner over the ticket's scope -> **QA** reads the artifacts (JSON report,
-  screenshots, traces) and reports `pass` / `pass-with-notes` / `fail` (or a precondition `BLOCKED`
-  when the artifacts are missing/unreadable). Same boundary per host as the Reviewer. QA never starts
-  a dev server and never drives a browser.
-- **QAL** - live agentic-browser Codex via `scripts/native/ps/codex-qal.ps1` /
-  `scripts/native/sh/codex-qal.sh` (wrapped by `/pnp:qal`), **codex-only**. The **operator-gated
-  exception**: runs **only after an explicit operator request in the current conversation** and only
-  when `roles.qal.enabled` is true - never on the orchestrator's own initiative. It runs **without an
-  OS sandbox** (`--sandbox danger-full-access`, the minimal non-bypass flag that runs a
-  Codex-launched browser; `--dangerously-bypass-approvals-and-sandbox` also strips the approval
-  mechanism; neither is "safe") in a throwaway scratch cwd with a disposable browser profile - hygiene,
-  not a guarantee; its "never writes the repo" is a convention, not a cell. QA stays the default.
-- **Arbiter** - not a loop role: an on-demand, cold-start second view opened through `/pnp:arbiter`
-  on a fired escalation trigger, read-only on the tree; the doctrine is `docs/WORKFLOW.md`
-  § Escalation and the arbiter.
-- **Operator** - the human; the sole authority for commit approval, push, merge, branch switches,
-  destructive/system-changing operations, and for authorizing a QAL (unsandboxed live-browser) run.
-
-The session rule (a readiness cycle in a fresh session; ~400k tokens as a ticket boundary):
-`docs/WORKFLOW.md` § Plan readiness review.
-
-**Reading is not a shell job (all roles).** Read or inspect files and config with the Read/Grep/Glob
-tools, not shell commands (`cat`/`head`/`node -e`/shell loops) - the shell is for execution
-(tests/git/build). Editing is not a shell job either: change tracked files with Edit / Write, never
-`sed -i`, a heredoc or a redirect - a shell edit can stall on a dialog nobody is watching, and a file
-whose text names a gated git verb trips Gate 4 when written through the shell. No command carries a
-`cd` prefix: it runs from the repository root and reaches a subfolder with the tool's own flag -
-the habit guard (§ Enforcement of Writer-only writes) denies the prefix, since Claude Code's
-working-directory variable returns only the main session to the root and no migration op carries it.
-Surgical edits over rewrites: a file is never rewritten whole when the result is the same, and a
-whole-file restructure that is needed is announced in one line first, with its reason. A command
-expected to run over about five minutes runs in the background for every role, with a timeout of at
-least 3600000 ms, awaited by its notification; a run killed by the cap is not restarted but
-reported, and every brief repeats this. Auto mode refuses Edit/Write-tool edits to
-`.claude/settings.json` and `.claude/hooks/**`, even with the operator's word: the COO asks the
-operator to switch auto mode off in its first reply, and if still blocked stops and explains - never
-a bypass through `sed`, a heredoc or a redirect; the operator may hand-edit from the COO's exact
-lines. The update engine's own config write is a different case: `/pnp:update --apply` was observed
-running through under auto mode, so an apply does not ask in advance for auto mode to be switched
-off; a host that does refuse it is handled by `/pnp:update` Step 3 (run it again in a mode that
-asks). The
-Writer's reply is its report, and it is short - about 25 lines: blockers, deviations, failed checks
-and the VERIFY exit codes, with no separate handoff document. The diff stays in the tree, where the
-COO reads it whole.
+What each role may and may not do on its host: `ticket.md` § Role boundaries.
 
 ## Enforcement of Writer-only writes
 
@@ -157,7 +61,7 @@ denied with a message naming the open ticket. No state file, or the cleared `{}`
 invisible; the Writer is never gated by it. A present-but-unusable state (a route that is not R2/R3,
 a non-string route, malformed JSON) denies by design, never opens the transfer surface, the roadmap
 or the planning folders, and is self-healing because `.aiwf/**` stays writable. The planning folders
-are what lets `/pnp:plan` run beside an open route (`docs/WORKFLOW.md` § Branch policy); the landed
+are what lets `/pnp:plan` run beside an open route (`ORCHESTRATOR.md` § Branch policy); the landed
 plans under `<plansDir>/active/**` stay behind the guard - a landed plan is edited by the executing
 session or after the route closes. The paths and the state-file location are fixed. It covers the Edit/Write tool class only - shell
 mutations remain doctrine. `enforcement.routeWriteGuard: false` skips it; every other state of that
@@ -241,7 +145,7 @@ and that probe date stand for it.
 
 The authority - who commits, the native dialog, the click that approves the invocation rather than
 the tree, push/merge/rebase on the explicit word plus the dialog, destructive commands as `ask`
-rules - is `docs/WORKFLOW.md` § Commit & Push Authority. Natively: after review passes, the Writer
+rules - is `ORCHESTRATOR.md` § Commit & Push Authority. Natively: after review passes, the Writer
 attempts the local `git commit`, the `ask` rule raises the Yes/No dialog, and the operator's click on
 that attempt is the approval.
 
