@@ -79,5 +79,5 @@
 
 A red with an environment fingerprint (empty copy, pwsh cache, /tmp wipe, fixture-form selfcheck,
 log-in-tree) is NOT a code defect: STOP, name the fingerprint, ask for the operator word - never
-silently fix the environment and report a pass (payload `docs/WORKFLOW.md` § Verifying failure
-claims).
+silently fix the environment and report a pass (`.claude/aiwf-native/ORCHESTRATOR.md` § Verifying
+failure claims).

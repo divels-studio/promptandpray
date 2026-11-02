@@ -37,7 +37,7 @@ Furnissimo) - a consumer takes 0.3.8 through `/plugin update` + `/pnp:update` in
 | ref | title | implements | status | record |
 |---|---|---|---|---|
 | DOCSTAGE-001 | prose: the four stage templates and the core sections of ORCHESTRATOR, the coverage control and mid-state | D-01 D-02 D-03 D-04 D-05 D-08 D-09 | closed (`78fa59a`) | `records/DOCSTAGE-001.md` |
-| DOCSTAGE-002 | code + release 0.3.8: the managed keys, migration 0033, the doors re-pointed, the docs reduced, `/pnp:loop` removed | D-01 D-02 D-03 D-05 D-06 D-07 D-08 D-09 D-10 D-11 D-13 | open | - |
+| DOCSTAGE-002 | code + release 0.3.8: the managed keys, migration 0033, the doors re-pointed, the docs reduced, `/pnp:loop` removed | D-01 D-02 D-03 D-05 D-06 D-07 D-08 D-09 D-10 D-11 D-13 | closed (`955e64c`) | `records/DOCSTAGE-002.md` |
 
 ## Order and gates
 

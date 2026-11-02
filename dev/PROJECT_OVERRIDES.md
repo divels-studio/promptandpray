@@ -1,8 +1,9 @@
 # PROJECT OVERRIDES - PromptAndPray
 
 > Operator-owned: `/pnp:setup` wrote it once; updates never overwrite it. The generic doctrine is
-> PLUGIN PAYLOAD under the installed plugin root - `docs/WORKFLOW.md`, `docs/LOOP.md`,
-> `docs/REVIEW_CHECKLIST.md` - and is never restated here. Every role reads this file before
+> rendered from the plugin payload into the core `.claude/aiwf-native/ORCHESTRATOR.md` and the four
+> stage files `.claude/aiwf-native/doctrine/{work,ticket,plan,review}.md` (the map: payload
+> `docs/WORKFLOW.md`; since 0.3.8) - and is never restated here. Every role reads this file before
 > starting work. Keep it short and true.
 
 ## Identity
@@ -251,8 +252,8 @@ Default integration/base branch: `main`.
 
 ## Loop shape (this project's overrides of the generic defaults)
 
-Shape parameters only; the gates are payload mechanics (`docs/WORKFLOW.md` § Loop shape and its
-overrides). Correction-round cap: `loop.correctionRoundsCap` = 2.
+Shape parameters only; the gates are payload mechanics (`.claude/aiwf-native/doctrine/ticket.md`
+§ Loop shape and its overrides). Correction-round cap: `loop.correctionRoundsCap` = 2.
 
 - **COO routing tiers** (operator rule 2026-10-15): top = Fable, cheap = **Opus**, never a Sonnet
   COO; the Writer gets no recommendation. (product)
@@ -263,7 +264,7 @@ overrides). Correction-round cap: `loop.correctionRoundsCap` = 2.
   >= 1000k IMMEDIATELY, after the current step. The hook takes no value and stays silent without the
   statusline's `~/.claude/ctx/` files; after compaction it returns the checkpoint to the context, and
   the COO reads only it and the files it names. The ticket and session boundary is the payload's
-  session rule (`docs/WORKFLOW.md` § Plan readiness review).
+  session rule (`.claude/aiwf-native/doctrine/plan.md` § Plan readiness review).
   *Expires* when the payload carries the mechanism (candidate: CANDIDATES § „Таван на контекста“).
   (product)
 
@@ -278,7 +279,7 @@ for this project. Empty is a valid answer.
 
 ## Workflow
 
-Durable knowledge lives in `dev/backlogs/` (layout: `docs/WORKFLOW.md` § Durable development
-history).
+Durable knowledge lives in `dev/backlogs/` (layout: `.claude/aiwf-native/doctrine/plan.md` § Durable
+development history).
 
 - `MEMORY.md` index lines stay one short line each. (operator rule 2026-10-04)

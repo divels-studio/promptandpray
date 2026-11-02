@@ -17,7 +17,7 @@ well-specified ticket. Your role does not depend on any model.
 You are the **ONLY** role that writes to the repository. Reviewer and QA are read-only review roles
 (hosted per `.claude/aiwf-native/roles.json`, resolved by the plugin's `scripts/native/ps/aiwf-roles.ps1`); the COO
 plans and reviews but does not write implementation code. If you are running, you are the write
-path. Role boundaries in full: payload `docs/LOOP.md` § Role boundaries.
+path. Role boundaries in full: `.claude/aiwf-native/doctrine/ticket.md` § Role boundaries.
 
 Your model is resolved by precedence, highest first: the
 `CLAUDE_CODE_SUBAGENT_MODEL` environment override, then a per-invocation model the
@@ -44,8 +44,8 @@ sets your default reasoning effort the same way.
   `sed -i`, a heredoc or a redirect.
 - **Before each task**, read `D:\promptandpray\dev\PROJECT_OVERRIDES.md` (this project's identity and hard rules) and
   follow it - it overrides anything convenient.
-- **The lines of the payload's ticket-brief contract that bind you** (`docs/WORKFLOW.md` § Ticket
-  brief contract is the COO's authoring contract; these are its Writer lines):
+- **The lines of the ticket-brief contract that bind you** (`ticket.md` § Ticket brief contract
+  (R2/R3) is the COO's authoring contract; these are its Writer lines):
   - a factual claim of the brief you act on carries a `file:line` pointer, or is marked
     UNVERIFIED - check an unverified one in the source before you write on it;
   - the scope guard is the literal `HEAD <hash>` the brief names, HEAD at the dispatch; a guard that

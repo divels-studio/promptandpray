@@ -1,0 +1,136 @@
+<!-- Managed by PromptAndPray. `/pnp:setup` renders this file and `/pnp:update` re-renders it,
+     overwriting any edit. Text of your own goes between the project additions markers at the end of
+     this file - every re-render carries it over; a local rule there opens with the heading of the
+     rule it modifies. -->
+
+# Work stage - PromptAndPray
+
+Read IN FULL by `/pnp:work` at its first step, beside the always-on `ORCHESTRATOR.md` and
+`dev/PROJECT_OVERRIDES.md`. It carries the routes and the rules of work in general; the ticket
+brief and the loop's inner rules are `ticket.md`, the planning cycle is `plan.md`.
+
+## Routes
+
+### R1 - routine
+
+Direct work in the main Claude Code session. No subagents, no Reviewer, no QA.
+
+**An executable artifact ends R1.** The moment a ticket scoped as docs-only gains an executable
+artifact - a script, a hook, anything that runs - it is re-classified and takes the code loop,
+Writer and Reviewer included.
+
+### R2 - product
+
+- **Non-runtime:** `COO -> Writer subagent -> /pnp:review -> COO`.
+- **Runtime/UI (observable behavior):** `COO -> Writer subagent -> /pnp:review -> /pnp:qa -> COO`.
+
+Correction rounds are capped (`ticket.md` § Loop shape and its overrides). Local commit after the
+loop passes and a human approves (`ORCHESTRATOR.md` § Commit & Push Authority).
+
+**The engine and the pass count come from the ticket's CLASS - and the class is a row you can
+see.** Every review brief carries `Class: plan | code | docs` (default `code` when absent), and
+`/pnp:review` resolves that row of the **audit table** before it dispatches:
+
+- **`Class: code`** - anything that runs, is imported, or is tested - takes `review.code`.
+- **`Class: docs`** - the overrides document, README, skill/doc prose with **no executable
+  artifact** in the diff - takes `review.docs`.
+- **`Class: plan`** - a plan-readiness pass over a durable plan before implementation - takes
+  `review.plan` (`plan.md` § Plan readiness review).
+
+The engine, the model, the effort and `passes` all come from `review.<class>`. A Claude-hosted row
+dispatches the project's rendered `reviewer` agent, rendered whenever the Reviewer role OR any row
+is Claude-hosted. The class is the COO's call and follows the R1 rule above: a docs-class ticket
+that gains an executable artifact is code class, in the review row as in the route.
+
+### R3 - critical (migrations / access policy / auth / destructive / push)
+
+`COO-approved mini-plan + plan-readiness review (before Writer starts) -> Writer subagent on
+r3/<topic> -> /pnp:review -> /pnp:qa (when there is observable/runtime behavior) -> COO synthesis
+-> operator commit/merge gate`. Push always requires the operator's explicit word and is executed
+via the `ask` dialog.
+
+R3 always uses the full ticket-brief contract, and the durable Mission PLAN when the work crosses
+the durable-history threshold. Durable decisions go to a short ADR when warranted.
+
+### COO routing
+
+Which session drives a ticket is answered by counting. The term is **COO routing**: "tier" stays
+reserved for the model vocabulary.
+
+Four checks, yes/no, read off the ticket before it starts:
+
+1. the ticket writes migration / access-policy / grants / auth / permission-model code;
+2. the contract leaves an architecture or a concurrency decision open - countable form: any worklist
+   item without a `file:line` anchor, or any unresolved decision marker in the plan section (or, for
+   a non-durable R2 that has no plan section, in the brief);
+3. the diff surface greppably matches one of the escalation trigger classes (`ORCHESTRATOR.md`
+   § Escalation and the arbiter);
+4. a canon conflict or an open incident stands on the ticket's path.
+
+ANY "yes" puts the ticket on a COO at the top tier; ALL "no" on the cheap COO. The plan records
+the answer in each ticket's entry as one line that names the model filling the tier - `COO: <model> -
+because <check N | all four no>`;
+a non-durable R2 with no plan section records it in its brief.
+
+**The routing moves the COO and nothing else.** The Writer's model stays pinned in its agent
+frontmatter and the audit table stays as `/pnp:roles` shows it: a cheap COO does not buy a cheaper
+Writer or a cheaper auditor.
+
+**The dynamic clause.** A trigger that surfaces MID-ticket suspends the ticket exactly as a canon
+conflict does - escalation, not continuation; the four checks are read again against what is now
+true.
+
+The saving of a cheap COO is real downstream of an expensive readiness cycle; work routed cheap
+without one keeps the same routing and pays later, in correction rounds. **The dual:** routing
+upward "to be safe" on a ticket where all four checks are "no" is the same defect as routing
+everything cheap.
+
+## Routing mapped to native
+
+| Route | What it is | Native execution |
+|---|---|---|
+| **R1 - routine** | Small, low-risk change | Done **directly in the main session**. No subagents, no Reviewer, no QA, no loop - but a ticket that gains an executable artifact (script, hook) is re-classified out of R1 and takes the code loop (§ Routes). |
+| **R2 - product (non-runtime)** | Product change with no observable runtime/UI surface | `COO -> Writer subagent -> /pnp:review -> COO`. Correction rounds capped at `loop.correctionRoundsCap`. |
+| **R2 - product (runtime/UI)** | Observable runtime/UI behavior | `COO -> Writer subagent -> /pnp:review -> /pnp:qa -> COO`. Same cap. |
+| **R3 - critical** | Migrations / access policy / auth / destructive / push | Plan-first: COO-approved mini-plan + plan-readiness review (Reviewer, read-only) **before** Writer starts, on `r3/<topic>`, then Writer -> `/pnp:review` -> `/pnp:qa` (if runtime) -> COO synthesis -> **operator** commit/merge gate. |
+
+The review engine and the pass count come from the ticket's class, in both R2 rows and in R3: the
+brief's `Class: plan | code | docs` names a row of the audit table (§ Routes),
+which `/pnp:review` resolves through the role resolver's reviewer-only `-Class` / `--class` flag -
+engine, model, effort and `passes` in one snapshot. A Claude-hosted row dispatches the rendered
+`reviewer` agent under the dispatch contract (`ticket.md` § Role boundaries). Before every diff pass above the
+scan tier `/pnp:review` Step 2b runs the fact-check gate; a plan pass has the mechanical plan gate
+instead (`ticket.md` § The COO write boundary runs along artifact class, not size; the
+planning cycle is `/pnp:plan`).
+
+There is **no runtime state machine and no counters** - the loop is convention + the native
+click-based permission gates only.
+
+## Tests
+
+Test policy has a single home in your project - the standard named in your overrides document
+(`paths.overridesDoc`), and the concrete commands live in `verify.commands` and `verify.e2e` in
+`aiwf.config.json`. Tests are part of implementation, not polish. A check agent runs checks and
+fixes nothing; the Writer runs only the tests it adds - red, then green.
+
+### Out-of-scope failures found during work
+
+Out-of-scope pre-existing failures, stale tests, or build blockers discovered during work are
+recorded as risks in the report - never silently dropped, never silently fixed. Every out-of-scope
+finding, from any role, goes to the operator with a proposed destination - a new ticket under guard
+(b) (`ORCHESTRATOR.md` § Operator-interaction guards), or a line in its area's roadmap entry
+(`plan.md` § Durable development history) - asked at the ticket's end; nothing stays recorded only
+as "pre-existing".
+
+## Status / release docs policy
+
+Your project's status and release artifacts (a project-status page, `CHANGELOG.md`, a roadmap -
+whichever exist) are named in the overrides document. The rules:
+
+- they are evaluated only **after a DONE product ticket**;
+- docs-only analysis / inventory / audit / backlog work MUST NOT touch them;
+- a roadmap-class document is updated only by exception (accepted priority, milestone, or
+  direction change) - not as a default checkpoint artifact.
+
+<!-- project additions -->
+<!-- /project additions -->

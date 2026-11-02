@@ -1,0 +1,261 @@
+<!-- Managed by PromptAndPray. `/pnp:setup` renders this file and `/pnp:update` re-renders it,
+     overwriting any edit. Text of your own goes between the project additions markers at the end of
+     this file - every re-render carries it over; a local rule there opens with the heading of the
+     rule it modifies. -->
+
+# Plan stage - PromptAndPray
+
+Read IN FULL by `/pnp:plan` at its first step, beside the always-on `ORCHESTRATOR.md` and
+`dev/PROJECT_OVERRIDES.md`. It carries the planning lock, the readiness cycle and the durable
+history of a plan - its folder, its archive, the roadmap and the ledger.
+
+## Planning lock
+
+`/plan` and any explicit request to plan before implementation activate a planning-only lock that
+binds every role in the loop; native Plan Mode alone is not the authority (it does not constrain the
+Writer or the Codex runs).
+
+While locked, the COO may read files, inspect Git state, research, compare options, and present
+a concrete plan, and update its own agent-local memory with facts and preferences (a rule-bearing
+memory write goes through guard (g), `ORCHESTRATOR.md` § Operator-interaction guards, even under
+the lock); such memory is not project workflow authority.
+
+Until the concrete plan is presented and the operator explicitly approves its execution, the COO
+must not:
+
+- dispatch or advance an **implementation** brief, or commit a change to the Git-tracked PLAN.
+  Composing the draft plan and a read-only plan-readiness brief (each carrying its risk threshold +
+  stop condition) is **explicitly permitted**: the
+  draft folder `<plansDir>/drafts/<ABBR>/` and `<plansDir>/readiness/<ABBR>/` are written
+  UNTRACKED under the lock and committed only at the landing; an extension of a landed plan is
+  drafted the same way, as an UNCOMMITTED edit of `<plansDir>/active/<ABBR>/` and its
+  `<plansDir>/readiness/<ABBR>/`, and lands with the extension's own docs commit;
+- delegate to the Writer subagent, QA, or another implementation run - the planner excepted: it is
+  dispatched as the `writer` agent type with the planner brief, writes only under
+  `<plansDir>/drafts/<ABBR>/`, and implements nothing (`/pnp:plan`);
+- edit the repository, agent/tooling configuration, or other project state - the planning's own
+  files above and the roadmap entry excepted;
+- stage, commit, switch/create branches, merge, push, or perform another Git mutation.
+
+The sole orchestration exception is the read-only plan-readiness review through the plan-readiness
+mode of `/pnp:review`, which `/pnp:plan` calls. It does not release the lock or authorize
+implementation. Selecting an option (`A`, `B`, `C`) chooses direction; it is not approval to
+execute. Execution approval applies to the presented plan only; commit, merge, push, destructive and
+system-changing gates remain separate, and plan mode does not replace them.
+
+## Plan readiness review
+
+Plans for durable R2 work and all R3 work receive an independent read-only review before the COO
+presents the final plan for execution approval; small R1 and non-durable R2 work do not. Neither
+the planner nor the COO approves its own plan. `/pnp:plan` runs the cycle; this section is its
+doctrine. The COO owns the routine engineering choices inside it and asks the operator only when an
+unresolved alternative would materially change product intent, an architecture boundary,
+security/external risk or cost, or an irreversible outcome.
+
+**The cycle.** One roadmap entry per idea (`<plansDir>/ROADMAP.md`) -> research by one or two
+scan-tier agents in a fresh context, BEFORE the first sentence of the plan: the Code Map, what the
+code does today, and the consumers and adjacent contracts of every touched surface, as pointers ->
+`DECISIONS.md`: numbered decisions, a Deferred list and Open Questions; an open question stops the
+cycle until the operator answers, and an unknown is never written down as an assumption -> the
+planner agent writes `<plansDir>/drafts/<ABBR>/` (the index, at most 3 tickets with their six
+fields and a Code Map, the gates each ticket passes in order) and returns a structured handoff -
+which decision lands in which ticket, the dependencies checked, the risks left, the evidence
+pointers; the COO reads the files and does not write the plan -> the mechanical gate -> ONE
+readiness pass -> the COO's triage -> at most 2 revisions -> the operator's approval -> the landing
+(guard (e), `ORCHESTRATOR.md` § Operator-interaction guards).
+
+**The mechanical gate.** `scripts/engine/plan-gate.js --stamp <folder>` checks the folder contract -
+the index, at most 3 tickets, the configured ticket byte cap (`plan.ticketByteCap`, factory 6,144) per
+ticket (its header `Status:` line not counted), the six headings, every decision of this plan cited,
+cross-references resolved, no bare open item, Code Map paths that exist - and writes the
+SHA-256 stamp to `<plansDir>/readiness/<ABBR>/stamp.json`; `--check` confirms it, and every
+revision is stamped again. A plan-class pass does not start without a current stamp: the Codex
+review wrapper refuses it (exit 2) and Gate 2 denies a Claude reviewer dispatch whose brief carries
+`Class: plan`. Honest limit: the gate proves shape, citations and that the text is the stamped one;
+it cannot prove the plan is good.
+
+**The pass and the blocker contract.** The pass runs on the `review.plan` row (`/pnp:roles`). Its
+brief is the `COVERED BY:` line, `Class: plan`, `PLAN: <folder>` and the shipped readiness brief.
+The auditor reads the complete folder against the tree and returns every material gap at once; the
+output contract (one findings table, one `BLOCKERS: <n> INFO: <m>` line, what a BLOCKER is, what is
+out of scope) is `review.md` § Plan readiness (before implementation). A readiness
+pass runs only through `/pnp:plan` Step 6, which applies `/pnp:review` Step 3's dispatch mechanics
+with the skill loaded before any scan agent; a hand-built readiness pass is a route violation.
+
+**Triage and the round file.** The COO disposes of every finding - fixed / rejected with a
+refutation / deferred / asked - in `<plansDir>/readiness/<ABBR>/round-<N>.md`: the table verbatim
+plus a disposition column. A finding that disputes a recorded decision goes to the operator, not
+into a revision. The planner writes the fix. A revision closes the blockers it was handed and adds
+nothing new: a change that opens new surface is a candidate for the next plan. A revision that does
+not reduce the count of carried OPEN rows stops the cycle and goes to the operator; a blocker born of
+added scope is named separately, never counted as carried.
+
+**Pass economy.** Pass 1 rides the plan's standing word. A second pass runs only on the operator's
+own explicit word, and only when pass 1 returned a BLOCKER that reverses a recorded decision, or
+the COO names a risk - security, tenancy, concurrency, transactions - after a substantive revision;
+its brief carries `round-1.md` verbatim (`ticket.md` § Fail aggregation). `review.plan.passes` is the
+ceiling (factory 2) and no pass runs beyond it without the operator's explicit word; at `0` the plan
+gets no auditor, which `/pnp:roles` prints as `no auditor`.
+
+**The session rule.** A readiness cycle starts in a fresh session. The COO session holds the plan
+index, the state and the verdict lines; it reads the approved tickets once and carries no revision
+body and no review body. About 400k tokens of context is a ticket boundary and a guide, not a
+target: there the COO finishes the current ticket - commit and record - and the next ticket starts
+in a new session. A context checkpoint is a project's own addition; the payload ships none. A
+heavy ticket moves to a fresh session on the operator's word, never on the COO's alone. A ticket's
+session reads the plan's shared sections - the index and the decisions - and its own ticket file,
+not the other tickets. No session brief is offered when the state is durable: once the record, the
+memory and the transfer surface are complete the COO says "new session, `/pnp:mission`", and a brief
+is offered only mid-flight - an unfinished ticket, an uncommitted diff, decisions spoken but not
+recorded.
+
+No separate audit backlog, handoff file, narrative report, universal DoR, or universal DoD is
+created: the stamp and the round files are the readiness history.
+
+The readiness review checks only:
+
+1. the plan matches the actual repository state;
+2. scope and out-of-scope boundaries are clear;
+3. no hidden discovery or unresolved architectural decision remains - for every write the plan
+   adds or changes, the lock that holds it and what runs beside it are named (`docs/READINESS_CLASSES.md`
+   class 15: a race left as an accepted residual is an open decision);
+4. tickets/steps are executable in the correct dependency order;
+5. acceptance criteria are sufficient, and every verification command is literal and can fail -
+   runnable as written, with a named output that would mean "broken";
+6. branch, worktree, and Git prerequisites are valid.
+
+The approved plan is the durable Git authority after the operator approves execution.
+
+## Durable development history
+
+A durable record is required when work is multi-session, changes architecture,
+migrations/security/access policy, or important domain behavior, or is likely to need future
+code-level explanation. Small R1/R2 fixes do not receive an artificial document.
+
+Every durable initiative uses **one living Mission PLAN**, including when it has multiple
+tickets; no separate active BACKLOG file. The PLAN keeps:
+
+1. product/problem context and repository reality discovered during planning;
+2. mission goal, scope/out-of-scope, architecture boundaries, decisions, and rejected
+   alternatives that matter later;
+3. an executable ticket ledger: stable Ticket Ref, context/problem, outcome, scope, dependencies,
+   affected areas, acceptance criteria, and verification; a paid review the plan schedules beyond
+   the readiness passes and the diff audit - a cold audit of existing code, say - is written into
+   its ticket with its scope and estimated cost, and the plan's approval is then that pass's word,
+   quoted in its COVERED BY line;
+
+Items 4-5 - the completion record and the closeout in two halves: `ticket.md` § Durable development
+history.
+
+**A plan that is 100% executed is archived immediately.** The moment every ticket in a PLAN
+carries a closed status and its completion record, the COO moves it from `<plansDir>/active/` to
+`<plansDir>/archive/` - in the same session, unprompted, as the last act of closing the final
+ticket. Archive name: `<NNN>_PLAN_<ABBR>_<YYYY-MM-DD>.md`, `NNN` the next free sequence number, the
+date the day of ARCHIVING; `git mv` preserves the history. A folder plan moves as a DIRECTORY
+under the same grammar: `git mv <plansDir>/active/<ABBR>/
+<plansDir>/archive/<NNN>_PLAN_<ABBR>_<YYYY-MM-DD>/`. `<plansDir>/readiness/<ABBR>/` is not moved.
+The plan's line under the ledger's `## Plans` is rewritten to the archive path, and the archiving of
+the last plan of a roadmap entry takes the entry out of `<plansDir>/ROADMAP.md`: the roadmap holds
+only live entries, and an idea dropped before its plans are done leaves it with one ledger row
+`<ABBR> dropped: <why>`. **The roadmap is written at exactly three entry events, plus the two
+list writes below, and never otherwise:**
+(1) an entry is born -> `Status: idea` (`researching` when `/pnp:plan` dispatches the research
+agents); (2) a plan lands in `active/` -> `Plans:` gains it, `Status: planned`, and the first
+ticket's dispatch - the moment the COO writes `.aiwf/route-state.json` - sets `Status: in
+progress`; (3) the last plan under the entry is archived -> the entry leaves the roadmap. **An entry
+may be an area** - a module or theme whose goal is "no known open defect" - whose `Scope: in -` list
+collects the findings born during work, one indented line each (`<date> <origin> - <what>
+[<pointer>]`), until the list is worth a plan; the plan is born over the list and its tickets come
+from the lines. That list is the fourth write: it grows at a finding's birth. The fifth write closes
+a line: when the commit that closes a finding lands, its line is marked `done <pointer>` or removed.
+`Status` and `Plans` change at the three events only. An installation older than the roadmap ports
+its live candidates once - each row to an area or goal entry, the old row marked `taken up -> ROADMAP §
+<ABBR>`, `done` or `dropped: <why>` - and from then on reads the roadmap alone for open work. Archiving also greps the plan's process sections for rule-class points without a pointer row -
+fail-capable, with a positive control (the grep run once over a plan known to carry such a point,
+seen to report) - the backstop under guard (h) (`ORCHESTRATOR.md` § Operator-interaction guards).
+The trigger is the checkable fact - every ticket closed, every verify green. Archiving is
+bookkeeping, reversible with one `git mv` back, and NOT part of the irreversible half
+(`ticket.md` § Durable development history).
+
+Do not copy raw orchestration conversation, assignee/status changes, or review rounds into the
+PLAN.
+
+Use the configured paths (`paths.plansDir`):
+
+```text
+<plansDir>/ROADMAP.md                         one LIVE entry per idea, its plans listed under it
+<plansDir>/drafts/<ABBR>/                     the draft folder, untracked, while the plan is one
+<plansDir>/readiness/<ABBR>/                  stamp.json + round-<N>.md + ledger.md, committed at landing, kept
+<plansDir>/active/<ABBR>/PLAN_<ABBR>.md       the index + DECISIONS.md, RESEARCH.md, tickets/, records/
+<plansDir>/active/PLAN_<ABBR>.md              an older single-file plan, still read
+<plansDir>/archive/
+```
+
+The scratch directory carries the live loop mechanics only - a plan's proof written there would
+disappear with it. The approved PLAN is written to Git only after the planning lock is released -
+and then immediately, by the COO itself (docs class), before production-code changes begin: the
+landing commit, which also takes the readiness history (`/pnp:plan` Step 6). Rough personal notes
+are inputs, never implementation authority. When a durable record is warranted:
+
+- **one prefix per plan.** A plan file is `PLAN_<ABBR>.md` - a folder plan's index
+  `active/<ABBR>/PLAN_<ABBR>.md` carries the same name - where `<ABBR>` is **2 to 8 uppercase
+  letters `A-Z`**, and every ticket in that plan carries the Ticket Ref `<ABBR>-<NNN>`: the SAME
+  abbreviation plus a **three-digit** sequential number that is never reused - not even for a
+  dropped ticket. That grammar is what the tooling reads: the dispatch gate turns it into a
+  filename (`PLAN_<ABBR>.md`, then `<ABBR>/PLAN_<ABBR>.md`, then `<ABBR>/tickets/<ABBR>-<NNN>.md`)
+  and the self-check holds a plan to it. An `<ABBR>` is never reused by a later plan: its
+  `<plansDir>/readiness/<ABBR>/` outlives the plan;
+- **a ticket born in flight takes the same abbreviation and the next free number**; a different
+  abbreviation means a different plan, never a foreign ref inside an existing one;
+- **a candidate has no ref.** Proposed work carries a title and nothing else; it earns its
+  `<ABBR>-<NNN>` when written into a plan. It is registered where it is born, in that session,
+  with its retrigger or expiry condition, and a done item is marked, never deleted;
+- choose the abbreviation so it identifies the actual product/workstream. The convention is not
+  retroactive: older plans and refs keep their names, and the tools fall back to a full scan;
+- the durable ledger is the living Mission PLAN itself - no separate runtime work-item store;
+- carry the Ticket Ref, PLAN path, and ticket-section anchor in the Writer brief, instead of
+  copying the plan into it;
+- use the stable Ticket Ref in commit bodies (`Refs: ABC-001`) and in code comments only when it
+  preserves a non-obvious architectural, compatibility, security, or domain reason.
+
+Do not update Markdown for assignee changes, review rounds, or other live events. Update the
+ticket section once after that ticket is accepted, then the Mission closeout once, and archive.
+
+The resume memory is state, not a log: it holds only the current state, rewritten whole at every
+checkpoint, while history lives in the records, the readiness folders and git. A repository copy of
+a live artifact is refreshed at the canon moment - when anything declares it canon, and after each
+later iteration - and the check is a mechanical diff or size comparison against the live file.
+
+### The ledger
+
+Beside the plans an installation keeps one operator-owned page, the **ledger** - the transfer
+surface of the config - at the configured `paths.transferSurface`, or at the legacy fallback
+`<plansDir>/PNP_CANDIDATES.md` when that key is absent. It is a pointer index and nothing else: one
+line per plan under `## Plans`, pointing at the plan's `readiness/<ABBR>/` and its `records/`, plus
+the rows that belong to no plan. A plan's ruling and pass-statistics rows live in
+`<plansDir>/readiness/<ABBR>/ledger.md`, a ticket's events in its record's `## Events`; the ledger
+keeps only the ruling, the pass, the event or the dropped idea no plan owns, one line each with a
+pointer rather than a retelling. `/pnp:plan` writes a plan's `## Plans` line at the landing and the
+archiving rewrites it (§ Durable development history). `/pnp:setup` writes the key
+(`<plansDir>/LEDGER.md` when the answers carry none), seeds the page once from
+`templates/LEDGER.md.tmpl` and never writes it again; an installation older than the key receives
+it from `/pnp:update` (migration `0026_ledger`, the same seed, kept when the file exists). The
+skeleton:
+
+```markdown
+# Ledger
+
+Seeded once and then yours: nothing in the plugin records this file, hashes it or rewrites it, so an
+update never touches what you put here. It is a pointer index. Under Plans, one line per plan names
+its readiness folder and its records; a plan's own rulings and passes live in its readiness folder's
+`ledger.md`. Under Rows that belong to no plan, one row per ruling, pass, event or dropped idea that
+no plan owns, shaped `| date | kind | text | pointer |`. Ideas live in `ROADMAP.md` under the plans
+directory.
+
+## Plans
+
+## Rows that belong to no plan
+```
+
+<!-- project additions -->
+<!-- /project additions -->
