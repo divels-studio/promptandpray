@@ -1,17 +1,17 @@
 {
   "$schema": "D:/pnp-live/schema/aiwf.config.schema.json",
   "_aiwf": {
-    "installedPluginVersion": "0.3.8",
-    "lastMigrationApplied": "0033_doctrine-stages",
+    "installedPluginVersion": "0.3.9",
+    "lastMigrationApplied": "0034_ticket-close-homes",
     "managedRegions": {
       ".claude/aiwf-native/roles.json": "0.2.19",
       ".claude/agents/writer.md": "0.3.8",
-      "CLAUDE.md#aiwf-core": "0.3.8",
-      ".claude/aiwf-native/ORCHESTRATOR.md": "0.3.8",
+      "CLAUDE.md#aiwf-core": "0.3.9",
+      ".claude/aiwf-native/ORCHESTRATOR.md": "0.3.9",
       "AGENTS.md": "0.2.20",
-      ".claude/aiwf-native/doctrine/work.md": "0.3.8",
-      ".claude/aiwf-native/doctrine/ticket.md": "0.3.8",
-      ".claude/aiwf-native/doctrine/plan.md": "0.3.8",
+      ".claude/aiwf-native/doctrine/work.md": "0.3.9",
+      ".claude/aiwf-native/doctrine/ticket.md": "0.3.9",
+      ".claude/aiwf-native/doctrine/plan.md": "0.3.9",
       ".claude/aiwf-native/doctrine/review.md": "0.3.8"
     },
     "ownedAskRules": [

@@ -177,8 +177,11 @@ Where a rule a COO reaches for stands, named here so nobody restates it locally:
 - **Subagent model policy** - § COO owns broad scans below.
 - **Multi-session invariants** - § Branch policy below.
 - **VERIFY honesty** - § Verifying failure claims below.
+- **Out-of-scope findings and the status / release docs** - § Out-of-scope failures found during
+  work and § Status / release docs policy below: every session that works meets them.
 - **The routes and the work in general** - `work.md`; **the ticket brief, the role boundaries, the
-  loop's shape and the ticket's close** - `ticket.md`; **the verdict rules** - `review.md`.
+  loop's shape, the ticket boundary and the ticket's close, the plan's archive included** -
+  `ticket.md`; **the verdict rules** - `review.md`.
 
 ## Roles
 
@@ -405,6 +408,25 @@ operator; never silently fix the environment and report a pass. Before VERIFY th
 environment - tool binaries present, lockfile clean, env pins as expected - and records the unit
 baseline at HEAD by test name; the bar after the change is zero new failures by name, and a "not
 recognized" or "Cannot find module" is the environment and goes to the operator.
+
+## Out-of-scope failures found during work
+
+Out-of-scope pre-existing failures, stale tests, or build blockers discovered during work are
+recorded as risks in the report - never silently dropped, never silently fixed. Every out-of-scope
+finding, from any role, goes to the operator with a proposed destination - a new ticket under guard
+(b) (§ Operator-interaction guards above), or a line in its area's roadmap entry
+(`ticket.md` § Durable development history) - asked at the ticket's end; nothing stays recorded only
+as "pre-existing".
+
+## Status / release docs policy
+
+Your project's status and release artifacts (a project-status page, `CHANGELOG.md`, a roadmap -
+whichever exist) are named in the overrides document. The rules:
+
+- they are evaluated only **after a DONE product ticket**;
+- docs-only analysis / inventory / audit / backlog work MUST NOT touch them;
+- a roadmap-class document is updated only by exception (accepted priority, milestone, or
+  direction change) - not as a default checkpoint artifact.
 
 ## Branch policy
 

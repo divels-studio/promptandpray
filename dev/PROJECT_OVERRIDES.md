@@ -264,7 +264,7 @@ Shape parameters only; the gates are payload mechanics (`.claude/aiwf-native/doc
   >= 1000k IMMEDIATELY, after the current step. The hook takes no value and stays silent without the
   statusline's `~/.claude/ctx/` files; after compaction it returns the checkpoint to the context, and
   the COO reads only it and the files it names. The ticket and session boundary is the payload's
-  session rule (`.claude/aiwf-native/doctrine/plan.md` § Plan readiness review).
+  ticket boundary (`.claude/aiwf-native/doctrine/ticket.md` § The ticket boundary, since 0.3.9).
   *Expires* when the payload carries the mechanism (candidate: CANDIDATES § „Таван на контекста“).
   (product)
 

@@ -1,0 +1,63 @@
+ESCALATION BRIEF - PromptAndPray, 2026-11-03 (COO session promptandpray-2e, Opus 5.5)
+
+Trigger: 1 - the decision reverses plan-recorded decisions (DOCSTAGE D-02, D-05, D-06).
+No ticket line: the work belongs to no open plan (DOCSTAGE is archived; its roadmap entry stays).
+
+## Casus
+
+Silerax (consumer, now on 0.3.8) found that rules executed in a /pnp:mission session stand in stage
+files /pnp:mission never reads. The operator approved a quick prose release 0.3.9 ("Да, с четирите")
+on the COO's proposal: move four texts into ticket.md so the mission session sees them. Before the
+first edit the COO found the move reverses DOCSTAGE's recorded section->stage map, and that the
+proposal as approved loses coverage elsewhere (option A below). Question for ONE ruling: where do
+these four texts stand, and does /pnp:mission's read set change?
+
+The four texts:
+1. plan.md § Durable development history - the archive + roadmap-writes paragraph ("A plan that is
+   100% executed is archived immediately ..."): templates/doctrine/plan.md.tmpl:166-194. Executed
+   at the close of a plan's last ticket = a mission (or R2 /pnp:work) session.
+2. plan.md § Plan readiness review - the session rule's ticket-boundary sentences ("About 400k
+   tokens ... a ticket boundary ... A heavy ticket moves to a fresh session on the operator's word"):
+   templates/doctrine/plan.md.tmpl:116-126. Executed at a ticket boundary = mission. ticket.md only
+   points at it: templates/doctrine/ticket.md.tmpl:198-199.
+3. work.md ### Out-of-scope failures found during work: templates/doctrine/work.md.tmpl:130-137.
+   Executed at every ticket's end (mission, /pnp:work R1 and R2) and during planning research.
+4. work.md § Status / release docs policy: templates/doctrine/work.md.tmpl:139-147. Executed after
+   a DONE ticket (mission, /pnp:work) and binds docs-only work (incl. /pnp:plan sessions).
+
+## Evidence
+
+- Door reads: skills/mission/SKILL.md:33-40 (core + overrides; ticket.md before an R2/R3 dispatch -
+  no work.md, no plan.md); skills/work/SKILL.md:32-33 and :58 (core + work.md; ticket.md only when
+  the task routes R2/R3 - an R1 session never reads ticket.md); skills/plan/SKILL.md:56-57 (core +
+  plan.md). The self-check pins these reads: scripts/selfcheck/aiwf-selfcheck.js:7769-7778
+  (DOOR_READS; a minimum check - an added read does not fail it, an unpinned read is unguarded).
+- Recorded decisions: dev/backlogs/archive/018_PLAN_DOCSTAGE_2026-11-02/DECISIONS.md:16-44 (D-02,
+  work.md carries § Tests, § Status / release docs policy, ### Out-of-scope failures), :58-72 (D-05,
+  the archive and roadmap-writes paragraphs go to plan.md), :73+ (D-06, /pnp:mission reads core +
+  overrides + ticket.md).
+- Consumer evidence (read-only, D:\Stratex): its ORCHESTRATOR additions block defines "heavy ticket"
+  on top of text 2; its overrides override text 2's 400k to 600k; it proposes putting its own plan-
+  archiving rules into ticket.md because mission does not read plan.md.
+
+## Options
+
+A. All four into ticket.md (as approved). Mission sees all four. Cost: an R1 /pnp:work session and a
+   /pnp:plan session no longer see texts 3-4 (neither reads ticket.md). Reverses D-02, D-05. Prose,
+   R1.
+B. Texts 1-2 into ticket.md; texts 3-4 stay; /pnp:mission also reads work.md IN FULL (~140 lines).
+   Reverses D-05, D-06. The DOOR_READS pin should gain mission->work: a scripts/ change = code,
+   Writer, R2 (no longer a quick prose release) - or ship unpinned and leave a roadmap line.
+C. Texts 1-2 into ticket.md; texts 3-4 into the core ORCHESTRATOR.md (read by every door: work,
+   mission, plan, review, qa, arbiter). Reverses D-02, D-05. No read-set change, no code; core grows
+   ~15 lines. Prose, R1.
+
+COO recommendation: C - texts 3-4 bind every executing and planning session, and only the core is
+read by all of them; texts 1-2 are executed at a ticket's close, and every door that closes a ticket
+reads ticket.md. Open sub-point either way: work.md § Tests' sentence "A check agent runs checks and
+fixes nothing; the Writer runs only the tests it adds" is also executed in mission (R2/R3 only, since
+it names the Writer) and would fit ticket.md under A or C.
+
+Release shape under A or C (unchanged): the templates, one migration re-rendering the touched
+rendered files (projects' additions blocks carried), the bump, CHANGELOG, README; VERIFY = provenance
+grep + validate-payload + one render dry-run + /pnp:update --apply here with its self-check.

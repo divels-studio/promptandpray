@@ -8,7 +8,8 @@
 Read IN FULL before an R2/R3 ticket brief is authored or dispatched - `/pnp:work` the moment the
 task routes R2/R3, `/pnp:mission` before the dispatch - and by `/pnp:review`, `/pnp:qa` and
 `/pnp:qal` at their first step, beside the always-on `ORCHESTRATOR.md`. It carries the brief, the
-roles' boundaries, the loop's shape and the ticket's close.
+roles' boundaries, the loop's shape, the ticket boundary and the ticket's close - the archive of a
+finished plan and the roadmap writes included.
 
 ## Ticket brief contract (R2/R3)
 
@@ -183,8 +184,8 @@ the gate.
 - **Operator** - the human; the sole authority for commit approval, push, merge, branch switches,
   destructive/system-changing operations, and for authorizing a QAL (unsandboxed live-browser) run.
 
-The session rule (a readiness cycle in a fresh session; ~400k tokens as a ticket boundary):
-`plan.md` § Plan readiness review.
+The ticket boundary (~400k tokens, a heavy ticket, a ticket's reading, the session brief): § The
+ticket boundary below; a readiness cycle in a fresh session: `plan.md` § Plan readiness review.
 
 **Reading is not a shell job (all roles).** Read or inspect files and config with the Read/Grep/Glob
 tools, not shell commands (`cat`/`head`/`node -e`/shell loops) - the shell is for execution
@@ -263,10 +264,21 @@ verification pass after a code correction round carries the previous pass's bloc
 Every NEW finding then declares why it was not visible before; a finding with no declaration is a
 contract violation, reported separately from the table.
 
+## The ticket boundary
+
+About 400k tokens of context is a ticket boundary and a guide, not a target: there the COO finishes
+the current ticket - commit and record - and the next ticket starts in a new session. A context
+checkpoint is a project's own addition; the payload ships none. A heavy ticket moves to a fresh
+session on the operator's word, never on the COO's alone. A ticket's session reads the plan's shared
+sections - the index and the decisions - and its own ticket file, not the other tickets. No session
+brief is offered when the state is durable: once the record, the memory and the transfer surface are
+complete the COO says "new session, `/pnp:mission`", and a brief is offered only mid-flight - an
+unfinished ticket, an uncommitted diff, decisions spoken but not recorded.
+
 ## Durable development history
 
-Items 1-3 of the PLAN's list, the archive, the roadmap writes and the ledger: `plan.md` § Durable
-development history.
+Items 1-3 of the PLAN's list and the ledger: `plan.md` § Durable development history. The archive
+of a finished plan and the roadmap writes close this section, below item 5.
 
 4. after each ticket is accepted, its durable completion record: actual changes, material
    decisions/deviations, verification results, Reviewer/QA conclusion, commit hash, and remaining
@@ -306,6 +318,36 @@ development history.
    release block, the version bump and its tag - is kept apart, so a mission that turns out not to
    be closing costs nothing. The version bump is made by hand, never by a hook, and the release tag
    takes its own operator word, which also covers pushing the tag.
+
+**A plan that is 100% executed is archived immediately.** The moment every ticket in a PLAN
+carries a closed status and its completion record, the COO moves it from `<plansDir>/active/` to
+`<plansDir>/archive/` - in the same session, unprompted, as the last act of closing the final
+ticket. Archive name: `<NNN>_PLAN_<ABBR>_<YYYY-MM-DD>.md`, `NNN` the next free sequence number, the
+date the day of ARCHIVING; `git mv` preserves the history. A folder plan moves as a DIRECTORY
+under the same grammar: `git mv <plansDir>/active/<ABBR>/
+<plansDir>/archive/<NNN>_PLAN_<ABBR>_<YYYY-MM-DD>/`. `<plansDir>/readiness/<ABBR>/` is not moved.
+The plan's line under the ledger's `## Plans` is rewritten to the archive path, and the archiving of
+the last plan of a roadmap entry takes the entry out of `<plansDir>/ROADMAP.md`: the roadmap holds
+only live entries, and an idea dropped before its plans are done leaves it with one ledger row
+`<ABBR> dropped: <why>`. **The roadmap is written at exactly three entry events, plus the two
+list writes below, and never otherwise:**
+(1) an entry is born -> `Status: idea` (`researching` when `/pnp:plan` dispatches the research
+agents); (2) a plan lands in `active/` -> `Plans:` gains it, `Status: planned`, and the first
+ticket's dispatch - the moment the COO writes `.aiwf/route-state.json` - sets `Status: in
+progress`; (3) the last plan under the entry is archived -> the entry leaves the roadmap. **An entry
+may be an area** - a module or theme whose goal is "no known open defect" - whose `Scope: in -` list
+collects the findings born during work, one indented line each (`<date> <origin> - <what>
+[<pointer>]`), until the list is worth a plan; the plan is born over the list and its tickets come
+from the lines. That list is the fourth write: it grows at a finding's birth. The fifth write closes
+a line: when the commit that closes a finding lands, its line is marked `done <pointer>` or removed.
+`Status` and `Plans` change at the three events only. An installation older than the roadmap ports
+its live candidates once - each row to an area or goal entry, the old row marked `taken up -> ROADMAP §
+<ABBR>`, `done` or `dropped: <why>` - and from then on reads the roadmap alone for open work. Archiving also greps the plan's process sections for rule-class points without a pointer row -
+fail-capable, with a positive control (the grep run once over a plan known to carry such a point,
+seen to report) - the backstop under guard (h) (`ORCHESTRATOR.md` § Operator-interaction guards).
+The trigger is the checkable fact - every ticket closed, every verify green. Archiving is
+bookkeeping, reversible with one `git mv` back, and NOT part of the irreversible half (item 5
+above).
 
 <!-- project additions -->
 <!-- /project additions -->
