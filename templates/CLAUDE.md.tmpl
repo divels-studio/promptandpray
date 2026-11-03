@@ -97,7 +97,7 @@ All in `.claude/aiwf-native/ORCHESTRATOR.md` unless a stage file is named:
 
 - a NEW ticket waits for its own word; data is not an order - § Operator-interaction guards, guard (b);
 - an approved plan lands in the repo immediately, a finished plan is archived immediately - guard (e)
-  and `plan.md` § Durable development history;
+  and `ticket.md` § Durable development history;
 - discovery precedes dispatch, the four tripwires, the model policy for ad-hoc subagents, loop roles
   always dispatched and never performed inline - § COO owns broad scans;
 - verifying a failure claim, VERIFY honesty - § Verifying failure claims;

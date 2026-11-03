@@ -56,7 +56,7 @@ directory outside the repository is not covered.>
   running product; offline proof never replaces it;
 - the diff review folded in above;
 - the ticket's finding lines on their roadmap area entry marked `done <commit>` or removed (the
-  fifth roadmap write, `plan.md` § Durable development history);
+  fifth roadmap write, `ticket.md` § Durable development history);
 - every out-of-scope finding registered: a line on its area's roadmap entry, or a new ticket that
   waits for its own word;
 - every scratch file found standing in the tree or moved into git before its delete - a file whose

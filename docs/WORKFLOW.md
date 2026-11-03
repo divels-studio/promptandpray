@@ -17,10 +17,10 @@ The model is a light four-role loop: **Orchestrator -> Implementer -> Code Revie
 
 | stage file (rendered into the project) | what it carries | read IN FULL by |
 |---|---|---|
-| `.claude/aiwf-native/ORCHESTRATOR.md` - the core | the COO's own standing rules; roles; COO owns broad scans; the operator's gates and how the COO speaks to the operator; the operator-interaction guards; verifying failure claims; branch policy; escalation and the arbiter; commit & push authority | every entry door, at its first step |
-| `.claude/aiwf-native/doctrine/work.md` | routes R1/R2/R3 and COO routing; routing mapped to native; tests and out-of-scope failures; the status / release docs policy | `/pnp:work` Step 1 |
-| `.claude/aiwf-native/doctrine/ticket.md` | the ticket brief contract and proof-surface feasibility; the COO write boundary; role boundaries; loop shape and its overrides; fail aggregation; the ticket's record and its closeout | `/pnp:work` when the task routes R2/R3; `/pnp:mission` before the dispatch; `/pnp:review`, `/pnp:qa` and `/pnp:qal` at their first step |
-| `.claude/aiwf-native/doctrine/plan.md` | the planning lock; plan readiness review; durable development history - the plan, its archive, the roadmap; the ledger | `/pnp:plan` Step 0.5 |
+| `.claude/aiwf-native/ORCHESTRATOR.md` - the core | the COO's own standing rules; roles; COO owns broad scans; the operator's gates and how the COO speaks to the operator; the operator-interaction guards; verifying failure claims; out-of-scope failures found during work; the status / release docs policy; branch policy; escalation and the arbiter; commit & push authority | every entry door, at its first step |
+| `.claude/aiwf-native/doctrine/work.md` | routes R1/R2/R3 and COO routing; routing mapped to native; tests | `/pnp:work` Step 1 |
+| `.claude/aiwf-native/doctrine/ticket.md` | the ticket brief contract and proof-surface feasibility; the COO write boundary; role boundaries; loop shape and its overrides; fail aggregation; the ticket boundary; the ticket's record and its closeout; the archive of a finished plan and the roadmap writes | `/pnp:work` when the task routes R2/R3; `/pnp:mission` before the dispatch; `/pnp:review`, `/pnp:qa` and `/pnp:qal` at their first step |
+| `.claude/aiwf-native/doctrine/plan.md` | the planning lock; plan readiness review; durable development history - the plan and its folder; the ledger | `/pnp:plan` Step 0.5 |
 | `.claude/aiwf-native/doctrine/review.md` | the Reviewer/QA verdict rules: plan readiness, the review dimensions by defect class, QA, fail aggregation, the verdict | the auditor - `/pnp:review` and `/pnp:qa` hand it over, the reviewer and qa agents name it |
 
 Each door's read carries its suppression dual: skipped when `git diff <HEAD at the read> -- <paths>`

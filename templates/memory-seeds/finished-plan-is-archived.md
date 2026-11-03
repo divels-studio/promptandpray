@@ -1,6 +1,6 @@
 # A finished plan is archived immediately [R]
 
-Reinforces `.claude/aiwf-native/doctrine/plan.md` - "Durable development history". The mirror image of
+Reinforces `.claude/aiwf-native/doctrine/ticket.md` - "Durable development history". The mirror image of
 "an approved plan lands in the repository": that rule covers the plan's ENTRY, this one its EXIT.
 
 The moment every ticket in a plan stands closed with its completion record, the file (or the

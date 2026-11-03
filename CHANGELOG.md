@@ -4,6 +4,27 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.3.9] - 2026-11-03
+
+Each rule stands where the session that applies it reads: `/pnp:mission` closes tickets and plans,
+so their close rules move to `ticket.md`; rules every working session meets move to the core.
+
+### Changed
+
+- **The plan's archive and the roadmap writes move to `ticket.md` (DOCSTAGE)** - from `plan.md`
+  § Durable development history to the end of `ticket.md` § Durable development history, word for
+  word; `/pnp:mission` never read `plan.md`.
+- **The ticket boundary moves to `ticket.md` (DOCSTAGE)** - about 400k tokens, a heavy ticket, a
+  ticket's reading and the session brief, from `plan.md` § Plan readiness review to a new
+  `ticket.md` § The ticket boundary; `plan.md` keeps the readiness cycle's fresh session.
+- **Out-of-scope findings and the status / release docs policy move to the core (DOCSTAGE)** - from
+  `work.md` to `ORCHESTRATOR.md`, same headings: R1 work and planning sessions do not read
+  `ticket.md`, and every door reads the core.
+  - Migration `0034_ticket-close-homes` re-renders the core, `work.md`, `ticket.md`, `plan.md` and
+    the managed `CLAUDE.md` region; every project additions block is carried.
+
+Retires local rules: none
+
 ## [0.3.8] - 2026-11-02
 
 The doctrine by stage: a session reads only the doctrine of the stage it is in, whole, by

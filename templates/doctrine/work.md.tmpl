@@ -127,24 +127,9 @@ Test policy has a single home in your project - the standard named in your overr
 `aiwf.config.json`. Tests are part of implementation, not polish. A check agent runs checks and
 fixes nothing; the Writer runs only the tests it adds - red, then green.
 
-### Out-of-scope failures found during work
-
-Out-of-scope pre-existing failures, stale tests, or build blockers discovered during work are
-recorded as risks in the report - never silently dropped, never silently fixed. Every out-of-scope
-finding, from any role, goes to the operator with a proposed destination - a new ticket under guard
-(b) (`ORCHESTRATOR.md` § Operator-interaction guards), or a line in its area's roadmap entry
-(`plan.md` § Durable development history) - asked at the ticket's end; nothing stays recorded only
-as "pre-existing".
-
-## Status / release docs policy
-
-Your project's status and release artifacts (a project-status page, `CHANGELOG.md`, a roadmap -
-whichever exist) are named in the overrides document. The rules:
-
-- they are evaluated only **after a DONE product ticket**;
-- docs-only analysis / inventory / audit / backlog work MUST NOT touch them;
-- a roadmap-class document is updated only by exception (accepted priority, milestone, or
-  direction change) - not as a default checkpoint artifact.
+Out-of-scope failures found during work and the status / release docs policy bind every session
+that works, so they stand in the core: `ORCHESTRATOR.md` § Out-of-scope failures found during work
+and § Status / release docs policy.
 
 <!-- project additions -->
 <!-- /project additions -->

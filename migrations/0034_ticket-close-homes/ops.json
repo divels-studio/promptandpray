@@ -1,0 +1,17 @@
+{
+  "migration": "0034_ticket-close-homes",
+  "targetPluginVersion": "0.3.9",
+  "operations": [
+    { "op": "rerender-managed-region", "file": ".claude/aiwf-native/ORCHESTRATOR.md", "region": null, "template": "templates/ORCHESTRATOR.md.tmpl" },
+    { "op": "rerender-managed-region", "file": ".claude/aiwf-native/doctrine/work.md", "region": null, "template": "templates/doctrine/work.md.tmpl" },
+    { "op": "rerender-managed-region", "file": ".claude/aiwf-native/doctrine/ticket.md", "region": null, "template": "templates/doctrine/ticket.md.tmpl" },
+    { "op": "rerender-managed-region", "file": ".claude/aiwf-native/doctrine/plan.md", "region": null, "template": "templates/doctrine/plan.md.tmpl" },
+    { "op": "rerender-managed-region", "file": "CLAUDE.md", "region": "aiwf-core", "template": "templates/CLAUDE.md.tmpl#aiwf-core" },
+    {
+      "op": "note",
+      "id": "ticket-close-homes-0-3-9",
+      "text": "0.3.9 moves four texts to the stage file every session that applies them reads. /pnp:mission reads the core and ticket.md, never work.md or plan.md, yet it closes tickets and plans. The archive of a finished plan and the roadmap writes move from plan.md § Durable development history to the end of ticket.md § Durable development history. The ticket boundary - about 400k tokens, a heavy ticket, what a ticket's session reads, the session brief - moves from plan.md § Plan readiness review to a new ticket.md § The ticket boundary; plan.md keeps 'a readiness cycle starts in a fresh session'. Out-of-scope failures found during work and the status / release docs policy move from work.md to the core ORCHESTRATOR.md, under the same headings, because R1 work and planning sessions do not read ticket.md. The texts move word for word; only their cross-references changed. If a local rule of yours in a project additions block, your overrides document or your memory points at one of these texts by its old stage file, re-aim the pointer; a local rule that modifies one of them belongs in the additions block of its new stage file - on your operator's word, never by this update, which moves nothing of yours. This update re-renders ORCHESTRATOR.md, work.md, ticket.md, plan.md and the managed CLAUDE.md region; every additions block is carried.",
+      "docRefs": ["CHANGELOG.md", "docs/WORKFLOW.md"]
+    }
+  ]
+}

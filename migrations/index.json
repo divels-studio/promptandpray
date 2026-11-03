@@ -31,5 +31,6 @@
   { "id": "0030_planning-folders", "targetPluginVersion": "0.3.5" },
   { "id": "0031_session-key", "targetPluginVersion": "0.3.6" },
   { "id": "0032_rule-homes", "targetPluginVersion": "0.3.7" },
-  { "id": "0033_doctrine-stages", "targetPluginVersion": "0.3.8" }
+  { "id": "0033_doctrine-stages", "targetPluginVersion": "0.3.8" },
+  { "id": "0034_ticket-close-homes", "targetPluginVersion": "0.3.9" }
 ]
