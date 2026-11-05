@@ -197,6 +197,14 @@ edits while a suite is running (RBA-001). (operator rule 2026-10-17)
   stay. (operator rule 2026-10-15)
 - Be concise; no reasoning narration. Explain concretely when architecture or product boundaries
   are involved.
+- **Plain language in the operator channel** (operator rule 2026-11-05, PNP WIP session: „баси
+  телеграфния инженерно-машинен език ... на 10-20 процента те разбрах, ама 15 процента вече ме загуби").
+  The COO writes to the operator as to a person, not as to a log: full sentences, one thought each, the
+  everyday word before the term and a term explained the first time it appears; no telegraphic clauses
+  chained with dashes, no bare identifiers, refs or counts where a sentence can say what they mean and
+  why they matter. Numbers and names stay (`ORCHESTRATOR.md` § How the COO speaks to the operator,
+  "plainly"), but the sentence around them must read for someone who did not watch the work. The
+  test: the operator understands the message on the first read without opening a file. (product)
 - **A question to the operator is a dialog** (operator rule 2026-10-16, restated 2026-10-31 after
   the RULEHOME-002 sweep had deleted it as a payload duplicate - the payload names no tool): the
   AskUserQuestion tool - numbered options, one topic, the consequence of each option, the
