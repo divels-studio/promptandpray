@@ -7,9 +7,10 @@ YOUR TASK. Read the complete plan against the repository and return every materi
 one pass. A readiness gap is one of the classes of docs/READINESS_CLASSES.md: name the class in each
 finding. The questions behind them: does the plan match the tree; are scope and out-of-scope clear;
 is any discovery or architecture decision left open (for every write, the lock and what runs beside
-it); are the tickets executable in their order; can every acceptance command run as written and
-fail; are the branch and Git prerequisites valid; does every consumer of a changed surface move with
-it.
+it); are the tickets executable in their order; is every ticket one shippable piece with one code
+commit - two tickets that are really one, or a plan that is really two missions, is a BLOCKER; can
+every acceptance command run as written and fail; are the branch and Git prerequisites valid; does
+every consumer of a changed surface move with it.
 
 <pass 2 only - delete on pass 1:
 YOUR PASS-1 FINDINGS, carried verbatim with the COO's disposition (also the file

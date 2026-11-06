@@ -4847,7 +4847,9 @@ function sectionShWrappers(tmpRoot) {
 // that token is part of the set), so a neighbouring check that happens to refuse cannot stand in for
 // the named one. Passing twins: M8/M7 (6,144 LF bytes on CRLF against 6,145), M12/M13 (a decision of
 // another plan against the same decision of this one), M16/M11 (no `plan:` against `plan: FIX`),
-// M6/M5 (a file outside the ticket grammar against a fourth ticket), M37/M36, M38/M39, M45/M46 (a
+// M6/M5 (a file outside the ticket grammar against a fourth ticket), M48/M5 (four tickets with a
+// declared "Tickets: 4" against the same four with no line), M49/M50 (a declared count above the
+// tickets against one below them), M37/M36, M38/M39, M45/M46 (a
 // 7,000-byte ticket under a configured plan.ticketByteCap of 7168 against the same ticket with the
 // key gone), and M27/M28 for the stamp's own scope. The seven negative controls of the contract are
 // M11 (a decision nothing cites), M17 (a cross-reference that does not resolve), M12 (another plan's decision not demanded),
@@ -4861,6 +4863,7 @@ const PG_FOLDER = 'docs/backlogs/active/FIX';
 const PG_ARCHIVE = 'docs/backlogs/archive/001_PLAN_OLD_2026-01-01';
 const PG_STAMP = 'docs/backlogs/readiness/FIX/stamp.json';
 const PG_TICKET = `${PG_FOLDER}/tickets/FIX-001.md`;
+const PG_INDEX = `${PG_FOLDER}/PLAN_FIX.md`;
 const PG_FIELDS = ['Outcome', 'Scope', 'Acceptance', 'Risk threshold', 'Stop condition', 'Verify'];
 // The index cites D-02 and nothing else; the ticket cites D-01 and the archived OLD/D-01;
 // DECISIONS.md cross-references FIX/D-01; D-03 belongs to plan OTH and nothing cites it.
@@ -4908,6 +4911,10 @@ const PG_BRIEF = [
 // The project config the checker reads plan.ticketByteCap from; `undefined` writes `plan` without the key.
 const PG_CONFIG = '.claude/aiwf-native/aiwf.config.json';
 const pgCapConfig = (cap) => `${JSON.stringify({ plan: cap === undefined ? {} : { ticketByteCap: cap } }, null, 2)}\n`;
+// The fixture index with `lines` right under its title line (where the planner writes the declared
+// `Tickets: <n> - <reason>` line), and the ticket files FIX-002.. up to a total of `n`.
+const pgIndexWith = (...lines) => pgIndexText().replace('\n\n', `\n\n${lines.join('\n')}\n\n`);
+const pgTicketsUpTo = (put, n) => { for (let k = 2; k <= n; k++) put(`${PG_FOLDER}/tickets/FIX-${String(k).padStart(3, '0')}.md`, pgTicketText()); };
 const pgSetLine = (brief, name, line) => brief.replace(new RegExp(`^${name}:.*$`, 'm'), line);
 const pgDropLine = (brief, name) => brief.replace(new RegExp(`^${name}:.*\\n`, 'm'), '');
 const pgLineOf = (text, needle) => text.split('\n').findIndex((l) => l.includes(needle)) + 1;
@@ -5000,9 +5007,9 @@ function planGateCases() {
       } },
     { id: 'M4', label: 'the index deleted after the stamp -> exactly index-missing, decision-uncited:D-02 (the index was its only citation) and stamp-mismatch',
       after: (put, at) => fs.rmSync(at(`${PG_FOLDER}/PLAN_FIX.md`)), expect: exactly('index-missing', 'decision-uncited:D-02', 'stamp-mismatch') },
-    { id: 'M5', label: '(vi) a fourth ticket file -> exactly tickets-over-cap:4 and stamp-mismatch',
+    { id: 'M5', label: '(vi) a fourth ticket file, no "Tickets:" line in the index -> exactly tickets-over-cap:4 and stamp-mismatch, the message naming "the default 3"',
       after: (put) => { for (const n of ['002', '003', '004']) put(`${PG_FOLDER}/tickets/FIX-${n}.md`, pgTicketText()); },
-      expect: exactly('tickets-over-cap:4', 'stamp-mismatch') },
+      expect: (r) => exactly('tickets-over-cap:4', 'stamp-mismatch')(r) && r.stdout.includes('at most 3 (the default 3)') },
     { id: 'M6', label: 'three ticket files plus tickets/notes.md (outside the ticket grammar) -> exactly stamp-mismatch (not counted, not checked as a ticket, but inside the contract)',
       after: (put) => { for (const n of ['002', '003']) put(`${PG_FOLDER}/tickets/FIX-${n}.md`, pgTicketText()); put(`${PG_FOLDER}/tickets/notes.md`, 'free notes\n'); },
       expect: exactly('stamp-mismatch') },
@@ -5115,7 +5122,39 @@ function planGateCases() {
     { id: 'M47', label: 'plan.ticketByteCap 512 (below the minimum 1024) -> exactly ticket-over-bytes:tickets/FIX-001.md, the message naming the cap 6144 (the default applies, not 512)',
       before: (put) => { put(PG_CONFIG, pgCapConfig(7168)); put(PG_TICKET, pgTicketOfBytes(7000)); },
       after: (put) => put(PG_CONFIG, pgCapConfig(512)), expect: (r) => exactly(`ticket-over-bytes:${T}`)(r) && r.stdout.includes('the cap is 6144') },
+    // The declared ticket count: `Tickets: <n> - <reason>` right under the index title. A passing case
+    // stamps the declaration with its tickets; a refusing one damages the stamped folder, so its token
+    // set carries stamp-mismatch. Every malformed case holds FOUR tickets: fallen back to 3 it would add
+    // tickets-over-cap:4, and the exact token set (tickets-cap-malformed:<line> + stamp-mismatch,
+    // nothing else) catches both a fallback and a loose reading.
+    { id: 'M48', label: 'four ticket files and "Tickets: 4 - four pieces" in the index, stamped -> valid (the passing twin of M5)',
+      before: (put) => { put(PG_INDEX, pgIndexWith('Tickets: 4 - four pieces')); pgTicketsUpTo(put, 4); }, expect: valid },
+    { id: 'M49', label: 'three ticket files and "Tickets: 6 - six at most", stamped -> valid (the declared count is a cap, not an exact count)',
+      before: (put) => { put(PG_INDEX, pgIndexWith('Tickets: 6 - six at most')); pgTicketsUpTo(put, 3); }, expect: valid },
+    { id: 'M50', label: '"Tickets: 3 - three pieces" stamped, then a fourth ticket file -> exactly tickets-over-cap:4 and stamp-mismatch, the message naming declared "Tickets: 3"',
+      before: (put) => put(PG_INDEX, pgIndexWith('Tickets: 3 - three pieces')), after: (put) => pgTicketsUpTo(put, 4),
+      expect: (r) => exactly('tickets-over-cap:4', 'stamp-mismatch')(r) && r.stdout.includes('at most 3 (declared "Tickets: 3")') },
+    pgMalformed('M51', '"Tickets: four - four pieces" (not an integer)', ['Tickets: four - four pieces'], 'Tickets: four'),
+    pgMalformed('M52', '"Tickets: 4" (no " - <reason>")', ['Tickets: 4'], 'Tickets: 4'),
+    pgMalformed('M53', 'two "Tickets:" lines at column 0, both well-formed (the token names the SECOND)', ['Tickets: 4 - the first', 'Tickets: 4 - the second'], 'the second'),
+    { id: 'M54', label: '"Tickets: 4 - inside a fence" inside a fenced block, four ticket files -> exactly tickets-over-cap:4 and stamp-mismatch, the message naming "the default 3" (a fenced line declares nothing)',
+      after: (put) => { put(PG_INDEX, pgIndexWith('```text', 'Tickets: 4 - inside a fence', '```')); pgTicketsUpTo(put, 4); },
+      expect: (r) => exactly('tickets-over-cap:4', 'stamp-mismatch')(r) && r.stdout.includes('at most 3 (the default 3)') },
+    pgMalformed('M55', '"Tickets: 0 - none" (below the range 1-99)', ['Tickets: 0 - none'], 'Tickets: 0'),
+    pgMalformed('M56', '"Tickets: 100 - a hundred" (above the range 1-99)', ['Tickets: 100 - a hundred'], 'Tickets: 100'),
   ];
+}
+
+/**
+ * A malformed-declaration case: the stamped folder's index rewritten with `lines` under its title and
+ * three tickets added -> exactly tickets-cap-malformed:<the line holding `needle`> and stamp-mismatch.
+ */
+function pgMalformed(id, what, lines, needle) {
+  const text = pgIndexWith(...lines);
+  const line = pgLineOf(text, needle);
+  return { id, label: `${what}, four ticket files -> exactly tickets-cap-malformed:${line} and stamp-mismatch (refused, never read loosely, never capped at 3)`,
+    after: (put) => { put(PG_INDEX, text); pgTicketsUpTo(put, 4); },
+    expect: (r) => r.status === 2 && r.tokens.length === 2 && r.tokens.includes(`tickets-cap-malformed:${line}`) && r.tokens.includes('stamp-mismatch') };
 }
 
 /** Runs one M case against a checker file; a fresh project dir per case. */
@@ -5236,7 +5275,7 @@ function pgPatch(file, from, to) {
 
 // The contract's tokens. Every one of them is produced by at least one M case - except
 // internal-error, which no input can provoke from a working checker (stated as a NOTE below).
-const PG_CONTRACT_TOKENS = ['index-missing', 'tickets-over-cap', 'ticket-over-bytes', 'field-missing',
+const PG_CONTRACT_TOKENS = ['index-missing', 'tickets-cap-malformed', 'tickets-over-cap', 'ticket-over-bytes', 'field-missing',
   'decision-uncited', 'decision-xref-unresolved', 'decision-xref-stale', 'tbd-found', 'codemap-path-missing',
   'stamp-missing', 'stamp-mismatch', 'plan-folder-required', 'line-missing', 'line-duplicate', 'class-not-plan'];
 
@@ -5365,6 +5404,17 @@ function sectionPlanGate(tmpRoot) {
     { id: 'ctl-cap-config', target: 'M45', label: 'the config reader returning MAX_TICKET_BYTES always (plan.ticketByteCap ignored)', from: CAP_READ, to: 'return MAX_TICKET_BYTES;' },
     { id: 'ctl-cap-fallback', target: 'M46', label: 'an absent or unusable key loosening the cap to 1 MiB instead of falling back to 6144', from: CAP_READ, to: 'return Number.isInteger(v) && v >= MIN_TICKET_BYTES ? v : 1048576;' },
     { id: 'ctl-cap-min', target: 'M47', label: 'the minimum 1024 dropped from the reader (512 accepted)', from: CAP_READ, to: 'return Number.isInteger(v) && v >= 1 ? v : MAX_TICKET_BYTES;' },
+    // The declared ticket count (M48-M56): one branch of declaredTicketCap or of the cap check, or one
+    // term of the TICKETS_DECL grammar, each.
+    { id: 'ctl-decl-default', target: 'M48', label: 'the declared-count reader returning the default 3 always (the "Tickets:" line ignored)', from: 'if (model.index === null) return { cap: MAX_TICKETS, declared: false };', to: 'return { cap: MAX_TICKETS, declared: false };' },
+    { id: 'ctl-decl-exact', target: 'M49', label: 'the declared count enforced as an exact count instead of a cap', from: '} else if (model.tickets.length > ticketCap.cap) {', to: '} else if (model.tickets.length !== ticketCap.cap) {' },
+    { id: 'ctl-decl-trusted', target: 'M50', label: 'a declared count trusted without checking the ticket files against it', from: '} else if (model.tickets.length > ticketCap.cap) {', to: '} else if (!ticketCap.declared && model.tickets.length > ticketCap.cap) {' },
+    { id: 'ctl-decl-fallback', target: 'M51', label: 'a malformed line falling back to the default 3 instead of refusing', from: 'if (!m) return { malformed:', to: 'if (!m) return { cap: MAX_TICKETS, declared: false }; if (!m) return { malformed:' },
+    { id: 'ctl-decl-reason', target: 'M52', label: 'the " - <reason>" made optional in the grammar', from: 'const TICKETS_DECL = /^Tickets: ([1-9][0-9]?) - \\S/;', to: 'const TICKETS_DECL = /^Tickets: ([1-9][0-9]?)(?: - \\S|$)/;' },
+    { id: 'ctl-decl-second', target: 'M53', label: 'a second "Tickets:" line skipped instead of refused', from: 'if (found !== null) return { malformed:', to: 'if (found !== null) continue; if (false) return { malformed:' },
+    { id: 'ctl-decl-mask', target: 'M54', label: 'fenced blocks no longer skipped by the declared-count reader', from: 'if (mask[i] || !lines[i].startsWith(TICKETS_KEY)) continue;', to: 'if (!lines[i].startsWith(TICKETS_KEY)) continue;' },
+    { id: 'ctl-decl-min', target: 'M55', label: 'the range\'s lower bound dropped (0 accepted)', from: '([1-9][0-9]?)', to: '([0-9][0-9]?)' },
+    { id: 'ctl-decl-max', target: 'M56', label: 'the range\'s upper bound dropped (100 accepted)', from: '([1-9][0-9]?)', to: '([1-9][0-9]*)' },
   ];
   // The checker controls: plan-gate.js copied beside aiwf-lib.js, sabotaged, and the target case run
   // against the copy. The fixture is still stamped by the PAYLOAD checker, so only the branch moved.

@@ -144,6 +144,12 @@ filled. Pass NO `model` (the Writer's pin applies) and write NO `Ticket:` line: 
 yet, so the dispatch gate raises ONE dialog per planner dispatch - that click is the gate for a plan
 that does not exist yet, not a defect.
 
+Before the dispatch, fill the brief's `TICKET COUNT`: the COO decides the plan's ticket count from
+the roadmap entry's Size and the research - a decision with one reason, `<n> - <reason>` (an integer
+1-99), or `default`. The planner copies it verbatim into the index as the line
+`Tickets: <n> - <reason>`, which the gate of Step 5 enforces; on `default` the index carries no
+such line and the cap is 3.
+
 The planner writes ONLY under `<plansDir>/drafts/<ABBR>/` - the index `PLAN_<ABBR>.md` and
 `tickets/<ABBR>-NNN.md` - and returns the structured handoff the brief defines, never the files'
 text. Read the files from disk yourself. A handoff that only says the plan is fine is not a handoff:
@@ -157,7 +163,8 @@ Stamp first, from `<root>`:
 node "${CLAUDE_PLUGIN_ROOT}/scripts/engine/plan-gate.js" --stamp <plansDir>/drafts/<ABBR>
 ```
 
-It refuses and lists every problem while the folder breaks its contract (index, at most 3 tickets,
+It refuses and lists every problem while the folder breaks its contract (index, the declared ticket
+count - `Tickets: <n> - <reason>` in the index, 3 when there is none, a malformed line refused -
 the configured ticket byte cap per ticket - `plan.ticketByteCap`, factory 6,144, its header `Status:`
 line not counted - the six headings, every `D-NN` of this plan cited, cross-references, no bare open
 item, Code Map paths that exist), and writes
@@ -233,8 +240,9 @@ carries `round-1.md` verbatim - findings and dispositions - and requires every N
 why pass 1 could not see it (`ticket.md` § Fail aggregation). A resumed pass 2 needs that word
 too and its compensations (`/pnp:review` Step 3).
 
-**Approval.** Report to the operator in a few lines: the tickets and their order, the passes run with
-their BLOCKER counts and dispositions, what is deferred, and the folder path - never the plan itself.
+**Approval.** Report to the operator in a few lines: the declared ticket count and its reason, the
+tickets and their order, the passes run with their BLOCKER counts and dispositions, what is
+deferred, and the folder path - never the plan itself.
 Take the approval number the same way, from the machine source; with none, ask the operator once,
 in this report, for the COO context size on their statusline - the only question this measurement
 asks per plan. Wait for the approval word.

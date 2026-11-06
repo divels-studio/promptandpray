@@ -17,8 +17,19 @@
  *
  * WHAT IT CHECKS - every problem at once, one `plan-gate: <token> - <message>` line each:
  *   index-missing                       no regular file PLAN_<ABBR>.md in the folder;
- *   tickets-over-cap:<n>                more than 3 ticket files (names of the grammar <ABBR>-NNN.md -
- *                                       any other file in tickets/ is not a ticket and not counted);
+ *   tickets-cap-malformed:<line>        a line of the index that starts `Tickets:` at column 0, outside
+ *                                       fenced blocks, and is not the declaration - exactly
+ *                                       `Tickets: <n> - <reason>`, <n> an integer 1-99 without a leading
+ *                                       zero, <reason> starting with a non-space character - or is a
+ *                                       second `Tickets:` line (the first one counts, only one is
+ *                                       allowed); <line> is the 1-based line of the index. A malformed
+ *                                       line REFUSES and the cap is not checked against any count: it
+ *                                       never falls back to 3 silently;
+ *   tickets-over-cap:<n>                more ticket files than the cap in force (names of the grammar
+ *                                       <ABBR>-NNN.md - any other file in tickets/ is not a ticket and
+ *                                       not counted); the cap is the <n> of the index's one
+ *                                       `Tickets: <n> - <reason>` line, and 3 when the index carries no
+ *                                       such line (or there is no index) - the message names which;
  *   ticket-over-bytes:<file>            a ticket over the cap of LF-normalised UTF-8, its header
  *                                       `Status:` line not counted (the first line starting `Status:`
  *                                       above the first `## ` heading; one line at most - a `Status:`
@@ -90,7 +101,11 @@ const lib = require('./aiwf-lib');
 // The recognition line: column 0, the key exact, the value `plan` in any case, a trailing CR allowed.
 const CLASS_PLAN_LINE = /^Class:[ \t]*[Pp][Ll][Aa][Nn][ \t]*\r?$/m;
 const LINE_NAMES = ['Class', 'PLAN'];
+// The ticket cap when the index declares none; a declared `Tickets: <n> - <reason>` line replaces it.
 const MAX_TICKETS = 3;
+// The declared ticket count: column 0, the key exact, n 1-99 (no leading zero), " - ", then a reason.
+const TICKETS_KEY = 'Tickets:';
+const TICKETS_DECL = /^Tickets: ([1-9][0-9]?) - \S/;
 // The default of plan.ticketByteCap (~1,500 tokens of one ticket): the cap in force when the config's key or file cannot be read.
 const MAX_TICKET_BYTES = 6144;
 const MIN_TICKET_BYTES = 1024;
@@ -419,9 +434,31 @@ function ticketByteCap(root) {
 }
 
 /**
- * Every problem of the folder, in this order: the folder itself, the index, the cap, each ticket's
- * bytes and fields, decision coverage, cross-references, open items, Code Map paths, and - with
- * `withStamp` - the stamp. A folder that is not one is the only problem reported.
+ * The ticket cap the index declares: the FIRST line of the index that starts `Tickets:` at column 0
+ * outside fenced blocks, read as `Tickets: <n> - <reason>`. Returns { cap, declared: true } for a
+ * well-formed line, { cap: MAX_TICKETS, declared: false } when there is no such line (or no index),
+ * and { malformed: { line, text, why } } when that line breaks the grammar or a second one follows -
+ * a planner that tried to declare is told, never capped at 3 behind its back.
+ */
+function declaredTicketCap(model) {
+  if (model.index === null) return { cap: MAX_TICKETS, declared: false };
+  const { lines, mask } = model.index;
+  let found = null;
+  for (let i = 0; i < lines.length; i++) {
+    if (mask[i] || !lines[i].startsWith(TICKETS_KEY)) continue;
+    if (found !== null) return { malformed: { line: i + 1, text: lines[i], why: `a second "${TICKETS_KEY}" line (the first one is line ${found.line}; only one is allowed)` } };
+    const m = TICKETS_DECL.exec(lines[i]);
+    if (!m) return { malformed: { line: i + 1, text: lines[i], why: 'not "Tickets: <n> - <reason>" with <n> an integer 1-99 and a reason after " - "' } };
+    found = { cap: Number(m[1]), declared: true, line: i + 1 };
+  }
+  return found === null ? { cap: MAX_TICKETS, declared: false } : { cap: found.cap, declared: true };
+}
+
+/**
+ * Every problem of the folder, in this order: the folder itself, the index, the declared ticket count
+ * (tickets-cap-malformed) and the cap, each ticket's bytes and fields, decision coverage,
+ * cross-references, open items, Code Map paths, and - with `withStamp` - the stamp. A folder that is
+ * not one is the only problem reported.
  */
 function examine(folderArg, root, withStamp) {
   const problems = [];
@@ -441,8 +478,13 @@ function examine(folderArg, root, withStamp) {
   const byteCap = ticketByteCap(root);
 
   if (model.index === null) add('index-missing', `the folder has no regular file ${model.indexName}`);
-  if (model.tickets.length > MAX_TICKETS) {
-    add(`tickets-over-cap:${model.tickets.length}`, `tickets/ holds ${model.tickets.length} ticket files - a plan carries at most ${MAX_TICKETS}; split it`);
+  const ticketCap = declaredTicketCap(model);
+  if (ticketCap.malformed) {
+    const bad = ticketCap.malformed;
+    add(`tickets-cap-malformed:${bad.line}`, `${model.indexName} line ${bad.line} reads "${bad.text}" - ${bad.why}; fix it or remove it (no line -> the cap is ${MAX_TICKETS})`);
+  } else if (model.tickets.length > ticketCap.cap) {
+    const source = ticketCap.declared ? `declared "Tickets: ${ticketCap.cap}"` : `the default ${MAX_TICKETS}`;
+    add(`tickets-over-cap:${model.tickets.length}`, `tickets/ holds ${model.tickets.length} ticket files - a plan carries at most ${ticketCap.cap} (${source}); split it`);
   }
   for (const t of model.tickets) {
     const bytes = countedTicketBytes(t);

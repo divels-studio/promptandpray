@@ -4,6 +4,33 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.3.10] - 2026-11-06
+
+A plan's ticket count is a decision of the plan: the COO decides it with one reason before the
+planner, the index declares it, and the plan gate enforces it; an index that declares nothing keeps
+the cap of 3.
+
+### Added
+
+- **The declared ticket count (PLANCAP-001)** - the plan index carries `Tickets: <n> - <reason>`
+  right under its title line (`<n>` 1-99); `plan-gate.js` enforces it instead of 3.
+- **The refusal token `tickets-cap-malformed:<line>` (PLANCAP-001)** - a `Tickets:` line that breaks
+  the grammar, or a second one, is refused by name; it never falls back to 3 silently.
+- **Readiness class 16, ticket cut (PLANCAP-001)** - `docs/READINESS_CLASSES.md`: every ticket one
+  shippable piece with one code commit; two tickets that are one, or a plan that is two missions,
+  is a BLOCKER.
+
+### Changed
+
+- **The plan gate's cap of 3 becomes the default (PLANCAP-001)** - it applies only when the index
+  declares no count; `tickets-over-cap` names the cap in force and its source.
+- **The planning templates carry the count (PLANCAP-001)** - `plan.md` § Plan readiness review, the
+  planner brief's `TICKET COUNT` slot and index line, the readiness brief's cut question, and
+  `/pnp:plan` Step 4 and its approval report.
+  - Migration `0035_declared-ticket-count` re-renders `plan.md`; its additions block is carried.
+
+Retires local rules: none
+
 ## [0.3.9] - 2026-11-03
 
 Each rule stands where the session that applies it reads: `/pnp:mission` closes tickets and plans,

@@ -1,0 +1,13 @@
+{
+  "migration": "0035_declared-ticket-count",
+  "targetPluginVersion": "0.3.10",
+  "operations": [
+    { "op": "rerender-managed-region", "file": ".claude/aiwf-native/doctrine/plan.md", "region": null, "template": "templates/doctrine/plan.md.tmpl" },
+    {
+      "op": "note",
+      "id": "declared-ticket-count-0-3-10",
+      "text": "0.3.10 makes a plan's ticket count a decision of the plan instead of a constant. Before the planner runs, the COO decides the count from the roadmap entry's Size and the research, with one reason, and fills the planner brief's TICKET COUNT slot; the planner copies it into the plan index, right under the title line, as one line at column 0: 'Tickets: <n> - <reason>', n an integer 1-99. plan-gate.js enforces the declared count instead of 3; an index without the line is capped at 3, as before; a line that starts 'Tickets:' and breaks the grammar, or a second such line, is refused with the new token tickets-cap-malformed:<line> - never read loosely, never capped at 3 behind the planner's back. The readiness auditor gains the cut question, docs/READINESS_CLASSES.md class 16: every ticket one shippable piece with one code commit - two tickets that are one, or a plan that is two missions, is a BLOCKER. An existing plan needs nothing: without the line its cap stays 3. This update re-renders plan.md; its additions block is carried.",
+      "docRefs": ["CHANGELOG.md", "docs/READINESS_CLASSES.md"]
+    }
+  ]
+}

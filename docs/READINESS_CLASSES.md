@@ -4,7 +4,8 @@ The classes below were measured on the readiness cycles of consumer projects: th
 classes were each a paid pass-1 blocker at least once, most of them in more than one project; the
 fourteenth was measured between passes, on the blockers a revision itself created; the fifteenth on
 a second pass, where two of the four blockers born of the revision were a race or a lock decision the
-plan had left as an accepted residual.
+plan had left as an accepted residual. The sixteenth is not a measurement: it is the cut a plan's
+declared ticket count (`Tickets: <n> - <reason>` in its index) leaves to the auditor.
 
 The readiness brief `/pnp:plan` sends (`templates/briefs/readiness-codex.md`) cites this file: the
 auditor names the class of every finding by number. Classes 1, 10 and 14 are also what the research
@@ -28,5 +29,6 @@ grows with a release, never with a session.
 | 13 | acceptance misses a risk-threshold item | Does every item of the risk threshold have an acceptance check that observes it? |
 | 14 | fix after a pass adds new surface | Does the revision after a pass only close the blockers it was handed, or does it open surface the previous pass never saw? |
 | 15 | concurrency decision left as an accepted residual | For every write the ticket adds or changes: which lock holds it and what runs beside it - does the plan NAME them? A race or a lock-order question on a path the ticket writes that the plan closes with "accepted residual", "rare" or "the Writer will see" is an open decision, and no pass accepts it. |
+| 16 | ticket cut | Is every ticket one shippable piece with one code commit, and is the plan one mission? Two tickets that are really one, or a plan that is really two missions, is a BLOCKER. |
 
 This is a corpus, not a theory - a class not listed is not proven absent.

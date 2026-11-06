@@ -9,6 +9,8 @@ READ FIRST, from disk: `<folder>/RESEARCH.md`, `<folder>/DECISIONS.md`, the road
 `<plansDir>/ROADMAP.md`. Read the code BY POINTER: open a file only at the `file:line` the research
 names, and only where you write a Code Map row or a worklist pointer - never a whole file; a Code Map
 row needs the file's role, which the research already gives.
+TICKET COUNT: <COO-filled - `<n> - <reason>`, the plan's ticket count the COO decided from the
+roadmap entry's Size and the research; or `default` (= 3)>
 CLOSING GREPS: <COO-filled - the consumer enumeration of every symbol the plan changes, `file:line`
 each, so you never ask for it>
 <on a revision: ROUND FILE: <plansDir>/readiness/<ABBR>/round-<N>.md - fix every row whose
@@ -21,14 +23,19 @@ question. No other file, no git command, no commit.
 
 THE FOLDER CONTRACT (checked mechanically by `plan-gate.js` - a breach is refused):
 
-- `<folder>/PLAN_<ABBR>.md` - the index: a title line, `## Goal` (one paragraph), `## Scope` (in /
-  out), `## Tickets` - one table `| ref | title | implements | status | record |`, every status
-  `open`, every record `-` - then the order of the tickets and the gates each one passes (the
-  operator's word, the review passes, the commit dialogs, a tag or push word if any). You write no
+- `<folder>/PLAN_<ABBR>.md` - the index: a title line; right under it, before `## Goal`, the line
+  `Tickets: <n> - <reason>` at column 0, copied verbatim from TICKET COUNT (when the slot says
+  `default`, write no such line - the cap is then 3; a malformed or second `Tickets:` line is
+  refused); `## Goal` (one paragraph), `## Scope` (in / out), `## Tickets` - one table
+  `| ref | title | implements | status | record |`, every status `open`, every record `-` - then
+  the order of the tickets and the gates each one passes (the operator's word, the review passes,
+  the commit dialogs, a tag or push word if any). You write no
   `## Measurements` and no `## Roadmap entry`: the COO writes both into the index on the approval,
   before the landing.
-- `<folder>/tickets/<ABBR>-NNN.md` - at most 3 tickets, numbered from 001; each at most the configured
-  ticket byte cap (`plan.ticketByteCap`, factory 6,144), its header `Status:` line not counted;
+- `<folder>/tickets/<ABBR>-NNN.md` - at most the declared count (`Tickets:` in the index, copied
+  verbatim from TICKET COUNT; 3 when the slot says default), numbered from 001; each at most the
+  configured ticket byte cap (`plan.ticketByteCap`, factory 6,144), its header `Status:` line not
+  counted;
   each with these six headings at column 0, exactly: `## Outcome`, `## Scope`, `## Acceptance`,
   `## Risk threshold`, `## Stop condition`, `## Verify`; then `## Code Map` - a table whose first
   column is a backticked path that EXISTS (a directory counts), and the ticket's role for it.
