@@ -4,6 +4,64 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.3.12] - 2026-11-06
+
+Four rules sessions kept breaking move from prose into mechanism: the habit guard denies a
+`git -C` that opens a command, Gate 1 lets a non-writer write outside the project root, the plan gate refuses
+side-by-side tickets whose Code Maps share a path, and the Codex wrappers print the verdict and
+send the engine's stream to a log.
+
+### Added
+
+- **The plan gate checks side-by-side tickets (GATES-003)** - a plan index may carry `Side by side:
+  <REF>, <REF>[, <REF> ...]` lines at column 0 (two or more refs; no line, nothing checked);
+  `plan-gate.js` refuses a malformed line (`sidebyside-malformed`), an unknown or repeated ref
+  (`sidebyside-unknown-ref`) and every path two refs of one line share in their Code Maps
+  (`sidebyside-shared-path`).
+  - "Share" is equality or containment - a directory row contains every path under it - and the
+    problem names the longer path, because a commit by path staging cannot separate them either.
+  - The planner brief's folder contract and `plan.md` § Plan readiness review name the line.
+
+### Changed
+
+- **The habit guard denies a `git -C` that opens a command (GATES-001)** - a sixth shape on both
+  shell tools, for every actor: `git -C <path> ...` and `git -C<path> ...` as the first words of a
+  command segment, whatever the verb, with the hint to run git bare from the repository root and to
+  read a foreign tree with the file tools.
+  - `Push-Location`, `Pop-Location` and `popd` join the `cd` prefix; the first word of a segment is
+    read through a leading `&`, `{`, `(`, `$(` or a whole-word `.`, so a nested form is judged by
+    the word inside it. A `git -C` deeper inside a segment (`echo $(git -C <path> status)`) is not
+    read.
+  - The `git -C <projectRoot> push|merge|rebase` ask rules stay, as the dialog for a project whose
+    hooks are off; `ORCHESTRATOR.md` § Branch policy says so instead of "the `-C` forms ask by
+    construction".
+- **The Codex review and QA wrappers print the verdict, not the stream (GATES-004)** - codex's
+  stdout and stderr go to one log outside the repository,
+  `<temp>/pnp-codex/<key>-<class or role>-<timestamp>-<pid>.log`; the wrapper's stdout is codex's
+  `-o` final message and nothing else; the exit code stays codex's.
+  - New stderr lines after the run: `tokens used <N>` (the engine's last figure, labelled cumulative
+    on a resume), the capacity refusal, the no-verdict line when codex wrote no final message, and
+    the log path; the QA wrapper gains the same lines and the header and footer, prefixed
+    `codex-qa:`.
+  - On Windows the streams are captured by a new zero-dependency helper,
+    `scripts/native/codex-capture.mjs`, because Windows PowerShell 5.1 re-encodes a redirected native
+    stream (measured: UTF-16LE, console code page, LF to CRLF); the bash channel redirects with
+    `> "$log" 2>&1`.
+  - `/pnp:plan` Step 6 reads the readiness verdict from the `-o` file beside the log;
+    `/pnp:review`, `/pnp:qa` and `docs/CODEX_REVIEW_QA_RECIPE.md` describe the new lines.
+
+### Fixed
+
+- **Gate 1 no longer refuses a non-writer's write outside the project root (GATES-002)** - a
+  non-writer subagent's Edit / Write / MultiEdit / NotebookEdit passes through when every path field
+  it carries resolves outside the project root (a scratch file, a temp directory); a path inside,
+  the root itself, a missing or non-string field, or no path field is denied with the same text as
+  before.
+  - Migration `0037_habit-gates-and-codex-output` re-renders `ORCHESTRATOR.md` and `plan.md`; every
+    additions block is carried.
+
+Retires local rules: plan.md § project additions: Side-by-side tickets
+
 ## [0.3.11] - 2026-11-06
 
 The planning briefs carry what the first measured multi-service plans taught; the Writer runs only

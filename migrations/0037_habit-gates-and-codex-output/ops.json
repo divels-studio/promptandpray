@@ -1,0 +1,14 @@
+{
+  "migration": "0037_habit-gates-and-codex-output",
+  "targetPluginVersion": "0.3.12",
+  "operations": [
+    { "op": "rerender-managed-region", "file": ".claude/aiwf-native/ORCHESTRATOR.md", "region": null, "template": "templates/ORCHESTRATOR.md.tmpl" },
+    { "op": "rerender-managed-region", "file": ".claude/aiwf-native/doctrine/plan.md", "region": null, "template": "templates/doctrine/plan.md.tmpl" },
+    {
+      "op": "note",
+      "id": "habit-gates-and-codex-output-0-3-12",
+      "text": "0.3.12 moves four rules sessions kept breaking from prose into mechanism. The habit guard (the git-verb hook, every actor, both shell tools) gains a sixth shape: a `git -C <path> ...` that opens a command segment is denied (a `git -C` deeper inside a segment is not read) with the hint to run git bare from the repository root and to read a foreign tree with the file tools; `Push-Location`, `Pop-Location` and `popd` join the `cd` prefix, and the first word of a segment is read through a leading `&`, `{`, `(`, `$(` or a dot-source `.`. The `git -C <projectRoot> push|merge|rebase` ask rules stay in the ruleset as the dialog for a project whose hooks are off, so the ask-ruleset is not touched. Gate 1 lets a non-writer subagent's Edit / Write / MultiEdit / NotebookEdit through when every path it names resolves OUTSIDE the project root (a scratch file, a temp directory); any path inside, or no readable path, is denied as before. The plan gate reads zero or more `Side by side: <REF>, <REF>[, <REF> ...]` lines in a plan index (column 0, two or more refs) and refuses a malformed line, an unknown or repeated ref, and every path two tickets of one line share in their Code Maps (equal, or a directory containing it) - the planner brief and plan.md name the line, so a local rule about side-by-side tickets retires. The Codex review and QA wrappers send the engine's whole stream to one log outside the repository (`<temp>/pnp-codex/<key>-<class or role>-<timestamp>-<pid>.log`), print the verdict from codex's own `-o` file on stdout and nothing else, and add stderr lines for the engine's last `tokens used` figure (labelled cumulative on a resume), a capacity refusal, a missing final message and the log path; on Windows the streams are captured by the new zero-dependency helper `scripts/native/codex-capture.mjs`, because Windows PowerShell 5.1 re-encodes a redirected native stream. A script that read the engine's stream from the wrapper's stdout now finds only the verdict there; the full stream is in the log. This update re-renders ORCHESTRATOR.md and plan.md; every additions block is carried.",
+      "docRefs": ["CHANGELOG.md", "templates/briefs/planner.md", "docs/LOOP.md", "docs/CODEX_REVIEW_QA_RECIPE.md", "scripts/native/codex-capture.mjs"]
+    }
+  ]
+}

@@ -19,7 +19,7 @@ Born in a real production project, then extracted and genericized.
 
 ## Status
 
-**v0.3.11. Public since 0.2.0.**
+**v0.3.12. Public since 0.2.0.**
 
 What is here:
 
@@ -36,12 +36,13 @@ What is here:
   documented exceptions - the command that applies the migrations and the diagnostic you need most
   when something is out of date cannot be the two that refuse to run.
 - **Three enforcement hooks** (`hooks/hooks.json`): the mutation guard - Gate 1, non-writer subagents
-  cannot use the Edit/Write family, plus Gate 3, the route-state write guard that keeps the main
-  session out of code while an R2/R3 ticket is open - the dispatch gate, Gate 2, which puts the
+  cannot use the Edit/Write family inside the project root (a write outside it passes), plus Gate 3,
+  the route-state write guard that keeps the main session out of code while an R2/R3 ticket is open - the dispatch gate, Gate 2, which puts the
   operator in the way of a Writer dispatch: a click on every one of them, or (per
   `enforcement.dispatchGate`) only on a dispatch whose `Ticket: <REF>` line names no ticket in an
   active PLAN, and which denies a Claude-hosted plan-readiness pass whose plan folder fails the
-  mechanical gate (its contract or its stamp) - and the git-verb guard, Gate 4, on both shell tools (matcher `Bash|PowerShell`): an
+  mechanical gate (its contract, its stamp, or side-by-side tickets whose Code Maps share a path) -
+  and the git-verb guard, Gate 4, on both shell tools (matcher `Bash|PowerShell`): an
   ask-class git verb is denied
   to any subagent but the Writer, because a background agent's dialog reaches nobody, and for the
   session it raises a dialog on the git forms the `ask` rules never spell out - `git.exe` outside
@@ -50,7 +51,7 @@ What is here:
   wrappers, `NAME=value` prefixes) stays silent. The same hook file carries the habit guard: for
   every actor, on both shell tools, a deny with a hint for a pipe into `tail` / `head` /
   `Select-Object -First|-Last`, a `cd` prefix (`Push-Location` / `popd` too, read through a leading
-  `&`, `{`, `(` or `$(`), `git -c` and any `git -C <path> ...`. The deny-direction gates (Gate 1/3,
+  `&`, `{`, `(` or `$(`), `git -c` and a `git -C <path> ...` that opens a command. The deny-direction gates (Gate 1/3,
   Gate 4) carry `onFailure: "block"` - observed on Claude Code 2.1.316, a hook that cannot start
   blocks the call. The self-check holds its verb list against the
   shipped ask-ruleset, so a rule added there cannot silently outrun the gate. Both layers cover both
@@ -65,7 +66,9 @@ What is here:
   `{engine, model, effort}`, and three Codex hosts whose flags are literals in the script rather
   than defaults inherited from a config - two of them sandboxed read-only (Reviewer, QA) and QAL,
   which trades the sandbox away to get a live browser and is therefore operator-gated and off by
-  default.
+  default. The review and QA wrappers send the engine's stream to a log outside the repository and
+  print only its final message on stdout, with the token figure, a capacity refusal and the log path
+  on stderr.
 - **The setup engine and the config schema**: an interview, a plan-then-write generator, and a JSON
   Schema that is the single authority for the config shape. Managed artifacts are rendered and
   overwritten; your own text lives in the overrides document, outside the managed region of
@@ -109,8 +112,9 @@ What is **not** here yet:
   self-check's captured output truncates partway through and the run ends without its tally
   (`CHANGELOG.md`, 0.2.2 § Known limits). It is tracked rather than fixed - pinning it needs a Mac,
   and there is none.
-- **One consumer installation so far.** It has taken every release from 0.1.0 to 0.1.2 through
-  `/plugin update` + `/pnp:update`, and there is no second consumer yet.
+- **An installation on a second machine.** Besides this repository's own self-install, at least two
+  consumer projects take the releases through `/plugin update` + `/pnp:update` (both on 0.3.11 when
+  0.3.12 was cut) - all of them on the author's one machine; no installation elsewhere is known.
 
 ## Three names
 
