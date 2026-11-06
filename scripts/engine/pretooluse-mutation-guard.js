@@ -4,7 +4,7 @@
  * live on this one hook file (Gate 2 is the dispatch gate, Gate 4 the git-verb guard on the two
  * shell tools, Bash and PowerShell):
  *
- * (1) AIWF-N3 (trimmed) — NON-WRITER SUBAGENTS CANNOT WRITE.
+ * (1) AIWF-N3 (trimmed) — NON-WRITER SUBAGENTS CANNOT WRITE INSIDE THE PROJECT ROOT.
  * Identity comes ONLY from the harness-trusted `agent_id` / `agent_type` fields (never a
  * self-declared/file value). Checks OWN-PROPERTY PRESENCE (not value), and requires a plain-object
  * input. Allow ONLY:
@@ -13,6 +13,11 @@
  * Everything else denies: a non-object input (array/primitive/null), or ANY own-property
  * presence of `agent_id`/`agent_type` (including explicit `null`) with a type other than
  * "writer" — incomplete/ambiguous identity fails CLOSED (never inferred as main session).
+ * The one passthrough of that deny: a write whose EVERY path field present in `tool_input`
+ * (`file_path`, `notebook_path`, each an own property) is a non-empty string that resolves OUTSIDE
+ * the project root (a scratch directory) - the gate protects the repo, the same boundary the main
+ * session's branch holds. One field inside (the root itself included), a present field that is not
+ * a non-empty string, a `tool_input` that is not an object, or no path field at all keeps the deny.
  *
  * AIWF-N10 (engine-neutral review roles): this gate catches the Edit/Write family from any non-writer
  * subagent, so it is what holds a CLAUDE-hosted Reviewer/QA read-only (Read/Grep/Glob-only, no OS
@@ -43,8 +48,9 @@
  *                                denying everything) is what makes it self-healing instead of a trap:
  *                                `.aiwf/**` stays writable, so the fix is ONE allowed write.
  * Targets OUTSIDE the project dir pass through deliberately (see the path check in
- * mainSessionDecision): the COO's scratchpad and ~/.claude/** memory writes are ordinary work, and
- * this guard protects the REPO. Branch (b) is untouched: the WRITER is never affected by this guard —
+ * mainSessionDecision, through projectRelative - the one rule (1) uses too): the COO's scratchpad and
+ * ~/.claude/** memory writes are ordinary work, and this guard protects the REPO, i.e. what lies
+ * inside the project root. Branch (b) is untouched: the WRITER is never affected by this guard —
  * it is the role that is supposed to write.
  *
  * THE `enforcement.routeWriteGuard` TOGGLE (project config, read from
@@ -119,6 +125,37 @@ function targetPathOf(toolInput) {
     if (typeof v === 'string' && v.trim() !== '') return v;
   }
   return null;
+}
+
+// Where a write target lies against the project dir: `path.resolve` + `path.relative` and nothing
+// more (no realpath, no filesystem access). `outside` is an absolute relative path (another drive on
+// win32) or a first segment `..`; the project dir itself (`rel === ''`) is NOT outside - each caller
+// decides the root on its own terms. Shared by the main session's branch and the non-writer branch.
+function projectRelative(projectDir, target) {
+  const resolved = path.resolve(projectDir, target);
+  const rel = path.relative(projectDir, resolved);
+  const outside = path.isAbsolute(rel) || rel.split(/[\\/]/)[0] === '..';
+  return { resolved, rel, outside };
+}
+
+// The non-writer branch's one passthrough (responsibility (1)). Unlike targetPathOf, which returns
+// the FIRST non-empty field only, this reads EVERY path field present as an own property, so a payload
+// naming an outside `file_path` beside an inside `notebook_path` cannot pass on the first one. TRUE
+// only when at least one field is present and every present field is a non-empty string resolving
+// outside the project dir; anything else - an inside field, the root itself, a present field that is
+// not a non-empty string, a `tool_input` that is not a plain object, no path field - is FALSE (deny).
+const NON_WRITER_PATH_FIELDS = ['file_path', 'notebook_path'];
+function everyTargetOutside(toolInput, projectDir) {
+  if (!isPlainObject(toolInput)) return false;
+  let present = 0;
+  for (const key of NON_WRITER_PATH_FIELDS) {
+    if (!has(toolInput, key)) continue;
+    present += 1;
+    const v = toolInput[key];
+    if (typeof v !== 'string' || v.trim() === '') return false;
+    if (!projectRelative(projectDir, v).outside) return false;
+  }
+  return present > 0;
 }
 
 // The project config, through ONE reader with ONE failure rule: anything that cannot be read, parsed
@@ -342,12 +379,12 @@ function mainSessionDecision(input) {
     );
   }
 
-  const resolved = path.resolve(projectDir, target);
-  const rel = path.relative(projectDir, resolved);
+  const { resolved, rel, outside } = projectRelative(projectDir, target);
   // OUTSIDE the project dir -> passthrough, deliberately and load-bearingly. The main session writes to
   // its session scratchpad and to ~/.claude/** (memory) constantly; denying those would break ordinary
-  // work while protecting nothing — this guard exists to protect the REPO.
-  if (rel === '' || path.isAbsolute(rel) || rel.split(/[\\/]/)[0] === '..') return lib.allowPassthrough();
+  // work while protecting nothing — this guard exists to protect the REPO. (The root itself, `rel ===
+  // ''`, passes here too; the non-writer branch denies it.)
+  if (rel === '' || outside) return lib.allowPassthrough();
 
   if (isAllowlisted(rel)) return lib.allowPassthrough();
   if (surface !== null && isTransferSurface(projectDir, surface, resolved)) return lib.allowPassthrough();
@@ -388,6 +425,9 @@ if (require.main === module) lib.runFailClosed(async () => {
   if (!idPresent && !typePresent) return mainSessionDecision(input);
 
   // Any own-property presence of agent_id/agent_type (incl. explicit null) with type != "writer".
+  // A write whose every present path field resolves OUTSIDE the project root passes: the repo is not
+  // touched. The route state (responsibility (2)) is never read on this branch.
+  if (everyTargetOutside(input.tool_input, projectDirOf())) return lib.allowPassthrough();
   const detail = typePresent
     ? `agent_type ${input.agent_type === null ? 'null' : JSON.stringify(input.agent_type)}`
     : 'agent_id present, agent_type absent';

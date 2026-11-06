@@ -22,9 +22,10 @@ What each role may and may not do on its host: `ticket.md` § Role boundaries.
 
 ## Enforcement of Writer-only writes
 
-**Gate 1** (the plugin's PreToolUse mutation guard) allows an `Edit`/`Write` only from the true main
-session or a subagent whose harness-trusted `agent_type` is exactly `writer`; every other subagent
-is denied.
+**Gate 1** (the plugin's PreToolUse mutation guard) allows an `Edit`/`Write` inside the project root
+only from the true main session or a subagent whose harness-trusted `agent_type` is exactly
+`writer`; every other subagent is denied there. A write whose every path field resolves outside the
+project root (a scratch directory) passes for any actor - the gate protects the repository.
 
 **Gate 2** (the plugin's PreToolUse dispatch gate) puts the operator in the way of a Writer dispatch
 through the Agent tool, in one of two modes chosen by `enforcement.dispatchGate`:

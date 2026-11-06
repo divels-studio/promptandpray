@@ -147,6 +147,8 @@ const capturedNonWriter = {
 const srcFile = path.join(projectNoTicket, 'src', 'probe.txt');
 const srcFileOpen = path.join(projectOpenTicket, 'src', 'probe.txt');
 const docFileOpen = path.join(projectOpenTicket, 'docs', 'note.md');
+// Outside both project fixtures (a sibling under the spike's temp root); the hook only judges it.
+const outsideFile = path.join(tmpRoot, 'outside', 'probe.txt');
 
 const gate1Cases = [
   { name: 'capture: live Writer subagent payload', projectDir: projectNoTicket, payload: capturedWriter, expect: 'allow(passthrough)' },
@@ -164,6 +166,11 @@ const gate1Cases = [
   { name: 'route guard: main session -> src/** while an R2 ticket is open', projectDir: projectOpenTicket, payload: writeEnvelope({}, srcFileOpen), expect: 'deny' },
   { name: 'route guard: main session -> docs/** while an R2 ticket is open', projectDir: projectOpenTicket, payload: writeEnvelope({}, docFileOpen), expect: 'allow(passthrough)' },
   { name: 'route guard: Writer -> src/** while an R2 ticket is open', projectDir: projectOpenTicket, payload: writeEnvelope({ agent_id: 'a7', agent_type: 'writer' }, srcFileOpen), expect: 'allow(passthrough)' },
+  // The outside-root passthrough of the non-writer branch (every present path field outside). Under
+  // --reference the outside row is expected to diverge: a reference hook older than this passthrough denies it.
+  { name: 'subagent Explore -> a path OUTSIDE the project root', projectDir: projectNoTicket, payload: writeEnvelope({ agent_id: 'a8', agent_type: 'Explore' }, outsideFile), expect: 'allow(passthrough)' },
+  { name: 'subagent Explore -> src/probe.txt (relative, inside the root)', projectDir: projectNoTicket, payload: writeEnvelope({ agent_id: 'a9', agent_type: 'Explore' }, path.join('src', 'probe.txt')), expect: 'deny' },
+  { name: 'subagent Explore -> file_path outside + notebook_path inside', projectDir: projectNoTicket, payload: { ...writeEnvelope({ agent_id: 'a10', agent_type: 'Explore' }, outsideFile), tool_input: { file_path: outsideFile, notebook_path: path.join('src', 'probe.ipynb'), content: 'PROBE' } }, expect: 'deny' },
 ];
 
 // Gate 3's per-project toggle. These cases are deliberately NOT part of gate1Cases: the reference
@@ -664,7 +671,7 @@ console.log(`reference    : ${referenceAvailable ? REFERENCE : (REFERENCE ? REFE
 console.log(`fixture dirs : ${tmpRoot}`);
 console.log('');
 
-console.log('== Gate 1 - non-writer subagents cannot write (+ route-state guard) ==');
+console.log('== Gate 1 - non-writer subagents cannot write inside the project root (+ route-state guard) ==');
 console.log('per case: [1] plugin decision matches the expectation  [2] plugin exited 0');
 console.log('          [3] reference decision + reason text identical  [4] reference exited 0  (when a reference is given)');
 console.log(`${pad('case', 62)} ${pad('expected', 18)} ${pad('plugin', 18)} ${pad('exit', 5)} ${pad('reference', 18)} ${pad('exit', 5)} verdict`);

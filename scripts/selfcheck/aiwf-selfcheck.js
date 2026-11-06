@@ -674,7 +674,7 @@ const writeEnvelope = (identity, filePath, extra) => Object.assign({
 }, identity, extra || {});
 
 function sectionGate1Identity(tmpRoot) {
-  section('GATE 1 - non-writer subagents cannot write (identity, real hook run)');
+  section('GATE 1 - non-writer subagents cannot write inside the project root (identity, real hook run)');
   // Identity is isolated on a project dir with NO route state, so no assertion here can change
   // outcome because some ticket happens to be open somewhere.
   const root = path.join(tmpRoot, 'g1-no-ticket');
@@ -725,6 +725,84 @@ function sectionGate1Identity(tmpRoot) {
     const r = runHook(GATE1, capturedNonWriter, root);
     check('captured live general-purpose payload -> DENY naming the agent type',
       deny(r) && r.reason.includes('general-purpose'), r.reason.slice(0, 55));
+  }
+
+  // --- the outside-root passthrough of the non-writer branch -------------------------------------
+  // A non-writer write passes only when EVERY path field present in tool_input resolves OUTSIDE the
+  // project root; one inside field, the root itself, a present field that is not a non-empty string,
+  // or no path field keeps the deny - byte-identical to the deny of the captured payloads above. The
+  // hook only judges the payload, so nothing is written to the outside paths named here.
+  const EM_DASH = String.fromCharCode(0x2014); // the hook's own dash, spelled so this hunk adds no non-ASCII byte
+  const G1_DENY = (tool, type) => `Blocked ${tool}: non-writer or incomplete subagent identity (agent_type ` +
+    `${JSON.stringify(type)}) may not write to the repo ${EM_DASH} only the Writer subagent (or the true main ` +
+    'session) writes. Route edits through the Writer (.claude/agents/writer.md). ' +
+    '[AIWF-N3 gate 1: non-writer subagents cannot write]';
+  const EXPLORE = { agent_id: 'a8', agent_type: 'Explore' };
+  const OUT_ABS = path.join(tmpRoot, 'g1-outside', 'probe.txt');
+  const IN_REL = path.join('src', 'probe.txt');
+  const g1Payload = (tool, toolInput) => Object.assign({
+    session_id: '02a3eeba-ff69-4daa-94be-329a7a5036c1', permission_mode: 'acceptEdits',
+    hook_event_name: 'PreToolUse', tool_name: tool, tool_input: toolInput,
+    tool_use_id: 'toolu_0115iTt4t3NCUBWADAYd3j4u',
+  }, EXPLORE);
+  const exactDeny = (tool) => (r) => deny(r) && r.reason === G1_DENY(tool, 'Explore');
+  // [id, label, tool, tool_input, verdict]; the ids name the rows the named-fault controls target.
+  const OUTSIDE_ROWS = [
+    ['g1-out-rel', 'Explore Write to ../outside.txt (relative, outside the root) -> passthrough',
+      'Write', { file_path: path.join('..', 'outside.txt'), content: 'x' }, allow],
+    ['g1-out-abs', 'Explore Write to an ABSOLUTE path outside the root -> passthrough',
+      'Write', { file_path: OUT_ABS, content: 'x' }, allow],
+    ['g1-out-nb', 'Explore NotebookEdit with notebook_path outside the root -> passthrough',
+      'NotebookEdit', { notebook_path: path.join(tmpRoot, 'g1-outside', 'probe.ipynb'), new_source: 'x' }, allow],
+    ['g1-in', 'Explore Write inside the root (src/probe.txt) -> DENY, the text byte-identical',
+      'Write', { file_path: IN_REL, content: 'x' }, exactDeny('Write')],
+    ['g1-in-abs', 'Explore Write inside the root (absolute) -> DENY, the text byte-identical',
+      'Write', { file_path: src, content: 'x' }, exactDeny('Write')],
+    ['g1-root', 'Explore Write to the root itself (".") -> DENY, the text byte-identical',
+      'Write', { file_path: '.', content: 'x' }, exactDeny('Write')],
+    ['g1-none', 'Explore Write with NO path field ({}) -> DENY, the text byte-identical',
+      'Write', {}, exactDeny('Write')],
+    ['g1-empty', 'Explore Write with an empty file_path -> DENY',
+      'Write', { file_path: '', content: 'x' }, exactDeny('Write')],
+    ['g1-notobj', 'Explore Write whose tool_input is an array -> DENY',
+      'Write', [OUT_ABS], exactDeny('Write')],
+    ['g1-mixed', 'Explore Edit, file_path OUTSIDE + notebook_path INSIDE -> DENY (every present field is read)',
+      'Edit', { file_path: OUT_ABS, notebook_path: path.join('src', 'probe.ipynb') }, exactDeny('Edit')],
+    ['g1-nonstring', 'Explore Write, file_path OUTSIDE + a present notebook_path 42 -> DENY',
+      'Write', { file_path: OUT_ABS, notebook_path: 42, content: 'x' }, exactDeny('Write')],
+    ['g1-blank-nb', 'Explore Write, file_path OUTSIDE + a present notebook_path "" -> DENY',
+      'Write', { file_path: OUT_ABS, notebook_path: '', content: 'x' }, exactDeny('Write')],
+  ];
+  const runRow = (hookPath, row) => runHook(hookPath, g1Payload(row[2], row[3]), root);
+  for (const row of OUTSIDE_ROWS) {
+    const r = runRow(GATE1, row);
+    check(`[${row[0]}] ${row[1]}`, row[4](r), `${r.decision}: ${r.reason.slice(0, 70)}`);
+  }
+  {
+    // The real harness shape, not only the synthetic envelope: the captured general-purpose payload,
+    // its target rewritten onto an outside path, passes.
+    const r = runHook(GATE1, Object.assign({}, capturedNonWriter,
+      { tool_input: { file_path: OUT_ABS, content: 'PROBE_NONWRITER' } }), root);
+    check('[g1-out-captured] captured live general-purpose payload rewritten onto an OUTSIDE path -> passthrough',
+      allow(r), `${r.decision}: ${r.reason.slice(0, 70)}`);
+  }
+  // Named-fault controls: the hook copied beside aiwf-lib.js, one fault each, the target row run
+  // against the copy and required to turn red.
+  for (const [id, label, target, from, to] of [
+    ['g1-ctl-outside', 'the helper forced to "outside"', 'g1-in',
+      "const outside = path.isAbsolute(rel) || rel.split(/[\\\\/]/)[0] === '..';", 'const outside = true;'],
+    ['g1-ctl-first', 'only the first path field read', 'g1-mixed',
+      "const NON_WRITER_PATH_FIELDS = ['file_path', 'notebook_path'];", "const NON_WRITER_PATH_FIELDS = ['file_path'];"],
+  ]) {
+    let hookCopy;
+    try {
+      hookCopy = path.join(pgEngineCopy(tmpRoot, id, ['pretooluse-mutation-guard.js', 'aiwf-lib.js']), 'pretooluse-mutation-guard.js');
+      pgPatch(hookCopy, from, to);
+    } catch (e) { check(`[${id}] control could be applied: ${label}`, false, String(e.message)); continue; }
+    const row = OUTSIDE_ROWS.find((x) => x[0] === target);
+    const r = runRow(hookCopy, row);
+    check(`[${id}] sabotage detected: ${label} -> ${target} turns red`, !row[4](r),
+      row[4](r) ? 'still PASS - the check is vacuous' : `FAIL as required (${r.decision})`);
   }
 }
 
