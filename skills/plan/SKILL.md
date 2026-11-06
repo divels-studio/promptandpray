@@ -43,9 +43,10 @@ it) does not stop this skill: planning is not execution, and Gate 3 lets the pla
 through - `<plansDir>/drafts/<ABBR>/`, `<plansDir>/readiness/<ABBR>/`, the roadmap and the ledger
 (`ORCHESTRATOR.md` § Branch policy). One thing waits while that route is open: an edit of a LANDED
 plan under `<plansDir>/active/` (behind the guard). The readiness pass of Step 6 does not wait: its
-brief, round and session-state files are keyed by the readiness brief's `PLAN:` folder's last
-segment, `<ABBR>` (`<scratchDir>/<ABBR>-review-brief.txt`, `<scratchDir>/<ABBR>-readiness-round.txt`),
-so it is dispatched and runs beside the ticket's pass (`ORCHESTRATOR.md` § Branch policy). The
+brief and session-state files are keyed by the readiness brief's `PLAN:` folder's last segment,
+`<ABBR>` (`<scratchDir>/<ABBR>-review-brief.txt`), and its log and `-o` file are the run's own under
+`<temp>/pnp-codex/` with `<ABBR>` in their name, so it is dispatched and runs beside the ticket's pass
+(`ORCHESTRATOR.md` § Branch policy). The
 planning lock holds for the whole skill (`plan.md` § Planning lock): until the landing in
 Step 6 the only files written are the
 plan's own - `<plansDir>/drafts/<ABBR>/`, `<plansDir>/readiness/<ABBR>/`, the roadmap entry - and
@@ -202,27 +203,32 @@ PLAN: <plansDir>/drafts/<ABBR>
 <the text of templates/briefs/readiness-codex.md, filled>
 ```
 
-In a LATER tool call, run the wrapper in the BACKGROUND (`run_in_background: true`), stdout to the
-round file. **os `windows`:**
+In a LATER tool call, run the wrapper in the BACKGROUND (`run_in_background: true`). **os `windows`:**
 
 ```powershell
-& "${CLAUDE_PLUGIN_ROOT}/scripts/native/ps/codex-review.ps1" -ProjectRoot '<root>' -Class plan -BriefFile '<root>/<scratchDir>/<ABBR>-review-brief.txt' > '<root>/<scratchDir>/<ABBR>-readiness-round.txt'
+& "${CLAUDE_PLUGIN_ROOT}/scripts/native/ps/codex-review.ps1" -ProjectRoot '<root>' -Class plan -BriefFile '<root>/<scratchDir>/<ABBR>-review-brief.txt'
 ```
 
 **os `linux` / `macos`:**
 
 ```bash
-bash "${CLAUDE_PLUGIN_ROOT}/scripts/native/sh/codex-review.sh" --project-root '<root>' --class plan --brief-file '<root>/<scratchDir>/<ABBR>-review-brief.txt' > '<root>/<scratchDir>/<ABBR>-readiness-round.txt'
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/native/sh/codex-review.sh" --project-root '<root>' --class plan --brief-file '<root>/<scratchDir>/<ABBR>-review-brief.txt'
 ```
 
 The brief path, the background run, the session file and the resume policy are `/pnp:review` Step 3
 (codex branch); pass 1 is always cold. A Claude-hosted plan row dispatches the `reviewer` agent with
-the same brief - `/pnp:review` Step 3 (claude branch). Read the result with Grep - the `^BLOCKERS:`
-line and the table rows - never whole.
+the same brief - `/pnp:review` Step 3 (claude branch). The wrapper's stdout is the final message,
+and the same bytes stand in its `-o` file, `<same stem as the log>.last.txt`, beside the log its
+`codex-review: log <path>` stderr line names: read THAT file with Grep - the `^BLOCKERS:` line and the
+table rows - never whole, and never redirect the wrapper's stdout inside PowerShell (Windows
+PowerShell 5.1 re-encodes a redirected stream as UTF-16LE).
 
 **Triage.** Write `<plansDir>/readiness/<ABBR>/round-<N>.md`: one header line (engine, model, cold or
-resumed, the tokens as the engine printed them, the verdict line - the wrapper's two `codex-review:`
-stderr lines carry model, effort, cold/resumed, exit and session id), the auditor's findings table
+resumed, the tokens as the engine printed them, the verdict line - the wrapper's `codex-review:`
+stderr lines carry model, effort, cold/resumed, the tokens figure (cumulative on a resume), a
+capacity refusal, the log path, exit and session id; the `-o` file beside that log holds only the
+final message),
+the auditor's findings table
 VERBATIM, plus a `disposition` column the COO fills per row - `fixed` / `rejected: <why>` /
 `deferred` / `asked`. INFO rows never trigger a revision. A row that disputes a recorded decision
 or a design choice the operator approved is `asked` - it goes to the operator in plain words, not

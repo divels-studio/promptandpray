@@ -336,7 +336,12 @@ file above; write the continuation prompt - WITH the pass's `Ticket:` line - int
 rule matches.
 
 **How the id gets recorded, and when it does not.** The wrapper does **not** read the engine's
-output - it touches neither stdout nor stderr, so what you see is the engine's own bytes. A
+output for the id. Codex's stdout and stderr go to the run's own log outside the repository; the
+wrapper's stdout is the engine's final message (its `-o` file) byte for byte, and its stderr carries
+its own lines in order: `codex-qa: run ...`, then `codex-qa: tokens used ...` (the engine's figure,
+cumulative on a resume), `codex-qa: engine refused: capacity, ...` when it applies, `codex-qa: no
+verdict - ...` when the engine left no final message, `codex-qa: log <path>` and `codex-qa: exit
+..., session ...`. A
 **resumed** run records the id it resumed with (which also repairs the state file after an explicit
 `-ResumeId`). A **cold** run identifies its session in Codex's own store (`$CODEX_HOME`, default
 `~/.codex`) by mtime plus a fingerprint of this run's brief, and records the id only when exactly

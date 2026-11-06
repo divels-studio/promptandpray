@@ -155,3 +155,44 @@ background at the hand-back. Portion 1 only (Portion 2 is not a release gate); r
 | `docs/CODEX_REVIEW_QA_RECIPE.md` | D6 |
 | `skills/review/SKILL.md`, `skills/qa/SKILL.md`, `skills/plan/SKILL.md` | D6 |
 | `scripts/native/README.md` | D6 |
+
+## Amendment D-12 (2026-11-06, after D0)
+
+D0 step 1 stopped the ticket: under PS 5.1 `*>` the 447 expected bytes became a 1796-byte log
+(UTF-16LE + BOM, mojibake, LF->CRLF, NativeCommandError records). The COO chose the capture
+fallback as D-12 (DECISIONS); D0 step 2's facts are the parse source (`tokens used` on stderr only,
+two lines, the figure comma-grouped on the second; `-o` accepted on resume; no capacity line
+observed - D-06's text stands unmeasured). The frozen sections above stay; these rows change them:
+
+- Scope D1 / D3 (PS only): the invocation is `$Prompt | & node <$PSScriptRoot helper> --log <log> --
+  @codexArgs` (resume: `@resumeArgs`), not a `*>` redirect; `$code = $LASTEXITCODE` as today; the
+  comment at `:443-449` (HEAD 03e1309; now `codex-review.ps1:473`, `codex-qa.ps1:434`) states D0's
+  measured fact and D-12. Everything else of D1 / D3 stands. The sh
+  wrappers keep `> "$log" 2>&1`; both channels' comments name the capture mechanism as the one
+  documented channel difference.
+- Scope D-12: new payload file `scripts/native/codex-capture.mjs` - zero dependencies, ESM, ASCII,
+  LF; `node codex-capture.mjs --log <path> -- <codex args...>`; one log fd, `stdio: ['inherit', fd,
+  fd]`, `shell: false`, argv an array, nothing on its own stdout, exit = codex's (signal -> 1);
+  codex resolved by `PATH` x `PATHEXT` (`.COM;.EXE;.BAT;.CMD` when unset), `.exe` / `.com` spawned
+  directly, a `.cmd` / `.bat` read as the npm shim (`<dir>\node.exe` else `process.execPath`, on
+  `<dir>\node_modules\@openai\codex\bin\codex.js`), `.ps1` skipped, a `.cmd` never spawned;
+  unresolvable -> `codex-capture: cannot resolve codex (<reason>)` on stderr, exit 2, no log.
+- Scope D4 / D5: the PS stubs are laid out so the helper resolves them; added (a) the helper's byte
+  probe (D0's emitter bytes on both streams through the PS wrapper, the log hex-equal to stdout part
+  then stderr part) with a named-fault control; (b) the unresolvable control (PATH without codex ->
+  exit 2, the `cannot resolve codex` line, no log); (c) a second resolution form when the stub
+  layout allows it cheaply. The PS flag locks read the `$codexArgs = @( ... )` block through
+  `argBlock(s)` (`scripts/selfcheck/aiwf-selfcheck.js:3303`); only the `STDIN_CAPTURE` check
+  (`aiwf-selfcheck.js:3310`) pins that this argv follows the helper's `--`.
+- Acceptance, added (the helper is untracked until staged: run its two rows with `--untracked` or
+  after staging):
+  - `git grep -n -F "*>" -- scripts/native/ps/codex-review.ps1 scripts/native/ps/codex-qa.ps1` - a hit on an executable line;
+  - `git grep -n -E "shell: *true|execSync|exec\(" -- scripts/native/codex-capture.mjs` - any hit;
+  - `git grep -nP "[^\x00-\x7F]" -- scripts/native/codex-capture.mjs` - any hit.
+  The existing rows stand.
+- Risk threshold, added (blocks): a shell string anywhere in the launch; the helper writing to the
+  repository; a byte added, dropped or reordered within one stream between codex and the log; a
+  `.cmd` spawned.
+- Code Map, added: `scripts/native/codex-capture.mjs` (D1, D3, D-12); a touch of validate-payload,
+  the plugin manifest, the provenance allowlist or `scripts/native/README.md` that must name the new
+  file is in scope; any other file outside the Code Map = stop and hand back.

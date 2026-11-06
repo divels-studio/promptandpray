@@ -30,6 +30,19 @@ explicit project root because the payload has no project of its own:
   The review wrapper passes every brief through `scripts/engine/plan-gate.js`: a `plan`-class run,
   or a brief carrying a `Class: plan` line at its first column, is refused (exit 2) while the plan
   folder its `PLAN:` line names fails `plan-gate --check`.
+  Both share one output contract: Codex's stdout and stderr go to one log of the run's own under
+  `<temp>/pnp-codex/`, Codex writes its final message through `-o` beside it, and the wrapper's
+  stdout is that final message byte for byte and nothing else; its stderr carries its own lines in a
+  fixed order - run, then tokens, capacity (when it applies), no-verdict (when there is no final
+  message), log and exit. The exit code is Codex's own.
+- `codex-capture.mjs` (beside the two channels) - the PowerShell channel's capture helper. PowerShell
+  re-encodes a redirected native stream, so `codex-review.ps1` and `codex-qa.ps1` run Codex through
+  `node codex-capture.mjs --log <path> -- <codex args...>`: one file handle for both streams, the
+  argv an array, `shell: false`, Codex resolved from `PATH` / `PATHEXT` without a shell (an `.exe`
+  directly, the npm shim's `codex.js` with node, never a `.cmd`; unresolvable is exit 2 with no log),
+  and `--print <file>` emits the final message as a native process. The bash channel needs no
+  helper: `> "$log" 2>&1` and `cat` are byte-exact there - the one documented difference between the
+  channels.
 - `codex-qal.*` - the unsandboxed, operator-gated live-browser host; `-C` is always a unique
   throwaway scratch dir, never the repo. The project root is used only to find `roles.json`.
 

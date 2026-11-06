@@ -109,16 +109,32 @@ session even when another ticket's pass ran on the same tree. An explicit id (`-
 `--resume-id <id>`) is for a session the state file no longer names. The policy of which passes
 resume at all is `/pnp:review` Step 3 and `/pnp:qa` Step 3b.
 
-- **THE WRAPPERS DO NOT TOUCH EITHER OUTPUT STREAM, and the id does not come from the output at
-  all.** Codex prints its configuration banner - the part carrying `session id:` - on **stderr**,
-  reserves **stdout** for the final message, and decides what to render by whether those streams are
-  a terminal. A wrapper that tees, pipes or redirects either stream therefore changes what the
-  caller sees *and* what Codex prints; on PowerShell it cannot preserve bytes either, as the shell
-  decodes a native command's stdout line by line and re-terminates the last one. Both were measured,
-  not assumed. So the invocation is the plain one and the id is looked up **after** the run. The
-  review wrappers add two stderr lines of their OWN beside it, never through it: `codex-review: run
-  <cold|resumed <id>>, ...` with the model and effort before Codex starts, and `codex-review: exit
-  <code>, session <id> (resumable: ...)` after the id is recorded (or `session not identified`).
+- **THE ENGINE'S STREAMS GO TO A LOG; THE WRAPPER'S STDOUT IS THE VERDICT.** Both wrappers send
+  Codex's stdout and stderr to ONE log file of the run's own, outside the repository -
+  `<temp>/pnp-codex/<key>-<class or role>-<yyyyMMdd-HHmmss>-<pid>.log` (`$env:TEMP` on Windows,
+  `${TMPDIR:-/tmp}` elsewhere; no key segment for a brief without one) - and pass Codex
+  `-o <same stem>.last.txt`, so Codex writes its final message to a file of its own. The wrapper's
+  **stdout is that final message, byte for byte, and nothing else** - empty when Codex left none.
+  Nothing stands between Codex and the log: bash redirects both streams straight to the file, and
+  on PowerShell, which re-encodes a redirected native stream (measured: a 447-byte UTF-8 emitter
+  came back from Windows PowerShell 5.1 `*>` as a 1796-byte UTF-16 log, line ends and a
+  NativeCommandError record added), Codex runs through `scripts/native/codex-capture.mjs`, a node
+  helper that hands it one file handle for both streams, resolves Codex without a shell and prints
+  the final message back as a native process. That capture mechanism is the one documented
+  difference between the two channels. The session id does not come from the output at all: it is
+  looked up **after** the run.
+- **The wrapper's own lines are on stderr, in a fixed order** (`codex-review:` or `codex-qa:`):
+  `run <cold|resumed <id>>, <class X|role Y>, model M, effort E` before Codex starts; then, after
+  the run, `tokens used <N>` - the engine's LAST `tokens used` figure from the log, printed as the
+  engine wrote it (on a resume `tokens used <N> (cumulative over session <id>)`; never computed, no
+  increment), or `tokens used: not printed by the engine`; `engine refused: capacity, session <id>
+  resumable` (or `session not identified`) when a run that exited non-zero has a capacity text in
+  its log; `no verdict - the engine wrote no final message; log <path>` when there is no final
+  message; `log <path>`; and `exit <code>, session <id> (resumable: ...)` (or `session not
+  identified`). They are information, never a decision: the exit code is Codex's own. Codex prints
+  `tokens used` on stderr as two lines - the words, then the figure with comma grouping - measured
+  on codex-cli 0.156.1 cold and resumed; the capacity text is the recorded one ("Selected model is at
+  capacity"), not reproduced at will.
 - **A RESUMED run records the id it resumed with**, without consulting the store at all:
   `codex exec resume <id>` continues *that* conversation (branching into a new one is the separate
   `codex exec fork` subcommand, which these wrappers never use), and the store could not answer for
@@ -185,9 +201,14 @@ resume at all is `/pnp:review` Step 3 and `/pnp:qa` Step 3b.
 Both forms - cold and resume - are pinned by the self-check on both channels, with a negative
 control per pin. The EXECUTED probes go further than reading source: against a stub that puts the
 session id **only on stderr**, exactly as Codex does, they compare the argv Codex really receives
-atom for atom, compare the caller's stdout and stderr **in hex** (a payload with a CR and no
-trailing newline, so a line-oriented pass-through is caught), and assert that the id still lands in
-the right per-role file - which it can only do by having come from the session store.
+atom for atom, compare the caller's stdout **in hex** against the final message the stub wrote
+through `-o` (a payload with a CR, a non-ASCII byte and no trailing newline, so a line-oriented
+pass-through is caught), find the stub's own two streams byte for byte in the run log, assert the
+wrapper's stderr lines in their order (tokens, capacity, no-verdict, log, exit), and assert that the
+id still lands in the right per-role file - which it can only do by having come from the session
+store. The capture helper is probed on its own as well: D0's emitter bytes through the PowerShell
+wrapper land in the log hex-equal, a missing Codex is exit 2 with no log, and a `.cmd` is never
+spawned.
 
 ### Option-injection regression probe (must stay green)
 

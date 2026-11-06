@@ -20,6 +20,15 @@
   exploratory browsing there is a separate, operator-gated surface - QAL
   (scripts\native\ps\codex-qal.ps1) - which is NOT read-only. See docs/CODEX_REVIEW_QA_RECIPE.md.
 
+  OUTPUT CONTRACT - the review wrapper's, with every line prefixed `codex-qa:`. codex's stdout and
+  stderr go to ONE log file of this run, outside the repository:
+  <temp>\pnp-codex\<key>-qa-<yyyyMMdd-HHmmss>-<pid>.log, and codex writes its final message (`-o`)
+  beside it, same stem, .last.txt. This wrapper's STDOUT is that final message, byte for byte, and
+  nothing else. Its STDERR carries, in this order: the run line before codex starts; after the run the
+  tokens line (the engine's last `tokens used` figure, never computed), the capacity line when the
+  engine refused at capacity, the no-verdict line when codex left no final message, the log line, and
+  the exit line. The exit code is codex's own; a refusal before the engine is exit 2.
+
 .PARAMETER Prompt
   The QA brief (which artifacts to read, acceptance criteria, risk threshold, stop condition).
   Pass with -Prompt or pipe it (use -Raw for long briefs), or name its file with -BriefFile. It is
@@ -48,8 +57,8 @@
   segment of its first `PLAN: <folder>` line, else no key and the legacy unkeyed
   <scratchDir>\last-qa-session.txt; a value that is not 1-64 characters of A-Za-z0-9_.- starting
   with a letter or digit is a refusal (exit 2). Every run, cold or resumed, records the session id
-  afterwards from codex's OWN session store - never from this run's output, which belongs to the
-  caller and is passed through untouched.
+  afterwards from codex's OWN session store - never from this run's output, which goes to the run
+  log untouched.
 
 .PARAMETER ResumeId
   An explicit codex session id to resume; it implies -Resume. The bash mirror spells the two as ONE
@@ -204,6 +213,21 @@ if (-not [System.IO.Path]::IsPathRooted($SessionState)) {
   $SessionState = Join-Path (Get-Location).Path $SessionState
 }
 
+# THE RUN'S OWN FILES, OUTSIDE THE REPOSITORY: the log that receives codex's stdout and stderr, and
+# the final message codex writes itself (`-o`) beside it with the same stem. The name is
+# <key>-qa-<yyyyMMdd-HHmmss>-<pid> under <temp>\pnp-codex (a brief with no key has no key segment,
+# as its state file has none). The files belong to the run that created them: the timestamp plus
+# this process id make the name unique, and the log is created exclusively, so two runs never share
+# one - no lock. The session-state file is NOT touched by any of this: two runs with one key at once
+# remain what they always were, the one-executing-session-per-tree invariant the operator holds.
+# <temp> is $env:TEMP; a host without one (pwsh on POSIX) uses the .NET temp path.
+$tempRoot = if ($env:TEMP) { $env:TEMP } else { [System.IO.Path]::GetTempPath() }
+$RunDir = Join-Path $tempRoot 'pnp-codex'
+$RunStem = "qa-$((Get-Date).ToString('yyyyMMdd-HHmmss'))-$PID"
+if ($SessionKey) { $RunStem = "$SessionKey-$RunStem" }
+$LogFile = Join-Path $RunDir "$RunStem.log"
+$LastFile = Join-Path $RunDir "$RunStem.last.txt"
+
 # -Resume with no explicit id means "the session THIS wrapper recorded last". A missing or empty
 # state file is a refusal with the path in it, never a silent cold run: a resume that quietly became
 # a cold pass would spend the operator's quota on the read-the-whole-evidence pass they were
@@ -249,13 +273,16 @@ if ($IsResume -and [string]::IsNullOrWhiteSpace($ResumeId)) {
 # `-c approval_policy=never` is a deliberate hardening on top of the proven posture: it pins the
 # approval mechanism explicitly (does NOT inherit it from ~/.codex/config.toml), so read-only
 # cannot be paired with an escalating approval policy.
+# `-o <file>` makes codex write its final message to this run's own file - the verdict this wrapper
+# prints on stdout; `codex exec resume` accepts the same flag (measured, codex-cli 0.156.1).
 $codexArgs = @(
   'exec',
   '-C', $ProjectRoot,
   '-m', $role.model,
   '--sandbox', 'read-only',
   '-c', 'approval_policy=never',
-  '-c', "model_reasoning_effort=$($role.effort)"
+  '-c', "model_reasoning_effort=$($role.effort)",
+  '-o', $LastFile
 )
 
 # THE RESUME FORM IS FROZEN, AND IT IS A DIFFERENT COMMAND, NOT THE COLD ONE WITH A FLAG ADDED.
@@ -272,6 +299,7 @@ $resumeArgs = @(
   '-c', 'approval_policy=never',
   '-c', "model=$($role.model)",
   '-c', "model_reasoning_effort=$($role.effort)",
+  '-o', $LastFile,
   '-'
 )
 if ($IsResume) {
@@ -330,7 +358,9 @@ function Clear-CodexSessionState {
     Write-Error "this run could not be identified in the codex session store AND the stale session id ${left} could NOT be removed from ${StateFile}. Do not resume from it - pass -ResumeId <id> explicitly."
     return
   }
-  Write-Warning "this run could not be identified in the codex session store; no session id is recorded now (${StateFile}), so the next -Resume will need an explicit id."
+  # On STDERR, never Write-Warning: the PowerShell host prints warnings on stdout, and this wrapper's
+  # stdout is the final message and nothing else.
+  [Console]::Error.WriteLine("WARNING: this run could not be identified in the codex session store; no session id is recorded now (${StateFile}), so the next -Resume will need an explicit id.")
 }
 
 function Save-CodexSessionId {
@@ -381,8 +411,9 @@ function Save-CodexSessionId {
         New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
       }
       Set-Content -LiteralPath $StateFile -Value $sessionId -Encoding ASCII -ErrorAction Stop
+      $script:RecordedSessionId = $sessionId
     } catch {
-      Write-Warning "the codex session id could not be recorded in ${StateFile}: $($_.Exception.Message)"
+      [Console]::Error.WriteLine("WARNING: the codex session id could not be recorded in ${StateFile}: $($_.Exception.Message)")
     }
     return
   }
@@ -400,15 +431,111 @@ $CaptureSince = (Get-Date).AddSeconds(-2)
 # "Windows" native-argument mode strips "--" before it reaches codex, so an on-argv
 # prompt cannot be protected. Routing through stdin bypasses option parsing entirely.
 
-# THE INVOCATION IS THE PLAIN ONE: NEITHER OUTPUT STREAM IS TOUCHED.
-# No pipeline element, no redirect, no Tee-Object and above all no ForEach-Object pass-through -
-# PowerShell decodes a native command's stdout line by line and re-emits it, which cannot preserve
-# bytes (an `A CRLF B` payload came back as `A CRLF B CRLF`), and any pipe also changes what codex
-# itself decides to print, because it renders by whether the stream is a terminal. The session id is
-# NOT in this output anyway: codex puts its configuration banner on STDERR and reserves STDOUT for
-# the final message. It is looked up from codex's own session store after the run instead.
-$Prompt | & codex @codexArgs
+# CODEX'S TWO STREAMS GO TO THE RUN LOG, AND NOTHING STANDS BETWEEN CODEX AND THAT LOG.
+# PowerShell cannot be the one that writes it. Measured (plan GATES, D-12): a 447-byte UTF-8 emitter
+# run under Windows PowerShell 5.1 with all its streams redirected to a file produced a 1796-byte log -
+# UTF-16LE with a byte order mark, the UTF-8 decoded through the console code page, every LF turned
+# into CRLF, and the first stderr line wrapped in a NativeCommandError record. A pipeline element is no
+# better: PowerShell decodes a native command's output line by line and re-emits it. So codex is run
+# by scripts/native/codex-capture.mjs, a node child process that hands codex ONE file handle for both
+# streams at the operating-system level, resolves codex without a shell and keeps the argv an array;
+# the prompt still arrives on stdin. Codex writes to a file, not a terminal, as it does under the bash
+# channel's `> "$log" 2>&1` - the capture mechanism is the one documented difference between the two
+# channels. The session id is NOT taken from this output: it is looked up from codex's own session
+# store after the run. The helper's own `--` only separates its options from codex's argv (measured:
+# both PowerShell 5.1 and 7 pass it to node); were it ever stripped, the helper refuses with exit 2
+# rather than read codex's first argument as its own.
+#
+# THIS WRAPPER'S STDOUT IS THE FINAL MESSAGE AND NOTHING ELSE: the bytes codex wrote through `-o`,
+# printed by the same helper as a native process, so a caller that redirects this wrapper's stdout
+# receives them the way it received codex's own stdout before. No Write-Output, no Write-Host and no
+# Write-Warning anywhere in this file - the host prints those on stdout. When codex left no final
+# message, stdout stays EMPTY and stderr says so.
+#
+# THE STDERR LINES are this wrapper's own, written beside the run and never through it, in a fixed
+# order: the run line before codex starts (cold or resumed, the role, the model and effort the
+# resolver returned); after the run the tokens line, the capacity line when it applies, the no-verdict
+# line when there is no final message, the log line, and the exit line (the exit code, and the session
+# id with the flag that resumes it). They are information, never a decision: the exit code below is
+# codex's own.
+# THE TOKENS LINE is the engine's own figure, never computed. Measured on codex-cli 0.156.1: codex
+# prints `tokens used` on stderr as two lines - the words alone, then the figure with comma grouping
+# (`3,506`) - and on a resumed session the figure is the session's running total. The LAST such pair
+# in the log is printed as the engine wrote it; a log without one says so instead.
+# THE CAPACITY LINE: a run that exited non-zero with one of $CapacityTexts in its log was refused by
+# the engine at capacity (the recorded real text is "Selected model is at capacity"; not reproduced
+# at will, so the text is the recorded one). It names the session to resume when one was recorded. A
+# run that exited 0 is never called a refusal, whatever its log quotes.
+# EACH LINE IS ONE PHYSICAL LINE. Every dynamic field (run mode, resume id, model, effort, session id,
+# tokens figure, log path) passes through Sanitize-HeaderField, which turns every control character -
+# CR, LF and the rest of 0x00-0x1F, and 0x7F - into one space each: the schema admits any non-empty
+# string for a model or an effort, and a value carrying a line break could otherwise split a line or
+# print a fake exit line before codex has even started.
+function Sanitize-HeaderField {
+  param([string] $Value)
+  return ([string]$Value -replace '[\x00-\x1F\x7F]', ' ')
+}
+$CapacityTexts = @('at capacity')
+$CaptureHelper = Join-Path $PSScriptRoot '..\codex-capture.mjs'
+try {
+  if (-not (Test-Path -LiteralPath $RunDir)) { New-Item -ItemType Directory -Path $RunDir -Force | Out-Null }
+} catch {
+  Write-Error "the run log directory could not be created: $RunDir ($($_.Exception.Message))"
+  exit 2
+}
+if ((Test-Path -LiteralPath $LogFile) -or (Test-Path -LiteralPath $LastFile)) {
+  Write-Error "this run's log already exists: $LogFile - a log is never shared by two runs; start the run again."
+  exit 2
+}
+$runMode = if ($IsResume) { "resumed $ResumeId" } else { 'cold' }
+[Console]::Error.WriteLine("codex-qa: run $(Sanitize-HeaderField $runMode), role qa, model $(Sanitize-HeaderField $role.model), effort $(Sanitize-HeaderField $role.effort)")
+$script:RecordedSessionId = $null
+$Prompt | & node $CaptureHelper --log $LogFile -- @codexArgs
 $code = $LASTEXITCODE
 
 Save-CodexSessionId -StateFile $SessionState -Resumed $IsResume -KnownId $ResumeId -Brief $Prompt -Since $CaptureSince
+$hasVerdict = Test-Path -LiteralPath $LastFile -PathType Leaf
+if ($hasVerdict) {
+  & node $CaptureHelper --print $LastFile
+}
+$logText = ''
+if (Test-Path -LiteralPath $LogFile -PathType Leaf) {
+  try { $logText = [System.IO.File]::ReadAllText($LogFile, (New-Object System.Text.UTF8Encoding($false))) } catch { $logText = '' }
+}
+$tokensFigure = $null
+$previousLine = $null
+foreach ($rawLine in $logText.Split([char]10)) {
+  $logLine = if ($rawLine.Length -gt 0 -and $rawLine[$rawLine.Length - 1] -eq [char]13) { $rawLine.Substring(0, $rawLine.Length - 1) } else { $rawLine }
+  if ($previousLine -ceq 'tokens used' -and $logLine -cmatch '^[0-9][0-9,]*$') { $tokensFigure = $logLine }
+  $previousLine = $logLine
+}
+$atCapacity = $false
+if ($code -ne 0) {
+  foreach ($capacityText in $CapacityTexts) { if ($logText.Contains($capacityText)) { $atCapacity = $true } }
+}
+$sid = if ($script:RecordedSessionId) { Sanitize-HeaderField $script:RecordedSessionId } else { $null }
+$logShown = Sanitize-HeaderField $LogFile
+if ($null -eq $tokensFigure) {
+  [Console]::Error.WriteLine('codex-qa: tokens used: not printed by the engine')
+} elseif ($IsResume) {
+  [Console]::Error.WriteLine("codex-qa: tokens used $(Sanitize-HeaderField $tokensFigure) (cumulative over session $(Sanitize-HeaderField $ResumeId))")
+} else {
+  [Console]::Error.WriteLine("codex-qa: tokens used $(Sanitize-HeaderField $tokensFigure)")
+}
+if ($atCapacity) {
+  if ($sid) {
+    [Console]::Error.WriteLine("codex-qa: engine refused: capacity, session $sid resumable")
+  } else {
+    [Console]::Error.WriteLine('codex-qa: engine refused: capacity, session not identified')
+  }
+}
+if (-not $hasVerdict) {
+  [Console]::Error.WriteLine("codex-qa: no verdict - the engine wrote no final message; log $logShown")
+}
+[Console]::Error.WriteLine("codex-qa: log $logShown")
+if ($sid) {
+  [Console]::Error.WriteLine("codex-qa: exit $code, session $sid (resumable: -ResumeId $sid)")
+} else {
+  [Console]::Error.WriteLine("codex-qa: exit $code, session not identified - the next resume needs an explicit id")
+}
 exit $code

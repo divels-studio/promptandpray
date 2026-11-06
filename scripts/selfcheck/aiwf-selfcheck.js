@@ -3273,6 +3273,10 @@ function sectionWrappers(tmpRoot) {
   const EXEC_FIRST = /^\s*(?:#[^\n]*\n\s*)*'exec'\s*,/;
   const POSITIONAL = /@codexArgs\s+\$Prompt|\$Prompt\s+@codexArgs|codex\s+@codexArgs\s+"?\$Prompt/;
   const STDIN = /\$Prompt\s*\|\s*&\s*codex\s+@codexArgs/;
+  // The review and QA wrappers run codex through the capture helper (GATES D-12): the prompt is
+  // still piped, and the codex argv is everything after the helper's own `--`.
+  const STDIN_CAPTURE = /\$Prompt\s*\|\s*&\s*node\s+\$CaptureHelper\s+--log\s+\$LogFile\s+--\s+@codexArgs/;
+  const LAST_MESSAGE_PAIR = /'-o'\s*,\s*\$LastFile\s*$/;
   // Assert the CONSECUTIVE argv PAIR, not the bare literal: deleting the `'-c',` token would leave
   // the value orphaned and the flag inert, yet a bare-literal check would still pass.
   const APPROVAL_PIN = /'-c'\s*,\s*'approval_policy=never'/;
@@ -3303,7 +3307,8 @@ function sectionWrappers(tmpRoot) {
     check(`${name} argv contains NO danger-full-access atom`, !SANDBOX_PAIR('danger-full-access').test(args));
     check(`${name} argv contains NO --dangerously-bypass atom`, !/'--dangerously-bypass[a-z-]*'/.test(args));
     check(`${name} argv contains NO --ignore-user-config atom`, !/'--ignore-user-config'/.test(args));
-    check(`${name} delivers the prompt via stdin`, STDIN.test(s));
+    check(`${name} delivers the prompt via stdin, through the capture helper, with the codex argv after its \`--\``, STDIN_CAPTURE.test(s));
+    check(`${name} closes the cold argv with the '-o',$LastFile pair (codex writes its final message to the run's own file)`, LAST_MESSAGE_PAIR.test(args));
     check(`${name} has NO positional prompt`, !POSITIONAL.test(s));
     check(`${name} exits 2 on an empty prompt`, s.includes('exit 2'));
     check(`${name} takes -C from the caller's $ProjectRoot, never a baked-in path`,
@@ -3468,20 +3473,24 @@ function sectionWrappers(tmpRoot) {
 // trailing '-' is part of the form - it is the atom that says the prompt arrives on stdin.
 const PS_RESUME_FROZEN = ["'exec'", "'resume'", '$ResumeId',
   "'-c'", "'sandbox_mode=read-only'", "'-c'", "'approval_policy=never'",
-  "'-c'", '"model=$($role.model)"', "'-c'", '"model_reasoning_effort=$($role.effort)"', "'-'"];
+  "'-c'", '"model=$($role.model)"', "'-c'", '"model_reasoning_effort=$($role.effort)"', "'-o'", '$LastFile', "'-'"];
 const psRel = (file) => ['scripts', 'native', 'ps', file];
+// The capture helper the PowerShell channel runs codex through (GATES D-12), and its own path.
+const CAPTURE_REL = ['scripts', 'native', 'codex-capture.mjs'];
 
 /**
  * A control copies ONLY the PowerShell wrappers - the findings below read nothing else - plus the
  * two engine files the review wrapper's plan gate runs (scripts/engine/plan-gate.js and its
  * aiwf-lib.js), at the same relative path: without them every executed probe on a copy would be
- * refused by the gate for the wrong reason.
+ * refused by the gate for the wrong reason. The capture helper the wrappers run codex through
+ * (scripts/native/codex-capture.mjs) is copied beside them for the same reason.
  */
 function copyPsChannel(from, to) {
   const src = path.join(from, 'scripts', 'native', 'ps');
   const dst = path.join(to, 'scripts', 'native', 'ps');
   fs.mkdirSync(dst, { recursive: true });
   for (const name of fs.readdirSync(src)) fs.copyFileSync(path.join(src, name), path.join(dst, name));
+  if (fs.existsSync(path.join(from, ...CAPTURE_REL))) fs.copyFileSync(path.join(from, ...CAPTURE_REL), path.join(to, ...CAPTURE_REL));
   copyPlanGateEngine(from, to);
 }
 
@@ -3542,14 +3551,24 @@ function psResumeFindings(root, { execProbes = false, tmpDir = null } = {}) {
       `${file} reads and writes ONLY <scratchDir>\\${own} - and never names ${other} ANYWHERE, comments and help block included, so the crossed-state question is answerable by a plain grep - with scratchDir taken from the project's aiwf.config.json and falling back to .aiwf`,
       body.includes(own) && !s.includes(other) && /\$cfg\.paths\.scratchDir/.test(s)
       && /\$scratchRel\s*=\s*'\.aiwf'/.test(s), `own file in the code ${body.includes(own)}, other file anywhere ${s.includes(other)}`);
-    // THE STREAMS BELONG TO THE CALLER, and on this channel that rule has teeth of its own:
-    // PowerShell decodes a native command's stdout line by line and re-emits it, so a ForEach-Object
-    // or Tee-Object pass-through cannot preserve bytes even when it means to.
+    // NOTHING BETWEEN CODEX AND THE RUN LOG (GATES D-05, D-12), and on this channel that rule has
+    // teeth of its own: PowerShell decodes a native command's output and re-emits it - a 447-byte
+    // emitter under PS 5.1 `*>` came back as a 1796-byte UTF-16 log - so codex runs only through the
+    // capture helper, which hands it ONE file handle for both streams, on the bare stdin pipe.
     add(`ps-${short}-stream-purity`,
-      `${file} attaches NOTHING to codex's stdout or stderr - the invocation is the bare stdin pipe, with no ForEach-Object, no Tee-Object and no redirect (PowerShell re-encodes what it passes through)`,
-      /\n\$Prompt \| & codex @codexArgs\r?\n/.test(s)
-      && !/& codex @codexArgs[^\r\n]*(?:\||[12]?>)/.test(s)
-      && !/Tee-Object/.test(body) && !/--json/.test(body));
+      `${file} puts NOTHING between codex and the run log - codex runs only through scripts/native/codex-capture.mjs on the bare stdin pipe, with no ForEach-Object, no Tee-Object, no redirect (\`*>\` re-encodes), no Start-Process and no other codex invocation`,
+      /\n\$Prompt \| & node \$CaptureHelper --log \$LogFile -- @codexArgs\r?\n/.test(s)
+      && /\$CaptureHelper = Join-Path \$PSScriptRoot '\.\.\\codex-capture\.mjs'/.test(s)
+      && !/& node \$CaptureHelper --log[^\r\n]*(?:\||[12*]?>)/.test(s)
+      && !/&\s*codex\b/.test(body) && !/\*>/.test(body)
+      && !/Tee-Object|Start-Process/.test(body) && !/--json/.test(body));
+    // THE WRAPPER'S STDOUT IS THE -o FILE AND NOTHING ELSE (GATES D-05): printed by the helper as a
+    // native process - so a caller's `> round.txt` receives it as it received codex's own stdout -
+    // and no Write-Output, Write-Host or Write-Warning anywhere in the code, since the host prints
+    // those on stdout (the unidentified-session warning once did).
+    add(`ps-${short}-stdout-verdict`,
+      `${file} prints on stdout ONLY the final message - the -o file, through the helper's --print - and has no Write-Output, Write-Host or Write-Warning anywhere in its code (the host prints those on stdout)`,
+      /\n {2}& node \$CaptureHelper --print \$LastFile\r?\n/.test(s) && !/Write-(?:Output|Host|Warning)\b/.test(body));
     add(`ps-${short}-session-store`,
       `${file} takes the id from codex's OWN session store ($CODEX_HOME/sessions), identified POSITIVELY - written during this run AND carrying this run's brief - and records nothing at all unless exactly one file survives`,
       /\$env:CODEX_HOME/.test(s) && /Join-Path \$codexHome 'sessions'/.test(s)
@@ -3620,9 +3639,10 @@ function psResumeFindings(root, { execProbes = false, tmpDir = null } = {}) {
         if (wantsExec(`ps-exec-${short}-bytes`, `ps-exec-${short}-session-capture`)) {
           const probe = runPsWrapperWithStub(root, file, tmpDir);
           add(`ps-exec-${short}-bytes`,
-            `${file} EXECUTED: the caller's stdout is the engine's own bytes, unchanged (hex-compared, CR included, no re-terminated last line)`,
-            probe.stdoutHex === STUB_STDOUT_HEX,
-            `stdout ${probe.stdoutHex || '(none)'} (expected ${STUB_STDOUT_HEX}); exit ${probe.status}`);
+            `${file} EXECUTED: the caller's stdout is EXACTLY the final message codex wrote through -o (hex-compared, CR and a non-ASCII byte included, no re-terminated last line, none of codex's own stdout), and codex's own two streams landed in the run log byte for byte, never on the caller's stderr`,
+            probe.stdoutHex === STUB_LAST_HEX && probe.logHex.includes(STUB_STDOUT_HEX + STUB_STDERR_HEX)
+            && !probe.stderrHex.includes(STUB_STDERR_HEX),
+            `stdout ${probe.stdoutHex || '(none)'} (expected ${STUB_LAST_HEX}); log carries the engine's bytes ${probe.logHex.includes(STUB_STDOUT_HEX + STUB_STDERR_HEX)}; exit ${probe.status}`);
           add(`ps-exec-${short}-session-capture`,
             `${file} EXECUTED: with the session id ONLY on stderr (never on stdout), the id still lands in ${own} - it came from the session store`,
             probe.state(own) === STUB_SESSION_ID && probe.state(other) === null,
@@ -3691,14 +3711,22 @@ function psResumeFindings(root, { execProbes = false, tmpDir = null } = {}) {
 // `roleRecord` replaces the roles' own host (default: the hostile model and effort).
 // `pipeBrief` false runs the wrapper with NOTHING on the pipeline; `flagBrief` passes -BriefFile -
 // a string is written to a file of its own first, BF_MISSING names a path that does not exist.
+// `stubMode` (GATES-004 D5) picks what the stub does beyond its default run: 'no-tokens' prints no
+// tokens line, 'no-last' writes no -o file, 'capacity' refuses at capacity (no -o file, no tokens
+// line, exit 1), 'emit' writes only the D0 emitter's bytes (EMIT_STDOUT then EMIT_STDERR) and the -o
+// file. `runTemp` replaces the probe's own temp directory - the wrapper's <temp>\pnp-codex lives
+// under it - so two runs can be made to share one.
 function runPsWrapperWithStub(root, wrapper, tmpDir,
   { brief = STUB_BRIEF, writeRollout = true, foreignRollout = false, seedState = null, readOnlyState = null, extraArgs = '',
-    klass = undefined, prepare = null, pathFor = null, roleRecord = null, pipeBrief = true, flagBrief = undefined } = {}) {
+    klass = undefined, prepare = null, pathFor = null, roleRecord = null, pipeBrief = true, flagBrief = undefined,
+    stubMode = '', runTemp = null } = {}) {
   const home = fs.mkdtempSync(path.join(tmpDir, 'ps-exec-run-'));
   const bin = path.join(home, 'bin');
   const projectRoot = path.join(home, 'project');
   const codexHome = path.join(home, 'codex-home');
+  const temp = runTemp || path.join(home, 'temp');
   fs.mkdirSync(bin, { recursive: true });
+  fs.mkdirSync(temp, { recursive: true });
   fs.mkdirSync(path.join(projectRoot, '.claude', 'aiwf-native'), { recursive: true });
   const record = roleRecord || { engine: 'codex', model: HOSTILE_MODEL, effort: HOSTILE_EFFORT };
   fs.writeFileSync(path.join(projectRoot, '.claude', 'aiwf-native', 'roles.json'),
@@ -3724,12 +3752,31 @@ function runPsWrapperWithStub(root, wrapper, tmpDir,
 
   // The stub is node, not a shell script: it must write EXACT bytes (a CR, no trailing newline) on
   // both streams, and node is the one interpreter this payload already requires everywhere.
-  const stubJs = path.join(bin, 'pnp-codex-stub.js');
+  // IT IS LAID OUT AS THE NPM SHIM (GATES D-12): the capture helper never spawns a .cmd, it runs
+  // <bin>\node_modules\@openai\codex\bin\codex.js itself when it finds <bin>\codex.cmd - so that is
+  // where the stub's logic lives, with a package.json pinning it to CommonJS whatever lies above the
+  // probe directory. codex.cmd stays a working launcher of the same file, and the extensionless
+  // `codex` serves a POSIX host, where the helper spawns the first executable `codex` on PATH.
+  const stubDir = path.join(bin, 'node_modules', '@openai', 'codex');
+  fs.mkdirSync(path.join(stubDir, 'bin'), { recursive: true });
+  fs.writeFileSync(path.join(stubDir, 'package.json'), '{"type":"commonjs"}\n');
+  const stubJs = path.join(stubDir, 'bin', 'codex.js');
   fs.writeFileSync(stubJs, [
     'const fs = require("fs");',
     'const path = require("path");',
     'let brief = "";',
     'try { brief = fs.readFileSync(0, "utf8"); } catch (e) { brief = ""; }',
+    'const mode = process.env.PNP_STUB_MODE || "";',
+    'const argv = process.argv.slice(2);',
+    'const lastAt = argv.indexOf("-o");',
+    'const lastFile = lastAt === -1 ? null : argv[lastAt + 1];',
+    `const lastBytes = Buffer.from(${JSON.stringify(Array.from(Buffer.from(STUB_LAST, 'utf8')))});`,
+    'if (mode === "emit") {',
+    `  process.stdout.write(Buffer.from(${JSON.stringify(Array.from(Buffer.from(EMIT_STDOUT, 'utf8')))}));`,
+    `  process.stderr.write(Buffer.from(${JSON.stringify(Array.from(Buffer.from(EMIT_STDERR, 'utf8')))}));`,
+    '  if (lastFile) fs.writeFileSync(lastFile, lastBytes);',
+    `  process.exit(${STUB_EXIT});`,
+    '}',
     `process.stderr.write("session id: ${STUB_SESSION_ID}\\n");`,
     'const dir = path.join(process.env.CODEX_HOME, "sessions", "2026", "09", "17");',
     'fs.mkdirSync(dir, { recursive: true });',
@@ -3745,12 +3792,16 @@ function runPsWrapperWithStub(root, wrapper, tmpDir,
     ] : []),
     `process.stdout.write(Buffer.from(${JSON.stringify(Array.from(Buffer.from(STUB_STDOUT, 'utf8')))}));`,
     `process.stderr.write(Buffer.from(${JSON.stringify(Array.from(Buffer.from(STUB_STDERR, 'utf8')))}));`,
+    // The final message through -o, and the tokens line on stderr in the measured two-line shape.
+    'if (lastFile && mode !== "no-last" && mode !== "capacity") fs.writeFileSync(lastFile, lastBytes);',
+    `if (mode !== "no-tokens" && mode !== "capacity") process.stderr.write(${JSON.stringify(STUB_TOKENS_TEXT)});`,
+    `if (mode === "capacity") { process.stderr.write(${JSON.stringify(STUB_CAPACITY_TEXT)}); process.exit(${STUB_CAPACITY_EXIT}); }`,
     `process.exit(${STUB_EXIT});`,
     '',
   ].join('\n'));
-  // Both spellings, so the probe works wherever a PowerShell host does: PATHEXT finds the .cmd on
-  // Windows, the execute bit finds the extensionless one everywhere else.
-  fs.writeFileSync(path.join(bin, 'codex.cmd'), `@echo off\r\nnode "%~dp0pnp-codex-stub.js"\r\nexit /b %ERRORLEVEL%\r\n`);
+  // Both spellings, so the probe works wherever a PowerShell host does: the helper reads the .cmd on
+  // Windows as the shim of the file above, the execute bit finds the extensionless one elsewhere.
+  fs.writeFileSync(path.join(bin, 'codex.cmd'), `@echo off\r\nnode "%~dp0node_modules\\@openai\\codex\\bin\\codex.js" %*\r\nexit /b %ERRORLEVEL%\r\n`);
   const posixStub = path.join(bin, 'codex');
   fs.writeFileSync(posixStub, `#!/usr/bin/env node\n${fs.readFileSync(stubJs, 'utf8')}`);
   try { fs.chmodSync(posixStub, 0o755); } catch (e) { /* best-effort on filesystems without modes */ }
@@ -3761,6 +3812,9 @@ function runPsWrapperWithStub(root, wrapper, tmpDir,
   const env = Object.assign({}, process.env, {
     PATH: pathFor ? pathFor(bin) : bin + sep + process.env.PATH,
     CODEX_HOME: codexHome,
+    TEMP: temp,
+    TMPDIR: temp,
+    PNP_STUB_MODE: stubMode,
   });
   // Windows spells the variable `Path`; the copy is deduplicated so the value the wrapper sees does
   // not depend on how the spawn layer merges the two spellings.
@@ -3773,6 +3827,7 @@ function runPsWrapperWithStub(root, wrapper, tmpDir,
     + `& '${path.join(root, 'scripts', 'native', 'ps', wrapper)}' -ProjectRoot '${projectRoot}'${classArg}${flagArg} ${extraArgs}; `
     + 'exit $LASTEXITCODE';
   const r = spawnSync(PWSH, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', cmd], { env });
+  const run = runFilesIn(temp);
   return {
     status: r.status,
     stdoutHex: (r.stdout || Buffer.alloc(0)).toString('hex'),
@@ -3782,11 +3837,25 @@ function runPsWrapperWithStub(root, wrapper, tmpDir,
     // Every name in the state directory, sorted - "no state file of any name was written" is a claim
     // about the directory, not about the one name a row happens to look up.
     stateFiles: () => stateDirFiles(projectRoot),
-    // The stub leaves two traces when it runs: its rollout in its own $CODEX_HOME and its stdout
-    // bytes. This stub records no argv, so "codex was invoked" is read off those two.
+    // The run's own files under <temp>/pnp-codex: the log names, and the first log's bytes.
+    runDir: run.dir, logs: run.logs, logHex: run.logHex,
+    // The stub leaves three traces when it runs: its rollout in its own $CODEX_HOME, the final message
+    // the wrapper prints, and its bytes in the run log. This stub records no argv, so "codex was
+    // invoked" is read off those.
     stubInvoked: fs.existsSync(path.join(codexHome, 'sessions', '2026', '09', '17', `rollout-2026-09-17T18-00-00-${STUB_SESSION_ID}.jsonl`))
-      || (r.stdout || Buffer.alloc(0)).toString('hex').includes(STUB_STDOUT_HEX),
+      || (r.stdout || Buffer.alloc(0)).toString('hex').includes(STUB_LAST_HEX) || run.logHex.length > 0,
   };
+}
+
+/** The run files a wrapper left under <temp>/pnp-codex: the .log names (sorted) and the first log's hex. */
+function runFilesIn(temp) {
+  const dir = path.join(temp, 'pnp-codex');
+  let names = [];
+  try { names = fs.readdirSync(dir).sort(); } catch (e) { names = []; }
+  const logs = names.filter((n) => n.endsWith('.log'));
+  let logHex = '';
+  if (logs.length) { try { logHex = fs.readFileSync(path.join(dir, logs[0])).toString('hex'); } catch (e) { logHex = ''; } }
+  return { dir, names, logs, logHex };
 }
 
 /** One sabotage per resume finding, built at call time so the helpers above are already defined. */
@@ -3806,8 +3875,10 @@ function psResumeControls() {
         apply: (r) => patchText(r, at, /\r?\n\s*Set-Location -LiteralPath \$ProjectRoot/, '') },
       { id: `ps-${short}-session-state`, label: `${file}: the state file crossed to the other role's`,
         apply: (r) => patchText(r, at, new RegExp(`'${SESSION_FILES[short]}'`), `'${OTHER_SESSION_FILE[short]}'`) },
-      { id: `ps-${short}-stream-purity`, label: `${file}: the ForEach-Object pass-through over the caller's stdout brought back`,
-        apply: (r) => patchText(r, at, /\$Prompt \| & codex @codexArgs/, '$Prompt | & codex @codexArgs | ForEach-Object { $_ }') },
+      { id: `ps-${short}-stream-purity`, label: `${file}: codex run by PowerShell itself with every stream redirected to the log again (the measured \`*>\` form)`,
+        apply: (r) => patchText(r, at, '$Prompt | & node $CaptureHelper --log $LogFile -- @codexArgs', () => '$Prompt | & codex @codexArgs *> $LogFile') },
+      { id: `ps-${short}-stdout-verdict`, label: `${file}: the unidentified-session warning back on Write-Warning, which the host prints on stdout`,
+        apply: (r) => patchText(r, at, '[Console]::Error.WriteLine("WARNING: this run could not be identified', () => 'Write-Warning ("this run could not be identified') },
       { id: `ps-${short}-session-store`, label: `${file}: the "exactly one candidate" rule relaxed to "take the first"`,
         apply: (r) => patchText(r, at, /if \(\$mine\.Count -eq 1\)/, 'if ($mine.Count -ge 1)') },
       { id: `ps-${short}-session-stale`, label: `${file}: an unidentified cold run leaves the previous id in place`,
@@ -3820,10 +3891,10 @@ function psResumeControls() {
         apply: (r) => patchText(r, at, /\$sessionId = \$KnownId/, '$sessionId = $null') },
       { id: `ps-${short}-resume-writable`, label: `${file}: the writability guard dropped from the bare-resume path`,
         apply: (r) => patchText(r, at, /if \(-not \$writable\) \{/, 'if ($false) {') },
-      // The executed pair. The bytes control is the reviewer's own probe turned into a pin: the
-      // pass-through re-terminates the last line, so `A CRLF B` comes back as `A CRLF B CRLF`.
-      { id: `ps-exec-${short}-bytes`, label: `${file}: the caller's stdout pushed through PowerShell's line-by-line pass-through (executed)`,
-        apply: (r) => patchText(r, at, /\$Prompt \| & codex @codexArgs/, '$Prompt | & codex @codexArgs | ForEach-Object { $_ }') },
+      // The executed pair. The bytes control prints the final message through PowerShell's own text
+      // output instead of the native helper: the host re-terminates the last line and re-encodes.
+      { id: `ps-exec-${short}-bytes`, label: `${file}: the final message printed through PowerShell's Get-Content instead of the native helper (executed)`,
+        apply: (r) => patchText(r, at, '& node $CaptureHelper --print $LastFile', () => 'Get-Content -LiteralPath $LastFile') },
       { id: `ps-exec-${short}-session-capture`, label: `${file}: the id looked for in the wrapper's own output instead of the session store (executed)`,
         apply: (r) => patchText(r, at, /\$fresh = @\(Get-ChildItem[\s\S]*?\)\r?\n/, '$fresh = @()\n') },
       { id: `ps-exec-${short}-session-fingerprint`, label: `${file}: a brief with no fingerprint matches every fresh rollout, so a stranger's id is recorded (executed)`,
@@ -3955,9 +4026,10 @@ function shWrapperFindings(root, { execProbes = true, tmpDir = null } = {}) {
   const ABSOLUTE_PATH_LITERAL = /[A-Za-z]:[\\/]|\/(?:home|Users|mnt|opt|var)\//;
   const STDIN_PIPE = /printf\s+'%s\\n'\s+"\$PROMPT"\s*\|\s*codex\s+"\$\{CODEX_ARGS\[@\]\}"/;
   // The prompt reaches codex ONLY through that pipe. Any other argv shape - a further atom after
-  // the arg array (the `||` status capture excepted), or a --prompt/-p flag parsed out of argv -
-  // reopens the option-injection hole.
-  const PROMPT_ON_ARGV = /codex\s+"\$\{CODEX_ARGS\[@\]\}"[ \t]+(?!\|\|)\S|--prompt\)|-p\)|PROMPT="\$2"/;
+  // the arg array (the `||` status capture and the review / QA wrappers' redirect of both streams to
+  // the run log excepted), or a --prompt/-p flag parsed out of argv - reopens the option-injection hole.
+  const PROMPT_ON_ARGV = /codex\s+"\$\{CODEX_ARGS\[@\]\}"[ \t]+(?!\|\||> "\$LOG_FILE" 2>&1 \|\|)\S|--prompt\)|-p\)|PROMPT="\$2"/;
+  const LAST_MESSAGE_PAIR = /(?:^|\n)\s*-o\s+"\$LAST_FILE"\s*$/;
   const PROJECT_ROOT_REQUIRED = /\[\s*-n\s+"\$PROJECT_ROOT"\s*\]\s*\|\|\s*fail/;
   const PASSES_ROLES_PATH = /--roles-path\s+"\$ROLES_PATH"/;
   // The resolver snapshot -> shell variables transport. The delimiter must be NUL and the fields
@@ -4004,6 +4076,8 @@ function shWrapperFindings(root, { execProbes = true, tmpDir = null } = {}) {
     add(id('no-bypass'), `${name} argv contains NO --dangerously-bypass atom`, !/--dangerously-bypass[a-z-]*/.test(args));
     add(id('no-ignore'), `${name} argv contains NO --ignore-user-config atom`, !/--ignore-user-config/.test(args));
     add(id('stdin'), `${name} delivers the prompt via stdin`, STDIN_PIPE.test(s));
+    add(id('last-message'), `${name} closes the cold argv with the -o "$LAST_FILE" pair (codex writes its final message to the run's own file)`,
+      LAST_MESSAGE_PAIR.test(args));
     add(id('no-argv-prompt'), `${name} has NO prompt on argv and no prompt flag at all`, !PROMPT_ON_ARGV.test(s));
     add(id('empty-prompt'), `${name} exits 2 on an empty (or whitespace-only) prompt`,
       /tr -d '\[:space:\]'/.test(s) && /No prompt provided/.test(s));
@@ -4043,15 +4117,21 @@ function shWrapperFindings(root, { execProbes = true, tmpDir = null } = {}) {
       `${name} reads and writes ONLY <scratchDir>/${own} - and never names ${other} ANYWHERE, comments included, so the crossed-state question is answerable by a plain grep - with scratchDir taken from the project's aiwf.config.json and falling back to .aiwf`,
       body.includes(own) && !s.includes(other) && /cfg\.paths\.scratchDir/.test(s)
       && /SCRATCH_REL='\.aiwf'/.test(s), `own file in the code ${body.includes(own)}, other file anywhere ${s.includes(other)}`);
-    // THE STREAMS BELONG TO THE CALLER. codex writes its banner - the part carrying the session id -
-    // on STDERR, reserves STDOUT for the final message, and renders by whether those streams are a
-    // terminal, so anything this wrapper attaches to either stream changes what the caller sees AND
-    // what codex prints. The invocation must therefore be the plain stdin pipe with nothing after it.
+    // NOTHING BETWEEN CODEX AND THE RUN LOG (GATES D-05). Both streams are redirected straight to the
+    // file, so bash hands codex the file itself: no tee, no pipe, no process substitution, and the
+    // invocation is the only codex call in the file.
     add(id('stream-purity'),
-      `${name} attaches NOTHING to codex's stdout or stderr - no tee, no pipe, no redirect (the streams are the caller's, and codex renders by whether they are a terminal)`,
-      /\n *printf '%s\\n' "\$PROMPT" \| codex "\$\{CODEX_ARGS\[@\]\}" \|\| status=\$\?\n/.test(s)
-      && !/codex "\$\{CODEX_ARGS\[@\]\}"[^\n]*(?:\| *tee|[12]?> *[^&\s]|&>|>&2|>\()/.test(s)
-      && !/\| tee /.test(body) && !/--json/.test(body));
+      `${name} puts NOTHING between codex and the run log - both streams redirected straight to the file (\`> "$LOG_FILE" 2>&1\`), no tee, no pipe, no process substitution, one codex invocation`,
+      /\n *printf '%s\\n' "\$PROMPT" \| codex "\$\{CODEX_ARGS\[@\]\}" > "\$LOG_FILE" 2>&1 \|\| status=\$\?\n/.test(s)
+      && (body.match(/\| codex /g) || []).length === 1
+      && !/\| *tee( |$)/m.test(body) && !/>\(/.test(body) && !/--json/.test(body));
+    // THE WRAPPER'S STDOUT IS THE -o FILE AND NOTHING ELSE (GATES D-05): `cat` of the final message,
+    // and every line this wrapper prints of its own goes to stderr.
+    const ownLines = body.split('\n').filter((l) => new RegExp(`^\\s*printf '${short === 'review' ? 'codex-review' : 'codex-qa'}: `).test(l));
+    add(id('stdout-verdict'),
+      `${name} prints on stdout ONLY the final message - \`cat "$LAST_FILE"\` - and every line of its own on stderr`,
+      /\n {2}cat "\$LAST_FILE" \|\| true\n/.test(s) && ownLines.length > 0 && ownLines.every((l) => />&2$/.test(l.trimEnd())),
+      `${ownLines.filter((l) => !/>&2$/.test(l.trimEnd())).length} own line(s) not on stderr`);
     add(id('session-store'),
       `${name} takes the id from codex's OWN session store ($CODEX_HOME/sessions), identified POSITIVELY - written during this run AND carrying this run's brief - and records nothing at all unless exactly one file survives`,
       /SESSIONS_DIR="\$\{CODEX_HOME:-\$HOME\/\.codex\}\/sessions"/.test(s)
@@ -4201,6 +4281,7 @@ function shWrapperFindings(root, { execProbes = true, tmpDir = null } = {}) {
         const expected = [
           'exec', '-C', probe.projectRoot, '-m', HOSTILE_MODEL,
           '--sandbox', 'read-only', '-c', 'approval_policy=never', '-c', `model_reasoning_effort=${HOSTILE_EFFORT}`,
+          '-o', LAST_FILE_ATOM,
         ];
         add(`sh-exec-${short}-argv`,
           `${wrapper} EXECUTED: the argv codex really receives is the locked flag set, with the resolved model and effort intact as ONE atom each (space and newline included)`,
@@ -4222,19 +4303,15 @@ function shWrapperFindings(root, { execProbes = true, tmpDir = null } = {}) {
           `${wrapper} EXECUTED: with the session id ONLY on stderr (never on stdout), the id still lands in ${SESSION_FILES[short]} - it came from the session store - and the other role's file is never written`,
           probe.state(SESSION_FILES[short]) === STUB_SESSION_ID && probe.state(OTHER_SESSION_FILE[short]) === null,
           `${SESSION_FILES[short]}=${JSON.stringify(probe.state(SESSION_FILES[short]))}, ${OTHER_SESSION_FILE[short]}=${JSON.stringify(probe.state(OTHER_SESSION_FILE[short]))}`);
-        // BYTE PRESERVATION, EXECUTED. Both payloads carry a CR and end WITHOUT a newline, so a
-        // pass-through that re-terminates the last line is caught - the hex is compared, not the text.
-        // The REVIEW wrapper writes its own exit line after the engine, opening with a line break, so
-        // there the engine's stderr bytes must be followed DIRECTLY by that LF and the line's prefix.
-        const stderrOk = short === 'review'
-          ? probe.stderrHex.includes(STUB_STDERR_HEX + '0a' + Buffer.from('codex-review: exit ').toString('hex'))
-          : probe.stderrHex.endsWith(STUB_STDERR_HEX);
+        // BYTE PRESERVATION, EXECUTED (GATES D-05). The final message carries a CR and a non-ASCII
+        // byte and ends WITHOUT a newline, so a pass-through that re-terminates the last line is
+        // caught - the hex is compared, not the text. The engine's own two streams must sit in the
+        // run log byte for byte, and never on the caller's stderr.
+        const logOk = probe.logHex.includes(STUB_STDOUT_HEX + STUB_STDERR_HEX);
         add(`sh-exec-${short}-bytes`,
-          short === 'review'
-            ? `${wrapper} EXECUTED: the caller's stdout and stderr are the engine's own bytes, unchanged (hex-compared, CR included, no re-terminated last line), directly followed by the wrapper's exit line`
-            : `${wrapper} EXECUTED: the caller's stdout and stderr are the engine's own bytes, unchanged (hex-compared, CR included, no re-terminated last line)`,
-          probe.stdoutHex === STUB_STDOUT_HEX && stderrOk,
-          `stdout ${probe.stdoutHex} (expected ${STUB_STDOUT_HEX}); stderr ${short === 'review' ? 'carries the payload directly followed by the exit line' : 'ends with the payload'}: ${stderrOk}`);
+          `${wrapper} EXECUTED: the caller's stdout is EXACTLY the final message codex wrote through -o (hex-compared, CR and a non-ASCII byte included, no re-terminated last line, none of codex's own stdout), and codex's own two streams landed in the run log byte for byte, never on the caller's stderr`,
+          probe.stdoutHex === STUB_LAST_HEX && logOk && !probe.stderrHex.includes(STUB_STDERR_HEX),
+          `stdout ${probe.stdoutHex || '(none)'} (expected ${STUB_LAST_HEX}); log carries the engine's bytes ${logOk}`);
       }
       // THE RESUME FORM, EXECUTED. Source text cannot prove what argv a shell really builds, and the
       // resume form is the one where a stray -C or --sandbox would not merely be wrong but rejected
@@ -4352,6 +4429,7 @@ function shWrapperFindings(root, { execProbes = true, tmpDir = null } = {}) {
         const expected = [
           'exec', '-C', probe.projectRoot, '-m', ROW_MODEL,
           '--sandbox', 'read-only', '-c', 'approval_policy=never', '-c', `model_reasoning_effort=${ROW_EFFORT}`,
+          '-o', LAST_FILE_ATOM,
         ];
         add('sh-exec-review-class-argv',
           'codex-review.sh --class docs EXECUTED: codex receives the ROW\'s model and effort, not the Reviewer role\'s',
@@ -4406,6 +4484,26 @@ const SHORT_BRIEF = 'short\n';
 const cleared = (v) => v === null || v === '';
 const STUB_STDOUT_HEX = Buffer.from(STUB_STDOUT, 'utf8').toString('hex');
 const STUB_STDERR_HEX = Buffer.from(STUB_STDERR, 'utf8').toString('hex');
+// THE FINAL MESSAGE the stub writes through `-o` (GATES-004 D5). Different from its stdout on purpose,
+// so "the wrapper's stdout is the -o file" cannot pass on codex's own stdout; a CR inside, a non-ASCII
+// byte (written as an escape: this file is payload the provenance scan reads), no trailing newline.
+const STUB_LAST = `BLOCKERS: none\r\nverdict ${String.fromCharCode(0xe9)} end`;
+const STUB_LAST_HEX = Buffer.from(STUB_LAST, 'utf8').toString('hex');
+// The engine's tokens line in the shape measured on codex-cli 0.156.1 (GATES-004 D0, the cold and the
+// resumed run): on stderr, the words alone, then the figure with comma grouping on the next line.
+const STUB_TOKENS = '12,345';
+const STUB_TOKENS_TEXT = `\ntokens used\n${STUB_TOKENS}\n`;
+// The capacity refusal: the recorded real text (RULEHOME-002) and its recorded exit code. Not measured
+// in D0 - no capacity line appeared there - so the text is the recorded one.
+const STUB_CAPACITY_TEXT = 'Selected model is at capacity\n';
+const STUB_CAPACITY_EXIT = 1;
+// D0 step 1's emitter, the bytes PS 5.1 `*>` failed to keep (GATES D-12): non-ASCII UTF-8, CRLF and LF
+// line ends and a line longer than any console, on stdout and then on stderr.
+// The non-ASCII characters are built from their code points: this file is payload the provenance scan reads.
+const EMIT_STDOUT = `stdout LF line\nnon-ASCII UTF-8: caf${String.fromCharCode(0xe9)} ${String.fromCharCode(0x3bb)} `
+  + `${String.fromCharCode(0x20ac)} ${String.fromCodePoint(0x1f600)}\r\n${'L'.repeat(300)}\nCRLF line\r\nlast stdout line LF\n`;
+const EMIT_STDERR = `stderr LF line\nstderr non-ASCII: na${String.fromCharCode(0xef)}ve ${String.fromCharCode(0x20ac)}\r\ntokens used\n12,345\n`;
+const EMIT_HEX = Buffer.from(EMIT_STDOUT + EMIT_STDERR, 'utf8').toString('hex');
 /** The same bytes as a `printf '%b'` argument - the CR must reach the stub as an escape, not raw. */
 const shBytes = (s) => s.replace(/\\/g, '\\\\').replace(/\r/g, '\\r').replace(/\n/g, '\\n');
 const SEEDED_IDS = {
@@ -4557,11 +4655,17 @@ const BRIEF_FILE_PROBES = [
 // is part of the form.
 const SH_RESUME_FROZEN = ['exec', 'resume', '"$RESUME_ID"',
   '-c', 'sandbox_mode=read-only', '-c', 'approval_policy=never',
-  '-c', '"model=$ROLE_MODEL"', '-c', '"model_reasoning_effort=$ROLE_EFFORT"', '-'];
+  '-c', '"model=$ROLE_MODEL"', '-c', '"model_reasoning_effort=$ROLE_EFFORT"', '-o', '"$LAST_FILE"', '-'];
+// The -o value is the run's own file - <temp>/pnp-codex/<stem>.last.txt, a name with a timestamp and a
+// pid in it - so a recorded argv carries it as this placeholder once its shape was checked; a value
+// of any other shape stays as it was and fails the comparison.
+const LAST_FILE_ATOM = '<the run\'s own <temp>/pnp-codex/<stem>.last.txt>';
+const LAST_FILE_SHAPE = /(?:^|[\\/])pnp-codex[\\/][A-Za-z0-9_.-]+-[0-9]{8}-[0-9]{6}-[0-9]+\.last\.txt$/;
+const normalizeLastFile = (atoms) => atoms.map((a, i) => (i > 0 && atoms[i - 1] === '-o' && LAST_FILE_SHAPE.test(a) ? LAST_FILE_ATOM : a));
 /** The resume argv codex really receives, given a session id and the resolved model/effort. */
 const resumeArgvFor = (id, model, effort) => ['exec', 'resume', id,
   '-c', 'sandbox_mode=read-only', '-c', 'approval_policy=never',
-  '-c', `model=${model}`, '-c', `model_reasoning_effort=${effort}`, '-'];
+  '-c', `model=${model}`, '-c', `model_reasoning_effort=${effort}`, '-o', LAST_FILE_ATOM, '-'];
 const NUL_BYTE = String.fromCharCode(0);
 
 /**
@@ -4576,13 +4680,17 @@ const NUL_BYTE = String.fromCharCode(0);
 // path that does not exist); `idleStdin` (a string) replaces the piped brief with a stdin that
 // delivers exactly those bytes ('' for none) and then stays OPEN - a wrapper that reads it to its
 // end blocks, and the run is cut at BF_IDLE_TIMEOUT_MS.
+// `stubMode` and `runTemp` as in runPsWrapperWithStub: the stub's variant run, and the temp directory
+// the wrapper's ${TMPDIR}/pnp-codex lives under.
 function runWrapperWithStub(root, wrapper, tmpDir, extraArgs = [],
   { seedState = null, writeRollout = true, secondRollout = null, brief = STUB_BRIEF, readOnlyState = null, prepare = null, roleRecord = null,
-    flagBrief = undefined, idleStdin = false } = {}) {
+    flagBrief = undefined, idleStdin = false, stubMode = '', runTemp = null } = {}) {
   const home = fs.mkdtempSync(path.join(tmpDir, 'sh-exec-'));
   const bin = path.join(home, 'bin');
   const projectRoot = path.join(home, 'project');
+  const temp = runTemp || path.join(home, 'temp');
   fs.mkdirSync(bin, { recursive: true });
+  fs.mkdirSync(temp, { recursive: true });
   fs.mkdirSync(path.join(projectRoot, '.claude', 'aiwf-native'), { recursive: true });
   // The CWD probe, without comparing path strings. The resume form has no -C, so the project root
   // must be the process cwd instead - and a Windows bash reports that cwd in its own notation
@@ -4639,16 +4747,28 @@ function runWrapperWithStub(root, wrapper, tmpDir, extraArgs = [],
     '#!/usr/bin/env bash\n'
     + ': > "$PNP_ARGV_OUT"\n'
     + 'for a in "$@"; do printf \'%s\\0\' "$a" >> "$PNP_ARGV_OUT"; done\n'
+    // The -o value: where the final message goes (GATES-004 D5).
+    + 'LAST_OUT=\'\'\nprev=\'\'\nfor a in "$@"; do if [ "$prev" = \'-o\' ]; then LAST_OUT="$a"; fi; prev="$a"; done\n'
     + 'if [ -f ./pnp-cwd-marker.txt ]; then printf \'marker\' > "$PNP_CWD_OUT"; else printf \'no-marker\' > "$PNP_CWD_OUT"; fi\n'
     // The brief is written to the recording FIRST and read back from it: a `$(cat)` capture would
     // eat the trailing newline, and "byte for byte on stdin" is one of the things being asserted.
     + 'cat > "$PNP_STDIN_OUT"\n'
     + 'BRIEF="$(cat "$PNP_STDIN_OUT")"\n'
+    + 'if [ "${PNP_STUB_MODE:-}" = emit ]; then\n'
+    + `  printf '%b' '${shBytes(EMIT_STDOUT)}'\n`
+    + `  printf '%b' '${shBytes(EMIT_STDERR)}' >&2\n`
+    + `  if [ -n "$LAST_OUT" ]; then printf '%b' '${shBytes(STUB_LAST)}' > "$LAST_OUT"; fi\n`
+    + `  exit ${STUB_EXIT}\n`
+    + 'fi\n'
     + `printf 'session id: %s\\n' '${STUB_SESSION_ID}' >&2\n`
     + (writeRollout ? rollout(STUB_SESSION_ID, '$BRIEF') : '')
     + (secondRollout ? rollout(secondRollout.id, secondRollout.carriesBrief ? '$BRIEF' : 'a different session') : '')
     + `printf '%b' '${shBytes(STUB_STDOUT)}'\n`
     + `printf '%b' '${shBytes(STUB_STDERR)}' >&2\n`
+    + 'case "${PNP_STUB_MODE:-}" in no-last|capacity) ;; *) if [ -n "$LAST_OUT" ]; then '
+    + `printf '%b' '${shBytes(STUB_LAST)}' > "$LAST_OUT"; fi ;; esac\n`
+    + `case "\${PNP_STUB_MODE:-}" in no-tokens|capacity) ;; *) printf '%b' '${shBytes(STUB_TOKENS_TEXT)}' >&2 ;; esac\n`
+    + `if [ "\${PNP_STUB_MODE:-}" = capacity ]; then printf '%b' '${shBytes(STUB_CAPACITY_TEXT)}' >&2; exit ${STUB_CAPACITY_EXIT}; fi\n`
     + `exit ${STUB_EXIT}\n`);
   fs.chmodSync(stub, 0o755);
 
@@ -4659,6 +4779,9 @@ function runWrapperWithStub(root, wrapper, tmpDir, extraArgs = [],
     PNP_STDIN_OUT: stdinOut,
     PNP_CWD_OUT: cwdOut,
     CODEX_HOME: codexHome,
+    TMPDIR: temp,
+    TEMP: temp,
+    PNP_STUB_MODE: stubMode,
   });
   const flagArgs = flagBrief === undefined ? [] : ['--brief-file', flagBriefPath(home, flagBrief)];
   const wrapperArgv = [path.join(root, 'scripts', 'native', 'sh', wrapper), '--project-root', projectRoot, ...flagArgs, ...extraArgs];
@@ -4683,8 +4806,11 @@ function runWrapperWithStub(root, wrapper, tmpDir, extraArgs = [],
     stdoutHex: (r.stdout || Buffer.alloc(0)).toString('hex'),
     stderrHex: (r.stderr || Buffer.alloc(0)).toString('hex'),
     // The recording ends with a trailing NUL, so the last split element is always the empty string.
-    atoms: recorded === null ? null : recorded.split(NUL_BYTE).slice(0, -1),
+    // The run's own -o file is read as LAST_FILE_ATOM once its shape was checked (normalizeLastFile).
+    atoms: recorded === null ? null : normalizeLastFile(recorded.split(NUL_BYTE).slice(0, -1)),
     stdin: readText(stdinOut),
+    // The run's own files under ${TMPDIR}/pnp-codex: the log names, and the first log's bytes.
+    ...(() => { const run = runFilesIn(temp); return { runDir: run.dir, logs: run.logs, logHex: run.logHex }; })(),
     cwdMark: readText(cwdOut),
     // null when the wrapper never wrote that role's state file - which is itself an assertion.
     state: (file) => { const t = readText(path.join(projectRoot, '.aiwf', file)); return t === null ? null : t.trim(); },
@@ -4753,8 +4879,12 @@ function readOnlyWrapperControls(file, short) {
       apply: (r) => patchText(r, at, /\n *cd "\$PROJECT_ROOT" \|\| fail[^\n]*\n/, '\n') },
     { id: `sh-${short}-session-state`, label: `${file}: the state file crossed to the other role's`,
       apply: (r) => patchText(r, at, new RegExp(`/${SESSION_FILES[short]}"`), `/${OTHER_SESSION_FILE[short]}"`) },
-    { id: `sh-${short}-stream-purity`, label: `${file}: the caller's stdout teed into a file again`,
-      apply: (r) => patchText(r, at, /codex "\$\{CODEX_ARGS\[@\]\}" \|\| status=\$\?/, 'codex "${CODEX_ARGS[@]}" | tee /tmp/aiwf-out.log || status=$?') },
+    { id: `sh-${short}-stream-purity`, label: `${file}: codex's streams piped through tee into the log instead of redirected to it`,
+      apply: (r) => patchText(r, at, 'codex "${CODEX_ARGS[@]}" > "$LOG_FILE" 2>&1 || status=$?', () => 'codex "${CODEX_ARGS[@]}" 2>&1 | tee "$LOG_FILE" || status=$?') },
+    { id: `sh-${short}-stdout-verdict`, label: `${file}: the log line printed on stdout instead of stderr`,
+      apply: (r) => patchText(r, at, /(printf '[a-z-]+: log %s\\n' "\$LOG_SHOWN") >&2/, (m, head) => head) },
+    { id: `sh-${short}-last-message`, label: `${file}: the -o pair dropped from the cold argv`,
+      apply: dropArgLine(file, '-o "\\$LAST_FILE"') },
     { id: `sh-${short}-session-store`, label: `${file}: the "exactly one candidate" rule relaxed to "take the first"`,
       apply: (r) => patchText(r, at, /if \(mine\.length !== 1\) process\.exit\(0\);/, 'if (mine.length === 0) process.exit(0);') },
     { id: `sh-${short}-session-stale`, label: `${file}: an unidentified cold run leaves the previous id in place`,
@@ -4782,9 +4912,9 @@ function readOnlyWrapperControls(file, short) {
     { id: `sh-exec-${short}-session-capture`, label: `${file}: the id parsed from the wrapper's own stdout again instead of the session store (executed)`,
       apply: (r) => patchText(r, at, /id="\$\(PNP_SESSIONS=[^\n]*\n/,
         'id="$(printf \'%s\' "$PNP_STDOUT_COPY" | sed -n \'s/.*session id: \\([0-9a-f-]*\\).*/\\1/p\' || true)"\n') },
-    { id: `sh-exec-${short}-bytes`, label: `${file}: the caller's stdout pushed through a line-oriented shell loop (executed)`,
-      apply: (r) => patchText(r, at, /codex "\$\{CODEX_ARGS\[@\]\}" \|\| status=\$\?/,
-        'codex "${CODEX_ARGS[@]}" | while IFS= read -r pnp_line; do printf \'%s\\n\' "$pnp_line"; done || status=$?') },
+    { id: `sh-exec-${short}-bytes`, label: `${file}: the final message pushed through a line-oriented shell loop (executed)`,
+      apply: (r) => patchText(r, at, 'cat "$LAST_FILE" || true',
+        () => 'while IFS= read -r pnp_line; do printf \'%s\\n\' "$pnp_line"; done < "$LAST_FILE" || true') },
     { id: `sh-exec-${short}-session-stale`, label: `${file}: an unidentified cold run leaves the previous id in place (executed)`,
       apply: (r) => patchText(r, at, /\n *clear_session_state\n\}/, '\n  true\n}') },
     { id: `sh-exec-${short}-session-fingerprint`, label: `${file}: a brief with no fingerprint matches every fresh rollout, so a stranger's id is recorded (executed)`,
@@ -5408,7 +5538,7 @@ function pgShProbe(root, w, tmpRoot) {
   if (ok && w.planArgv) {
     // The locked argv on the plan row: the gate adds nothing to what codex is handed.
     const expected = ['exec', '-C', probe.projectRoot, '-m', ROW_MODEL,
-      '--sandbox', 'read-only', '-c', 'approval_policy=never', '-c', `model_reasoning_effort=${ROW_EFFORT}`];
+      '--sandbox', 'read-only', '-c', 'approval_policy=never', '-c', `model_reasoning_effort=${ROW_EFFORT}`, '-o', LAST_FILE_ATOM];
     ok = JSON.stringify(probe.atoms) === JSON.stringify(expected);
   }
   return { ok, detail: `exit ${probe.status}; codex ${probe.atoms === null ? 'never invoked' : `invoked with ${probe.atoms.length} atoms`}` };
@@ -5682,103 +5812,370 @@ function sectionPlanGate(tmpRoot) {
 }
 
 // ---------------------------------------------------------------------------
-// SECTION 5d - the review wrappers' run header and run footer (both channels, recording stubs)
+// SECTION 5d - the review and QA wrappers' output contract (both channels, recording stubs)
 // ---------------------------------------------------------------------------
-// codex-review.{ps1,sh} print ONE line on stderr before codex starts and ONE after the session id is
-// recorded; codex's own streams are not touched, so stdout stays the stub's bytes exactly. Five
-// executed probes per channel, each asserted exact-string: the cold code-class pass (W-hdr: the ROW's
-// model and effort, the recorded id with the channel's resume flag), a RESUMED pass (the known id in
-// both lines), a CLASSLESS pass (`role reviewer` and the role's own hostile model and effort, their
-// newlines turned into spaces), a pass the store cannot identify (the `not identified` footer), and a
-// model that embeds a line break and a fake footer (still one run line, one exit line, the fake text
-// never at a line start). Every probe has a named-fault control on a copy that must turn it red.
-const HDR_RUN = 'codex-review: run ';
-const HDR_EXIT = 'codex-review: exit ';
-const HDR_FAKE = 'codex-review: exit 0, session FAKE';
-const HDR_INJECT_MODEL = `evil\n${HDR_FAKE}`;
+// codex-review and codex-qa, in .ps1 and .sh, carry ONE output contract (GATES D-05..D-08): codex's
+// stdout and stderr go to one log of the run's own under <temp>/pnp-codex, outside the project; the
+// wrapper's stdout is the final message codex wrote through -o, byte for byte, and nothing else; its
+// stderr carries its own lines in a fixed order - the run line, then after the run the tokens line,
+// the capacity line when it applies, the no-verdict line when there is no -o file, the log line and
+// the exit line. Every probe is asserted on the WHOLE ordered list of those lines, exact-string (the
+// log path read as "the run log" once its file name was checked against the run's one log), on the
+// stdout hex, on the exit code and on the log's name. Each has a named-fault control on a copy.
 /** What the wrappers print for a dynamic field: every control character one space. */
 const hdrField = (s) => String(s).replace(/[\x00-\x1F\x7F]/g, ' ');
 const HDR_RESUME_ID = SEEDED_IDS['last-review-session.txt'];
-const hdrExitRecorded = (flag, id) => `${HDR_EXIT}${STUB_EXIT}, session ${id} (resumable: ${flag} ${id})`;
-const HDR_PROBES = [
-  { id: 'W-hdr', label: 'cold, code class, the id recorded', ps: { klass: 'code' }, sh: [['--class', 'code'], {}],
-    run: `${HDR_RUN}cold, class code, model ${ROW_MODEL}, effort ${ROW_EFFORT}`, exit: (flag) => hdrExitRecorded(flag, STUB_SESSION_ID) },
-  { id: 'W-hdr-resumed', label: 'a RESUMED code-class pass from the recorded id', ps: { klass: 'code', seedState: SEEDED_IDS, extraArgs: '-Resume' },
-    sh: [['--class', 'code', '--resume'], { seedState: SEEDED_IDS }],
-    run: `${HDR_RUN}resumed ${HDR_RESUME_ID}, class code, model ${ROW_MODEL}, effort ${ROW_EFFORT}`, exit: (flag) => hdrExitRecorded(flag, HDR_RESUME_ID) },
-  { id: 'W-hdr-role', label: 'a CLASSLESS cold pass on the Reviewer role\'s own host (its newlines printed as spaces)', ps: { klass: null }, sh: [[], {}],
-    run: `${HDR_RUN}cold, role reviewer, model ${hdrField(HOSTILE_MODEL)}, effort ${hdrField(HOSTILE_EFFORT)}`, exit: (flag) => hdrExitRecorded(flag, STUB_SESSION_ID) },
-  { id: 'W-hdr-unidentified', label: 'a cold pass with no matching rollout in the store', psWarnsOnStdout: true, ps: { klass: 'code', writeRollout: false }, sh: [['--class', 'code'], { writeRollout: false }],
-    run: `${HDR_RUN}cold, class code, model ${ROW_MODEL}, effort ${ROW_EFFORT}`, exit: () => `${HDR_EXIT}${STUB_EXIT}, session not identified - the next resume needs an explicit id` },
-  { id: 'W-hdr-inject', label: 'a classless pass whose model embeds a line break and a fake footer', ps: { klass: null, roleRecord: { engine: 'codex', model: HDR_INJECT_MODEL, effort: 'high' } },
-    sh: [[], { roleRecord: { engine: 'codex', model: HDR_INJECT_MODEL, effort: 'high' } }],
-    run: `${HDR_RUN}cold, role reviewer, model ${hdrField(HDR_INJECT_MODEL)}, effort high`, exit: (flag) => hdrExitRecorded(flag, STUB_SESSION_ID) },
-];
-function hdrVerdict(probeDef, stderrText, stdoutHex, resumeFlag) {
-  const lines = String(stderrText).replace(/\x1b\[[0-9;]*m/g, '').split(/\r?\n/);
-  const runs = lines.filter((l) => l.startsWith(HDR_RUN));
-  const exits = lines.filter((l) => l.startsWith(HDR_EXIT));
-  const fake = lines.some((l) => l.startsWith(HDR_FAKE));
-  const exitWant = probeDef.exit(resumeFlag);
-  // PowerShell's host writes Write-Warning to STDOUT, and the unidentified run's warning ("this run
-  // could not be identified ...", which predates the header) lands there AFTER codex's bytes; on that
-  // probe stdout must START with the stub's bytes - codex's own output is still untouched.
-  const stdoutOk = probeDef.psWarnsOnStdout && resumeFlag === '-ResumeId' ? stdoutHex.startsWith(STUB_STDOUT_HEX) : stdoutHex === STUB_STDOUT_HEX;
-  const ok = runs.length === 1 && exits.length === 1 && runs[0] === probeDef.run && exits[0] === exitWant && !fake && stdoutOk;
-  const extra = stdoutHex === STUB_STDOUT_HEX ? '' : ` (stdout after the stub's bytes: ${JSON.stringify(Buffer.from(stdoutHex.replace(STUB_STDOUT_HEX, ''), 'hex').toString('utf8').slice(0, 90))})`;
-  return { ok, detail: `run lines ${runs.length}, exit lines ${exits.length}; fake footer at a line start ${fake}; stdout ${stdoutOk ? 'as required' : 'NOT as required'}${extra}; ${JSON.stringify(runs[0] || '(none)')} / ${JSON.stringify(exits[0] || '(none)')}` };
+const HDR_QA_RESUME_ID = SEEDED_IDS['last-qa-session.txt'];
+const OUT_WRAPPERS = {
+  review: { prefix: 'codex-review', ps: 'codex-review.ps1', sh: 'codex-review.sh' },
+  qa: { prefix: 'codex-qa', ps: 'codex-qa.ps1', sh: 'codex-qa.sh' },
+};
+const OUT_LOG_PLACEHOLDER = '<the run log>';
+const OUT_KEY_BRIEF = `Ticket: PX-001\n${STUB_BRIEF}`;
+/** The fake exit line a model value smuggles in, per wrapper prefix. */
+const outFake = (P) => `${P}: exit 0, session FAKE`;
+const outExit = (P, code, id) => (flag) => (id
+  ? `${P}: exit ${code}, session ${id} (resumable: ${flag} ${id})`
+  : `${P}: exit ${code}, session not identified - the next resume needs an explicit id`);
+const outName = (stem) => new RegExp(`^${stem}-[0-9]{8}-[0-9]{6}-[0-9]+\\.log$`);
+/** The probe table, one block per wrapper; `run`, `tokens`, `capacity` and `exit` are the exact lines. */
+function outProbesFor(w) {
+  const P = OUT_WRAPPERS[w].prefix;
+  const T = w === 'review' ? 'W' : 'Q';
+  // The review wrapper's cold pass is the code class (the ROW's host); the QA wrapper has no class,
+  // so its cold pass is the role's own hostile host.
+  const cold = w === 'review'
+    ? { ps: { klass: 'code' }, sh: [['--class', 'code'], {}], run: `${P}: run cold, class code, model ${ROW_MODEL}, effort ${ROW_EFFORT}`, seg: 'code' }
+    : { ps: {}, sh: [[], {}], run: `${P}: run cold, role qa, model ${hdrField(HOSTILE_MODEL)}, effort ${hdrField(HOSTILE_EFFORT)}`, seg: 'qa' };
+  const resumeId = w === 'review' ? HDR_RESUME_ID : HDR_QA_RESUME_ID;
+  const tokens = `${P}: tokens used ${STUB_TOKENS}`;
+  const noTokens = `${P}: tokens used: not printed by the engine`;
+  const injectModel = `evil\n${outFake(P)}`;
+  const injectRecord = { engine: 'codex', model: injectModel, effort: 'high' };
+  const sh = (extra, opts) => [[...cold.sh[0], ...extra], Object.assign({}, cold.sh[1], opts)];
+  const ps = (opts) => Object.assign({}, cold.ps, opts);
+  const probes = [
+    { id: `${T}-hdr`, label: 'a cold pass, the id recorded', ps: ps({}), sh: sh([], {}),
+      run: cold.run, tokens, exit: outExit(P, STUB_EXIT, STUB_SESSION_ID), code: STUB_EXIT, name: outName(cold.seg) },
+    { id: `${T}-hdr-resumed`, label: 'a RESUMED pass from the recorded id (the tokens figure is the session\'s running total)',
+      ps: ps({ seedState: SEEDED_IDS, extraArgs: '-Resume' }), sh: sh(['--resume'], { seedState: SEEDED_IDS }),
+      run: cold.run.replace(': run cold,', `: run resumed ${resumeId},`), tokens: `${tokens} (cumulative over session ${resumeId})`,
+      exit: outExit(P, STUB_EXIT, resumeId), code: STUB_EXIT, name: outName(cold.seg) },
+    { id: `${T}-hdr-unidentified`, label: 'a cold pass with no matching rollout in the store (the warning on stderr, stdout still exactly the -o bytes)',
+      ps: ps({ writeRollout: false }), sh: sh([], { writeRollout: false }), warns: true,
+      run: cold.run, tokens, exit: outExit(P, STUB_EXIT, null), code: STUB_EXIT, name: outName(cold.seg) },
+    { id: `${T}-hdr-inject`, label: 'a pass whose model embeds a line break and a fake exit line',
+      ps: w === 'review' ? { klass: null, roleRecord: injectRecord } : { roleRecord: injectRecord },
+      sh: [[], { roleRecord: injectRecord }],
+      run: `${P}: run cold, role ${w === 'review' ? 'reviewer' : 'qa'}, model ${hdrField(injectModel)}, effort high`, tokens,
+      exit: outExit(P, STUB_EXIT, STUB_SESSION_ID), code: STUB_EXIT, name: outName(w === 'review' ? 'reviewer' : 'qa') },
+    { id: `${T}-out-no-tokens`, label: 'an engine that printed no tokens line', ps: ps({ stubMode: 'no-tokens' }), sh: sh([], { stubMode: 'no-tokens' }),
+      run: cold.run, tokens: noTokens, exit: outExit(P, STUB_EXIT, STUB_SESSION_ID), code: STUB_EXIT, name: outName(cold.seg) },
+    { id: `${T}-out-capacity`, label: 'a capacity refusal (the text on stderr, no final message, exit 1)',
+      ps: ps({ stubMode: 'capacity' }), sh: sh([], { stubMode: 'capacity' }), noVerdict: true,
+      run: cold.run, tokens: noTokens, capacity: `${P}: engine refused: capacity, session ${STUB_SESSION_ID} resumable`,
+      exit: outExit(P, STUB_CAPACITY_EXIT, STUB_SESSION_ID), code: STUB_CAPACITY_EXIT, name: outName(cold.seg) },
+    { id: `${T}-out-no-verdict`, label: 'an engine that left no -o file (empty stdout, the no-verdict line before the log and exit lines)',
+      ps: ps({ stubMode: 'no-last' }), sh: sh([], { stubMode: 'no-last' }), noVerdict: true,
+      run: cold.run, tokens, exit: outExit(P, STUB_EXIT, STUB_SESSION_ID), code: STUB_EXIT, name: outName(cold.seg) },
+    { id: `${T}-out-two-logs`, label: 'two runs with one key, one temp directory - two distinct logs, each named by its own run',
+      ps: ps({ brief: OUT_KEY_BRIEF }), sh: sh([], { brief: OUT_KEY_BRIEF }), twoLogs: true,
+      code: STUB_EXIT, name: outName(`PX-001-${cold.seg}`) },
+  ];
+  if (w === 'review') {
+    probes.splice(2, 0, { id: 'W-hdr-role', label: 'a CLASSLESS cold pass on the Reviewer role\'s own host (its newlines printed as spaces)',
+      ps: { klass: null }, sh: [[], {}], run: `${P}: run cold, role reviewer, model ${hdrField(HOSTILE_MODEL)}, effort ${hdrField(HOSTILE_EFFORT)}`,
+      tokens, exit: outExit(P, STUB_EXIT, STUB_SESSION_ID), code: STUB_EXIT, name: outName('reviewer') });
+  }
+  return probes.map((p) => Object.assign(p, { w }));
 }
-const hdrPs = (root, tmpRoot, probeDef) => {
+const OUT_PROBES = [...outProbesFor('review'), ...outProbesFor('qa')];
+const outBase = (p) => String(p).split(/[\\/]/).pop();
+const outClean = (s) => String(s || '').replace(/\x1b\[[0-9;]*m/g, '').replace(/\r/g, '');
+/** The log path the wrapper's log line names, as a bare file name (null when there is none). */
+const outLogNamed = (P, stderr) => { const m = new RegExp(`^${P}: log (.+)$`, 'm').exec(outClean(stderr)); return m ? outBase(m[1]) : null; };
+function outVerdict(def, run, flag) {
+  const P = OUT_WRAPPERS[def.w].prefix;
+  const lines = outClean(run.stderr).split('\n');
+  const heads = ['run ', 'tokens used', 'engine refused: ', 'no verdict', 'log ', 'exit '].map((h) => `${P}: ${h}`);
+  const logName = run.logs.length === 1 ? run.logs[0] : null;
+  // The two lines that name the log are read as OUT_LOG_PLACEHOLDER only when the name they print is
+  // the run's one log; any other path stays and fails the comparison.
+  const shown = lines.filter((l) => heads.some((h) => l.startsWith(h)))
+    .map((l) => l.replace(/^(.*(?:: log |; log ))(.+)$/, (m, head, p) => (logName && outBase(p) === logName ? `${head}${OUT_LOG_PLACEHOLDER}` : m)));
+  const want = [def.run, def.tokens, ...(def.capacity ? [def.capacity] : []),
+    ...(def.noVerdict ? [`${P}: no verdict - the engine wrote no final message; log ${OUT_LOG_PLACEHOLDER}`] : []),
+    `${P}: log ${OUT_LOG_PLACEHOLDER}`, def.exit(flag)];
+  const fake = lines.some((l) => l.startsWith(outFake(P)));
+  const stdoutWant = def.noVerdict ? '' : STUB_LAST_HEX;
+  const linesOk = JSON.stringify(shown) === JSON.stringify(want);
+  const nameOk = logName !== null && def.name.test(logName);
+  const warnOk = !def.warns || /this run could not be identified/.test(lines.join('\n'));
+  const ok = linesOk && !fake && run.stdoutHex === stdoutWant && nameOk && warnOk && run.status === def.code;
+  return { ok, detail: `exit ${run.status} (want ${def.code}); stdout ${run.stdoutHex === stdoutWant ? 'exactly the -o bytes' : `NOT as required: ${JSON.stringify(Buffer.from(run.stdoutHex, 'hex').toString('utf8').slice(0, 80))}`}`
+    + `; log ${JSON.stringify(run.logs)} ${nameOk ? 'named as required' : 'NOT as required'}; fake exit line at a line start ${fake}${def.warns ? `; warning on stderr ${warnOk}` : ''}`
+    + `; lines ${linesOk ? 'as required' : `${JSON.stringify(shown)} (want ${JSON.stringify(want)})`}` };
+}
+/** One probe on one channel; a two-logs probe is two runs sharing one temp directory. */
+function outRun(ch, root, tmpRoot, def) {
+  const w = OUT_WRAPPERS[def.w];
+  const once = (runTemp) => {
+    if (ch === 'ps') {
+      const p = runPsWrapperWithStub(root, w.ps, tmpRoot, Object.assign({}, def.ps, runTemp ? { runTemp } : {}));
+      return { status: p.status, stderr: p.stderrText, stdoutHex: p.stdoutHex, logs: p.logs };
+    }
+    const p = runWrapperWithStub(root, w.sh, tmpRoot, def.sh[0], Object.assign({}, def.sh[1], runTemp ? { runTemp } : {}));
+    return { status: p.status, stderr: p.stderr, stdoutHex: p.stdoutHex, logs: p.logs };
+  };
   try {
-    const p = runPsWrapperWithStub(root, 'codex-review.ps1', tmpRoot, probeDef.ps);
-    return Object.assign(hdrVerdict(probeDef, p.stderrText, p.stdoutHex, '-ResumeId'), { status: p.status });
+    if (!def.twoLogs) return outVerdict(def, once(null), ch === 'ps' ? '-ResumeId' : '--resume');
+    const shared = fs.mkdtempSync(path.join(tmpRoot, 'out-two-logs-'));
+    const a = once(shared);
+    const b = once(shared);
+    const logs = runFilesIn(shared).logs;
+    const named = [outLogNamed(w.prefix, a.stderr), outLogNamed(w.prefix, b.stderr)];
+    const ok = a.status === def.code && b.status === def.code && logs.length === 2 && logs.every((n) => def.name.test(n))
+      && named[0] !== null && named[1] !== null && named[0] !== named[1] && logs.includes(named[0]) && logs.includes(named[1]);
+    return { ok, detail: `exits ${a.status}, ${b.status} (want ${def.code}); logs ${JSON.stringify(logs)}; the two runs named ${JSON.stringify(named)}` };
   } catch (e) { return { ok: false, detail: `the probe could not be built: ${e && e.message ? e.message : String(e)}` }; }
-};
-const hdrSh = (root, tmpRoot, probeDef) => {
-  try {
-    const p = runWrapperWithStub(root, 'codex-review.sh', tmpRoot, probeDef.sh[0], probeDef.sh[1]);
-    return Object.assign(hdrVerdict(probeDef, p.stderr, p.stdoutHex, '--resume'), { status: p.status });
-  } catch (e) { return { ok: false, detail: `the probe could not be built: ${e && e.message ? e.message : String(e)}` }; }
-};
+}
+/** The named-fault controls of one wrapper on the PowerShell channel: [id, label, target, from, to]. */
+function psOutControls(w) {
+  const P = OUT_WRAPPERS[w].prefix;
+  const T = w === 'review' ? 'W' : 'Q';
+  const id = (n) => (w === 'review' ? `ctl-hdr-ps-${n}` : `ctl-hdr-ps-qa-${n}`);
+  return [
+    [id('run'), 'the run line removed', `${T}-hdr`, new RegExp(`\\r?\\n\\[Console\\]::Error\\.WriteLine\\("${P}: run [^\\r\\n]*\\r?\\n`), '\n'],
+    [id('exit'), 'the exit line removed', `${T}-hdr`, new RegExp(`\\r?\\n {2}\\[Console\\]::Error\\.WriteLine\\("${P}: exit \\$code, session \\$sid [^\\r\\n]*\\r?\\n`), '\n'],
+    [id('resumed'), 'the "resumed" word patched to "cold"', `${T}-hdr-resumed`, '"resumed $ResumeId"', '"cold $ResumeId"'],
+    w === 'review'
+      ? [id('role'), 'the "role reviewer" literal patched to "role qa"', 'W-hdr-role', "{ 'role reviewer' }", "{ 'role qa' }"]
+      : [id('role'), 'the "role qa" literal patched to "role reviewer"', 'Q-hdr', 'role qa, model $(', 'role reviewer, model $('],
+    [id('unidentified'), 'the "not identified" exit line printing a fake id', `${T}-hdr-unidentified`, 'session not identified - the next resume needs an explicit id', 'session FAKE (resumable: -ResumeId FAKE)'],
+    [id('sanitize'), 'Sanitize-HeaderField returning its value unchanged', `${T}-hdr-inject`, "return ([string]$Value -replace '[\\x00-\\x1F\\x7F]', ' ')", 'return [string]$Value'],
+    [id('warning-stdout'), 'the unidentified-session warning back on Write-Warning, which the host prints on stdout', `${T}-hdr-unidentified`,
+      '[Console]::Error.WriteLine("WARNING: this run could not be identified', 'Write-Warning ("this run could not be identified'],
+    [id('tokens-shape'), 'the tokens pattern moved off the measured two-line shape', `${T}-hdr`, "$previousLine -ceq 'tokens used'", "$previousLine -ceq 'tokens used:'"],
+    [id('tokens-absent'), 'the "not printed by the engine" line removed', `${T}-out-no-tokens`, `[Console]::Error.WriteLine('${P}: tokens used: not printed by the engine')`, '$null = 0'],
+    [id('capacity'), 'the capacity detection switched off', `${T}-out-capacity`, 'if ($code -ne 0) {', 'if ($false) {'],
+    [id('no-verdict'), 'the no-verdict line removed', `${T}-out-no-verdict`, 'if (-not $hasVerdict) {', 'if ($false) {'],
+    [id('two-logs'), 'the per-run part of the log name (timestamp and pid) dropped', `${T}-out-two-logs`,
+      w === 'review' ? "\"$runSegment-$((Get-Date).ToString('yyyyMMdd-HHmmss'))-$PID\"" : "\"qa-$((Get-Date).ToString('yyyyMMdd-HHmmss'))-$PID\"",
+      w === 'review' ? '"$runSegment"' : '"qa"'],
+    [id('stdout'), 'the final message printed through Get-Content instead of the native helper', `${T}-hdr`, '& node $CaptureHelper --print $LastFile', 'Get-Content -LiteralPath $LastFile'],
+  ];
+}
+/** The named-fault controls of one wrapper on the bash channel: [id, label, target, from, to]. */
+function shOutControls(w) {
+  const P = OUT_WRAPPERS[w].prefix;
+  const T = w === 'review' ? 'W' : 'Q';
+  const id = (n) => (w === 'review' ? `ctl-hdr-sh-${n}` : `ctl-hdr-sh-qa-${n}`);
+  return [
+    [id('run'), 'the run line removed', `${T}-hdr`, new RegExp(`\\nprintf '${P}: run [^\\n]*\\n`), '\n'],
+    [id('exit'), 'the exit line removed', `${T}-hdr`, new RegExp(`\\n {2}printf '${P}: exit %s, session %s [^\\n]*\\n`), '\n  :\n'],
+    [id('resumed'), 'the "resumed" word patched to "cold"', `${T}-hdr-resumed`, 'RUN_MODE="resumed $RESUME_ID"', 'RUN_MODE="cold $RESUME_ID"'],
+    w === 'review'
+      ? [id('role'), 'the "role reviewer" literal patched to "role qa"', 'W-hdr-role', "RUN_HOST='role reviewer'", "RUN_HOST='role qa'"]
+      : [id('role'), 'the "role qa" literal patched to "role reviewer"', 'Q-hdr', 'role qa, model %s', 'role reviewer, model %s'],
+    [id('unidentified'), 'the "not identified" exit line printing a fake id', `${T}-hdr-unidentified`, 'session not identified - the next resume needs an explicit id', 'session FAKE (resumable: --resume FAKE)'],
+    [id('sanitize'), 'header_field printing its value unchanged', `${T}-hdr-inject`, "printf '%s' \"$1\" | LC_ALL=C tr '\\000-\\037\\177' ' '", "printf '%s' \"$1\""],
+    [id('warning-stdout'), 'the unidentified-session message printed on stdout', `${T}-hdr-unidentified`,
+      "so the next --resume will need an explicit id.\\n' \"$SESSION_STATE\" >&2", "so the next --resume will need an explicit id.\\n' \"$SESSION_STATE\""],
+    [id('tokens-shape'), 'the tokens pattern moved off the measured two-line shape', `${T}-hdr`, 'prev == "tokens used"', 'prev == "tokens used:"'],
+    [id('tokens-absent'), 'the "not printed by the engine" line removed', `${T}-out-no-tokens`, `printf '${P}: tokens used: not printed by the engine\\n' >&2`, ':'],
+    [id('capacity'), 'the capacity detection switched off', `${T}-out-capacity`, 'if [ "$status" -ne 0 ]; then', 'if false; then'],
+    [id('no-verdict'), 'the no-verdict line removed', `${T}-out-no-verdict`, 'if [ "$HAS_VERDICT" -eq 0 ]; then', 'if false; then'],
+    [id('two-logs'), 'the per-run part of the log name (timestamp and pid) dropped', `${T}-out-two-logs`,
+      w === 'review' ? 'RUN_STEM="$RUN_SEGMENT-$(date +%Y%m%d-%H%M%S)-$$"' : 'RUN_STEM="qa-$(date +%Y%m%d-%H%M%S)-$$"',
+      w === 'review' ? 'RUN_STEM="$RUN_SEGMENT"' : 'RUN_STEM="qa"'],
+    [id('stdout'), 'the final message pushed through a line-oriented shell loop', `${T}-hdr`, 'cat "$LAST_FILE" || true',
+      'while IFS= read -r pnp_line; do printf \'%s\\n\' "$pnp_line"; done < "$LAST_FILE" || true'],
+  ];
+}
 
 function sectionRunHeader(tmpRoot) {
-  section('REVIEW WRAPPERS - one run header and one run footer line on stderr, stdout untouched (both channels, recording stubs)');
-  const byId = (id) => HDR_PROBES.find((p) => p.id === id);
-  // One named fault per probe (two for W-hdr), [id, label, target probe, from, to] per channel. The
-  // sh exit line sits alone in its `then` branch beside the SID line, so it is replaced by `:`.
+  section('REVIEW AND QA WRAPPERS - the output contract: stdout exactly the -o file, the stderr lines in their order, one log per run outside the project (both channels, recording stubs)');
+  const byId = (id) => OUT_PROBES.find((p) => p.id === id);
   const channels = [
-    { ch: 'ps', file: 'codex-review.ps1', host: PWSH, hostWhy: 'neither `pwsh` nor `powershell` could be executed', run: hdrPs, copy: copyPsChannel, rel: psRel, controls: [
-      ['ctl-hdr-ps-run', 'the run line removed', 'W-hdr', /\r?\n\[Console\]::Error\.WriteLine\("codex-review: run [^\r\n]*\r?\n/, '\n'],
-      ['ctl-hdr-ps-exit', 'the exit line removed', 'W-hdr', /\r?\n {2}\[Console\]::Error\.WriteLine\("`ncodex-review: exit \$code, session \$sid [^\r\n]*\r?\n/, '\n'],
-      ['ctl-hdr-ps-resumed', 'the "resumed" word patched to "cold"', 'W-hdr-resumed', '"resumed $ResumeId"', '"cold $ResumeId"'],
-      ['ctl-hdr-ps-role', 'the "role reviewer" literal patched to "role qa"', 'W-hdr-role', "{ 'role reviewer' }", "{ 'role qa' }"],
-      ['ctl-hdr-ps-unidentified', 'the "not identified" branch printing a fake id', 'W-hdr-unidentified', 'session not identified - the next resume needs an explicit id', 'session FAKE (resumable: -ResumeId FAKE)'],
-      ['ctl-hdr-ps-sanitize', 'Sanitize-HeaderField returning its value unchanged', 'W-hdr-inject', "return ([string]$Value -replace '[\\x00-\\x1F\\x7F]', ' ')", 'return [string]$Value'],
-    ] },
-    { ch: 'sh', file: 'codex-review.sh', host: BASH, hostWhy: 'neither `bash` on PATH nor a Git-for-Windows bash could be executed', run: hdrSh, copy: copyShChannel, rel: shRel, controls: [
-      ['ctl-hdr-sh-run', 'the run line removed', 'W-hdr', /\nprintf 'codex-review: run [^\n]*\n/, '\n'],
-      ['ctl-hdr-sh-exit', 'the exit line removed', 'W-hdr', /\n {2}printf '\\ncodex-review: exit %s, session %s [^\n]*\n/, '\n  :\n'],
-      ['ctl-hdr-sh-resumed', 'the "resumed" word patched to "cold"', 'W-hdr-resumed', 'RUN_MODE="resumed $RESUME_ID"', 'RUN_MODE="cold $RESUME_ID"'],
-      ['ctl-hdr-sh-role', 'the "role reviewer" literal patched to "role qa"', 'W-hdr-role', "RUN_HOST='role reviewer'", "RUN_HOST='role qa'"],
-      ['ctl-hdr-sh-unidentified', 'the "not identified" branch printing a fake id', 'W-hdr-unidentified', 'session not identified - the next resume needs an explicit id', 'session FAKE (resumable: --resume FAKE)'],
-      ['ctl-hdr-sh-sanitize', 'header_field printing its value unchanged', 'W-hdr-inject', "printf '%s' \"$1\" | LC_ALL=C tr '\\000-\\037\\177' ' '", "printf '%s' \"$1\""],
-    ] },
+    { ch: 'ps', host: PWSH, hostWhy: 'neither `pwsh` nor `powershell` could be executed', copy: copyPsChannel, rel: psRel, file: (w) => OUT_WRAPPERS[w].ps, controls: psOutControls },
+    { ch: 'sh', host: BASH, hostWhy: 'neither `bash` on PATH nor a Git-for-Windows bash could be executed', copy: copyShChannel, rel: shRel, file: (w) => OUT_WRAPPERS[w].sh, controls: shOutControls },
   ];
   for (const c of channels) {
     if (!c.host) {
-      check(`[W-hdr-${c.ch}] a host is available to run ${c.file}`, false, `${c.hostWhy} - the run header is UNPROVEN on this channel`);
+      check(`[W-hdr-${c.ch}] a host is available to run the review and QA wrappers`, false, `${c.hostWhy} - the output contract is UNPROVEN on this channel`);
       continue;
     }
-    for (const p of HDR_PROBES) {
-      const r = c.run(PLUGIN_ROOT, tmpRoot, p);
-      check(`[${p.id}-${c.ch}] ${c.file} EXECUTED (${p.label}): exactly one "codex-review: run " line and one "codex-review: exit " line on stderr, each the exact expected text, codex's stdout bytes untouched`, r.ok, r.detail);
+    for (const p of OUT_PROBES) {
+      const r = outRun(c.ch, PLUGIN_ROOT, tmpRoot, p);
+      check(`[${p.id}-${c.ch}] ${c.file(p.w)} EXECUTED (${p.label}): the stderr lines are the contract's, in its order, each the exact expected text; stdout is exactly the -o bytes (empty without them); the log is the run's own, outside the project`, r.ok, r.detail);
     }
-    for (const [id, label, target, from, to] of c.controls) {
-      const broken = fs.mkdtempSync(path.join(tmpRoot, `hdr-${id}-`));
-      try { c.copy(PLUGIN_ROOT, broken); pgPatch(path.join(broken, ...c.rel(c.file)), from, to); } catch (e) { check(`[${id}] control could be applied: ${label} in ${c.file}`, false, String(e.message)); continue; }
-      const b = c.run(broken, tmpRoot, byId(target));
-      check(`[${id}] sabotage detected: ${label} in ${c.file} -> ${target}-${c.ch} turns red`, b.ok === false, b.ok ? 'still PASS - the check is vacuous' : `FAIL as required (${b.detail})`);
+    for (const w of ['review', 'qa']) {
+      for (const [id, label, target, from, to] of c.controls(w)) {
+        const broken = fs.mkdtempSync(path.join(tmpRoot, `hdr-${id}-`));
+        try { c.copy(PLUGIN_ROOT, broken); pgPatch(path.join(broken, ...c.rel(c.file(w))), from, to); } catch (e) { check(`[${id}] control could be applied: ${label} in ${c.file(w)}`, false, String(e.message)); continue; }
+        const b = outRun(c.ch, broken, tmpRoot, byId(target));
+        check(`[${id}] sabotage detected: ${label} in ${c.file(w)} -> ${target}-${c.ch} turns red`, b.ok === false, b.ok ? 'still PASS - the check is vacuous' : `FAIL as required (${b.detail})`);
+      }
     }
+  }
+  sectionCaptureHelper(tmpRoot);
+}
+
+// ---------------------------------------------------------------------------
+// SECTION 5e - the capture helper the PowerShell channel runs codex through (GATES D-12)
+// ---------------------------------------------------------------------------
+// scripts/native/codex-capture.mjs exists because PowerShell cannot write a native command's bytes to
+// a file: D0's 447-byte emitter came back from PS 5.1 `*>` as a 1796-byte UTF-16 log. The helper hands
+// codex ONE file handle for stdout and stderr, resolves codex WITHOUT a shell (an .exe spawned
+// directly, the npm shim's codex.js run by node, a .cmd never spawned), refuses an unresolvable codex
+// before any log exists, and never reuses a log. Each claim is EXECUTED - the helper run directly with
+// a PATH it is given, and once through the PowerShell review wrapper with D0's own emitter bytes - and
+// each has a named fault on a copy.
+const CAP_SHIM_JS = 'process.stdout.write("S1");process.stderr.write("S2");process.exit(6);\n';
+const CAP_EXE_JS = 'process.stdout.write("O1");process.stderr.write("E1");process.exit(5)';
+/** A PATH directory holding this platform's ordinary codex install: the npm shim on Windows, an executable elsewhere. */
+function capInstallDir(home) {
+  const dir = path.join(home, 'bin');
+  if (process.platform === 'win32') {
+    const pkg = path.join(dir, 'node_modules', '@openai', 'codex');
+    fs.mkdirSync(path.join(pkg, 'bin'), { recursive: true });
+    fs.writeFileSync(path.join(pkg, 'package.json'), '{"type":"commonjs"}\n');
+    fs.writeFileSync(path.join(pkg, 'bin', 'codex.js'), CAP_SHIM_JS);
+    // A shim that says so if it ever runs: the helper must never spawn a .cmd.
+    fs.writeFileSync(path.join(dir, 'codex.cmd'), '@echo off\r\necho THE-CMD-RAN\r\nexit /b 99\r\n');
+  } else {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'codex'), "#!/bin/sh\nprintf 'S1'\nprintf 'S2' >&2\nexit 6\n");
+    fs.chmodSync(path.join(dir, 'codex'), 0o755);
+  }
+  return dir;
+}
+/** The environment with PATH replaced by `dir` alone (every spelling of the variable dropped first). */
+function capEnv(dir) {
+  const env = Object.assign({}, process.env);
+  for (const k of Object.keys(env)) if (k.toUpperCase() === 'PATH') delete env[k];
+  env.PATH = dir;
+  return env;
+}
+function captureFindings(root, tmpRoot, only = null) {
+  const out = [];
+  const want = (id) => only === null || only === id;
+  const add = (id, name, ok, detail, skip = false) => { out.push({ id, name, ok: !!ok, detail: detail || '', skip }); };
+  const helper = path.join(root, ...CAPTURE_REL);
+  const runHelper = (args, env) => spawnSync(process.execPath, [helper, ...args], { env, input: '' });
+  const home = () => fs.mkdtempSync(path.join(tmpRoot, 'cap-'));
+  const logOf = (p) => (fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : null);
+  const isWin = process.platform === 'win32';
+  if (want('cap-static')) {
+    const buf = fs.existsSync(helper) ? fs.readFileSync(helper) : null;
+    const src = buf === null ? '' : buf.toString('utf8');
+    const ascii = buf !== null && buf.every((b) => b < 0x80);
+    const lf = buf !== null && !buf.includes(0x0d);
+    add('cap-static', 'codex-capture.mjs hands codex ONE file handle for both streams (stdio inherit, log, log) with shell: false and the argv an array, creates the log exclusively, runs the npm shim\'s codex.js with node rather than spawning the .cmd, uses no shell-executing API, and is ASCII-only with LF line ends',
+      buf !== null && src.includes("spawn(target.command, [...target.prefix, ...codexArgs], { stdio: ['inherit', logFd, logFd], shell: false })")
+      && src.includes("fs.openSync(logPath, 'wx')")
+      && src.includes('return { command: isFile(shimNode) ? shimNode : process.execPath, prefix: [entry] };')
+      && !/shell:\s*true|execSync|execFile|spawnSync|\bexec\(/.test(src) && ascii && lf,
+      buf === null ? 'the helper is missing' : `ASCII ${ascii}, LF-only ${lf}`);
+  }
+  if (want('cap-resolve')) {
+    const h = home();
+    const dir = capInstallDir(h);
+    const log = path.join(h, 'run.log');
+    const r = runHelper(['--log', log, '--', 'exec'], capEnv(dir));
+    const got = logOf(log);
+    add('cap-resolve', `codex-capture.mjs EXECUTED with ${isWin ? 'only the npm shim (codex.cmd and its node_modules/@openai/codex/bin/codex.js)' : 'an executable codex'} on PATH: ${isWin ? 'node runs the shim\'s codex.js - the .cmd never runs -' : 'codex is spawned directly -'} its stdout then stderr land in the log byte for byte, its exit code is returned, and nothing reaches the helper's own stdout`,
+      r.status === 6 && got === 'S1S2' && (r.stdout || Buffer.alloc(0)).length === 0,
+      `exit ${r.status} (want 6); log ${JSON.stringify(got)} (want "S1S2"); own stdout ${(r.stdout || Buffer.alloc(0)).length} bytes; ${firstLine((r.stderr || '').toString())}`);
+  }
+  if (want('cap-exe')) {
+    if (!isWin) {
+      add('cap-exe', 'codex-capture.mjs EXECUTED with a codex.exe on PATH', true, 'a Windows form; on this host cap-resolve proves the direct spawn of an executable codex', true);
+    } else {
+      const h = home();
+      const dir = path.join(h, 'bin');
+      fs.mkdirSync(dir, { recursive: true });
+      // node itself plays codex.exe: a hard link where the filesystem allows one (it does not under a
+      // protected install directory), a copy otherwise.
+      let placed = true;
+      try { fs.linkSync(process.execPath, path.join(dir, 'codex.exe')); } catch (e) {
+        try { fs.copyFileSync(process.execPath, path.join(dir, 'codex.exe')); } catch (e2) { placed = false; }
+      }
+      if (!placed) {
+        add('cap-exe', 'codex-capture.mjs EXECUTED with a codex.exe on PATH', true, 'node could be neither hard-linked nor copied as codex.exe here - the .exe form is UNPROVEN in this run', true);
+      } else {
+        const log = path.join(h, 'run.log');
+        const r = runHelper(['--log', log, '--', '-e', CAP_EXE_JS], capEnv(dir));
+        const got = logOf(log);
+        add('cap-exe', 'codex-capture.mjs EXECUTED with a codex.exe on PATH (node, linked or copied): the .exe is spawned directly with the argv as given, its stdout then stderr land in the log byte for byte, its exit code is returned',
+          r.status === 5 && got === 'O1E1', `exit ${r.status} (want 5); log ${JSON.stringify(got)} (want "O1E1"); ${firstLine((r.stderr || '').toString())}`);
+      }
+    }
+  }
+  if (want('cap-unresolvable')) {
+    const h = home();
+    const empty = path.join(h, 'empty');
+    fs.mkdirSync(empty);
+    const log = path.join(h, 'run.log');
+    const r = runHelper(['--log', log, '--', 'exec'], capEnv(empty));
+    const err = (r.stderr || '').toString().replace(/\r/g, '');
+    add('cap-unresolvable', 'codex-capture.mjs EXECUTED with no codex on PATH: exit 2, one "codex-capture: cannot resolve codex (<reason>)" line, and NO log written - a refusal before the engine',
+      r.status === 2 && /^codex-capture: cannot resolve codex \(.+\)\n$/.test(err) && !fs.existsSync(log),
+      `exit ${r.status}; ${JSON.stringify(err.slice(0, 120))}; log written ${fs.existsSync(log)}`);
+  }
+  if (want('cap-exclusive')) {
+    const h = home();
+    const dir = capInstallDir(h);
+    const log = path.join(h, 'run.log');
+    fs.writeFileSync(log, 'ANOTHER RUN\n');
+    const r = runHelper(['--log', log, '--', 'exec'], capEnv(dir));
+    const err = (r.stderr || '').toString();
+    add('cap-exclusive', 'codex-capture.mjs EXECUTED against a log path that already exists: exit 2, the existing file untouched and codex never run - a log is never shared by two runs',
+      r.status === 2 && /codex-capture: the run log could not be created \(EEXIST\)/.test(err) && logOf(log) === 'ANOTHER RUN\n',
+      `exit ${r.status}; log ${JSON.stringify(logOf(log))}; ${firstLine(err)}`);
+  }
+  if (want('cap-bytes')) {
+    if (!PWSH) {
+      add('cap-bytes', 'codex-review.ps1 EXECUTED with the D0 emitter: a PowerShell host is available', false, 'neither `pwsh` nor `powershell` could be executed - the PowerShell capture is UNPROVEN in this run');
+    } else {
+      const p = runPsWrapperWithStub(root, 'codex-review.ps1', tmpRoot, { stubMode: 'emit' });
+      add('cap-bytes', 'codex-review.ps1 EXECUTED with D0\'s emitter as the engine (non-ASCII UTF-8, CRLF and LF, a 300-character line, on stdout then stderr): the run log is hex-equal to the emitted bytes - stdout part then stderr part - and the wrapper\'s stdout is exactly the -o bytes',
+        p.logHex === EMIT_HEX && p.stdoutHex === STUB_LAST_HEX,
+        `log ${p.logHex.length / 2} bytes (want ${EMIT_HEX.length / 2}), equal ${p.logHex === EMIT_HEX}${p.logHex === EMIT_HEX ? '' : `, first difference at byte ${(() => { let i = 0; while (i < p.logHex.length && p.logHex.slice(i, i + 2) === EMIT_HEX.slice(i, i + 2)) i += 2; return i / 2; })()}`}; stdout ${p.stdoutHex === STUB_LAST_HEX ? 'exactly the -o bytes' : 'NOT the -o bytes'}; exit ${p.status}`);
+    }
+  }
+  return out;
+}
+/** One named fault per capture finding, applied to a copy of the PowerShell channel (helper included). */
+function captureControls() {
+  const helper = (from, to) => (r) => pgPatch(path.join(r, ...CAPTURE_REL), from, to);
+  return [
+    { id: 'cap-static', label: 'the helper spawning through a shell', apply: helper('shell: false })', 'shell: true })') },
+    process.platform === 'win32'
+      ? { id: 'cap-resolve', label: 'the helper spawning the npm shim .cmd itself', apply: helper('return { command: isFile(shimNode) ? shimNode : process.execPath, prefix: [entry] };', 'return { command: file, prefix: [] };') }
+      : { id: 'cap-resolve', label: 'the helper no longer taking an executable codex on PATH', apply: helper('if (isFile(file) && isExecutable(file)) return', 'if (false) return') },
+    { id: 'cap-exe', label: 'the helper skipping a codex.exe', apply: helper("if (ext === '.exe' || ext === '.com') return { command: file, prefix: [] };", "if (ext === '.exe' || ext === '.com') continue;") },
+    { id: 'cap-unresolvable', label: 'an unresolvable codex spawned by name instead of refused', apply: helper('if (target.error) refuse(`cannot resolve codex (${target.error})`);', "if (target.error) Object.assign(target, { command: 'codex', prefix: [] });") },
+    { id: 'cap-exclusive', label: 'the log opened for overwrite instead of exclusively', apply: helper("fs.openSync(logPath, 'wx')", "fs.openSync(logPath, 'w')") },
+    { id: 'cap-bytes', label: 'codex-review.ps1 back on PowerShell\'s own all-streams redirect (the D0 form)',
+      apply: (r) => pgPatch(path.join(r, ...psRel('codex-review.ps1')), '$Prompt | & node $CaptureHelper --log $LogFile -- @codexArgs', () => '$Prompt | & codex @codexArgs *> $LogFile') },
+  ];
+}
+function sectionCaptureHelper(tmpRoot) {
+  section('CAPTURE HELPER (scripts/native/codex-capture.mjs) - one file handle for both streams, codex resolved without a shell, executed');
+  const pristine = captureFindings(PLUGIN_ROOT, tmpRoot);
+  for (const f of pristine) {
+    if (f.skip) note(`[${f.id}] ${f.name}`, f.detail);
+    else check(`[${f.id}] ${f.name}`, f.ok, f.detail);
+  }
+  for (const c of captureControls()) {
+    const target = pristine.find((f) => f.id === c.id);
+    if (!target || target.skip) { note(`[ctl-${c.id}] control not run: ${c.label}`, 'its probe did not run on this host'); continue; }
+    const broken = fs.mkdtempSync(path.join(tmpRoot, `cap-ctl-${c.id}-`));
+    try { copyPsChannel(PLUGIN_ROOT, broken); c.apply(broken); } catch (e) { check(`[ctl-${c.id}] control could be applied: ${c.label}`, false, String(e.message)); continue; }
+    const f = captureFindings(broken, tmpRoot, c.id).find((x) => x.id === c.id);
+    check(`[ctl-${c.id}] sabotage detected: ${c.label} -> ${c.id} turns red`, !!f && f.ok === false,
+      f && f.ok ? 'still PASS - the check is vacuous' : `FAIL as required (${f ? f.detail : 'no finding'})`);
   }
 }
 

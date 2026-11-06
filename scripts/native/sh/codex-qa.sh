@@ -45,8 +45,17 @@
 # A-Za-z0-9_.- starting with a letter or digit is a refusal (exit 2). --resume-id <id>
 # is the same thing spelled with a mandatory value, and it implies --resume. Every run - cold or
 # resumed - records the session id afterwards from codex's OWN session store (never from this run's
-# output, which belongs to the caller), so the NEXT pass can be a resume instead of a second cold
+# output, which goes to the run log), so the NEXT pass can be a resume instead of a second cold
 # read of the whole evidence set.
+#
+# OUTPUT CONTRACT - the review wrapper's, with every line prefixed `codex-qa:`. codex's stdout and
+# stderr go to ONE log file of this run, outside the repository:
+# ${TMPDIR:-/tmp}/pnp-codex/<key>-qa-<YYYYmmdd-HHMMSS>-<pid>.log, and codex writes its final message
+# (-o) beside it, same stem, .last.txt. This wrapper's STDOUT is that final message, byte for byte, and
+# nothing else. Its STDERR carries, in this order: the run line before codex starts; after the run the
+# tokens line (the engine's last `tokens used` figure, never computed), the capacity line when the
+# engine refused at capacity, the no-verdict line when codex left no final message, the log line, and
+# the exit line. The exit code is codex's own; a refusal before the engine is exit 2.
 #
 # EXAMPLE:
 #   bash scripts/native/sh/codex-qa.sh --project-root /path/to/repo --brief-file .aiwf/<key>-qa-brief.txt
@@ -253,6 +262,19 @@ else
   SESSION_STATE="$PROJECT_ROOT_ABS/$SCRATCH_REL/last-qa-session.txt"
 fi
 
+# THE RUN'S OWN FILES, OUTSIDE THE REPOSITORY: the log that receives codex's stdout and stderr, and
+# the final message codex writes itself (-o) beside it with the same stem. The name is
+# <key>-qa-<YYYYmmdd-HHMMSS>-<pid> under ${TMPDIR:-/tmp}/pnp-codex (a brief with no key has no key
+# segment, as its state file has none). The files belong to the run that created them: the timestamp
+# plus this process id make the name unique, and an existing log is a refusal, so two runs never
+# share one - no lock. The session-state file is NOT touched by any of this: two runs with one key at
+# once remain what they always were, the one-executing-session-per-tree invariant the operator holds.
+RUN_DIR="${TMPDIR:-/tmp}/pnp-codex"
+RUN_STEM="qa-$(date +%Y%m%d-%H%M%S)-$$"
+if [ -n "$SESSION_KEY" ]; then RUN_STEM="$SESSION_KEY-$RUN_STEM"; fi
+LOG_FILE="$RUN_DIR/$RUN_STEM.log"
+LAST_FILE="$RUN_DIR/$RUN_STEM.last.txt"
+
 # --resume with no id means "the session THIS wrapper recorded last". A missing or empty state file
 # is a refusal with the path in it, never a silent cold run: a resume that quietly became a cold
 # pass would spend the operator's quota on the read-the-whole-evidence pass they were avoiding.
@@ -276,6 +298,8 @@ fi
 # `-c approval_policy=never` is a deliberate hardening on top of the proven posture: it pins the
 # approval mechanism explicitly (does NOT inherit it from ~/.codex/config.toml), so read-only cannot
 # be paired with an escalating approval policy.
+# `-o <file>` makes codex write its final message to this run's own file - the verdict this wrapper
+# prints on stdout; `codex exec resume` accepts the same flag (measured, codex-cli 0.156.1).
 CODEX_ARGS=(
   exec
   -C "$PROJECT_ROOT"
@@ -283,6 +307,7 @@ CODEX_ARGS=(
   --sandbox read-only
   -c approval_policy=never
   -c "model_reasoning_effort=$ROLE_EFFORT"
+  -o "$LAST_FILE"
 )
 
 # THE RESUME FORM IS FROZEN, AND IT IS A DIFFERENT COMMAND, NOT THE COLD ONE WITH A FLAG ADDED.
@@ -299,6 +324,7 @@ RESUME_ARGS=(
   -c approval_policy=never
   -c "model=$ROLE_MODEL"
   -c "model_reasoning_effort=$ROLE_EFFORT"
+  -o "$LAST_FILE"
   -
 )
 if [ "$RESUME" -eq 1 ]; then
@@ -312,12 +338,14 @@ if [ -z "$(printf '%s' "$PROMPT" | tr -d '[:space:]')" ]; then
 fi
 
 # THE SESSION ID IS READ FROM CODEX'S OWN SESSION STORE, NOT FROM THIS RUN'S OUTPUT.
-# BOTH output streams belong to the caller and this wrapper touches NEITHER. The reason is not
-# tidiness: codex renders its configuration banner - the part carrying the session id - on STDERR and
-# reserves STDOUT for the final message, and it decides what to render by whether those streams are a
-# terminal. A tee, a pipe or a redirect added here changes what the caller sees and what codex
-# prints; an earlier attempt to parse STDOUT captured nothing on a real run and duplicated the
-# caller's output. So the invocation below is the plain one, and the id is looked up afterwards.
+# Codex's two streams go to the run log, and NOTHING stands between codex and that log: the
+# invocation below redirects both straight to the file (`> "$LOG_FILE" 2>&1`), with no tee and no
+# pipe, so bash hands codex the file itself and every byte lands as codex wrote it. Codex renders by
+# whether its streams are a terminal; a file is what it sees under the PowerShell channel too, where
+# PowerShell cannot be the one writing the log (it re-encodes a redirected native stream - measured,
+# plan GATES D-12) and scripts/native/codex-capture.mjs does it instead. That capture mechanism is the
+# one documented difference between the two channels. An earlier attempt to parse the output for the
+# id captured nothing on a real run, so the id is looked up afterwards.
 #
 # The store is the one codex maintains itself - $CODEX_HOME (default ~/.codex), the same place
 # `codex exec resume --last` resolves against - where every session is one rollout-*.jsonl file whose
@@ -415,14 +443,91 @@ record_session_id() {
   fi
   if [ -n "$id" ]; then
     mkdir -p "$(dirname "$SESSION_STATE")" 2>/dev/null || true
-    printf '%s\n' "$id" > "$SESSION_STATE" 2>/dev/null \
-      || printf 'codex-qa: the session id could not be recorded in %s\n' "$SESSION_STATE" >&2
+    if printf '%s\n' "$id" > "$SESSION_STATE" 2>/dev/null; then
+      RECORDED_ID="$id"
+    else
+      printf 'codex-qa: the session id could not be recorded in %s\n' "$SESSION_STATE" >&2
+    fi
     return 0
   fi
   clear_session_state
 }
 
+# THIS WRAPPER'S STDOUT IS THE FINAL MESSAGE AND NOTHING ELSE: the bytes codex wrote through -o, by
+# `cat`. When codex left no final message, stdout stays EMPTY and stderr says so.
+#
+# THE STDERR LINES are this wrapper's own, written beside the run and never through it, in a fixed
+# order: the run line before codex starts (cold or resumed, the role, the model and effort the
+# resolver returned); after the run the tokens line, the capacity line when it applies, the no-verdict
+# line when there is no final message, the log line, and the exit line (the exit code, and the session
+# id with the flag that resumes it). They are information, never a decision: the exit code below is
+# codex's own.
+# THE TOKENS LINE is the engine's own figure, never computed. Measured on codex-cli 0.156.1: codex
+# prints `tokens used` on stderr as two lines - the words alone, then the figure with comma grouping
+# (`3,506`) - and on a resumed session the figure is the session's running total. The LAST such pair
+# in the log is printed as the engine wrote it; a log without one says so instead.
+# THE CAPACITY LINE: a run that exited non-zero with one of CAPACITY_TEXTS in its log was refused by
+# the engine at capacity (the recorded real text is "Selected model is at capacity"; not reproduced
+# at will, so the text is the recorded one). It names the session to resume when one was recorded. A
+# run that exited 0 is never called a refusal, whatever its log quotes.
+# EACH LINE IS ONE PHYSICAL LINE. Every dynamic field (run mode, resume id, model, effort, session id,
+# tokens figure, log path) passes through header_field, which turns every control character - CR, LF
+# and the rest of 0x00-0x1F, and 0x7F - into one space each: the schema admits any non-empty string
+# for a model or an effort, and a value carrying a line break could otherwise split a line or print a
+# fake exit line before codex has even started.
+header_field() {
+  printf '%s' "$1" | LC_ALL=C tr '\000-\037\177' ' '
+}
+CAPACITY_TEXTS=('at capacity')
+mkdir -p "$RUN_DIR" 2>/dev/null || fail "the run log directory could not be created: $RUN_DIR"
+if [ -e "$LOG_FILE" ] || [ -e "$LAST_FILE" ]; then
+  fail "this run's log already exists: $LOG_FILE - a log is never shared by two runs; start the run again."
+fi
+if [ "$RESUME" -eq 1 ]; then RUN_MODE="resumed $RESUME_ID"; else RUN_MODE='cold'; fi
+printf 'codex-qa: run %s, role qa, model %s, effort %s\n' "$(header_field "$RUN_MODE")" "$(header_field "$ROLE_MODEL")" "$(header_field "$ROLE_EFFORT")" >&2
+RECORDED_ID=''
 status=0
-printf '%s\n' "$PROMPT" | codex "${CODEX_ARGS[@]}" || status=$?
+printf '%s\n' "$PROMPT" | codex "${CODEX_ARGS[@]}" > "$LOG_FILE" 2>&1 || status=$?
 record_session_id "$RESUME"
+HAS_VERDICT=0
+if [ -f "$LAST_FILE" ]; then
+  HAS_VERDICT=1
+  cat "$LAST_FILE" || true
+fi
+TOKENS_FIGURE=''
+AT_CAPACITY=0
+if [ -f "$LOG_FILE" ]; then
+  TOKENS_FIGURE="$(awk '{ sub(/\r$/, "") } prev == "tokens used" && /^[0-9][0-9,]*$/ { n = $0 } { prev = $0 } END { printf "%s", n }' "$LOG_FILE" 2>/dev/null || true)"
+  if [ "$status" -ne 0 ]; then
+    for capacity_text in "${CAPACITY_TEXTS[@]}"; do
+      if grep -q -F -- "$capacity_text" "$LOG_FILE" 2>/dev/null; then AT_CAPACITY=1; fi
+    done
+  fi
+fi
+SID=''
+if [ -n "$RECORDED_ID" ]; then SID="$(header_field "$RECORDED_ID")"; fi
+LOG_SHOWN="$(header_field "$LOG_FILE")"
+if [ -z "$TOKENS_FIGURE" ]; then
+  printf 'codex-qa: tokens used: not printed by the engine\n' >&2
+elif [ "$RESUME" -eq 1 ]; then
+  printf 'codex-qa: tokens used %s (cumulative over session %s)\n' "$(header_field "$TOKENS_FIGURE")" "$(header_field "$RESUME_ID")" >&2
+else
+  printf 'codex-qa: tokens used %s\n' "$(header_field "$TOKENS_FIGURE")" >&2
+fi
+if [ "$AT_CAPACITY" -eq 1 ]; then
+  if [ -n "$SID" ]; then
+    printf 'codex-qa: engine refused: capacity, session %s resumable\n' "$SID" >&2
+  else
+    printf 'codex-qa: engine refused: capacity, session not identified\n' >&2
+  fi
+fi
+if [ "$HAS_VERDICT" -eq 0 ]; then
+  printf 'codex-qa: no verdict - the engine wrote no final message; log %s\n' "$LOG_SHOWN" >&2
+fi
+printf 'codex-qa: log %s\n' "$LOG_SHOWN" >&2
+if [ -n "$SID" ]; then
+  printf 'codex-qa: exit %s, session %s (resumable: --resume %s)\n' "$status" "$SID" "$SID" >&2
+else
+  printf 'codex-qa: exit %s, session not identified - the next resume needs an explicit id\n' "$status" >&2
+fi
 exit "$status"
