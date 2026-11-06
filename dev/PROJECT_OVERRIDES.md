@@ -242,8 +242,8 @@ dev/                the plugin's OWN development: this doc, answers.json, backlo
 .aiwf/              scratch (gitignored): ONLY the live loop mechanics - route-state.json, the
                     per-ticket files <key>-review-brief.txt, <key>-qa-brief.txt,
                     last-review-session.<key>.txt, last-qa-session.<key>.txt,
-                    <key>-readiness-round.txt (0.3.7), checkpoint.md (HARD-024) - and the
-                    artifacts of the CURRENT ticket
+                    checkpoint.md (HARD-024) - and the artifacts of the CURRENT ticket
+                    (the Codex run log and -o file live under <temp>/pnp-codex/ since GATES-004)
 ```
 
 **Where things are written** - the generic block is the managed `CLAUDE.md` region (0.3.1); this
