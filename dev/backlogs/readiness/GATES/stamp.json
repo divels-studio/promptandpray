@@ -1,0 +1,15 @@
+{
+  "plan": "GATES",
+  "contract": "317141b3db0547f038c295395d83ad1027548fe84d5ec6c523c6ed38e4fbae0a",
+  "files": {
+    "DECISIONS.md": "ff059d4ba171e990abcff3cc3aa96023c77b013c60738c585e9c2ec6ced8f553",
+    "PLAN_GATES.md": "d07c2ac0c0f2c5b8c86291702c8b6bdd7f0b42200a5d8bcc574b891d7893090a",
+    "tickets/GATES-001.md": "5307ea8b6a0a502c882cde4d4ac962a32b6fb39d198918ca9738562ad7facc59",
+    "tickets/GATES-002.md": "fee6fce0854c5e6cd01dd4dcb402768bfd3750e7c5ccea6a81765c993624b9dc",
+    "tickets/GATES-003.md": "f86829747c31e9fbe0895316ff53990b61ad88666cf84cefa23c2176205a9ec0",
+    "tickets/GATES-004.md": "ed58dd6ca6ae989760bc3824b558862d2de5d840af1aa780e455e19e4084ae9c",
+    "tickets/GATES-005.md": "17c22055b7f01a9d1ede4d8b53cb6d7fb1af0fb8cee54570f03e37bb1accb7d5"
+  },
+  "xrefs": {},
+  "stampedAt": "2026-11-06T09:43:16.922Z"
+}
