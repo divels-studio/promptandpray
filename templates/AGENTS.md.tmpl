@@ -1,9 +1,9 @@
 <!-- TEMPLATE CONTRACT (read by the generate engine, not by the reader of the rendered file)
      - ALWAYS rendered, at the project root: the instruction file a Codex-hosted auditor reads when
        the wrappers run it on the project root. A whole-file artifact - no region markers.
-     - VERSION-FREE BY CONTRACT: no plugin-root path, no version, no absolute path. The brief on
-       stdin names every payload file a pass needs by its resolved path, so nothing here can go stale
-       when the plugin updates.
+     - VERSION-FREE BY CONTRACT: no plugin-root path, no version, no absolute path. The brief the
+       wrapper hands the engine names every payload file a pass needs by its resolved path, so
+       nothing here can go stale when the plugin updates.
      - ROLE-FREE: the same file reaches the review AND the QA runs, so nothing in it belongs to one
        role - no verdict words, no boundary checks, no block over a config list.
      - The only placeholders are the project name and the project-relative overrides path.
@@ -18,11 +18,12 @@ This file is read by the Codex-hosted auditor that PromptAndPray dispatches with
 
 ## Where the contract is
 
-The brief on stdin is the contract: it names the review checklist and the verdict vocabulary of the pass; nothing here overrides it.
+The brief is the contract - the wrapper reads it from the file its `-BriefFile` / `--brief-file` flag names (stdin is the fallback) and hands it to the engine; it names the review stage file and the verdict vocabulary of the pass, and nothing here overrides it.
 
 ## Where the project's canon is
 
-- `{{config.paths.overridesDoc}}`
+- `{{config.paths.overridesDoc}}` - the project's identity, hard rules and product truth
+- `.claude/aiwf-native/ORCHESTRATOR.md` and `.claude/aiwf-native/doctrine/` (`work.md`, `ticket.md`, `plan.md`, `review.md`) - the rendered doctrine; the brief names the stage file a pass reads
 - `.claude/aiwf-native/aiwf.config.json`
 - `.claude/aiwf-native/roles.json`
 - `CLAUDE.md`

@@ -10,7 +10,11 @@ is any discovery or architecture decision left open (for every write, the lock a
 it); are the tickets executable in their order; is every ticket one shippable piece with one code
 commit - two tickets that are really one, or a plan that is really two missions, is a BLOCKER; can
 every acceptance command run as written and fail; are the branch and Git prerequisites valid; does
-every consumer of a changed surface move with it.
+every consumer of a changed surface move with it - verified against the index's `## Closing greps`
+(run the grep, compare the count) rather than re-derived, a set the plan changes with no grep there
+being a finding; for every function the plan changes that holds a transaction, a lock or more than
+one write, does RESEARCH.md carry its read / lock / write rows (a later write in the same
+transaction that nobody opened is a finding).
 
 <pass 2 only - delete on pass 1:
 YOUR PASS-1 FINDINGS, carried verbatim with the COO's disposition (also the file

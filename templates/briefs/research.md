@@ -7,7 +7,11 @@ GOAL OF THE PLAN (the operator's, for orientation - do not judge it): <goal>
 
 SURFACE TO SCAN: <the files, commands, config keys, contracts or behaviours this agent covers>
 Read by pointer: a grep hit and its neighbourhood, the section a symbol lives in - never a whole file
-to learn its role; the Code Map row needs the role, the facts need the lines.
+to learn its role; the Code Map row needs the role, the facts need the lines. ONE exception, the
+transactional read: a function the goal changes that holds a transaction, a lock or more than one
+write is read whole, from its first line to its last write, and section 2 carries one row per site
+in it - `read | lock | write`, the target and its `file:line` - so no later write in the same
+transaction stays unread (a function with one write and no lock is a pointer read, as above).
 
 BASE: <none - first plan of the entry | <plansDir>/active-or-archive/<X>/RESEARCH.md - report only
 what changed since that plan and what it did not cover>

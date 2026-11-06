@@ -237,9 +237,22 @@ anything that can read the tree, and finding them at review price is the most ex
 them (`ticket.md` § The COO write boundary runs along artifact class, not size - "COO-authored text
 is reviewed like the Writer's").
 
-Dispatch it with the **Agent tool**, `subagent_type: "Explore"` (or whichever read-only scan agent
-this harness ships), `model: sonnet`, and exactly this task - written here so it is reusable
-verbatim:
+**What the gate checks, by class.** On `Class: docs` every factual claim of the prose. On `Class:
+code` only the CROSS-REFERENCE claims: a pointer into another file (a `file:line`, a symbol, a
+decision id), a fixture fact a test asserts, a count, a command, a claim about how an engine, a hook
+or a library behaves - a comment that only describes the line under it is the auditor's to read, not
+the gate's. **Its suppression dual:** a prose delta of a few lines carrying no pointer - a reworded
+sentence, a comment - is the COO's own first-hand read, recorded as one line in
+`<scratchDir>/<REF>-diff-review.md`; no agent is dispatched for it.
+
+**One agent for a short diff, two for a long one.** When the prose of the diff runs past roughly a
+hundred claims, a `haiku` scan first EXTRACTS the claim list - one row per claim: the doc line, the
+claim shortened, the file it points at; no verification - and the `sonnet` scan below then verifies
+THAT LIST (handed to it under DOCUMENT in place of the diff), so the judgement runs over a list
+instead of over the whole diff; a shorter diff takes the one `sonnet` scan with the diff pasted.
+Either way the verifying agent is dispatched with the **Agent tool**, `subagent_type: "Explore"` (or
+whichever read-only scan agent this harness ships), `model: sonnet`, and exactly this task - written
+here so it is reusable verbatim:
 
 ```
 Verify EVERY factual claim in the prose of this document - path, line number, count, command,
@@ -248,6 +261,9 @@ a hook or an engine is verified in the code that implements it (scripts/, hooks/
 never in a document that describes it; a claim about a library is verified in node_modules (or the
 installed package), never from memory. Return a LEDGER with one row per claim, in document order:
 <doc line> | <claim, shortened> | VERIFIED <file:line> | FALSE <correct value> | UNVERIFIABLE <why>
+Compress the reply, not the work: every FALSE and UNVERIFIABLE row in full, in document order;
+the VERIFIED rows folded per target file into one line each,
+VERIFIED <file>: <n> claims (doc lines <a>, <b>, ...) - every claim is still opened.
 No sampling, no spot-checking, no "everything else resolved": a claim you did not open is
 UNVERIFIABLE with the reason "not opened". End with
 CLAIMS: total=<n> verified=<n> false=<n> unverifiable=<n>. No verdict, no review, no suggestions.

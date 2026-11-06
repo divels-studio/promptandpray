@@ -106,9 +106,14 @@ with the skill loaded before any scan agent; a hand-built readiness pass is a ro
 refutation / deferred / asked - in `<plansDir>/readiness/<ABBR>/round-<N>.md`: the table verbatim
 plus a disposition column. A finding that disputes a recorded decision goes to the operator, not
 into a revision. The planner writes the fix. A revision closes the blockers it was handed and adds
-nothing new: a change that opens new surface is a candidate for the next plan. A revision that does
-not reduce the count of carried OPEN rows stops the cycle and goes to the operator; a blocker born of
-added scope is named separately, never counted as carried. The auditor's cut question
+nothing new. **A finding that opens new surface** - one that can be answered only by something the
+plan does not have: a lock, a helper, a new write path, a collection written by another path - takes
+one of two dispositions, by name: `deferred to the next plan` (the surface leaves this plan's scope;
+a roadmap line at the landing) or `asked` (the plan's scope is wrong; the cycle stops and the
+operator decides) - never `fixed` by expansion. **Its suppression dual:** a finding closed by
+wording, a command, a pointer or a property the plan already has is `fixed` in the revision. A
+revision that does not reduce the count of carried OPEN rows stops the cycle and goes to the
+operator; a blocker born of added scope is named separately, never counted as carried. The auditor's cut question
 (`docs/READINESS_CLASSES.md` class 16, under check 4 below): every ticket is one shippable piece with
 one code commit - two tickets that are one, or a plan that is two missions, is a BLOCKER.
 
@@ -117,7 +122,13 @@ own explicit word, and only when pass 1 returned a BLOCKER that reverses a recor
 the COO names a risk - security, tenancy, concurrency, transactions - after a substantive revision;
 its brief carries `round-1.md` verbatim (`ticket.md` § Fail aggregation). `review.plan.passes` is the
 ceiling (factory 2) and no pass runs beyond it without the operator's explicit word; at `0` the plan
-gets no auditor, which `/pnp:roles` prints as `no auditor`.
+gets no auditor, which `/pnp:roles` prints as `no auditor`. **A mechanism admitted after a
+new-surface finding restarts the count.** When the operator's answer to an `asked` disposition puts
+the mechanism INTO the plan, the next pass is a pass 1 again - cold, over the whole re-stamped
+folder, the earlier round files carried as history, the ceiling counted from it - because a resumed
+session would be reading a plan that no longer exists; the word that admits the mechanism is the
+word for that pass. **Its suppression dual:** a revision of wording, a command, a pointer or a
+property the plan already has keeps the resumed pass.
 
 **The session rule.** A readiness cycle starts in a fresh session. The COO session holds the plan
 index, the state and the verdict lines; it reads the approved tickets once and carries no revision

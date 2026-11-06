@@ -4,6 +4,56 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.3.11] - 2026-11-06
+
+The planning briefs carry what the first measured multi-service plans taught; the Writer runs only
+what it adds and the ticket's VERIFY rows are the COO's; the fact-check gate is cheaper; two stale
+"brief on stdin" sentences are corrected.
+
+### Added
+
+- **The transactional read in the research brief** - a function the goal changes that holds a
+  transaction, a lock or more than one write is read whole, and the facts carry one
+  `read | lock | write` row per site; everything else stays a pointer read
+  (`templates/briefs/research.md`).
+- **The closing greps stand in the plan** - the planner copies the brief's `CLOSING GREPS` block into
+  the index under `## Closing greps` (per set: the grep, the hit count, the hits), and the readiness
+  brief verifies that section instead of re-deriving the enumeration (`templates/briefs/planner.md`,
+  `templates/briefs/readiness-codex.md`).
+- **The `VERIFY COMMANDS` slot of the planner brief** - `verify.commands` and `verify.e2e.runner`
+  quoted verbatim from `aiwf.config.json`, so a ticket never carries a command in another shell's
+  form.
+- **Two dispositions for a finding that opens new surface** - `plan.md` § Plan readiness review:
+  `deferred to the next plan` or `asked`, never `fixed` by expansion; a mechanism the operator admits
+  into the plan after such a finding restarts the readiness count with a cold pass over the
+  re-stamped folder.
+
+### Changed
+
+- **The Writer runs only what it adds** - the Writer agent's § VERIFY and § Done contract and
+  `ticket.md` § Role boundaries now say what `work.md` § Tests said: the tests it adds (red, then
+  green) and the commands its brief names; the ticket's VERIFY rows are run once by the COO or its
+  check agent at the handoff.
+- **The fact-check gate costs less** - `/pnp:review` Step 2b: on a code-class diff only the
+  cross-reference claims; a `haiku` extraction of the claim list before the `sonnet` verification when
+  the prose is long; a few-line pointer-free prose delta is the COO's own recorded read; the reply
+  carries the FALSE and UNVERIFIABLE rows in full and folds the VERIFIED ones per file.
+- **No hand-edit request** - `ticket.md` § Role boundaries: when auto mode refuses a write, the COO
+  asks for a mode that asks and never asks the operator to open and edit a file by hand.
+- **The overrides seed's "Restate scope" line** no longer asks for a confirmation before the first
+  change (it contradicted guard (b)); a seed is written once, so an installed overrides document keeps
+  its own line until its operator rewords it.
+
+### Fixed
+
+- **"The brief on stdin" in `AGENTS.md` and `review.md`** - the wrappers have read the brief from the
+  file `-BriefFile` / `--brief-file` names since 0.3.7, stdin the fallback; `AGENTS.md` also names the
+  rendered core and stage files among the project's canon.
+  - Migration `0036_planning-briefs-and-verify-owner` re-renders `plan.md`, `ticket.md`,
+    `review.md`, the Writer agent and `AGENTS.md`; every additions block is carried.
+
+Retires local rules: plan.md § project additions: "The planning COO" rules 1-3 (the flow read before the planner; the enumeration stands in the plan; the project's commands come from the config) - its rule 4 (a data claim verified on the project's real database) stays local; plan.md § project additions: "A finding that opens new surface"; writer.md § project additions: "VERIFY - who runs it" (the Writer runs only what it adds; the ticket's VERIFY is the COO's check agent's). "Side-by-side tickets" stays local until the plan gate carries it.
+
 ## [0.3.10] - 2026-11-06
 
 A plan's ticket count is a decision of the plan: the COO decides it with one reason before the

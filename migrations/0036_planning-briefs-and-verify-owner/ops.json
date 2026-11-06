@@ -1,0 +1,17 @@
+{
+  "migration": "0036_planning-briefs-and-verify-owner",
+  "targetPluginVersion": "0.3.11",
+  "operations": [
+    { "op": "rerender-managed-region", "file": ".claude/aiwf-native/doctrine/plan.md", "region": null, "template": "templates/doctrine/plan.md.tmpl" },
+    { "op": "rerender-managed-region", "file": ".claude/aiwf-native/doctrine/ticket.md", "region": null, "template": "templates/doctrine/ticket.md.tmpl" },
+    { "op": "rerender-managed-region", "file": ".claude/aiwf-native/doctrine/review.md", "region": null, "template": "templates/doctrine/review.md.tmpl" },
+    { "op": "rerender-managed-region", "file": ".claude/agents/writer.md", "region": null, "template": "templates/agents/writer.md.tmpl" },
+    { "op": "rerender-managed-region", "file": "AGENTS.md", "region": null, "template": "templates/AGENTS.md.tmpl" },
+    {
+      "op": "note",
+      "id": "planning-briefs-and-verify-owner-0-3-11",
+      "text": "0.3.11 carries into the payload what the first measured multi-service plans taught. The planning briefs: the research brief reads a function that holds a transaction, a lock or more than one write WHOLE and returns one read / lock / write row per site (the pointer read stays the rule for everything else); the planner brief gains a VERIFY COMMANDS slot quoted verbatim from aiwf.config.json and copies its CLOSING GREPS block into the plan index under '## Closing greps', which the readiness brief verifies instead of re-deriving. plan.md: a readiness finding that can be answered only by something the plan does not have takes one of two dispositions by name - 'deferred to the next plan' or 'asked' - never 'fixed' by expansion; a mechanism the operator then admits into the plan restarts the readiness count with a cold pass over the re-stamped folder. The Writer: it runs only the tests it adds and the commands its brief names; the ticket's VERIFY rows are the COO's run at the handoff - the Writer agent, ticket.md and work.md now say the same thing, so a local rule that said it retires. ticket.md: the COO never asks the operator to hand-edit a file when auto mode refuses a write; a mode that asks is the path. The fact-check gate (/pnp:review Step 2b) is cheaper: on code-class diffs only cross-reference claims, a haiku extraction before the sonnet verification on long prose, the reply compressed to the false and unverifiable rows. AGENTS.md and review.md say the brief arrives through the brief file (-BriefFile / --brief-file), stdin the fallback, as the wrappers have done since 0.3.7. The overrides SEED's 'Restate scope' line no longer asks for a confirmation before the first change (guard (b)): a seed is written once, so an installed overrides document keeps its own line - delete or reword it on your operator's word. This update re-renders plan.md, ticket.md, review.md, the Writer agent and AGENTS.md; every additions block is carried.",
+      "docRefs": ["CHANGELOG.md", "templates/briefs/research.md", "templates/briefs/planner.md", "skills/review/SKILL.md"]
+    }
+  ]
+}

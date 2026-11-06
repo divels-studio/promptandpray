@@ -11,8 +11,13 @@ names, and only where you write a Code Map row or a worklist pointer - never a w
 row needs the file's role, which the research already gives.
 TICKET COUNT: <COO-filled - `<n> - <reason>`, the plan's ticket count the COO decided from the
 roadmap entry's Size and the research; or `default` (= 3)>
-CLOSING GREPS: <COO-filled - the consumer enumeration of every symbol the plan changes, `file:line`
-each, so you never ask for it>
+CLOSING GREPS: <COO-filled - the consumer enumeration of every symbol the plan changes: per set, the
+grep that closes it and its hit count, `file:line` each, so you never ask for it; you copy this
+block verbatim into the index under `## Closing greps`>
+VERIFY COMMANDS: <COO-filled - `verify.commands` and `verify.e2e.runner` quoted VERBATIM from
+`.claude/aiwf-native/aiwf.config.json`, one line each; a ticket's Verify names its rows from this
+list and never rewrites a command in another shell's form; a unit file list the config does not
+carry is written on the overrides' form>
 <on a revision: ROUND FILE: <plansDir>/readiness/<ABBR>/round-<N>.md - fix every row whose
 disposition is `fixed`; touch nothing else>
 <on a gate refusal: GATE PROBLEMS: <the plan-gate lines, verbatim> - fix exactly these>
@@ -29,7 +34,9 @@ THE FOLDER CONTRACT (checked mechanically by `plan-gate.js` - a breach is refuse
   refused); `## Goal` (one paragraph), `## Scope` (in / out), `## Tickets` - one table
   `| ref | title | implements | status | record |`, every status `open`, every record `-` - then
   the order of the tickets and the gates each one passes (the operator's word, the review passes,
-  the commit dialogs, a tag or push word if any). You write no
+  the commit dialogs, a tag or push word if any); then `## Closing greps` - the CLOSING GREPS block
+  copied verbatim (per set: the grep, the hit count, the hits), so the enumeration sits in the
+  stamped folder and the auditor verifies it instead of re-deriving it. You write no
   `## Measurements` and no `## Roadmap entry`: the COO writes both into the index on the approval,
   before the landing.
 - `<folder>/tickets/<ABBR>-NNN.md` - at most the declared count (`Tickets:` in the index, copied
