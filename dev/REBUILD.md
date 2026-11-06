@@ -56,6 +56,18 @@
   1456/1456, under auto mode). PARPLAN is done without a plan - the roadmap entry leaves (LEDGER
   `done` row). Tag + push 0.3.6: the operator's two words. Next: DOCSTAGE (step 12) - its planning
   runs beside a ticket now, its readiness pass beside a ticket's pass.
+- 2026-11-06, PLANCAP-001 DONE (born 2026-11-05 from the Silerax PLAN_ALOG arbitration; operator words
+  „да за двете", "Да, един пас", "PLANCAP-001 тук"): release 0.3.10 - the plan's ticket count is a
+  decision of the plan, declared in its index as `Tickets: <n> - <reason>` (first line counts, 1-99,
+  fenced lines declare nothing; absent -> the default 3; malformed or a second line refuses with
+  `tickets-cap-malformed:<line>`); the COO decides it before the planner (planner brief slot
+  `TICKET COUNT`), the auditor judges the cut (readiness class 16). Code `1be8a29` (non-durable R2, no
+  plan; Writer; Fable COO on the operator's choice; Codex code pass 1 cold `pass-with-notes` 0 blockers
+  at 76,940 tokens; fact-check 93 claims / 2 false fixed in a micro-round; Portion 1 once at handoff:
+  selfcheck CI form 1600/1600, spikes 418/0, update-suite 455/0, validate-payload 35 migrations 0.3.10,
+  the migration rendered on a scratch copy; self-install apply self-check 1598/1598). PLANCAP is done
+  without a plan - the roadmap entry leaves (LEDGER `pass` + `done` rows). Tag + push 0.3.10: the
+  operator's two words.
 - RBC-001 done (`bf018ac`, record `31909bd`, amendment `90a2f81`). RBC-002 done (`a10110f`, record
   `744cc4b`): WORKFLOW + LOOP + REVIEW_CHECKLIST + overrides 54.6k -> 38.7k tokens (claude-opus-5-5
   via `claude -p`, base `90a2f81`), every rule homed (four rule-homes tables, homeless 0), the
