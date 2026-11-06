@@ -200,8 +200,8 @@ Entries below were ported on 2026-10-18 from `dev/backlogs/CANDIDATES.md` (now h
   - 2026-11-03 harvest F6 (Furnissimo TESTENV) - the engine's stream (~6,000 lines per pass) goes to a log file outside the repository; the wrapper prints only the verdict, the token figure and the session id [dev/backlogs/inputs/harvest-2026-11-03.md F6] done 6984415
   - 2026-11-03 harvest F9/F23 (Furnissimo TESTENV-002, operator fact 2026-10-18) - the "tokens used" figure of a resumed pass is the session's running total, not the pass's own cost; the wrapper prints the increment, or labels the figure cumulative [dev/backlogs/inputs/harvest-2026-11-03.md F9] done 6984415
 - Size: S
-- Plans: PLAN_GATES (`active/GATES/`, landed 2026-11-06) takes the three output items - the stream to a log, the capacity line, the cumulative tokens label (GATES-004); the PS-EOL, `multi_agent`, round-file skeleton and effort-flag items stay here with no plan yet
-- Status: in progress
+- Plans: PLAN_GATES (`archive/019_PLAN_GATES_2026-11-06/`, landed and archived 2026-11-06, release 0.3.12) took the three output items - the stream to a log, the capacity line, the cumulative tokens label (GATES-004); the PS-EOL, `multi_agent`, round-file skeleton and effort-flag items stay here with no plan yet
+- Status: idea
 - Born: 2026-10-18, operator word „продължи три"
 
 ## SETUP - setup and naming: open items
@@ -238,17 +238,4 @@ Entries below were ported on 2026-10-18 from `dev/backlogs/CANDIDATES.md` (now h
 - Plans: none yet
 - Status: idea
 - Born: 2026-10-18, operator word „продължи три"
-
-## GATES - the enforcement hooks: open items
-- Goal: a rule that sessions keep breaking in the same shape is carried by a hook, and no hook refuses a legitimate act outside the repository
-- Why: the 2026-11-03 harvest - `git -C` broken four times in three projects although a written rule forbids it, the habit guard bypassed by a nested form, Gate 1 refusing a scratchpad write twice (harvest S1, S6, F20, F41)
-- Scope: in - the items below; out - the fail directions of the gates (a flip is R3, overrides § Architecture direction)
-  - done 4122b27 (GATES-001) - 2026-11-03 harvest S1 + F20 + PnP DOCSTAGE ledger (twice) - `git -C <path>` from a COO, four occurrences in three projects (Silerax after the operator's `! cd` moved the cwd; Furnissimo to read Silerax's log; PnP reading the live copy's HEAD twice) though "run git bare from the repo root, no `-C` prefix" stands in every CLAUDE.md; today only `git -C <root> push|merge|rebase` asks - the habit guard denies `git -C` for every verb, with a hint naming the bare form and the file tools for a foreign tree [dev/backlogs/inputs/harvest-2026-11-03.md S1, F20]
-  - done 4122b27 (GATES-001) - 2026-11-03 harvest S6 (Silerax IWRC-003) - the habit guard misses a nested form: a check agent denied `Set-Location` twice ran `& { Push-Location ... }` [dev/backlogs/inputs/harvest-2026-11-03.md S6]
-  - done 2c1ad1d (GATES-002) - 2026-11-03 0.3.9 release session + harvest F41 (Furnissimo 2026-10-04) - Gate 1 (`[AIWF-N3 gate 1: non-writer subagents cannot write]`) refuses a non-writer subagent's Edit/Write on a file in the harness scratchpad OUTSIDE the repository, while § COO owns broad scans sends a procedure agent to write files and to make a gate fail "on a copy - a fixture project or a scratch copy": the gate compares the target with the project root, or the doctrine's wording changes - one of the two (operator word „Ред в roadmap"; two occurrences) [dev/backlogs/inputs/harvest-2026-11-03.md F41; the render dry-run of 6efd103 ran without its probe]
-  - done a5d883c (GATES-003) - 2026-11-05 Silerax PLAN_ALOG (the PNP WIP arbiter's ruling) - `scripts/engine/plan-gate.js` checks that tickets the index declares side by side have Code Maps intersecting in zero paths (it already reads every Code Map); a shared path refuses the stamp with the two refs and the path (ALOG B9: two tickets sharing two files were put side by side, and path staging cannot separate their hunks - one code commit per ticket); the local sentence stands in Stratex `plan.md` project additions "Side-by-side tickets" until the gate carries it [D:\Stratex\dev\backlogs\readiness\ALOG\ledger.md § Rulings]
-- Size: S
-- Plans: PLAN_GATES (`active/GATES/`, landed 2026-11-06; all four items of this entry plus § CODEX's three output items; release 0.3.12; operator word „Един план върху ROADMAP § GATES и § CODEX, с деклариран брой тикети, release 0.3.12.")
-- Status: in progress
-- Born: 2026-11-03, operator word „Ред в roadmap"
 

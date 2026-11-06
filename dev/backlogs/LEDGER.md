@@ -20,7 +20,7 @@ directory.
 - RBB - readiness/RBB/, archive/013_PLAN_RBB_2026-10-17/records/
 - RBC - readiness/RBC/, archive/015_PLAN_RBC_2026-10-18/records/
 - GENERIC - readiness/GENERIC/, archive/016_PLAN_GENERIC_2026-10-18/records/
-- GATES - readiness/GATES/ (its ledger.md: the three readiness passes, the operator's words beyond the ceiling, the ticket-cap change), active/GATES/records/
+- GATES - readiness/GATES/ (its ledger.md: the three readiness passes, the operator's words beyond the ceiling, the ticket-cap change, the GATES-004 ruling), archive/019_PLAN_GATES_2026-11-06/records/ (landed and executed 2026-11-06 - release 0.3.12; ROADMAP § GATES closed with it, § CODEX stays for its remaining items)
 - RULEHOME - readiness/RULEHOME/ (its ledger.md: rulings, passes, events), archive/017_PLAN_RULEHOME_2026-10-31/ (executed in full 2026-10-31: 001 payload prose f61817f, 002 code 6bb25dc + release 0.3.7, 003 the Silerax harvest / removal / diet; records in the archive folder)
 - DOCSTAGE - readiness/DOCSTAGE/ (stamp, round-1.md, round-2.md, ledger.md), archive/018_PLAN_DOCSTAGE_2026-11-02/records/ (landed 2026-11-01, archived 2026-11-02 - release 0.3.8; the first plan of ROADMAP § DOCSTAGE, the entry stays for its second plan)
 
