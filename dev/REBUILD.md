@@ -67,7 +67,17 @@
   selfcheck CI form 1600/1600, spikes 418/0, update-suite 455/0, validate-payload 35 migrations 0.3.10,
   the migration rendered on a scratch copy; self-install apply self-check 1598/1598). PLANCAP is done
   without a plan - the roadmap entry leaves (LEDGER `pass` + `done` rows). Tag + push 0.3.10: the
-  operator's two words.
+  operator's two words - given the same day (tag `v0.3.10` on `4d01636`, pushed).
+- 2026-11-06, release 0.3.11 (R1 prose, `c8ddf63`; operator „пускаме 3.11 сега"): the planning briefs
+  carry the ALOG lessons (transactional read, closing greps in the index, VERIFY COMMANDS), plan.md's
+  two dispositions + cold restart, the Writer runs only what it adds, no hand-edit request, the
+  fact-check gate cheaper, the stdin sentences fixed; migration 0036; `Retires` names the consumers'
+  planning-COO rules 1-3, the new-surface rule, the VERIFY-owner rule. Self-install apply self-check
+  1598/1598. NEXT (a new session, `/pnp:plan`): ONE plan for ROADMAP § GATES (the habit guard on
+  `git -C` and the nested form, Gate 1 and the scratchpad, the plan-gate Code Map intersection) and
+  § CODEX (the engine stream to a log file, the verdict / tokens / session line, the capacity line,
+  the cumulative label) with a declared ticket count - the operator's direction of 2026-11-06, after
+  the correction that a multi-item direction is planned as one plan, not executed item by item.
 - RBC-001 done (`bf018ac`, record `31909bd`, amendment `90a2f81`). RBC-002 done (`a10110f`, record
   `744cc4b`): WORKFLOW + LOOP + REVIEW_CHECKLIST + overrides 54.6k -> 38.7k tokens (claude-opus-5-5
   via `claude -p`, base `90a2f81`), every rule homed (four rule-homes tables, homeless 0), the

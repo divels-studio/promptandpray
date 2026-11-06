@@ -113,9 +113,12 @@ text must already be in the tree when the pass is dispatched - the review covers
 
 **The Reviewer verifies DECISIONS; it is not the mechanism that discovers factual errors.** A wrong
 path, line number, count, a command that does not exist, a claim about how an engine or a hook
-behaves are caught by the **fact-check gate** (`/pnp:review` Step 2b): one cheap read-only scan
-agent over the prose of a diff, run BEFORE every diff pass above the scan tier, returning a
-per-claim ledger - every claim verified, false or unverifiable, with `file:line` and a count line.
+behaves are caught by the **fact-check gate** (`/pnp:review` Step 2b): a cheap read-only scan over
+the prose of a diff - one `sonnet` agent, or a `haiku` extraction of the claim list and a `sonnet`
+verification of it when the prose is long; on `Class: code` the cross-reference claims only - run
+BEFORE every diff pass above the scan tier, returning a per-claim ledger - every claim verified,
+false or unverifiable, with `file:line` and a count line; the false and unverifiable rows in full,
+the verified ones folded per file.
 The COO fixes those, and only then dispatches the review. A plan gets no fact-check agent: its pass
 is guarded by the mechanical gate (`plan.md` § Plan readiness review). The gate guards the EXPENSIVE
 pass, whichever engine hosts it: only a reviewer on a scan-tier alias (`haiku`/`sonnet`) skips it.
@@ -131,7 +134,8 @@ the gate.
   deliberate exception, not a violation.
 - **Writer** - the **only** repo writer. A native Claude subagent (`.claude/agents/writer.md`),
   invoked via the **Agent tool** with `subagent_type: "writer"`. Never approves its own work;
-  returns the diff, the tests it added, and VERIFY output with exact exit codes. It does not decide
+  returns the diff, the tests it added - red, then green - and the exact exit codes of the commands
+  it ran; the ticket's VERIFY rows are the COO's run at the handoff (`work.md` § Tests). It does not decide
   acceptance or invent ledger content; it performs the Git PLAN write only when the COO explicitly
   delegates that specific mutation. Several Writers may run on ONE ticket when its worklist splits
   into file sets that do not overlap: the brief records the split, and one VERIFY and one commit
@@ -203,8 +207,9 @@ least 3600000 ms, awaited by its notification; a run killed by the cap is not re
 reported, and every brief repeats this. Auto mode refuses Edit/Write-tool edits to
 `.claude/settings.json` and `.claude/hooks/**`, even with the operator's word: the COO asks the
 operator to switch auto mode off in its first reply, and if still blocked stops and explains - never
-a bypass through `sed`, a heredoc or a redirect; the operator may hand-edit from the COO's exact
-lines. The update engine's own config write is a different case: `/pnp:update --apply` was observed
+a bypass through `sed`, a heredoc or a redirect, and never a request that the operator open and edit
+a file by hand: a mode that asks is the path, and the COO's exact lines wait for it. The update
+engine's own config write is a different case: `/pnp:update --apply` was observed
 running through under auto mode, so an apply does not ask in advance for auto mode to be switched
 off; a host that does refuse it is handled by `/pnp:update` Step 3 (run it again in a mode that
 asks). The

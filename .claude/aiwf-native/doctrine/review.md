@@ -9,7 +9,8 @@ The review stage of PromptAndPray: handed to the auditor by `/pnp:review` and `/
 and named by the reviewer and QA agents.
 
 Verdict authority for the **Reviewer** (code/design) and **QA** (runtime/UI). Both roles are
-**engine-neutral** - a read-only Codex wrapper (brief on **stdin**, OS `--sandbox read-only`;
+**engine-neutral** - a read-only Codex wrapper (the brief from the file `-BriefFile` /
+`--brief-file` names, stdin the fallback; OS `--sandbox read-only`;
 recipe: `docs/CODEX_REVIEW_QA_RECIPE.md`) or the `reviewer` / `qa` Claude subagent
 (`Read/Grep/Glob` only, no OS cell); hosts and boundaries: `ticket.md` § Role boundaries. Either
 way they report; they do not fix, stage, commit, or push. Routing and the ticket-brief contract

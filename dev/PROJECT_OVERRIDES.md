@@ -65,7 +65,9 @@ PromptAndPray is **not**:
 
 - **Checklist first.** A short checklist for the current scope only, executed and self-checked
   before the final response.
-- **Restate scope** in 1-3 bullets and confirm it before changing anything.
+- **Restate scope** in 1-3 bullets in the report that opens the work; the operator's word for the
+  ticket is its confirmation (`ORCHESTRATOR.md` guard (b)) - no second question before the first
+  change. (reworded 2026-11-06 with the 0.3.11 seed; the old line contradicted guard (b))
 
 ## Sibling products and negative scope
 
