@@ -53,6 +53,19 @@
  *   codemap-path-missing:<file>:<path>  a backticked path in the first column of a ticket's `## Code Map`
  *                                       table that does not exist under the project root (a directory
  *                                       counts);
+ *   sidebyside-malformed:<line>         a line of the index that starts `Side by side:` at column 0,
+ *                                       outside fenced blocks, and is not exactly
+ *                                       `Side by side: <REF>, <REF>[, <REF> ...]` - two or more refs of
+ *                                       the grammar <ABBR>-NNN joined by ", ", no upper bound on their
+ *                                       number; <line> is the 1-based line of the index. Zero or more
+ *                                       such lines; no line -> nothing is checked;
+ *   sidebyside-unknown-ref:<line>       a well-formed side-by-side line naming a ref with no ticket file
+ *                                       in tickets/, or one ref twice (one problem per line);
+ *   sidebyside-shared-path:<A>,<B>,<p>  two refs of ONE side-by-side line whose Code Maps share a path -
+ *                                       equal, or a directory row of one containing a path of the other,
+ *                                       because a commit by path staging cannot separate them; <p> is
+ *                                       the longer of the two, <A>,<B> in the line's order, one problem
+ *                                       per shared path;
  *   stamp-missing, stamp-mismatch,      --check and brief mode only: no stamp; a contract hash that
  *   decision-xref-stale:<X>/D-NN        differs from the stamp's; a cross-referenced decision whose text
  *                                       changed after the stamp.
@@ -106,6 +119,10 @@ const MAX_TICKETS = 3;
 // The declared ticket count: column 0, the key exact, n 1-99 (no leading zero), " - ", then a reason.
 const TICKETS_KEY = 'Tickets:';
 const TICKETS_DECL = /^Tickets: ([1-9][0-9]?) - \S/;
+// A declared side-by-side line: column 0, the key exact, then two or more ticket refs joined by ", ".
+const SIDE_BY_SIDE_KEY = 'Side by side:';
+const SIDE_BY_SIDE_PREFIX = 'Side by side: ';
+const SIDE_BY_SIDE_REF = /^[A-Z]{2,8}-\d{3}$/;
 // The default of plan.ticketByteCap (~1,500 tokens of one ticket): the cap in force when the config's key or file cannot be read.
 const MAX_TICKET_BYTES = 6144;
 const MIN_TICKET_BYTES = 1024;
@@ -455,10 +472,51 @@ function declaredTicketCap(model) {
 }
 
 /**
+ * The side-by-side lines the index declares: EVERY line that starts `Side by side:` at column 0
+ * outside fenced blocks, read as `Side by side: <REF>, <REF>[, <REF> ...]`. Returns
+ * [{ line, text, refs }] - `refs` null when the line breaks the grammar (fewer than two refs, or a
+ * token split on ", " that is not an <ABBR>-NNN ref; no upper bound on the count). Blanks at the end
+ * of the line are not part of its last ref. No index, or no such line -> [].
+ */
+function declaredSideBySide(model) {
+  if (model.index === null) return [];
+  const { lines, mask } = model.index;
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (mask[i] || !lines[i].startsWith(SIDE_BY_SIDE_KEY)) continue;
+    const value = lines[i].startsWith(SIDE_BY_SIDE_PREFIX) ? lines[i].slice(SIDE_BY_SIDE_PREFIX.length).replace(/[ \t]+$/, '') : null;
+    const refs = value === null ? [] : value.split(', ');
+    const wellFormed = refs.length >= 2 && refs.every((r) => SIDE_BY_SIDE_REF.test(r));
+    out.push({ line: i + 1, text: lines[i], refs: wellFormed ? refs : null });
+  }
+  return out;
+}
+
+/** A Code Map path as the side-by-side comparison reads it: `/` separators, no `./` lead, no trailing `/`; the root is ''. */
+function mapPathKey(p) {
+  const n = path.posix.normalize(p.replace(/\\/g, '/')).replace(/\/+$/, '');
+  return n === '.' ? '' : n;
+}
+
+/**
+ * The path two Code Map entries share, or null: the path itself when they are equal, else the LONGER
+ * one when the other is a directory containing it (`scripts/engine` contains
+ * `scripts/engine/plan-gate.js`; the root contains everything).
+ */
+function sharedMapPath(x, y) {
+  const a = mapPathKey(x);
+  const b = mapPathKey(y);
+  if (a === b) return a === '' ? '.' : a;
+  if (a === '' || b.startsWith(`${a}/`)) return b;
+  if (b === '' || a.startsWith(`${b}/`)) return a;
+  return null;
+}
+
+/**
  * Every problem of the folder, in this order: the folder itself, the index, the declared ticket count
  * (tickets-cap-malformed) and the cap, each ticket's bytes and fields, decision coverage,
- * cross-references, open items, Code Map paths, and - with `withStamp` - the stamp. A folder that is
- * not one is the only problem reported.
+ * cross-references, open items, Code Map paths, the side-by-side lines, and - with `withStamp` - the
+ * stamp. A folder that is not one is the only problem reported.
  */
 function examine(folderArg, root, withStamp) {
   const problems = [];
@@ -520,6 +578,41 @@ function examine(folderArg, root, withStamp) {
   for (const t of model.tickets) {
     for (const p of codeMapPaths(t)) {
       if (!fs.existsSync(path.resolve(root, p))) add(`codemap-path-missing:${t.rel}:${p}`, `the Code Map of ${t.rel} names ${p}, which does not exist under the project root`);
+    }
+  }
+
+  // The side-by-side lines: a malformed or an unknown/duplicate-ref line is one problem and is not
+  // compared further; the refs of a well-formed line are compared pair by pair, never across lines.
+  const ticketByRef = new Map(model.tickets.map((t) => [t.name.replace(/\.md$/, ''), t]));
+  const mapOf = (ref) => (ticketByRef.has(ref) ? codeMapPaths(ticketByRef.get(ref)) : []);
+  const sharedReported = new Set();
+  for (const decl of declaredSideBySide(model)) {
+    if (decl.refs === null) {
+      add(`sidebyside-malformed:${decl.line}`, `${model.indexName} line ${decl.line} reads "${decl.text}" - not "Side by side: <REF>, <REF>[, <REF> ...]" with two or more refs <ABBR>-NNN joined by ", "; fix it or remove it`);
+      continue;
+    }
+    const missing = [...new Set(decl.refs.filter((r) => !ticketByRef.has(r)))];
+    const twice = [...new Set(decl.refs.filter((r, k) => decl.refs.indexOf(r) !== k))];
+    if (missing.length > 0 || twice.length > 0) {
+      const named = [...missing.map((r) => `${r} (no ticket file in tickets/)`), ...twice.map((r) => `${r} (named twice)`)];
+      add(`sidebyside-unknown-ref:${decl.line}`, `${model.indexName} line ${decl.line} names ${named.join(', ')} - every ref of a side-by-side line is a ticket of this plan, named once`);
+      continue;
+    }
+    for (let a = 0; a < decl.refs.length; a++) {
+      for (let b = a + 1; b < decl.refs.length; b++) {
+        const left = mapOf(decl.refs[a]);
+        const right = mapOf(decl.refs[b]);
+        for (const x of left) {
+          for (const y of right) {
+            const shared = sharedMapPath(x, y);
+            if (shared === null) continue;
+            const token = `sidebyside-shared-path:${decl.refs[a]},${decl.refs[b]},${shared}`;
+            if (sharedReported.has(token)) continue;
+            sharedReported.add(token);
+            add(token, `${model.indexName} line ${decl.line} runs ${decl.refs[a]} and ${decl.refs[b]} side by side, but their Code Maps share ${shared} (${x} / ${y}) - a commit by path staging cannot separate them; run them in order or split the path`);
+          }
+        }
+      }
     }
   }
 

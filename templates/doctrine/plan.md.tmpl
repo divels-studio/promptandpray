@@ -87,7 +87,11 @@ readiness pass -> the COO's triage -> at most 2 revisions -> the operator's appr
 the index, the declared ticket count (`Tickets: <n> - <reason>` in the index; absent -> 3; a
 malformed line refuses), the configured ticket byte cap (`plan.ticketByteCap`, factory 6,144) per
 ticket (its header `Status:` line not counted), the six headings, every decision of this plan cited,
-cross-references resolved, no bare open item, Code Map paths that exist - and writes the
+cross-references resolved, no bare open item, Code Map paths that exist, and every
+`Side by side: <REF>, <REF>[, <REF> ...]` line of the index (column 0; two or more tickets that run
+beside each other; no line -> nothing checked): a malformed line, an unknown or repeated ref, or a
+path two of its tickets' Code Maps share - equal, or a directory containing it, the longer path
+named, because a commit by path staging cannot separate them - refuses - and writes the
 SHA-256 stamp to `<plansDir>/readiness/<ABBR>/stamp.json`; `--check` confirms it, and every
 revision is stamped again. A plan-class pass does not start without a current stamp: the Codex
 review wrapper refuses it (exit 2) and Gate 2 denies a Claude reviewer dispatch whose brief carries

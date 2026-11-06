@@ -5066,6 +5066,20 @@ const pgCapConfig = (cap) => `${JSON.stringify({ plan: cap === undefined ? {} : 
 // `Tickets: <n> - <reason>` line), and the ticket files FIX-002.. up to a total of `n`.
 const pgIndexWith = (...lines) => pgIndexText().replace('\n\n', `\n\n${lines.join('\n')}\n\n`);
 const pgTicketsUpTo = (put, n) => { for (let k = 2; k <= n; k++) put(`${PG_FOLDER}/tickets/FIX-${String(k).padStart(3, '0')}.md`, pgTicketText()); };
+// The side-by-side cases (M57-M61): the stamped folder gains, AFTER the stamp, `lines` under the index
+// title and a second ticket FIX-002 whose Code Map is exactly `paths` (each must exist), plus the
+// source src/two.js; every case's token set therefore carries stamp-mismatch.
+const pgTicketWithMap = (...paths) => {
+  const base = pgTicketText();
+  const out = base.replace(/\| `src\/fix\.js`[\s\S]*$/, `${paths.map((p) => `| \`${p}\` | a source of the second ticket |`).join('\n')}\n`);
+  if (out === base) throw new Error('the fixture ticket has no Code Map row to replace');
+  return out;
+};
+const pgSideBySide = (lines, ...paths) => (put) => {
+  put('src/two.js', "'use strict';\n");
+  put(PG_INDEX, pgIndexWith(...lines));
+  put(`${PG_FOLDER}/tickets/FIX-002.md`, pgTicketWithMap(...paths));
+};
 const pgSetLine = (brief, name, line) => brief.replace(new RegExp(`^${name}:.*$`, 'm'), line);
 const pgDropLine = (brief, name) => brief.replace(new RegExp(`^${name}:.*\\n`, 'm'), '');
 const pgLineOf = (text, needle) => text.split('\n').findIndex((l) => l.includes(needle)) + 1;
@@ -5293,6 +5307,26 @@ function planGateCases() {
       expect: (r) => exactly('tickets-over-cap:4', 'stamp-mismatch')(r) && r.stdout.includes('at most 3 (the default 3)') },
     pgMalformed('M55', '"Tickets: 0 - none" (below the range 1-99)', ['Tickets: 0 - none'], 'Tickets: 0'),
     pgMalformed('M56', '"Tickets: 100 - a hundred" (above the range 1-99)', ['Tickets: 100 - a hundred'], 'Tickets: 100'),
+    // The declared side-by-side lines (D-04 of the plan that added them): `Side by side: <REF>, <REF>[, ...]`
+    // under the index title, a second ticket FIX-002 added after the stamp (pgSideBySide). FIX-001's
+    // Code Map is src/fix.js, src/other.js and the directory docs/backlogs/active/FIX/.
+    { id: 'M57', label: '"Side by side: FIX-001" (one ref) and "Side by side: FIX-001, fix-2" (a token off the ref grammar) -> exactly their two sidebyside-malformed:<line> tokens and stamp-mismatch',
+      after: pgSideBySide(['Side by side: FIX-001', 'Side by side: FIX-001, fix-2'], 'src/two.js'),
+      expect: exactly(`sidebyside-malformed:${pgLineOf(pgIndexWith('Side by side: FIX-001', 'Side by side: FIX-001, fix-2'), 'Side by side: FIX-001')}`,
+        `sidebyside-malformed:${pgLineOf(pgIndexWith('Side by side: FIX-001', 'Side by side: FIX-001, fix-2'), 'fix-2')}`, 'stamp-mismatch') },
+    { id: 'M58', label: '"Side by side: FIX-001, FIX-009" (no such ticket file) and "Side by side: FIX-002, FIX-002" (one ref twice) -> exactly their two sidebyside-unknown-ref:<line> tokens and stamp-mismatch',
+      after: pgSideBySide(['Side by side: FIX-001, FIX-009', 'Side by side: FIX-002, FIX-002'], 'src/two.js'),
+      expect: exactly(`sidebyside-unknown-ref:${pgLineOf(pgIndexWith('Side by side: FIX-001, FIX-009', 'Side by side: FIX-002, FIX-002'), 'FIX-009')}`,
+        `sidebyside-unknown-ref:${pgLineOf(pgIndexWith('Side by side: FIX-001, FIX-009', 'Side by side: FIX-002, FIX-002'), 'FIX-002, FIX-002')}`, 'stamp-mismatch') },
+    { id: 'M59', label: '"Side by side: FIX-001, FIX-002", both Code Maps naming src/fix.js -> exactly sidebyside-shared-path:FIX-001,FIX-002,src/fix.js and stamp-mismatch (equality)',
+      after: pgSideBySide(['Side by side: FIX-001, FIX-002'], 'src/fix.js'),
+      expect: exactly('sidebyside-shared-path:FIX-001,FIX-002,src/fix.js', 'stamp-mismatch') },
+    { id: 'M60', label: '"Side by side: FIX-001, FIX-002", FIX-002 naming a file under FIX-001\'s directory row docs/backlogs/active/FIX/ -> exactly sidebyside-shared-path:FIX-001,FIX-002,docs/backlogs/active/FIX/RESEARCH.md and stamp-mismatch (containment, the longer path named)',
+      after: pgSideBySide(['Side by side: FIX-001, FIX-002'], `${PG_FOLDER}/RESEARCH.md`),
+      expect: exactly(`sidebyside-shared-path:FIX-001,FIX-002,${PG_FOLDER}/RESEARCH.md`, 'stamp-mismatch') },
+    { id: 'M61', label: '"Side by side: FIX-001, FIX-002" over disjoint Code Maps, plus "Side by side: FIX-001, FIX-009" inside a fenced block -> exactly stamp-mismatch (the passing twin of M59; a fenced line declares nothing)',
+      after: pgSideBySide(['Side by side: FIX-001, FIX-002', '```text', 'Side by side: FIX-001, FIX-009', '```'], 'src/two.js'),
+      expect: exactly('stamp-mismatch') },
   ];
 }
 
@@ -5428,6 +5462,7 @@ function pgPatch(file, from, to) {
 // internal-error, which no input can provoke from a working checker (stated as a NOTE below).
 const PG_CONTRACT_TOKENS = ['index-missing', 'tickets-cap-malformed', 'tickets-over-cap', 'ticket-over-bytes', 'field-missing',
   'decision-uncited', 'decision-xref-unresolved', 'decision-xref-stale', 'tbd-found', 'codemap-path-missing',
+  'sidebyside-malformed', 'sidebyside-unknown-ref', 'sidebyside-shared-path',
   'stamp-missing', 'stamp-mismatch', 'plan-folder-required', 'line-missing', 'line-duplicate', 'class-not-plan'];
 
 function sectionPlanGate(tmpRoot) {
@@ -5566,6 +5601,13 @@ function sectionPlanGate(tmpRoot) {
     { id: 'ctl-decl-mask', target: 'M54', label: 'fenced blocks no longer skipped by the declared-count reader', from: 'if (mask[i] || !lines[i].startsWith(TICKETS_KEY)) continue;', to: 'if (!lines[i].startsWith(TICKETS_KEY)) continue;' },
     { id: 'ctl-decl-min', target: 'M55', label: 'the range\'s lower bound dropped (0 accepted)', from: '([1-9][0-9]?)', to: '([0-9][0-9]?)' },
     { id: 'ctl-decl-max', target: 'M56', label: 'the range\'s upper bound dropped (100 accepted)', from: '([1-9][0-9]?)', to: '([1-9][0-9]*)' },
+    // The side-by-side lines (M57-M61): one branch of declaredSideBySide, the ref check, the pair
+    // comparison or sharedMapPath each.
+    { id: 'ctl-sbs-malformed', target: 'M57', label: 'a side-by-side line with one ref accepted (the "two or more" dropped)', from: 'const wellFormed = refs.length >= 2 &&', to: 'const wellFormed = refs.length >= 1 &&' },
+    { id: 'ctl-sbs-unknown', target: 'M58', label: 'the unknown/duplicate ref check disabled', from: 'if (missing.length > 0 || twice.length > 0) {', to: 'if (false) {' },
+    { id: 'ctl-sbs-shared', target: 'M59', label: 'the shared-path report disabled', from: 'if (shared === null) continue;', to: 'if (true) continue;' },
+    { id: 'ctl-sbs-contain', target: 'M60', label: 'containment dropped (only equal paths shared)', from: 'if (a === \'\' || b.startsWith(`${a}/`)) return b;', to: 'if (false) return b;' },
+    { id: 'ctl-sbs-mask', target: 'M61', label: 'fenced blocks no longer skipped by the side-by-side reader', from: 'if (mask[i] || !lines[i].startsWith(SIDE_BY_SIDE_KEY)) continue;', to: 'if (!lines[i].startsWith(SIDE_BY_SIDE_KEY)) continue;' },
   ];
   // The checker controls: plan-gate.js copied beside aiwf-lib.js, sabotaged, and the target case run
   // against the copy. The fixture is still stamped by the PAYLOAD checker, so only the branch moved.

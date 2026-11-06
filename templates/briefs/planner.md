@@ -34,9 +34,14 @@ THE FOLDER CONTRACT (checked mechanically by `plan-gate.js` - a breach is refuse
   refused); `## Goal` (one paragraph), `## Scope` (in / out), `## Tickets` - one table
   `| ref | title | implements | status | record |`, every status `open`, every record `-` - then
   the order of the tickets and the gates each one passes (the operator's word, the review passes,
-  the commit dialogs, a tag or push word if any); then `## Closing greps` - the CLOSING GREPS block
-  copied verbatim (per set: the grep, the hit count, the hits), so the enumeration sits in the
-  stamped folder and the auditor verifies it instead of re-deriving it. You write no
+  the commit dialogs, a tag or push word if any); tickets that run beside each other instead of in
+  order are declared there at column 0, one line per group, as
+  `Side by side: <REF>, <REF>[, <REF> ...]` (two or more refs; no line when the tickets run in
+  order) - a malformed line, an unknown or repeated ref, and every path two tickets of one line
+  share in their Code Maps (equal, or a directory containing it) are refused; then
+  `## Closing greps` - the CLOSING GREPS block copied verbatim (per set: the grep, the hit count,
+  the hits), so the enumeration sits in the stamped folder and the auditor verifies it instead of
+  re-deriving it. You write no
   `## Measurements` and no `## Roadmap entry`: the COO writes both into the index on the approval,
   before the landing.
 - `<folder>/tickets/<ABBR>-NNN.md` - at most the declared count (`Tickets:` in the index, copied
