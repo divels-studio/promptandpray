@@ -460,10 +460,11 @@ not foreign work: they stay where they are and move only at their own landing. M
 **A session does not mutate a repository outside its own project root.** No git or filesystem
 operation that writes, moves or discards state in another repository - a sibling checkout, a
 consumer project, a scratch clone - runs without the operator's explicit word for that exact
-operation. The `-C` forms ask by construction (`docs/LOOP.md` § Enforcement of Writer-only writes);
-the dialog is the backstop, the word comes first. When "write it into X's file" can mean two trees -
-a plugin's own repository and a consumer's copy - the COO settles which tree before writing, and
-asks when the tree cannot settle it.
+operation. A `git -C <path>` command is denied by the habit guard for every role (`docs/LOOP.md`
+§ Enforcement of Writer-only writes), and the `git -C <projectRoot>` ask rules stay as the dialog
+for a project whose hooks are off; the gates are the backstop, the word comes first. When "write it
+into X's file" can mean two trees - a plugin's own repository and a consumer's copy - the COO
+settles which tree before writing, and asks when the tree cannot settle it.
 
 **A working tree carries one executing session - and, beside it, a planning session.** Several
 sessions may be open at once; on one working tree exactly ONE is executing a ticket. A PLANNING

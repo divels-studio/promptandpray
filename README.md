@@ -45,11 +45,12 @@ What is here:
   ask-class git verb is denied
   to any subagent but the Writer, because a background agent's dialog reaches nobody, and for the
   session it raises a dialog on the git forms the `ask` rules never spell out - `git.exe` outside
-  push/merge/rebase, any `git -C <path> ...`, a wrapper Claude Code does not strip such as `sudo` -
+  push/merge/rebase, a wrapper Claude Code does not strip such as `sudo` -
   while everything the harness already gates by itself (chained subcommands, `timeout`-style
   wrappers, `NAME=value` prefixes) stays silent. The same hook file carries the habit guard: for
   every actor, on both shell tools, a deny with a hint for a pipe into `tail` / `head` /
-  `Select-Object -First|-Last`, a `cd` prefix and `git -c`. The deny-direction gates (Gate 1/3,
+  `Select-Object -First|-Last`, a `cd` prefix (`Push-Location` / `popd` too, read through a leading
+  `&`, `{`, `(` or `$(`), `git -c` and any `git -C <path> ...`. The deny-direction gates (Gate 1/3,
   Gate 4) carry `onFailure: "block"` - observed on Claude Code 2.1.316, a hook that cannot start
   blocks the call. The self-check holds its verb list against the
   shipped ask-ruleset, so a rule added there cannot silently outrun the gate. Both layers cover both

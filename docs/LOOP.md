@@ -79,11 +79,14 @@ verb the rules gate to be one the hook knows. Then:
   **byte for byte** -> **silent passthrough** (that dialog is the operator's own). Two shapes
   qualify: `git <verb> ...` for every ask-class verb, and `git.exe push|merge|rebase ...`.
 - from the main session or the Writer, on **anything else it recognised** -> **ask**: `git.exe
-  <verb>` outside push/merge/rebase, **any** `git -C <path> <verb>` (the hook reads no project
-  directory, so it cannot confirm the path), a wrapper the harness does not strip (`sudo`, `npx`,
-  `docker exec`, `direnv exec`, `watch`, `setsid`, `flock`, `find -exec`, a flagged `xargs`, a
-  `command -v` query), a nested shell (`bash -c "... git reset --hard"`), and irregular whitespace
-  on either side of the verb.
+  <verb>` outside push/merge/rebase, a `git -C <path> <verb>` deeper inside a subcommand
+  (`echo $(git -C /p push)` - the hook reads no project directory, so it cannot confirm the path),
+  a wrapper the harness does not strip (`sudo`, `npx`, `docker exec`, `direnv exec`, `watch`,
+  `setsid`, `flock`, `find -exec`, a flagged `xargs`, a `command -v` query), a nested shell
+  (`bash -c "... git reset --hard"`), and irregular whitespace on either side of the verb.
+- a `git -C <path> ...` that **opens** a subcommand never reaches these branches: the habit guard
+  below denies it first, for every actor and whatever the verb. The `git -C <projectRoot>
+  push|merge|rebase` ask rules stay in the ruleset as the backstop for a project whose hooks are off.
 
 Claude Code's own matcher, per its permission documentation, already splits a Bash command on `&&`,
 `||`, `;`, `|`, `|&`, `&` and newlines and matches each **subcommand** (deny/ask rules also reach
@@ -109,7 +112,8 @@ test; recognition is best-effort.
 `templates/settings.ask-ruleset.json` ships as a `Bash(<X>)` / `PowerShell(<X>)` mirror pair, with
 the blanket allow present for both; the self-check asserts the mirror in **both** directions. The
 dialects are not assumed identical, and each difference resolves towards asking: PowerShell splits
-on `;`, `|` and (PS7+) `&&` / `||`, `&` is its call operator (`& git push` asks), no wrapper or
+on `;`, `|` and (PS7+) `&&` / `||`, `&` is its call operator (`& git push` asks; the habit guard
+reads through it, so `& git -C /p log` and `& { Push-Location x }` are habits), no wrapper or
 `NAME=value` stripping is documented (`timeout 30 git commit` asks there), and recognition folds case
 (`GIT Push` is recognised) while the byte-exact rule test folds it on neither tool. `Monitor` runs
 its commands under the Bash rules and needs none of its own, and Gate 4 judges `tool_name: Monitor`
@@ -118,18 +122,30 @@ in the Bash dialect - git verbs and habits alike.
 **The habit guard** is the second responsibility INSIDE the Gate 4 hook file (the hook files stay
 three), as Gate 3 lives inside the Gate 1 file. It judges every top-level subcommand, in both
 dialects (PowerShell case-folded as Gate 4 folds it), for EVERY actor - the main session, the
-Writer, any subagent - and DENIES five shapes with a hint; it never rewrites a command:
+Writer, any subagent - and DENIES six shapes with a hint; it never rewrites a command:
 
 - a pipe into `tail`, a pipe into `head`, a pipe into `Select-Object` / `Select` with `-First` /
   `-Last` -> hint: run to a log file outside the repository and Read it (any pipe, not only a test
   run: reading is not a shell job);
-- `cd` / `chdir` / `pushd` / `Set-Location` / `sl` as the first token of a top-level subcommand ->
-  hint: the tool's own directory flag;
+- `cd` / `chdir` / `pushd` / `popd` / `Set-Location` / `sl` / `Push-Location` / `Pop-Location` as
+  the first word of a top-level subcommand -> hint: the tool's own directory flag;
 - the global `-c <k=v>` directly after `git` / `git.exe` -> hint: drop `-c` (the `git -c:*` ask rule
-  stays as the backstop).
+  stays as the backstop);
+- the global `-C <path>` (or a glued `-C<path>`) directly after `git` / `git.exe`, whatever the verb
+  -> hint: run git bare from the repository root; read a foreign tree with the file tools (Read /
+  Grep / Glob), never with `git -C`. The flag never folds case on either tool, so `git -c` and
+  `git -C` never answer for each other.
+
+The first word is read through a leading call operator or block opener - `&`, `{`, `(`, `$(` and the
+dot-sourcing `.` - repeatedly (`& {` is two), so `& { Push-Location x }`, `$(cd x)`, `( cd x )` and
+`{ cd x; }` are judged by the word that follows; an opener glued to the word (`$(cd`, `(cd`) comes
+off as a prefix, a closer glued to that first word comes off its end (`&{Pop-Location}`,
+`| (head)`), and `.` only as a whole word (`. ./x.ps1` is judged by the path `./x.ps1`).
 
 Honest limit: like Gate 4 it is a recogniser, not a parser - nothing inside quotes or a nested shell
-(`sh -lc '...'`, `bash -c "..."`) is judged, so a `cd` inside a nested shell passes.
+(`sh -lc '...'`, `bash -c "..."`) is judged, so a `cd` inside a nested shell passes, and so do a
+quoted `"git -C /p"` and a quoted word after an opener (`& "cd"`). Only the leading run of operators
+is read through: a `cd` or a `git -C` deeper in a subcommand (`echo $(cd x)`) is not judged.
 
 **A hook that cannot start blocks the call.** The Gate 1/3 and Gate 4 hook commands - the
 DENY-direction gates - carry `onFailure: "block"` in `hooks/hooks.json`, so a hook process that

@@ -440,10 +440,13 @@ const gate4Cases = [
   { name: 'main: `npx foo && git reset --hard` -> silent (the git SUBCOMMAND is rule-matched)', payload: bashEnvelope(MAIN, 'npx foo && git reset --hard'), expect: 'allow(passthrough)' },
   // The bypasses: forms the shipped ruleset never spells out, which reach nobody today.
   { name: 'main: `git.exe reset --hard` -> ASK (.exe rules exist for push/merge/rebase only)', payload: bashEnvelope(MAIN, 'git.exe reset --hard'), expect: 'ask' },
-  { name: 'main: `git -C <root> reset --hard` -> ASK (no -C rule for a non-push verb)', payload: bashEnvelope(MAIN, `git -C ${ROOT} reset --hard`), expect: 'ask' },
-  { name: 'main: `git -C <root> push origin main` -> ASK (the rule names <projectRoot>, unverifiable)', payload: bashEnvelope(MAIN, `git -C ${ROOT} push origin main`), expect: 'ask' },
-  { name: 'main: `git.exe -C <root> push` -> ASK (no rule carries both spellings)', payload: bashEnvelope(MAIN, `git.exe -C ${ROOT} push`), expect: 'ask' },
-  { name: 'main: `git -C /p -C . push` (a second -C) -> ASK', payload: bashEnvelope(MAIN, 'git -C /p -C . push'), expect: 'ask' },
+  // D-01: a `git -C` that opens its subcommand is the habit guard's shape (6), denied before the
+  // git-verb logic for every actor; the `git -C <projectRoot>` ask rules stay as the hooks-off backstop.
+  { name: 'main: `git -C <root> reset --hard` -> DENY (habit guard: git -C, before the ask branch)', payload: bashEnvelope(MAIN, `git -C ${ROOT} reset --hard`), expect: 'deny' },
+  { name: 'main: `git -C <root> push origin main` -> DENY (habit guard: git -C)', payload: bashEnvelope(MAIN, `git -C ${ROOT} push origin main`), expect: 'deny' },
+  { name: 'main: `git.exe -C <root> push` -> DENY (habit guard: git -C)', payload: bashEnvelope(MAIN, `git.exe -C ${ROOT} push`), expect: 'deny' },
+  { name: 'main: `git -C /p -C . push` (a second -C) -> DENY (habit guard: git -C)', payload: bashEnvelope(MAIN, 'git -C /p -C . push'), expect: 'deny' },
+  { name: 'main: a `-C` deeper than the first word (`echo $(git -C /p push)`) -> ASK (the ask branch still judges it)', payload: bashEnvelope(MAIN, 'echo $(git -C /p push)'), expect: 'ask' },
   { name: 'main: `sudo git reset --hard` -> ASK (sudo is NOT a stripped wrapper)', payload: bashEnvelope(MAIN, 'sudo git reset --hard'), expect: 'ask' },
   { name: 'main: `npx git reset --hard` -> ASK (npx is NOT stripped either)', payload: bashEnvelope(MAIN, 'npx git reset --hard'), expect: 'ask' },
   { name: 'main: `xargs -I{} git push` -> ASK (a FLAGGED xargs is not stripped)', payload: bashEnvelope(MAIN, 'xargs -I{} git push'), expect: 'ask' },
@@ -475,10 +478,11 @@ const gate4Cases = [
   { name: 'agent_id present, agent_type absent: `git commit` -> DENY', payload: bashEnvelope({ agent_id: 'a5' }, 'git commit -m x'), expect: 'deny' },
   { name: 'agent_type null: `git commit` -> DENY', payload: bashEnvelope({ agent_id: 'a6', agent_type: null }, 'git commit -m x'), expect: 'deny' },
   { name: 'agent_type "Writer" (wrong case): `git commit` -> DENY', payload: bashEnvelope({ agent_id: 'a7', agent_type: 'Writer' }, 'git commit -m x'), expect: 'deny' },
-  // The form never softens the deny: the .exe and -C rows above are an ASK for the main session and
-  // stay a DENY here, because identity decides this branch before the form is looked at.
+  // The form never softens the deny: the .exe row above is an ASK for the main session and stays a
+  // DENY here, because identity decides this branch before the form is looked at (a `git -C` that
+  // opens its subcommand is denied for every actor already, by the habit guard).
   { name: 'general-purpose: `git.exe reset --hard` -> DENY (form is irrelevant to identity)', payload: bashEnvelope({ agent_id: 'a13', agent_type: 'general-purpose' }, 'git.exe reset --hard'), expect: 'deny' },
-  { name: 'general-purpose: `git -C <root> reset --hard` -> DENY', payload: bashEnvelope({ agent_id: 'a14', agent_type: 'general-purpose' }, `git -C ${ROOT} reset --hard`), expect: 'deny' },
+  { name: 'general-purpose: `git -C <root> reset --hard` -> DENY (the habit guard, before identity)', payload: bashEnvelope({ agent_id: 'a14', agent_type: 'general-purpose' }, `git -C ${ROOT} reset --hard`), expect: 'deny' },
   // A verb GLUED to the punctuation that ends its command. Reading the token raw made the recogniser
   // blind to these, so the deny branch silently did not fire - the worst shape of the whole class.
   { name: 'general-purpose: `git reset --hard;` (trailing separator) -> DENY', payload: bashEnvelope({ agent_id: 'a15', agent_type: 'general-purpose' }, 'git reset --hard;'), expect: 'deny' },
@@ -514,7 +518,8 @@ const gate4Cases = [
   { name: 'main: `mygit commit` / `git-foo commit` are other programs -> silent', payload: bashEnvelope(MAIN, 'mygit commit && git-foo commit'), expect: 'allow(passthrough)' },
   // --- the documented FALSE POSITIVE (header): recognition does not treat quoted text as data
   { name: 'main: a gated verb inside a quoted string -> ASK (documented false positive, costs a click)', payload: bashEnvelope(MAIN, 'git grep -n "git commit" -- docs'), expect: 'ask' },
-  // --- the habit guard (D-14): five shapes denied with a hint for EVERY actor, in this tool's dialect
+  // --- the habit guard (D-14): six shapes denied with a hint for EVERY actor, in this tool's dialect,
+  // the first word read through a leading `&`, `{`, `(`, `$(` or whole-word `.` (D-02)
   { name: 'habit main: a pipe into tail -> DENY', payload: bashEnvelope(MAIN, 'node scripts/x.js | tail -5'), expect: 'deny' },
   { name: 'habit writer: a `|&` pipe into tail -> DENY', payload: bashEnvelope(WRITER, 'node scripts/x.js |& tail -n 20'), expect: 'deny' },
   { name: 'habit Explore: a pipe into head -> DENY', payload: bashEnvelope({ agent_id: 'h1', agent_type: 'Explore' }, 'git log --oneline | head -3'), expect: 'deny' },
@@ -525,6 +530,18 @@ const gate4Cases = [
   { name: 'habit main: a `cd` after a lone `&` (a Bash background list) -> DENY', payload: bashEnvelope(MAIN, 'echo X & cd scripts'), expect: 'deny' },
   { name: 'habit main: a `cd` after `\\>&` (an escaped `>` is no redirect) -> DENY', payload: bashEnvelope(MAIN, 'echo \\>& cd scripts'), expect: 'deny' },
   { name: 'habit main: a `cd` after `2>&1 &` (a redirect, then a lone `&`) -> DENY', payload: bashEnvelope(MAIN, 'node x 2>&1 & cd scripts'), expect: 'deny' },
+  { name: 'habit Explore: `git -C <root> status` (any verb) -> DENY', payload: bashEnvelope({ agent_id: 'h5', agent_type: 'Explore' }, `git -C ${ROOT} status`), expect: 'deny' },
+  { name: 'habit main: the glued `git -C<path> log` -> DENY', payload: bashEnvelope(MAIN, 'git -C/p log'), expect: 'deny' },
+  { name: 'habit main: `popd` -> DENY', payload: bashEnvelope(MAIN, 'popd'), expect: 'deny' },
+  { name: 'habit main: `$(cd x)` (a glued `$(` read through) -> DENY', payload: bashEnvelope(MAIN, '$(cd x)'), expect: 'deny' },
+  { name: 'habit writer: `( cd x )` (a subshell `(` read through) -> DENY', payload: bashEnvelope(WRITER, '( cd x )'), expect: 'deny' },
+  { name: 'habit main: `{ cd x; }` (a `{` group read through) -> DENY', payload: bashEnvelope(MAIN, '{ cd x; }'), expect: 'deny' },
+  { name: 'habit main: `$(cd)` (a glued opener and closer) -> DENY', payload: bashEnvelope(MAIN, '$(cd)'), expect: 'deny' },
+  { name: 'habit main: `echo x | (head)` (the glued closer comes off the first word) -> DENY', payload: bashEnvelope(MAIN, 'echo x | (head)'), expect: 'deny' },
+  { name: 'habit PASS main: `(echo x)` (read through, the first word is no habit) -> silent', payload: bashEnvelope(MAIN, '(echo x)'), expect: 'allow(passthrough)' },
+  { name: 'habit PASS main: `echo git -C /p log` (git not the first word) -> silent', payload: bashEnvelope(MAIN, 'echo git -C /p log'), expect: 'allow(passthrough)' },
+  { name: 'habit PASS main: `git log -C` (-C not the second word) -> silent', payload: bashEnvelope(MAIN, 'git log -C'), expect: 'allow(passthrough)' },
+  { name: 'habit PASS main: `. ./x.sh` (the dot-sourced word is a path) -> silent', payload: bashEnvelope(MAIN, '. ./x.sh'), expect: 'allow(passthrough)' },
   { name: 'habit PASS main: `echo git -c core.x=y` (git not the first word) -> Gate 4\'s own ASK, no habit', payload: bashEnvelope(MAIN, 'echo git -c core.x=y'), expect: 'ask' },
   { name: 'habit PASS main: `GIT -c core.x=y status` (no folding on Bash) -> Gate 4\'s own ASK, no habit', payload: bashEnvelope(MAIN, 'GIT -c core.x=y status'), expect: 'ask' },
   { name: 'habit PASS main: a bare `git -c` (no <k=v>) -> silent', payload: bashEnvelope(MAIN, 'git -c'), expect: 'allow(passthrough)' },
@@ -539,7 +556,8 @@ const gate4Cases = [
   // Monitor (D-14 (d)): Bash-matched hooks run on Monitor commands, so it is judged in the Bash dialect.
   { name: 'Monitor main: `cd scripts` -> DENY (judged in the Bash dialect)', payload: { ...bashEnvelope(MAIN, 'cd scripts'), tool_name: 'Monitor' }, expect: 'deny' },
   { name: 'Monitor main: `npm test |& tail -5` -> DENY (`|&` splits only in the Bash dialect)', payload: { ...bashEnvelope(MAIN, 'npm test |& tail -5'), tool_name: 'Monitor' }, expect: 'deny' },
-  { name: 'SomeFutureShell main: the same `|&` command -> silent (the PowerShell dialect: the control)', payload: { ...bashEnvelope(MAIN, 'npm test |& tail -5'), tool_name: 'SomeFutureShell' }, expect: 'allow(passthrough)' },
+  { name: 'SomeFutureShell main: `echo X & cd scripts` -> silent (the PowerShell dialect: `&` is the call operator, one segment - the dialect control on a lone `&`)', payload: { ...bashEnvelope(MAIN, 'echo X & cd scripts'), tool_name: 'SomeFutureShell' }, expect: 'allow(passthrough)' },
+  { name: 'SomeFutureShell main: `npm test |& tail -5` -> DENY (D-02: in the PowerShell dialect `|` pipes and the call operator `&` is read through - a pipe into tail)', payload: { ...bashEnvelope(MAIN, 'npm test |& tail -5'), tool_name: 'SomeFutureShell' }, expect: 'deny' },
   // --- the fail direction, on a hook that sits on EVERY Bash command
   { name: 'non-object input (array) -> DENY (fail-closed)', payload: '[]', expect: 'deny' },
   { name: 'non-object input (string) -> DENY (fail-closed)', payload: '"text"', expect: 'deny' },
@@ -573,8 +591,8 @@ const gate4PowershellCases = [
   { name: 'main (Bash): `GIT Push origin` is no verb at all -> silent (the dialect control)', payload: bashEnvelope(MAIN, 'GIT Push origin'), expect: 'allow(passthrough)' },
   { name: 'ps main: `GIT push origin main` -> ASK (recognised, but the rule test does not fold case)', payload: powershellEnvelope(MAIN, 'GIT push origin main'), expect: 'ask' },
   { name: 'ps main: `git.exe reset --hard` -> ASK (.exe mirrors exist for push/merge/rebase only)', payload: powershellEnvelope(MAIN, 'git.exe reset --hard'), expect: 'ask' },
-  { name: 'ps main: `git -C <root> reset --hard` -> ASK (no -C rule for a non-push verb)', payload: powershellEnvelope(MAIN, `git -C ${PS_ROOT} reset --hard`), expect: 'ask' },
-  { name: 'ps main: `git -C <root> push origin main` -> ASK (the rule names <projectRoot>, unverifiable)', payload: powershellEnvelope(MAIN, `git -C ${PS_ROOT} push origin main`), expect: 'ask' },
+  { name: 'ps main: `git -C <root> reset --hard` -> DENY (habit guard: git -C, before the ask branch)', payload: powershellEnvelope(MAIN, `git -C ${PS_ROOT} reset --hard`), expect: 'deny' },
+  { name: 'ps main: `git -C <root> push origin main` -> DENY (habit guard: git -C)', payload: powershellEnvelope(MAIN, `git -C ${PS_ROOT} push origin main`), expect: 'deny' },
   { name: 'ps main: `git  commit` (two spaces) -> ASK (irregular whitespace matches no rule)', payload: powershellEnvelope(MAIN, 'git  commit -m x'), expect: 'ask' },
   { name: 'ps writer: `git commit` -> silent (the commit dialog is the operator\'s, unchanged)', payload: powershellEnvelope(WRITER, 'git commit -m x'), expect: 'allow(passthrough)' },
   { name: 'ps writer: `git.exe reset --hard` -> ASK (the Writer is not exempt from the form)', payload: powershellEnvelope(WRITER, 'git.exe reset --hard'), expect: 'ask' },
@@ -584,7 +602,7 @@ const gate4PowershellCases = [
   { name: 'ps reviewer: `git switch other` -> DENY', payload: powershellEnvelope({ agent_id: 'p3', agent_type: 'reviewer' }, 'git switch other'), expect: 'deny' },
   { name: 'ps general-purpose: `& git push` -> DENY (the call operator buys no pass either)', payload: powershellEnvelope({ agent_id: 'p4', agent_type: 'general-purpose' }, '& git push'), expect: 'deny' },
   { name: 'ps general-purpose: `GIT Push` -> DENY (the case variant is recognised here)', payload: powershellEnvelope({ agent_id: 'p5', agent_type: 'general-purpose' }, 'GIT Push'), expect: 'deny' },
-  { name: 'ps general-purpose: `git -C <root> reset --hard` -> DENY', payload: powershellEnvelope({ agent_id: 'p6', agent_type: 'general-purpose' }, `git -C ${PS_ROOT} reset --hard`), expect: 'deny' },
+  { name: 'ps general-purpose: `git -C <root> reset --hard` -> DENY (the habit guard, before identity)', payload: powershellEnvelope({ agent_id: 'p6', agent_type: 'general-purpose' }, `git -C ${PS_ROOT} reset --hard`), expect: 'deny' },
   { name: 'ps agent_id present, agent_type absent: `git commit` -> DENY', payload: powershellEnvelope({ agent_id: 'p7' }, 'git commit -m x'), expect: 'deny' },
   { name: 'ps agent_type null: `git commit` -> DENY', payload: powershellEnvelope({ agent_id: 'p8', agent_type: null }, 'git commit -m x'), expect: 'deny' },
   // --- everything this gate does not judge stays invisible on this tool too
@@ -592,7 +610,8 @@ const gate4PowershellCases = [
   { name: 'ps subagent: `Get-ChildItem` (no git at all) -> silent', payload: powershellEnvelope({ agent_id: 'p10', agent_type: 'general-purpose' }, 'Get-ChildItem'), expect: 'allow(passthrough)' },
   { name: 'ps main: `mygit commit` is another program -> silent', payload: powershellEnvelope(MAIN, 'mygit commit'), expect: 'allow(passthrough)' },
   { name: 'ps: tool_input without a command string -> silent (nothing to recognise)', payload: powershellEnvelope(MAIN, undefined), expect: 'allow(passthrough)' },
-  // --- the habit guard (D-14) on this tool: the same five shapes, case-folded as Gate 4 folds it
+  // --- the habit guard (D-14) on this tool: the same six shapes, case-folded as Gate 4 folds it (the
+  // `-c` / `-C` flag never), the first word read through `&`, `{`, `(`, `$(` and whole-word `.` (D-02)
   { name: 'ps habit main: a pipe into tail -> DENY', payload: powershellEnvelope(MAIN, 'node x.js | tail -5'), expect: 'deny' },
   { name: 'ps habit writer: a pipe into head -> DENY', payload: powershellEnvelope(WRITER, 'git log | head -3'), expect: 'deny' },
   { name: 'ps habit main: `select-object -first` (case-folded) -> DENY', payload: powershellEnvelope(MAIN, 'Get-Content x.log | select-object -first 5'), expect: 'deny' },
@@ -601,7 +620,20 @@ const gate4PowershellCases = [
   { name: 'ps habit writer: `Set-Location` -> DENY', payload: powershellEnvelope(WRITER, 'Set-Location scripts'), expect: 'deny' },
   { name: 'ps habit main: the global `git -c k=v` -> DENY', payload: powershellEnvelope(MAIN, 'git -c core.autocrlf=false status'), expect: 'deny' },
   { name: 'ps habit PASS main: a `cd` and a pipe into select -first inside quotes -> silent', payload: powershellEnvelope(MAIN, 'Write-Output "cd x; Get-Content y | select -first 1"'), expect: 'allow(passthrough)' },
-  { name: 'ps habit PASS main: `git -C <root> status` (-C is no -c) -> silent', payload: powershellEnvelope(MAIN, `git -C ${PS_ROOT} status`), expect: 'allow(passthrough)' },
+  { name: 'ps habit main: `git -C <root> status` (any verb; -C is its own shape, D-01) -> DENY', payload: powershellEnvelope(MAIN, `git -C ${PS_ROOT} status`), expect: 'deny' },
+  { name: 'ps habit main: `GIT.EXE -C /p log` (the program name folds, the flag does not) -> DENY', payload: powershellEnvelope(MAIN, 'GIT.EXE -C /p log'), expect: 'deny' },
+  { name: 'ps habit writer: `& { Push-Location x }` (two openers read through) -> DENY', payload: powershellEnvelope(WRITER, '& { Push-Location x }'), expect: 'deny' },
+  { name: 'ps habit main: `{ Pop-Location }` -> DENY', payload: powershellEnvelope(MAIN, '{ Pop-Location }'), expect: 'deny' },
+  { name: 'ps habit Explore: `. { sl x }` (whole-word dot-sourcing read through) -> DENY', payload: powershellEnvelope({ agent_id: 'h6', agent_type: 'Explore' }, '. { sl x }'), expect: 'deny' },
+  { name: 'ps habit main: `& git -C /p log` (the call operator read through) -> DENY', payload: powershellEnvelope(MAIN, '& git -C /p log'), expect: 'deny' },
+  { name: 'ps habit main: `&{Pop-Location}` (glued opener and closer) -> DENY', payload: powershellEnvelope(MAIN, '&{Pop-Location}'), expect: 'deny' },
+  { name: 'ps habit main: `{Push-Location x}` (a glued `{`) -> DENY', payload: powershellEnvelope(MAIN, '{Push-Location x}'), expect: 'deny' },
+  { name: 'ps habit main: `echo x | (head)` (the glued closer comes off the first word) -> DENY', payload: powershellEnvelope(MAIN, 'echo x | (head)'), expect: 'deny' },
+  { name: 'ps habit PASS main: `("cd")` (the quoted word stays opaque) -> silent', payload: powershellEnvelope(MAIN, '("cd")'), expect: 'allow(passthrough)' },
+  { name: 'ps habit PASS main: a bare `}` (closers only, nothing to judge) -> silent', payload: powershellEnvelope(MAIN, '}'), expect: 'allow(passthrough)' },
+  { name: 'ps habit PASS main: `. ./x.ps1` (dot-sourcing a path) -> silent', payload: powershellEnvelope(MAIN, '. ./x.ps1'), expect: 'allow(passthrough)' },
+  { name: 'ps habit PASS main: `Write-Output "git -C /p"` (inside quotes) -> silent', payload: powershellEnvelope(MAIN, 'Write-Output "git -C /p"'), expect: 'allow(passthrough)' },
+  { name: 'ps habit PASS main: `git -c /p log` (-c does not fold into -C) -> silent', payload: powershellEnvelope(MAIN, 'git -c /p log'), expect: 'allow(passthrough)' },
   { name: 'ps habit PASS main: `git commit -c abc` -> silent', payload: powershellEnvelope(MAIN, 'git commit -c abc'), expect: 'allow(passthrough)' },
   { name: 'ps habit PASS main: `Select-Object Name` (no -First/-Last) -> silent', payload: powershellEnvelope(MAIN, 'Get-ChildItem | Select-Object Name'), expect: 'allow(passthrough)' },
   { name: 'ps habit PASS Explore: a plain `git status` -> silent', payload: powershellEnvelope({ agent_id: 'h4', agent_type: 'Explore' }, 'git status'), expect: 'allow(passthrough)' },

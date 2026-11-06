@@ -18,10 +18,12 @@
  *     DENIES an ask-class git verb
  *     to any subagent that is not the Writer (a background agent's dialog reaches no operator) and
  *     ASKS for the main session/Writer in the git forms the shipped `ask` rules never spell out:
- *     `git.exe` outside push/merge/rebase, any `git -C <path> <verb>`, and a wrapper the harness
- *     does not strip. What the harness already matches by itself - each subcommand of a chained
- *     command, a `timeout`/`nice` prefix, a `NAME=value` prefix - stays silent. Those last two are
- *     Bash-only: nothing of the sort is documented for PowerShell, so that dialect asks instead.
+ *     `git.exe` outside push/merge/rebase, a `git -C <path> <verb>` deeper inside a subcommand, and
+ *     a wrapper the harness does not strip; a `git -C` that opens a subcommand is denied for every
+ *     actor by the habit guard in the same file. What the harness already matches by itself -
+ *     each subcommand of a chained command, a `timeout`/`nice` prefix, a `NAME=value` prefix -
+ *     stays silent. Those last two are Bash-only: nothing of the sort is documented for
+ *     PowerShell, so that dialect asks instead.
  *
  * DELIBERATE ASYMMETRY IN THE FAIL DIRECTION — a decision, not an oversight:
  *   - Gate 1 fails CLOSED (deny). The stake there is a FOREIGN subagent writing to the repo; on a

@@ -5,7 +5,7 @@
  * Gate 3 lives inside the Gate 1 file: one node process per shell call, and three hook files stay
  * three.
  *
- * THE HABIT GUARD. Five command shapes that cost a session context or correctness without gating
+ * THE HABIT GUARD. Six command shapes that cost a session context or correctness without gating
  * anything are DENIED with a hint, for EVERY actor - the main session, the Writer and any subagent;
  * identity is not consulted - and never rewritten (stripping a `cd` breaks a command that needs the
  * subfolder, dropping a pipe floods the context, so the guard denies and explains). It runs after the
@@ -18,15 +18,33 @@
  *   (1)-(3) a segment that FOLLOWS a pipe and starts with `tail`, `head`, or `Select-Object` /
  *           `Select` carrying `-First` / `-Last` - "run to a log file outside the repository and
  *           Read it" (any pipe, not only a test run: reading is not a shell job);
- *   (4)     `cd`, `chdir`, `pushd`, `Set-Location` or `sl` as the FIRST token of a subcommand -
- *           "use the tool's own directory flag; a command runs from the repository root";
+ *   (4)     `cd`, `chdir`, `pushd`, `popd`, `Set-Location`, `sl`, `Push-Location` or `Pop-Location`
+ *           as the FIRST word of a subcommand - "use the tool's own directory flag; a command runs
+ *           from the repository root";
  *   (5)     the global `-c <k=v>`: the subcommand's FIRST word is `git` / `git.exe` (folded on
  *           PowerShell only), its SECOND word is exactly `-c` and its THIRD word carries `=` - "drop
- *           -c". So `git commit -c abc`, `git -C <path>`, a bare `git -c`, `echo git -c k=v` and, on
- *           Bash, `GIT -c k=v` are not this shape; the `git -c:*` ask rule stays in the ruleset as
- *           the backstop, and Gate 4's own verb logic still judges those forms.
+ *           -c". So `git commit -c abc`, a bare `git -c`, `echo git -c k=v` and, on Bash,
+ *           `GIT -c k=v` are not this shape (and `git -C <path>` is shape (6)); the `git -c:*` ask
+ *           rule stays in the ruleset as the backstop, and Gate 4's own verb logic still judges those
+ *           forms;
+ *   (6)     the global `-C <path>`: the subcommand's FIRST word is `git` / `git.exe` (folded on
+ *           PowerShell only) and its SECOND word is `-C` or a glued `-C<path>` - never folded on
+ *           either tool, so `git -c` is not it - whatever verb follows: "run git bare from the
+ *           repository root; read a foreign tree with the file tools (Read / Grep / Glob), never
+ *           with `git -C`". So `echo git -C /p log` and `git log -C` are not this shape. The
+ *           `git -C <projectRoot> push|merge|rebase` ask rules stay in the ruleset as the backstop
+ *           for a project whose hooks are off.
+ * THE FIRST WORD IS READ THROUGH a leading call operator or block opener - `&` (the PowerShell call
+ * operator; on Bash a lone `&` is a separator anyway), `{`, `(`, `$(` and the dot-sourcing `.` -
+ * repeatedly (`& {` is two), so `& { Push-Location x }`, `$(cd x)`, `( cd x )`, `{ cd x; }` and
+ * `. { sl x }` are judged by the word that follows. An opener glued to the word (`$(cd`, `(cd`,
+ * `{Push-Location`) comes off as a prefix, and a closer glued to that first word comes off its end
+ * (`&{Pop-Location}`, `| (head)`); `.` is read through only as a whole word, so `./x.ps1` is
+ * a path and `. ./x.ps1` is judged by it. Only the LEADING run is read through: a `cd` or a `git -C`
+ * deeper in the segment (`echo $(cd x)`, `Write-Output (git -C /p log)`) is not judged.
  * Not judged: anything inside quotes, and therefore anything inside a nested shell whose script is a
- * quoted argument (`sh -lc '...'`, `bash -c "..."`, `pwsh -Command '...'`). A recogniser, not a
+ * quoted argument (`sh -lc '...'`, `bash -c "..."`, `pwsh -Command '...'`), a quoted
+ * `"git -C /p"` and a quoted opener (`& "cd"` - the word `"cd"` is not `cd`). A recogniser, not a
  * parser - the same honest limit as the verb recognition below: a separator inside `$( )`, `( )` or
  * `{ }` outside quotes IS a top-level separator here, so `X=$(git log | head -1)` is a pipe into head.
  *
@@ -68,7 +86,8 @@
  *     `<projectRoot>`, and this hook cannot verify that a path is the project root), a wrapper the
  *     harness does not strip (`sudo`, `npx`, `docker exec`, `direnv exec`, `watch`, `setsid`,
  *     `flock`, `find -exec`, a flagged `xargs`), and irregular whitespace between the tokens. Those
- *     reach nobody today; for those, this gate asks.
+ *     reach nobody today; for those, this gate asks (a `git -C` that OPENS a subcommand never gets
+ *     that far: the habit guard denies it first, shape (6)).
  *       THE POWERSHELL DIALECT IS NARROWER, AND DELIBERATELY MODELLED AS LESS, NOT AS THE SAME.
  *     The documentation describes an AST split into subcommands on `;`, `|` and (PowerShell 7+)
  *     `&&` / `||`, with the rule required to match every subcommand - so those four separators are
@@ -177,7 +196,9 @@
  *     `Bash(git.exe push:*)` and the verb `push` is still "covered" by the bare rule, while
  *     `git.exe push ...` goes on being passed through here with nothing gating it.
  *   - the three `git -C <projectRoot> ...` rule forms are the one deliberate exception and are
- *     asserted as REFUSED rather than skipped (the reason is on EXE_RULE_VERBS below).
+ *     asserted as REFUSED rather than skipped (the reason is on EXE_RULE_VERBS below); from the hook
+ *     such a form, opening its subcommand, is denied by the habit guard before the rule test runs,
+ *     and the rules stay as the backstop for a project whose hooks are off.
  * Both directions run PER TOOL, over the `Bash(...)` and the `PowerShell(...)` rules separately, and
  * the mirror between the two lists is its own bidirectional assertion. Each direction carries its own
  * control on a sabotaged copy of the ruleset: a form added, the `git.exe` rule removed, a bare rule
@@ -206,6 +227,9 @@ const G4 = '[AIWF-G4 gate 4: ask-class git verbs]';
 // carries no blanket `git -C` rule (it would gate `git -C <other repo> log`), so `-C <path>` is
 // skipped as the global option it is and the verb AFTER it is the one RECOGNISED. That is
 // recognition only: no `-C` form is ever a rule match, whatever verb follows (see EXE_RULE_VERBS).
+// From the hook, a `git -C` that opens its subcommand is denied by the habit guard (shape (6))
+// before this recognition runs; the step-over still serves a `-C` deeper in a subcommand
+// (`echo $(git -C /p push)`) and the pure functions the self-check calls.
 const GIT_ASK_VERBS = Object.freeze([
   'commit', 'reset', 'clean', 'rm', 'checkout', 'switch', 'restore', 'revert',
   'pull', 'fetch', 'cherry-pick', 'stash', 'config', 'remote', '-c',
@@ -216,7 +240,8 @@ const VERB_SET = new Set(GIT_ASK_VERBS);
 // the bare `git <verb>` form alone - which is why the rule test below is asymmetric. The
 // `git -C <projectRoot> ...` rules are deliberately NOT modelled: their path is rendered from the
 // project root, and a hook that reads no project directory cannot tell that path from any other, so
-// every `-C` form asks.
+// every `-C` form that reaches the rule test asks - and one that opens its subcommand never reaches
+// it, because the habit guard (shape (6)) denies it first.
 const EXE_RULE_VERBS = new Set(['push', 'merge', 'rebase']);
 
 // What the harness itself does before it matches a rule, mirrored exactly as far as it is
@@ -489,7 +514,8 @@ function stripWrappers(subcommand, tool = TOOL_BASH) {
 // + TAB as that prefix is not something this repository can check - so it abstains and the caller
 // asks. The comparison is case-SENSITIVE for the same reason. Everything it cannot confirm -
 // `git  commit`, `git commit\t-m x`, `GIT commit`, `git -C <path> <anything>`, `git.exe reset` -
-// is a form this predicate refuses to call gated.
+// is a form this predicate refuses to call gated (the `-C` one, when it opens its subcommand, is
+// denied by the habit guard before this test is reached).
 function shippedRuleMatches(subcommand, tool = TOOL_BASH) {
   const rest = stripWrappers(subcommand, tool);
   const m = /^(git\.exe|git) (\S+)(?: (?!\s)|$)/.exec(rest);
@@ -513,26 +539,29 @@ function everyGitFormIsRuleMatched(command, tool = TOOL_BASH) {
 }
 
 // ---- THE HABIT GUARD (D-14) - the file's second responsibility --------------------------------
-// See the header for the five shapes and what is not judged. It reuses the dialect table and the
-// escape/quote rules of subcommandsOf, but needs one thing subcommandsOf drops: WHICH separator a
-// segment follows, because shapes (1)-(3) are "after a pipe". So the splitter below sits BESIDE
-// subcommandsOf rather than changing it, and the git logic above is untouched. Its separator sets
+// See the header for the six shapes, the read-through of a leading operator and what is not judged.
+// It reuses the dialect table and the escape/quote rules of subcommandsOf, but needs one thing
+// subcommandsOf drops: WHICH separator a segment follows, because shapes (1)-(3) are "after a
+// pipe". So the splitter below sits BESIDE subcommandsOf rather than changing it, and the git logic above is untouched. Its separator sets
 // are the habit check's own. On Bash a lone `&` IS a top-level separator (a background list - the
 // command after it starts a new segment, which follows no pipe), EXCEPT where the `&` belongs to a
 // redirect: preceded by a PLAIN `>` or `<` (`2>&1`, `<&0` - not an escaped `\>`, not one inside
 // quotes) or followed by `>` (`&>file`); `&&` and `|&` are two-character operators and are matched
 // first. On PowerShell `&` is the call operator and stays
-// text, as it does for the verb decomposition.
+// text, as it does for the verb decomposition - and habitReadThrough below reads the first word
+// through it (D-02), so the call operator is never made a separator.
 const HABIT_TAG = '[AIWF-G4 habit guard]';
 const HINT_LOG_FILE = 'run to a log file outside the repository and Read it';
 const HINT_DIRECTORY = "use the tool's own directory flag; a command runs from the repository root";
 const HINT_DASH_C = 'drop -c; the warning it silences is noise';
+const HINT_FOREIGN_TREE = 'run git bare from the repository root; read a foreign tree with the file tools (Read / Grep / Glob), never with `git -C`';
 const HABITS = Object.freeze({
   tail: Object.freeze({ shape: 'pipe into tail', hint: HINT_LOG_FILE }),
   head: Object.freeze({ shape: 'pipe into head', hint: HINT_LOG_FILE }),
   select: Object.freeze({ shape: 'pipe into Select-Object -First/-Last', hint: HINT_LOG_FILE }),
   cd: Object.freeze({ shape: 'cd prefix', hint: HINT_DIRECTORY }),
   gitDashC: Object.freeze({ shape: 'git -c', hint: HINT_DASH_C }),
+  gitDashCapitalC: Object.freeze({ shape: 'git -C', hint: HINT_FOREIGN_TREE }),
 });
 const HABIT_SEPARATORS = Object.freeze({
   [TOOL_BASH]: Object.freeze({ two: ['&&', '||', '|&'], one: new Set([';', '|', '\n', '\r']), background: true }),
@@ -541,11 +570,21 @@ const HABIT_SEPARATORS = Object.freeze({
 const HABIT_PIPES = new Set(['|', '|&']);
 const HABIT_SELECTS = ['Select-Object', 'Select'];
 const HABIT_SELECT_LIMITS = ['-First', '-Last'];
-const HABIT_DIRECTORY_CHANGERS = ['cd', 'chdir', 'pushd', 'Set-Location', 'sl'];
+const HABIT_DIRECTORY_CHANGERS = ['cd', 'chdir', 'pushd', 'Set-Location', 'sl', 'Push-Location', 'Pop-Location', 'popd'];
 // Shape (5) is exactly: the segment's FIRST word is `git` / `git.exe` (folded on PowerShell only, as
 // every word here is), its SECOND word is exactly `-c` - never folded on either tool, because git's
-// own `-C <path>` is another option - and its THIRD word carries `=` (the `<k=v>`).
+// own `-C <path>` is another option - and its THIRD word carries `=` (the `<k=v>`). Shape (6) is the
+// same FIRST word with a SECOND word that starts with `-C` (`-C <path>` or the glued `-C<path>`),
+// never folded either, so neither shape ever answers for the other.
 const HABIT_GIT_PROGRAMS = ['git', 'git.exe'];
+// The leading call operator / block openers the first word is read through (D-02), longest first so
+// `$(` is not left as `$` + `(`. A glued one comes off as a prefix (`$(cd` -> `cd`), and the skip
+// repeats (`& {` is two). The dot-sourcing `.` is read through only as a WHOLE word: `./x.ps1` and
+// `.git` are paths, not an operator. A quoted word starts with its quote and is never touched.
+const HABIT_OPENERS = ['$(', '&', '{', '('];
+const HABIT_DOT_SOURCE = '.';
+// The closers a glued first word sheds at its end, repeatedly (`cd))}` -> `cd`), on both tools.
+const HABIT_TRAILING_CLOSERS = /[)}]+$/;
 
 // The top-level segments of a command, each with whether it FOLLOWS a pipe. Quote-aware and
 // escape-aware exactly as subcommandsOf is: a separator inside quotes is text.
@@ -598,6 +637,30 @@ function habitWordsOf(segment, dialect) {
   return words;
 }
 
+// A segment's words with the leading call operators and block openers read through (D-02): a copy,
+// the input is not mutated. Only the leading run - the first word that is none of them ends it.
+// Then the FIRST word alone loses its trailing run of closers `)` / `}` (`&{Pop-Location}`,
+// `(head)`, `{(cd))}`); no other word is touched. A first word made only of closers (`}`) leaves
+// nothing to judge, and the segment is skipped as an empty one. A quoted word keeps its quotes, so
+// `("cd")` becomes `"cd"`, which is not `cd`.
+function habitReadThrough(words) {
+  const out = words.slice();
+  while (out.length > 0) {
+    const w = out[0];
+    if (w === HABIT_DOT_SOURCE) { out.shift(); continue; }
+    const opener = HABIT_OPENERS.find((o) => w.startsWith(o));
+    if (opener === undefined) break;
+    const rest = w.slice(opener.length);
+    if (rest === '') out.shift(); else out[0] = rest;
+  }
+  if (out.length > 0) {
+    const bare = out[0].replace(HABIT_TRAILING_CLOSERS, '');
+    if (bare === '') return [];
+    out[0] = bare;
+  }
+  return out;
+}
+
 // The habit a command carries, as { shape, hint }, or null. The first shape found, in segment order.
 function habitOf(command, tool = TOOL_BASH) {
   if (typeof command !== 'string' || command.trim() === '') return null;
@@ -605,7 +668,7 @@ function habitOf(command, tool = TOOL_BASH) {
   const fold = (w) => (dialect.caseInsensitiveVerb ? w.toLowerCase() : w);
   const isOneOf = (word, names) => names.some((n) => fold(n) === fold(word));
   for (const segment of habitSegmentsOf(command, tool)) {
-    const words = habitWordsOf(segment.text, dialect);
+    const words = habitReadThrough(habitWordsOf(segment.text, dialect));
     if (words.length === 0) continue;
     const first = words[0];
     if (segment.afterPipe) {
@@ -616,6 +679,7 @@ function habitOf(command, tool = TOOL_BASH) {
     }
     if (isOneOf(first, HABIT_DIRECTORY_CHANGERS)) return HABITS.cd;
     if (words.length >= 3 && isOneOf(first, HABIT_GIT_PROGRAMS) && words[1] === '-c' && words[2].includes('=')) return HABITS.gitDashC;
+    if (words.length >= 2 && isOneOf(first, HABIT_GIT_PROGRAMS) && words[1].startsWith('-C')) return HABITS.gitDashCapitalC;
   }
   return null;
 }

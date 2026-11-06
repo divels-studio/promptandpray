@@ -1571,6 +1571,9 @@ function sectionGate4() {
   const silent = (r) => r.decision === 'allow(passthrough)' && r.exit === 0;
   const denied = (r) => r.decision === 'deny' && r.exit === 0;
   const asked = (r) => r.decision === 'ask' && r.exit === 0;
+  // D-01: a `git -C` that opens its subcommand is the habit guard's shape (6), denied for every actor
+  // BEFORE the git-verb logic - so the rows that pinned a `-C` form as an ASK now pin this deny.
+  const dashCDenied = (r) => denied(r) && String(r.reason).includes('[AIWF-G4 habit guard] habit: git -C - ');
   const MAIN = {};                                       // true main session: no identity fields
   const SUB = { agent_id: 'a1', agent_type: 'general-purpose' };
   const WRITER = { agent_id: 'w1', agent_type: 'writer' };
@@ -1609,14 +1612,16 @@ function sectionGate4() {
   }
   check('`git.exe push origin main` -> silent (the control: the ruleset spells THIS one out)',
     silent(B(MAIN, 'git.exe push origin main')));
-  check('`git -C <path> reset --hard` -> ASK (no -C rule for a non-push verb)',
-    asked(B(MAIN, `git -C ${ROOT} reset --hard`)));
-  check('`git -C <path> push origin main` -> ASK (the rule names <projectRoot>, which this hook cannot verify)',
-    asked(B(MAIN, `git -C ${ROOT} push origin main`)));
-  check('`git.exe -C <path> push` -> ASK (no shipped rule carries both spellings)',
-    asked(B(MAIN, `git.exe -C ${ROOT} push`)));
-  check('`git -C /p -C . push` (a second -C) -> ASK',
-    asked(B(MAIN, 'git -C /p -C . push')));
+  check('`git -C <path> reset --hard` -> DENY by the habit guard (git -C), not an ask (D-01: the habit check runs first)',
+    dashCDenied(B(MAIN, `git -C ${ROOT} reset --hard`)));
+  check('`git -C <path> push origin main` -> DENY by the habit guard (the <projectRoot> ask rule stays the hooks-off backstop)',
+    dashCDenied(B(MAIN, `git -C ${ROOT} push origin main`)));
+  check('`git.exe -C <path> push` -> DENY by the habit guard (git -C)',
+    dashCDenied(B(MAIN, `git.exe -C ${ROOT} push`)));
+  check('`git -C /p -C . push` (a second -C) -> DENY by the habit guard (git -C)',
+    dashCDenied(B(MAIN, 'git -C /p -C . push')));
+  check('a `-C` form DEEPER than the first word still reaches the ask branch (`echo $(git -C /p push)` -> ASK)',
+    asked(B(MAIN, 'echo $(git -C /p push)')));
   check('`sudo git reset --hard` -> ASK (sudo is NOT in the harness\'s stripped-wrapper set)',
     asked(B(MAIN, 'sudo git reset --hard')));
   check('`npx git reset --hard` -> ASK (npx is not stripped either)',
@@ -1682,8 +1687,9 @@ function sectionGate4() {
   check('the Writer is not exempt from any of it (`git.exe reset --hard` from the Writer)',
     asked(B(WRITER, 'git.exe reset --hard')));
   check('a non-writer subagent is DENIED in those same forms (identity decides before the form)',
-    denied(B(SUB, 'git.exe reset --hard')) && denied(B(SUB, `git -C ${ROOT} reset --hard`))
-    && denied(B(SUB, 'sudo git reset --hard')));
+    denied(B(SUB, 'git.exe reset --hard')) && denied(B(SUB, 'sudo git reset --hard')));
+  check('...and its `git -C <path> reset --hard` is denied as the habit (git -C), before identity is read',
+    dashCDenied(B(SUB, `git -C ${ROOT} reset --hard`)));
 
   // --- what the HARNESS already gates must stay silent -----------------------------------------
   // Each of these was described as a hole earlier in this ticket and is not one: the documented
@@ -1772,11 +1778,11 @@ function sectionGate4() {
     silent(B(SUB, 'GIT Push origin')) && silent(B(MAIN, 'GIT Push origin')));
   check('PowerShell: the rule test does NOT fold case (a passthrough may not rest on an unobserved rewrite)',
     asked(P(MAIN, 'GIT push origin main')) && silent(P(MAIN, 'git push origin main')));
-  check('PowerShell: every `-C` form still asks, and the Writer is not exempt',
-    asked(P(MAIN, `git -C ${ROOT} push origin main`)) && asked(P(MAIN, `git -C ${ROOT} reset --hard`))
+  check('PowerShell: a `-C` form opening its subcommand -> DENY by the habit guard (git -C), and the Writer is not exempt from the ask on `git.exe reset`',
+    dashCDenied(P(MAIN, `git -C ${ROOT} push origin main`)) && dashCDenied(P(MAIN, `git -C ${ROOT} reset --hard`))
     && asked(P(WRITER, 'git.exe reset --hard')));
   check('PowerShell: identity decides before the form (a subagent is DENIED in those same forms)',
-    denied(P(SUB, 'git.exe reset --hard')) && denied(P(SUB, `git -C ${ROOT} reset --hard`))
+    denied(P(SUB, 'git.exe reset --hard')) && dashCDenied(P(SUB, `git -C ${ROOT} reset --hard`))
     && denied(P(SUB, '& git push')));
   check('PowerShell: the passthrough branch is intact (a read-only verb, a non-git command, no command at all)',
     silent(P(SUB, 'git log --oneline -5')) && silent(P(SUB, 'node --version'))
@@ -1797,10 +1803,12 @@ function sectionGate4() {
     asked(runHook(GATE4, envelope(MAIN, 'timeout 30 git commit -m x', 'SomeFutureShell'))));
 
   // --- THE HABIT GUARD (D-14), the file's SECOND responsibility ---------------------------------
-  // Five shapes over the top-level subcommands, in the tool's own dialect (PowerShell case-folded),
-  // denied WITH A HINT for EVERY actor - identity is not consulted - and never rewritten. Every
+  // Six shapes over the top-level subcommands, in the tool's own dialect (PowerShell case-folded),
+  // denied WITH A HINT for EVERY actor - identity is not consulted - and never rewritten; the first
+  // word is read through a leading `&`, `{`, `(`, `$(` or whole-word `.` (D-02). Every
   // deny row runs once per actor, and every shape has its nearest PASS twin below: inside quotes or
-  // a nested shell, not after a pipe, a `-c` that is not the global one. The check runs BEFORE the
+  // a nested shell, not after a pipe, a `-c` that is not the global one, a `-C` that is not the
+  // second word, a `.` that is a path. The check runs BEFORE the
   // git-verb logic, which the order row proves: a foreign subagent's `cd X && git reset --hard` is
   // denied as a habit, not as a verb.
   {
@@ -1808,6 +1816,7 @@ function sectionGate4() {
     const HINT_LOG = 'run to a log file outside the repository and Read it';
     const HINT_DIR = "use the tool's own directory flag; a command runs from the repository root";
     const HINT_C = 'drop -c; the warning it silences is noise';
+    const HINT_CC = 'run git bare from the repository root; read a foreign tree with the file tools (Read / Grep / Glob), never with `git -C`';
     const habitDenied = (r, hint) => denied(r) && r.reason.includes('[AIWF-G4 habit guard]')
       && r.reason.includes('habit:') && r.reason.includes(hint);
     const ACTORS = [MAIN, WRITER, SUB];
@@ -1829,6 +1838,18 @@ function sectionGate4() {
       ['Bash', 'sl', 'sl scripts', HINT_DIR],
       ['Bash', 'the global git -c <k=v>', 'git -c core.autocrlf=false status', HINT_C],
       ['Bash', 'the global git.exe -c <k=v>', 'git.exe -c core.x=y log', HINT_C],
+      ['Bash', 'the global git -C <path> (any verb, D-01)', 'git -C /p status', HINT_CC],
+      ['Bash', 'the glued git -C<path>', 'git -C/p log', HINT_CC],
+      ['Bash', 'the global git.exe -C <path>', 'git.exe -C /p log', HINT_CC],
+      ['Bash', 'git -C as the first word of a LATER subcommand', 'echo x && git -C /p log', HINT_CC],
+      ['Bash', 'git -C read through `$(` (D-02)', '$(git -C /p log)', HINT_CC],
+      ['Bash', 'popd', 'popd', HINT_DIR],
+      ['Bash', 'cd read through a glued `$(` (D-02)', '$(cd x)', HINT_DIR],
+      ['Bash', 'cd read through a spaced `(` subshell', '( cd x )', HINT_DIR],
+      ['Bash', 'cd read through a glued `(`', '(cd x && node y.js)', HINT_DIR],
+      ['Bash', 'cd read through a `{` group', '{ cd x; }', HINT_DIR],
+      ['Bash', 'cd with a glued opener AND closer (`$(cd)`)', '$(cd)', HINT_DIR],
+      ['Bash', 'a pipe into a glued `(head)` (the closer comes off the first word)', 'echo x | (head)', HINT_LOG],
       ['PowerShell', 'a pipe into tail', 'node x.js | tail -5', HINT_LOG],
       ['PowerShell', 'a pipe into head', 'git log | head -3', HINT_LOG],
       ['PowerShell', 'select-object -first (case-folded)', 'Get-Content x.log | select-object -first 5', HINT_LOG],
@@ -1842,6 +1863,21 @@ function sectionGate4() {
       ['PowerShell', 'pushd', 'pushd scripts', HINT_DIR],
       ['PowerShell', 'the global git -c <k=v>', 'git -c core.autocrlf=false status', HINT_C],
       ['PowerShell', 'GIT -c (the program name folds, the flag does not)', 'GIT -c core.x=y status', HINT_C],
+      ['PowerShell', 'the global git -C <path> (any verb, D-01)', 'git -C /p status', HINT_CC],
+      ['PowerShell', 'the glued git -C<path>', 'git -C/p log', HINT_CC],
+      ['PowerShell', 'GIT.EXE -C (the program name folds, the flag does not)', 'GIT.EXE -C /p log', HINT_CC],
+      ['PowerShell', 'git -C read through the call operator `&` (D-02)', '& git -C /p log', HINT_CC],
+      ['PowerShell', 'Push-Location', 'Push-Location scripts', HINT_DIR],
+      ['PowerShell', 'Pop-Location', 'Pop-Location', HINT_DIR],
+      ['PowerShell', 'popd', 'popd', HINT_DIR],
+      ['PowerShell', 'push-location (case-folded)', 'push-location scripts', HINT_DIR],
+      ['PowerShell', 'Push-Location read through `& {` (two openers, D-02)', '& { Push-Location x }', HINT_DIR],
+      ['PowerShell', 'Pop-Location read through `{`', '{ Pop-Location }', HINT_DIR],
+      ['PowerShell', 'Push-Location read through a glued `{`', '{Push-Location x}', HINT_DIR],
+      ['PowerShell', 'sl read through the whole-word dot-sourcing `.` and `{`', '. { sl x }', HINT_DIR],
+      ['PowerShell', 'cd read through a glued `$(`', '$(cd x)', HINT_DIR],
+      ['PowerShell', 'Pop-Location with a glued `&{` and `}` (`&{Pop-Location}`)', '&{Pop-Location}', HINT_DIR],
+      ['PowerShell', 'a pipe into a glued `(head)` (the closer comes off the first word)', 'echo x | (head)', HINT_LOG],
     ];
     for (const [tool, label, command, hint] of HABIT_DENY) {
       const rs = ACTORS.map((a) => T(tool, a, command));
@@ -1863,7 +1899,11 @@ function sectionGate4() {
       ['Bash', '`CD` on Bash (no case folding there)', 'CD scripts'],
       ['Bash', '`git -c` inside a quoted string', 'git commit -m "use git -c core.x=y"'],
       ['Bash', '`git commit -c abc` (the commit option, not the global one)', 'git commit -c abc'],
-      ['Bash', '`git -C <path> status` (-C is a different option)', `git -C ${ROOT} status`],
+      ['Bash', '`echo git -C /p log` (git is not the first word)', 'echo git -C /p log'],
+      ['Bash', '`git log -C` (-C is not the second word)', 'git log -C'],
+      ['Bash', 'a quoted `"git -C /p"`', 'echo "git -C /p log"'],
+      ['Bash', '`. ./x.sh` (the dot-sourced word is a path, no habit)', '. ./x.sh'],
+      ['Bash', '`(echo x)` (read through, the first word is no habit)', '(echo x)'],
       // Shape (5) is the FIRST word `git` / `git.exe`, the second exactly `-c`, the third a `<k=v>`.
       // Gate 4 still judges these as git forms, so the main session's answer is its own, not silence.
       ['Bash', '`GIT -c core.x=y status` (no case folding on Bash)', 'GIT -c core.x=y status', 'ask'],
@@ -1874,7 +1914,12 @@ function sectionGate4() {
       ['PowerShell', 'a `cd` and a pipe into select -first inside double quotes', 'Write-Output "cd x; Get-Content y | select -first 1"'],
       ['PowerShell', 'a `Set-Location` inside `pwsh -Command \'...\'`', "pwsh -NoProfile -Command 'Set-Location scripts; node x.js'"],
       ['PowerShell', 'a pipe into Select-Object WITHOUT -First/-Last', 'Get-ChildItem | Select-Object Name'],
-      ['PowerShell', '`git -C <path> status` (the -C flag does not fold into -c)', `git -C ${ROOT} status`],
+      ['PowerShell', '`git -c /p log` (the -c flag does not fold into -C, and carries no <k=v>)', 'git -c /p log'],
+      ['PowerShell', '`. ./x.ps1` (dot-sourcing a path: `./x.ps1` is no operator)', '. ./x.ps1'],
+      ['PowerShell', '`Write-Output "git -C /p"` (inside quotes)', 'Write-Output "git -C /p"'],
+      ['PowerShell', '`& "cd" x` (a quoted word after the call operator is not cd)', '& "cd" x'],
+      ['PowerShell', '`("cd")` (opener and closer come off, the quoted `"cd"` is not cd)', '("cd")'],
+      ['PowerShell', 'a bare `}` (a first word of closers only: nothing to judge)', '}'],
       ['PowerShell', '`git commit -c abc`', 'git commit -c abc'],
       ['PowerShell', 'a plain `git status`', 'git status'],
       ['PowerShell', '`echo X & cd scripts` (`&` is the call operator here: one segment, the control)', 'echo X & cd scripts'],
@@ -1892,15 +1937,19 @@ function sectionGate4() {
         habitDenied(r, HINT_DIR) && !r.reason.includes('"reset"'), r.reason.slice(0, 90));
     }
     // MONITOR (D-14 (d)): Bash-matched hooks run on Monitor commands, so this gate judges them in the
-    // BASH dialect - both responsibilities. `|&` is the discriminating separator: Bash splits on it,
-    // the PowerShell dialect does not, so an unknown tool name (the stricter dialect) is the control.
+    // BASH dialect - both responsibilities. A lone `&` is the discriminating separator: Bash splits on
+    // it, the PowerShell dialect reads it as the call operator, so an unknown tool name (the stricter
+    // dialect) is the control. (`|&` no longer discriminates for the habit guard: in the PowerShell
+    // dialect `|` pipes and the call operator `&` after it is read through, D-02.)
     const M = (identity, command) => runHook(GATE4, envelope(identity, command, 'Monitor'));
     check('Monitor: `cd scripts` -> habit DENY (judged in the Bash dialect)',
       habitDenied(M(MAIN, 'cd scripts'), HINT_DIR) && habitDenied(M(SUB, 'cd scripts'), HINT_DIR));
     check('Monitor: a `|&` pipe into tail -> habit DENY (`|&` is a separator only in the Bash dialect)',
       habitDenied(M(MAIN, 'npm test |& tail -5'), HINT_LOG));
-    check('...the control: the same `|&` command under an unknown tool name is judged as PowerShell, where `|&` is no pipe -> silent',
-      silent(runHook(GATE4, envelope(MAIN, 'npm test |& tail -5', 'SomeFutureShell'))));
+    check('...the dialect control on a lone `&`: `echo X & cd scripts` under an unknown tool name is judged as PowerShell, where `&` is the call operator (one segment, first word `echo`) -> silent',
+      silent(runHook(GATE4, envelope(MAIN, 'echo X & cd scripts', 'SomeFutureShell'))));
+    check('D-02: `npm test |& tail -5` under an unknown tool name -> habit DENY (pipe into tail: in the PowerShell dialect `|` pipes and the call operator `&` is read through)',
+      habitDenied(runHook(GATE4, envelope(MAIN, 'npm test |& tail -5', 'SomeFutureShell')), HINT_LOG));
     check('Monitor: the git-verb logic runs in the Bash dialect too (`timeout 30 git commit -m x` -> silent: a stripped wrapper)',
       silent(M(MAIN, 'timeout 30 git commit -m x')));
     {
@@ -2134,11 +2183,35 @@ function sectionGate4() {
       && /log file outside the repository/.test((hook.habitOf('a | head', 'PowerShell') || {}).hint || '')
       && (hook.habitOf('Set-Location x', 'PowerShell') || {}).shape === 'cd prefix'
       && (hook.habitOf('git -c a=b log') || {}).shape === 'git -c'
-      && hook.habitOf('tail -5 x.log') === null && hook.habitOf('git -C /p log') === null
+      && hook.habitOf('tail -5 x.log') === null && (hook.habitOf('git -C /p log') || {}).shape === 'git -C'
       && hook.habitOf('echo git -c a=b') === null && hook.habitOf('git -c') === null
       && hook.habitOf('git -c log') === null && hook.habitOf('GIT -c a=b log') === null
       && (hook.habitOf('GIT -c a=b log', 'PowerShell') || {}).shape === 'git -c'
       && hook.habitOf(null) === null && hook.habitOf('') === null);
+    // D-01: shape (6), the `-C` never folded on either tool, the program word folded on PowerShell only.
+    check('habitOf: `git -C` is its own shape with the file-tools hint; the -C never folds, the program word folds on PowerShell only',
+      /file tools \(Read \/ Grep \/ Glob\), never with `git -C`/.test((hook.habitOf('git -C/p log') || {}).hint || '')
+      && (hook.habitOf('git.exe -C /p status', 'PowerShell') || {}).shape === 'git -C'
+      && (hook.habitOf('GIT -C /p log', 'PowerShell') || {}).shape === 'git -C'
+      && hook.habitOf('GIT -C /p log') === null
+      && hook.habitOf('git -c /p log', 'PowerShell') === null
+      && hook.habitOf('echo git -C /p log') === null && hook.habitOf('git log -C') === null);
+    // D-02: the first word is read through a leading run of `&`, `{`, `(`, `$(` and a whole-word `.`.
+    check('habitOf reads the first word through a leading `&`, `{`, `(`, `$(` and whole-word `.`, and through the leading run only',
+      (hook.habitOf('& { Push-Location x }', 'PowerShell') || {}).shape === 'cd prefix'
+      && (hook.habitOf('{Push-Location x}', 'PowerShell') || {}).shape === 'cd prefix'
+      && (hook.habitOf('. { sl x }', 'PowerShell') || {}).shape === 'cd prefix'
+      && (hook.habitOf('$(cd x)') || {}).shape === 'cd prefix'
+      && (hook.habitOf('( cd x )') || {}).shape === 'cd prefix'
+      && (hook.habitOf('& git -C /p log', 'PowerShell') || {}).shape === 'git -C'
+      && hook.habitOf('. ./x.ps1', 'PowerShell') === null && hook.habitOf('./x.sh') === null
+      && hook.habitOf('echo $(cd x)') === null && hook.habitOf('& "cd" x', 'PowerShell') === null
+      && hook.habitOf('& {', 'PowerShell') === null && hook.habitOf('.') === null);
+    check('habitOf strips the glued CLOSERS off the first word only (`&{Pop-Location}`, `| (head)`; a quoted `("cd")` stays opaque)',
+      (hook.habitOf('&{Pop-Location}', 'PowerShell') || {}).shape === 'cd prefix'
+      && (hook.habitOf('echo x | (head)') || {}).shape === 'pipe into head'
+      && (hook.habitOf('$(git -C/p)') || {}).shape === 'git -C'
+      && hook.habitOf('("cd")', 'PowerShell') === null && hook.habitOf('}', 'PowerShell') === null);
   }
   check('dialectOf maps Monitor to the Bash dialect, and keeps every other non-Bash name on PowerShell',
     hook.dialectOf('Monitor') === hook.DIALECTS[hook.TOOL_BASH]

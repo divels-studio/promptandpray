@@ -62,15 +62,16 @@ The rules do not rely on the session "remembering" them - they are enforced mech
   know - `git commit -m ...` raises the one dialog it always did, and so do the chained and
   `timeout`-style forms, which Claude Code's permission documentation says it matches by subcommand
   and past stripped wrappers on its own. What is new is a prompt
-  for the spellings your rules never covered: `git.exe <verb>` outside push/merge/rebase, any
-  `git -C <path> <verb>`, and a git command behind a wrapper the harness does not strip, such as
-  `sudo` or `npx`. So a new prompt here means "this command would have run unasked", not "one more
+  for the spellings your rules never covered: `git.exe <verb>` outside push/merge/rebase and a git
+  command behind a wrapper the harness does not strip, such as `sudo` or `npx`. So a new prompt here means "this command would have run unasked", not "one more
   click for the same command" - and where a rule does match, the hook and the rule collapse into a
   single dialog rather than two.
-  The same hook also refuses five shell habits for every role, yours included - a pipe into `tail`,
-  `head` or `Select-Object -First|-Last`, a leading `cd` (or `chdir`, `pushd`, `Set-Location`, `sl`)
-  and `git -c <k=v>` - each with a hint naming the alternative (a log file you Read; the tool's own
-  directory flag; dropping `-c`), and it never rewrites a command.
+  The same hook also refuses six shell habits for every role, yours included - a pipe into `tail`,
+  `head` or `Select-Object -First|-Last`, a leading `cd` (or `chdir`, `pushd`, `popd`,
+  `Set-Location`, `sl`, `Push-Location`, `Pop-Location`, also behind a leading `&`, `{`, `(` or
+  `$(`), `git -c <k=v>` and any `git -C <path> ...` - each with a hint naming the alternative (a log
+  file you Read; the tool's own directory flag; dropping `-c`; running git bare from the repository
+  root and reading a foreign tree with the file tools), and it never rewrites a command.
   **Which tools this covers:** both shells. The gate is wired on `Bash|PowerShell` and every
   permission rule exists twice, once per tool, so a Windows session that carries a `PowerShell` tool
   alongside `Bash` gets the same dialog either way - and `Monitor`, which has no rules of its own,
