@@ -39,7 +39,7 @@ own operator's word.
 | ref | title | implements | status | record |
 |---|---|---|---|---|
 | GATES-001 | the habit guard denies every `git -C` and reads through a leading operator | D-01 D-02 D-11 | closed `4122b27` | `records/GATES-001.md` |
-| GATES-002 | Gate 1 passes a non-writer's write outside the project root | D-03 D-11 | open | - |
+| GATES-002 | Gate 1 passes a non-writer's write outside the project root | D-03 D-11 | closed `2c1ad1d` | `records/GATES-002.md` |
 | GATES-003 | the plan gate refuses side-by-side tickets whose Code Maps share a path | D-04 D-11 | open | - |
 | GATES-004 | the review and QA wrappers: the stream to a log, the verdict from `-o`, capacity and tokens lines | D-05 D-06 D-07 D-08 D-09 D-11 | open | - |
 | GATES-005 | release 0.3.12: migration 0037, the bump, the changelog, the self-install | D-10 D-11 | open | - |
