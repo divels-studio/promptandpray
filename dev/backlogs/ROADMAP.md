@@ -234,6 +234,7 @@ Entries below were ported on 2026-10-18 from `dev/backlogs/CANDIDATES.md` (now h
   - 2026-09 - VERIFY has no POSIX leg; `example-cycle-linux` is a Windows run [dev/backlogs/CANDIDATES.md:985]
   - 2026-10 - make the suites fast (setup ~16, update ~19, cycle ~16, selfcheck ~6 min; target under 3 min) [dev/backlogs/CANDIDATES.md:1284]
   - 2026-10 AFTER step 4 - suites fast or fewer; drop `example-cycle-linux` from `verify.commands` [dev/backlogs/CANDIDATES.md:1342]
+  - 2026-11-07 UPDCHECK-002 auditor (out of scope) - the embedded runner's FAIL verdict line still offers "could not prove part of the contract in this environment (a host the checks need was missing or unusable)" as a cause; under the project scope (0.3.13) no host is probed, so the clause misleads there - reword per scope [scripts/selfcheck/run-selfcheck.mjs:108-113; archive/020_PLAN_UPDCHECK_2026-11-07/records/UPDCHECK-002.md § Remaining debt]
 - Size: S
 - Plans: none yet
 - Status: idea
