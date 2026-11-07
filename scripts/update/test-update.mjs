@@ -1971,6 +1971,9 @@ section('18 - the self-check is the update\'s own last step, and a red one is ne
   check('and the PASS line quotes the self-check\'s own summary line verbatim',
     /self-check: PASS - .*assertions passed/.test(r.out),
     (r.out.split('\n').find((l) => l.startsWith('self-check:')) || '(no self-check line)').slice(0, 120));
+  check('and it names the narrower claim of the project scope it ran',
+    /^self-check: PASS - ==== \d+\/\d+ assertions passed ==== \(project layer only - run `\/pnp:selfcheck` for the full check\)\r?$/m.test(r.out),
+    (r.out.split('\n').find((l) => l.startsWith('self-check:')) || '(no self-check line)').slice(0, 160));
 }
 {
   const p = project('sc-skipped');
@@ -2012,20 +2015,25 @@ section('18 - the self-check is the update\'s own last step, and a red one is ne
   check('a RED self-check after a successful apply makes the update exit 1', r.status === 1, why(r));
   check('the self-check\'s own output reached the operator verbatim',
     r.out.includes('writer.md') && r.out.includes('FAILURES:'), why(r));
+  check('and it was the project scope that ran: the scope line is printed and no payload section (GATE 1) is',
+    /^scope {11}: project\r?$/m.test(r.out) && !r.out.includes('=== GATE 1'), why(r));
   check('the verdict says the files WERE written and nothing was rolled back',
     r.out.includes('WERE written') && r.out.includes('nothing was rolled back'), why(r));
   const bk = bookkeeping(p);
   check('which is true: the migration applied and the stamps moved',
     bk.installedPluginVersion === '0.2.0' && bk.lastMigrationApplied === '0002_noteonly', `${bk.installedPluginVersion} / ${bk.lastMigrationApplied}`);
 }
+// The two crash cases below plant their throw in the PROJECT scope's last call - the scope the
+// integrated self-check runs - so the plan-naming and project-layer passes print before it.
+const PROJECT_SCOPE_CRASH_SITE = '  sectionCommitAutomation(projectRoot);';
 {
   // The self-check CRASHES - a section throws rather than returning a red assertion.
   const crashPayload = makePayload('crash-selfcheck-020', {
     version: '0.2.0',
     migrations: [{ id: '0002_noteonly', version: '0.2.0', ops: [FIXTURE_NOTE] }],
     tweak: (dir) => patch(at(dir, 'scripts/selfcheck/aiwf-selfcheck.js'),
-      '    sectionGate2(tmpRoot);',
-      '    (() => { throw new Error(\'sc-crash injected\'); })();'),
+      PROJECT_SCOPE_CRASH_SITE,
+      '  (() => { throw new Error(\'sc-crash injected\'); })();'),
   });
   const p = project('sc-crash');
   check('install exits 0', install(p).status === 0);
@@ -2054,8 +2062,8 @@ section('18 - the self-check is the update\'s own last step, and a red one is ne
     version: '0.2.0',
     migrations: [{ id: '0002_noteonly', version: '0.2.0', ops: [FIXTURE_NOTE] }],
     tweak: (dir) => patch(at(dir, 'scripts/selfcheck/aiwf-selfcheck.js'),
-      '    sectionGate2(tmpRoot);',
-      '    (() => { throw Object.assign(Object.create(null), { code: \'sc-crash-null-proto\' }); })();'),
+      PROJECT_SCOPE_CRASH_SITE,
+      '  (() => { throw Object.assign(Object.create(null), { code: \'sc-crash-null-proto\' }); })();'),
   });
   const p = project('sc-crash-null-proto');
   check('install exits 0', install(p).status === 0);

@@ -11,10 +11,12 @@
  *      --dry-run, never after a blocked run, never on --check. The caller decides that and passes it
  *      as `wouldRun`; nothing here guesses.
  *   2. The child is `node <pluginRoot>/scripts/selfcheck/aiwf-selfcheck.js --plugin-root <pluginRoot>
- *      --project-fixture <projectRoot>` - the real entrypoint, against the project that was just
- *      written.
- *   3. Child exit 0 -> the CLI keeps its own exit code and prints `self-check: PASS` followed by the
- *      child's last non-empty stdout line, verbatim.
+ *      --project-fixture <projectRoot> --scope project` - the real entrypoint, against the project
+ *      that was just written, in its PROJECT scope: only the checks that read that project, no
+ *      payload section, no PowerShell or bash host. The full check is `/pnp:selfcheck`.
+ *   3. Child exit 0 -> the CLI keeps its own exit code and prints `self-check: PASS - ` followed by the
+ *      child's last non-empty stdout line, verbatim, and then "(project layer only - run
+ *      `/pnp:selfcheck` for the full check)", so the narrower claim is said in words.
  *   4. Child exit non-zero -> the child's stdout and stderr are printed verbatim and the CLI exits 1
  *      with a one-line verdict that says plainly that the files WERE written and nothing was rolled
  *      back. A red self-check behind exit 0 would be the worst false green this payload can produce.
@@ -57,7 +59,7 @@ export function runSelfCheck({ pluginRoot, projectRoot }) {
   if (!fs.existsSync(script)) {
     return { ran: false, reason: `${SELFCHECK_REL} is not in the payload at "${pluginRoot}"` };
   }
-  const r = spawnSync(process.execPath, [script, '--plugin-root', pluginRoot, '--project-fixture', projectRoot], { encoding: 'utf8' });
+  const r = spawnSync(process.execPath, [script, '--plugin-root', pluginRoot, '--project-fixture', projectRoot, '--scope', 'project'], { encoding: 'utf8' });
   if (r.error) return { ran: false, reason: `${SELFCHECK_REL} could not be started (${r.error.message})` };
   if (r.status === null) return { ran: false, reason: `${SELFCHECK_REL} did not exit normally (signal ${r.signal || 'unknown'})` };
   return { ran: true, status: r.status, stdout: r.stdout || '', stderr: r.stderr || '' };
@@ -96,7 +98,7 @@ export function finishWithSelfCheck({
     return 1;
   }
   if (result.status === 0) {
-    if (!quiet) out(`self-check: PASS - ${lastNonEmptyLine(result.stdout)}`);
+    if (!quiet) out(`self-check: PASS - ${lastNonEmptyLine(result.stdout)} (project layer only - run \`/pnp:selfcheck\` for the full check)`);
     return code;
   }
   // Verbatim, both streams, before the verdict: the verdict is one line and the detail is what the

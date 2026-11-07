@@ -41,7 +41,7 @@
  *   that cannot fail is not a check, and this section is what stops this file from becoming one.
  *
  * USAGE
- *   node scripts/selfcheck/aiwf-selfcheck.js [--plugin-root <dir>] [--project-fixture <dir>]
+ *   node scripts/selfcheck/aiwf-selfcheck.js [--plugin-root <dir>] [--project-fixture <dir>] [--scope project|full]
  *
  *   --plugin-root <dir>       The plugin payload to check. Default: the repo this file lives in.
  *   --project-fixture <dir>   A project with PromptAndPray installed. If the directory is missing
@@ -49,6 +49,11 @@
  *                             input, NOT the setup generator). If omitted entirely, a temporary
  *                             fixture directory is created and removed at the end.
  *   --keep-fixture            Do not remove an auto-created temporary fixture (for debugging).
+ *   --scope project|full      full (the default): every section and every negative control.
+ *                             project: only the checks that read the --project-fixture project
+ *                             (PROJECT PLAN NAMING, PROJECT LAYER, COMMIT AUTOMATION); no payload
+ *                             section, no PowerShell or bash host, no negative control. The run
+ *                             setup, update and /pnp:roles embed takes it. Any other value exits 2.
  *
  *   Exit 0 = every assertion held. Exit 1 = at least one failed. Exit 2 = the run could not start.
  */
@@ -77,6 +82,20 @@ function bail(message) {
   console.error(`aiwf-selfcheck: ${message}`);
   process.exit(2);
 }
+
+// --scope project|full. Absent = full: today's run, every section and negative control. `project`
+// runs only the checks that read the project passed as --project-fixture and probes no PowerShell or
+// bash host. Any other value - or the flag with no value - is refused, because a misspelled scope that
+// silently ran something else would be a false green.
+const SCOPES = ['project', 'full'];
+const SCOPE = (() => {
+  if (!HAS('--scope')) return 'full';
+  const value = argValue('--scope');
+  if (value === null || !SCOPES.includes(value)) {
+    bail(`--scope takes "project" or "full", got ${value === null ? 'no value' : JSON.stringify(value)}.`);
+  }
+  return value;
+})();
 
 if (!fs.existsSync(path.join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json'))) {
   bail(`--plugin-root "${PLUGIN_ROOT}" does not look like a plugin (no .claude-plugin/plugin.json).`);
@@ -212,7 +231,8 @@ function findPwsh() {
   }
   return null;
 }
-const PWSH = findPwsh();
+// Probed only by the full scope: the project scope spawns no host, so it never pays for the probe.
+const PWSH = SCOPE === 'full' ? findPwsh() : null;
 
 const RESOLVER = path.join(PLUGIN_ROOT, 'scripts', 'native', 'ps', 'aiwf-roles.ps1');
 function resolveRole(role, rolesPath, klass) {
@@ -285,7 +305,8 @@ function findBash(opts) {
   }
   return null;
 }
-const BASH = findBash();
+// Probed only by the full scope, like PWSH above.
+const BASH = SCOPE === 'full' ? findBash() : null;
 
 const SH_RESOLVER = path.join(PLUGIN_ROOT, 'scripts', 'native', 'sh', 'aiwf-roles.sh');
 function resolveRoleSh(role, rolesPath, klass) {
@@ -1238,18 +1259,36 @@ function planRefNamingFindings(activeDir, lib) {
   return out;
 }
 
+// The aiwf-lib export check every plan-naming reading needs: the library, or null once the check has
+// failed. One check, so the full scope counts it once (under ONE PREFIX PER PLAN) and the project
+// scope once (under PROJECT PLAN NAMING).
+function requirePlanShapeLib() {
+  let lib = null;
+  try { lib = require(AIWF_LIB); } catch (e) { lib = null; }
+  if (!check('aiwf-lib.js exports the ONE plan-shape predicate Gate 2, setup and this section read (no mirrored grammar)',
+    lib != null && lib.PLAN_ABBR_RE instanceof RegExp && lib.PLAN_FILE_RE instanceof RegExp
+    && lib.PLAN_TICKET_FILE_RE instanceof RegExp && typeof lib.targetedPlanCandidates === 'function'
+    && typeof lib.listActivePlanFiles === 'function')) return null;
+  return lib;
+}
+
+const PROJECT_PLAN_NAMING_TITLE = 'PROJECT PLAN NAMING - the inspected project\'s active plans carry only their own ticket prefix';
+
+// The project scope's form of the reading below: its own title, then the export check, then the reading.
+function sectionProjectPlanNaming(projectRoot) {
+  section(PROJECT_PLAN_NAMING_TITLE);
+  const lib = requirePlanShapeLib();
+  if (lib) projectPlanNamingReading(projectRoot, lib);
+}
+
 function sectionPlanRefNaming(tmpRoot, projectRoot) {
   section('ONE PREFIX PER PLAN - the ref addresses its plan, and Gate 2 looks it up that way');
   let gate = null;
   try { gate = require(GATE2); } catch (e) { gate = null; }
   if (!check('Gate 2 exports its ticket lookup (so these checks run the REAL helper, not a copy of it)',
     gate != null && typeof gate.lookupTicketRef === 'function')) return;
-  let lib = null;
-  try { lib = require(AIWF_LIB); } catch (e) { lib = null; }
-  if (!check('aiwf-lib.js exports the ONE plan-shape predicate Gate 2, setup and this section read (no mirrored grammar)',
-    lib != null && lib.PLAN_ABBR_RE instanceof RegExp && lib.PLAN_FILE_RE instanceof RegExp
-    && lib.PLAN_TICKET_FILE_RE instanceof RegExp && typeof lib.targetedPlanCandidates === 'function'
-    && typeof lib.listActivePlanFiles === 'function')) return;
+  const lib = requirePlanShapeLib();
+  if (!lib) return;
 
   let n = 0;
   // A `null` text makes that name a DIRECTORY instead of a file - the portable stand-in for "an
@@ -1508,6 +1547,13 @@ function sectionPlanRefNaming(tmpRoot, projectRoot) {
   }
 
   // --- 4. the same assertion on the project this run was pointed at ----------------------------
+  // Printed under a title of its own, in place, because it is the one part of this section that
+  // reads the real project - the part the project scope runs too.
+  section(PROJECT_PLAN_NAMING_TITLE);
+  projectPlanNamingReading(projectRoot, lib);
+}
+
+function projectPlanNamingReading(projectRoot, lib) {
   {
     const cfg = readJson(path.join(projectRoot, '.claude', 'aiwf-native', 'aiwf.config.json'));
     const plansDir = (cfg && cfg.paths && typeof cfg.paths.plansDir === 'string' && cfg.paths.plansDir.trim() !== '')
@@ -7983,12 +8029,31 @@ function writeLinkedWorktreeFixture(base, configBody) {
   return { mainRoot, worktreeRoot, worktreeGitDir };
 }
 
-function sectionCommitAutomation(projectRoot, tmpRoot) {
+// The reading of the inspected project only - the part the project scope runs. Its controls, on
+// repositories built under the scratch directory, are the full scope's COMMIT AUTOMATION CONTROLS
+// section, called right after this one.
+function sectionCommitAutomation(projectRoot) {
   section('COMMIT AUTOMATION - what the commit click cannot cover (reported, never failed)');
 
   const observed = commitAutomationNote(projectRoot);
   if (observed) observation(observed.name, observed.why);
   else console.log('  (no active pre-commit/post-commit hook and no core.hooksPath in the inspected project)');
+
+  // The tally semantics are the point of the whole section: a finding that turned into a `check()`
+  // would fail an installation over a legitimate hook. Converting the note back into an assertion
+  // puts its name in `results`, and this is what notices.
+  if (observed) {
+    check('the commit-automation finding is reported as a [NOTE], never as a counted assertion',
+      !results.some((r) => r.name.startsWith('the project carries commit automation')),
+      'reported through the note channel, outside the pass/fail tally');
+  } else {
+    note('the commit-automation finding is reported as a [NOTE], never as a counted assertion',
+      'the inspected project carries no commit automation, so this run produced no finding to classify');
+  }
+}
+
+function sectionCommitAutomationControls(tmpRoot) {
+  section('COMMIT AUTOMATION CONTROLS - the reading above, held to git repositories this section builds');
 
   // Both directions, on repositories this section builds itself: a detector that reports nothing is
   // indistinguishable from a clean project, and one that reports always is indistinguishable from a
@@ -8004,17 +8069,6 @@ function sectionCommitAutomation(projectRoot, tmpRoot) {
   check('an injected executable .git/hooks/post-commit produces exactly the [NOTE], with the honest limit',
     !!hookedNote && hookedNote.name.includes('.git/hooks/post-commit') && hookedNote.why === COMMIT_AUTOMATION_LIMIT,
     hookedNote ? hookedNote.name : 'nothing reported');
-  // The tally semantics are the point of the whole section: a finding that turned into a `check()`
-  // would fail an installation over a legitimate hook. Converting the note back into an assertion
-  // puts its name in `results`, and this is what notices.
-  if (observed) {
-    check('the commit-automation finding is reported as a [NOTE], never as a counted assertion',
-      !results.some((r) => r.name.startsWith('the project carries commit automation')),
-      'reported through the note channel, outside the pass/fail tally');
-  } else {
-    note('the commit-automation finding is reported as a [NOTE], never as a counted assertion',
-      'the inspected project carries no commit automation, so this run produced no finding to classify');
-  }
 
   // core.hooksPath is the other way a project arms a commit hook, and it REPLACES `.git/hooks`:
   // the redirected hook must be found and the one left in `.git/hooks` must not, or the note names
@@ -9921,6 +9975,114 @@ function sectionNegativeControls(tmpRoot, pluginVersion) {
 }
 
 // ---------------------------------------------------------------------------
+// SECTION - SCOPE CONTROLS: the project scope can fail, and it runs nothing but the project checks
+// ---------------------------------------------------------------------------
+// The project scope is the run setup, update and /pnp:roles embed, so its narrowing is proven here,
+// from the full run: a scope that cannot fail is not a check, and a scope that quietly grew back into
+// payload sections would put their cost and their host dependency back on the apply path. Every face
+// runs THIS file as a child: S1-S3 with --scope project against a project written by writeFixture
+// under the scratch directory, the S4 faces with the refused values (--scope bogus, a bare --scope).
+// The expected section titles are written out by hand, by their prefixes, never read from the
+// strings the sections print.
+//
+// Two guards keep a broken scope from turning this section into a runaway. Each child carries
+// SCOPE_CHILD_ENV, and a full run that finds it set refuses to spawn again (a FAIL, not a recursion).
+// The refused-value faces point --plugin-root at a directory that is not a plugin, so a --scope value
+// wrongly accepted stops at the plugin check - and that message does not name --scope.
+const SCOPE_CHILD_ENV = 'AIWF_SELFCHECK_SCOPE_CHILD';
+const SCOPE_PROJECT_TITLE_PREFIXES = ['PROJECT PLAN NAMING - ', 'PROJECT LAYER - ', 'COMMIT AUTOMATION - '];
+const TALLY_LINE_RE = /^==== (\d+)\/(\d+) assertions passed ====$/;
+
+function sectionScopeControls(tmpRoot, pluginVersion) {
+  section('SCOPE CONTROLS - the project scope runs only the project checks, probes no host, and can fail');
+  if (process.env[SCOPE_CHILD_ENV]) {
+    check('SCOPE CONTROLS never runs inside its own child (a --scope project child ran the full scope)', false,
+      `${SCOPE_CHILD_ENV} is set, so this full run was spawned as a project-scope child`);
+    return;
+  }
+  const runChild = (pluginRoot, argv, env) => {
+    const r = spawnSync(process.execPath, [__filename, '--plugin-root', pluginRoot, ...argv], {
+      encoding: 'utf8', env: Object.assign({}, env || process.env, { [SCOPE_CHILD_ENV]: '1' }),
+    });
+    const lines = String(r.stdout || '').split('\n').map((l) => l.replace(/\r$/, ''));
+    const filled = lines.filter((l) => l.trim() !== '');
+    return { status: r.status, error: r.error, stderr: String(r.stderr || ''), lines, last: filled.length ? filled[filled.length - 1] : '' };
+  };
+  const projectRun = (root, env) => runChild(PLUGIN_ROOT, ['--scope', 'project', '--project-fixture', root], env);
+  const exitText = (run) => (run.error ? `spawn error: ${run.error.message}` : `exit ${run.status}`);
+  const fixtureCopy = (name) => {
+    const root = path.join(tmpRoot, name);
+    fs.mkdirSync(root, { recursive: true });
+    writeFixture(root, pluginVersion);
+    return root;
+  };
+
+  // S1: a healthy project. The child prints exactly the three project sections, the scope line, the
+  // unprobed host line, and ends on the tally line.
+  const healthy = fixtureCopy('scope-healthy');
+  const s1 = projectRun(healthy);
+  const s1Titles = s1.lines.filter((l) => l.startsWith('=== '));
+  const s1TitlesOk = s1Titles.length === SCOPE_PROJECT_TITLE_PREFIXES.length
+    && SCOPE_PROJECT_TITLE_PREFIXES.every((p, i) => s1Titles[i].startsWith(`=== ${p}`));
+  const s1Scope = s1.lines.includes('scope           : project');
+  const s1Host = s1.lines.includes('powershell host : (not probed: project scope)');
+  const s1Tally = TALLY_LINE_RE.test(s1.last);
+  check('[scope-S1] a healthy project: --scope project exits 0, prints only the three project sections and the scope line, probes no host, and ends on the tally line',
+    s1.status === 0 && s1TitlesOk && s1Scope && s1Host && s1Tally,
+    `${exitText(s1)}; sections: ${s1Titles.join(' | ') || '(none)'}; scope line ${s1Scope ? 'present' : 'MISSING'}; `
+    + `host line ${s1Host ? 'unprobed' : 'NOT unprobed'}; last line: ${s1.last.slice(0, 80)}`);
+
+  // S2: the same project with no host reachable at all - PATH holds only this node binary's directory
+  // and the variables the bash discovery builds its Git-for-Windows candidates from are gone. Keys are
+  // matched without regard to case, because Windows environment names have none.
+  const hostless = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (!/^(path|programfiles|programw6432|programfiles\(x86\))$/i.test(k)) hostless[k] = v;
+  }
+  hostless.PATH = path.dirname(process.execPath);
+  const s2 = projectRun(healthy, hostless);
+  check('[scope-S2] the same project with no host reachable (PATH = the node directory only, no ProgramFiles*): exit 0 and the same tally as S1',
+    s2.status === 0 && TALLY_LINE_RE.test(s2.last) && s2.last === s1.last,
+    `${exitText(s2)}; tally "${s2.last.slice(0, 80)}", S1 "${s1.last.slice(0, 80)}"`);
+
+  // S3: one managed artifact recorded in the bookkeeping is deleted. The child must go red and its
+  // FAILURES block must name exactly the checks the full scope's own reading - projectLayerFindings,
+  // what PROJECT LAYER prints - reports not ok on the same copy, in-process.
+  const broken = fixtureCopy('scope-broken');
+  fs.rmSync(path.join(broken, '.claude', 'agents', 'writer.md'));
+  const expected = projectLayerFindings(broken, PLUGIN_ROOT, { selfAuthored: false })
+    .filter((f) => !f.note && !f.ok).map((f) => f.name);
+  const s3 = projectRun(broken);
+  const from = s3.lines.indexOf('FAILURES:');
+  const failed = (from === -1 ? [] : s3.lines.slice(from + 1))
+    .map((l) => /^ {2}- \[(.*?)\] (.*)$/.exec(l)).filter(Boolean).map((m) => ({ section: m[1], name: m[2] }));
+  const sorted = (list) => JSON.stringify(list.slice().sort());
+  check('[scope-S3] a project with a recorded managed artifact deleted: exit 1, and FAILURES names exactly what projectLayerFindings reports not ok on it',
+    s3.status === 1 && expected.length > 0 && failed.every((f) => f.section.startsWith('PROJECT LAYER - '))
+    && sorted(failed.map((f) => f.name)) === sorted(expected),
+    `${exitText(s3)}; in-process not ok: ${expected.join(' | ') || '(none)'}; child FAILURES: `
+    + `${failed.map((f) => `[${f.section.slice(0, 20)}] ${f.name}`).join(' | ') || '(none)'}`);
+
+  // S4: a third value and a bare trailing flag are refused before anything runs.
+  const notAPlugin = path.join(tmpRoot, 'not-a-plugin-root');
+  fs.mkdirSync(notAPlugin, { recursive: true });
+  const bogus = runChild(notAPlugin, ['--scope', 'bogus']);
+  check('[scope-S4] --scope bogus is refused: exit 2, and the message names --scope',
+    bogus.status === 2 && bogus.stderr.includes('--scope'), `${exitText(bogus)}; stderr: ${bogus.stderr.trim().slice(0, 120)}`);
+  const bare = runChild(notAPlugin, ['--scope']);
+  check('[scope-S4] a bare trailing --scope is refused: exit 2, and the message names --scope',
+    bare.status === 2 && bare.stderr.includes('--scope'), `${exitText(bare)}; stderr: ${bare.stderr.trim().slice(0, 120)}`);
+}
+
+// The project scope (--scope project): exactly the checks that read the project passed as
+// --project-fixture, in this order - and nothing that needs a PowerShell or bash host.
+function runProjectScope(projectRoot, selfAuthored) {
+  sectionProjectPlanNaming(projectRoot);
+  sectionProjectLayer(projectRoot, selfAuthored);
+  sectionCommitAutomation(projectRoot);
+}
+
+// ---------------------------------------------------------------------------
 // main
 // ---------------------------------------------------------------------------
 function main() {
@@ -9946,45 +10108,56 @@ function main() {
   console.log('PromptAndPray self-check');
   console.log(`plugin root     : ${PLUGIN_ROOT} (version ${pluginVersion})`);
   console.log(`project layer   : ${PROJECT}${selfAuthored ? '  [synthetic fixture written by this run]' : '  [existing installation]'}`);
-  console.log(`powershell host : ${PWSH || '(none found)'}`);
+  console.log(`scope           : ${SCOPE}`);
+  console.log(`powershell host : ${SCOPE === 'full' ? (PWSH || '(none found)') : '(not probed: project scope)'}`);
   console.log(`scratch         : ${tmpRoot}`);
   if (selfAuthored) {
     console.log('NOTE: the project layer was authored by this run, so its checks prove the CHECKER works,');
-    console.log('      not that a real installation is healthy. The NEGATIVE CONTROLS section below then');
-    console.log('      breaks a copy of it and requires every one of those checks to actually fail.');
+    if (SCOPE === 'full') {
+      console.log('      not that a real installation is healthy. The NEGATIVE CONTROLS section below then');
+      console.log('      breaks a copy of it and requires every one of those checks to actually fail.');
+    } else {
+      console.log('      not that a real installation is healthy.');
+    }
   }
 
   let crashed = false;
   try {
-    // First, because every bash-channel finding after it is only as trustworthy as this selection.
-    sectionBashHost();
-    sectionGate1Identity(tmpRoot);
-    sectionGate2(tmpRoot);
-    sectionGate2Mode(tmpRoot);
-    sectionPlanRefNaming(tmpRoot, PROJECT);
-    sectionGate4();
-    sectionGate3(tmpRoot);
-    sectionGate3Toggle(tmpRoot);
-    sectionGate3Surface(tmpRoot);
-    sectionGate3Planning(tmpRoot);
-    sectionConfigSchema(tmpRoot);
-    sectionMigrationPayload(tmpRoot);
-    sectionHookWiring();
-    sectionMarketplace(tmpRoot);
-    sectionWrappers(tmpRoot);
-    sectionShWrappers(tmpRoot);
-    sectionPlanGate(tmpRoot);
-    sectionRunHeader(tmpRoot);
-    sectionResolver(tmpRoot);
-    sectionRolesCommand(tmpRoot, pluginVersion);
-    sectionPayloadIntegrity(tmpRoot);
-    sectionProvenance(tmpRoot);
-    sectionExampleFixture(tmpRoot);
-    sectionProjectLayer(PROJECT, selfAuthored);
-    sectionDraftsObservations(tmpRoot);
-    sectionE2eTraceObservation(tmpRoot);
-    sectionCommitAutomation(PROJECT, tmpRoot);
-    sectionNegativeControls(tmpRoot, pluginVersion);
+    if (SCOPE === 'project') {
+      runProjectScope(PROJECT, selfAuthored);
+    } else {
+      // First, because every bash-channel finding after it is only as trustworthy as this selection.
+      sectionBashHost();
+      sectionGate1Identity(tmpRoot);
+      sectionGate2(tmpRoot);
+      sectionGate2Mode(tmpRoot);
+      sectionPlanRefNaming(tmpRoot, PROJECT);
+      sectionGate4();
+      sectionGate3(tmpRoot);
+      sectionGate3Toggle(tmpRoot);
+      sectionGate3Surface(tmpRoot);
+      sectionGate3Planning(tmpRoot);
+      sectionConfigSchema(tmpRoot);
+      sectionMigrationPayload(tmpRoot);
+      sectionHookWiring();
+      sectionMarketplace(tmpRoot);
+      sectionWrappers(tmpRoot);
+      sectionShWrappers(tmpRoot);
+      sectionPlanGate(tmpRoot);
+      sectionRunHeader(tmpRoot);
+      sectionResolver(tmpRoot);
+      sectionRolesCommand(tmpRoot, pluginVersion);
+      sectionPayloadIntegrity(tmpRoot);
+      sectionProvenance(tmpRoot);
+      sectionExampleFixture(tmpRoot);
+      sectionProjectLayer(PROJECT, selfAuthored);
+      sectionDraftsObservations(tmpRoot);
+      sectionE2eTraceObservation(tmpRoot);
+      sectionCommitAutomation(PROJECT);
+      sectionCommitAutomationControls(tmpRoot);
+      sectionNegativeControls(tmpRoot, pluginVersion);
+      sectionScopeControls(tmpRoot, pluginVersion);
+    }
   } catch (e) {
     // A section that THROWS must not take the report with it. Before this catch existed the
     // exception escaped main() uncaught: the tally, the FAILURES block and the exit code below
@@ -10023,134 +10196,152 @@ function main() {
     console.log('as a failure, so neither the tally nor the exit code can read as a pass.');
   }
   console.log('\n---- COVERAGE (honest) ----');
-  console.log('BASH HOST: the binary this run chose is selected by ORDER (the Git-for-Windows locations before');
-  console.log('the bare name) and by a FUNCTIONAL probe - the candidate must resolve a real absolute path handed');
-  console.log('to it as an argv atom - never by `bash -c \'exit 0\'`, which every candidate on such a machine');
-  console.log('passes. The choice is printed as a [NOTE] row. The expected probe argv is written out by hand in');
-  console.log('that section and the production one is PINNED to it, so a probe made permissive cannot move the');
-  console.log('expectation with it; blindness of a real binary is decided by that hand-written argv, never by the');
-  console.log('code under test. ONE face drives selection through findBash\'s OWN candidate construction, with two');
-  console.log('equally working hosts, so only the ORDER can decide its answer; the other three hand it a chosen');
-  console.log('candidate list, two of them over the production probe and one - the pre-fix control - replacing');
-  console.log('that probe too. The control must then select the path-blind host, while the production probe, over');
-  console.log('a list holding only that host, must yield no host at all rather than a broken one.');
-  console.log('EXECUTED: all three enforcement hooks, run as the harness runs them (identity matrix, the two');
-  console.log('captured live payloads, the dispatch gate\'s ask/passthrough matrix in its factory mode AND its');
-  console.log('enforcement.dispatchGate off-plan mode - where the only silent path is a Ticket: <REF> line whose');
-  console.log('ref is really in an active PLAN, the configured paths.plansDir is proven to be read, and every');
-  console.log('non-"off-plan" state of the key asks anyway; the gate\'s own ticket lookup is ALSO run in-process');
-  console.log('against fixtures, where the targeted read of PLAN_<ABBR>.md is proven to content-read no other plan');
-  console.log('(a decoy plan sorting before it carries the same ref) and a legacy plan name is proven still findable');
-  console.log('by the fallback scan,');
-  console.log('and the PLAN_<ABBR>.md / <ABBR>-<NNN> naming rule is asserted on this project\'s own active plans with');
-  console.log('a two-leg control (a clean fixture with headings really counted, a sabotaged copy that must fail)');
-  console.log('- and the route-state');
-  console.log('guard across R2/R3/unusable/cleared/absent state, and its enforcement.routeWriteGuard toggle,');
-  console.log('whose every failure mode leaves the guard ARMED - and the git-verb gate on BOTH shell tools');
-  console.log('(matcher Bash|PowerShell, each command judged in its own tool\'s dialect), whose');
-  console.log('three branches are asserted as PAIRS: the same command from a subagent and from the main session');
-  console.log('(deny vs silent), each form the shipped rules do NOT spell out - git.exe outside push/merge/rebase,');
-  console.log('every -C form, an unstripped wrapper such as sudo or npx or a flagged xargs, irregular whitespace,');
-  console.log('a newline-split command - against the nearest form that IS rule-matched (ask vs silent), the forms');
-  console.log('the harness itself already gates (a chained subcommand, a stripped wrapper, an env prefix) proven');
-  console.log('SILENT so no dialog is added where one exists, and the same identity on');
-  console.log('an ask-class and a read-only verb (deny vs silent), with every shipped git rule parsed into its');
-  console.log('literal invocation FORM and held against the hook\'s own accept-space in BOTH directions - each');
-  console.log('modelled form must be accepted, each accepted form must be carried by a rule, and the -C forms');
-  console.log('must be refused - with a control per direction on a sabotaged copy of the ruleset, run once per');
-  console.log('shell tool, plus the BIDIRECTIONAL mirror between the two tools\' rule lists: every Bash rule has a');
-  console.log('PowerShell twin and every PowerShell rule a Bash base, each direction with its own control) - the role');
-  console.log('resolver at its real entrypoint,');
-  console.log('including the claude factory fallback and the qal enabled gate - and the config validator at');
-  console.log('its own CLI entrypoint, in both directions (a healthy config is accepted, the mistakes the');
-  console.log('interview can produce are rejected), with its own controls for a broken schema and a');
-  console.log('validator stripped of its assertions.');
-  console.log('The MIGRATION PAYLOAD is validated at the runner\'s own validator entrypoint, in both directions:');
-  console.log('the shipped manifest and every ops.json are accepted, and a gap, a duplicate id, a non-monotonic');
-  console.log('version, a last entry that is not the payload version, an orphan directory, an unknown op type or');
-  console.log('field, and a traversal path are each REJECTED.');
-  console.log('The EXAMPLE FIXTURE - the committed answers file, seed project and simulated version bump under');
-  console.log('examples/example-project/ - is asserted as data that cannot rot: the answers really satisfy the');
-  console.log('shipped schema (at the validator\'s own entrypoint), the bump template carries no number and');
-  console.log('its builder is EXECUTED to prove it lands as the payload\'s next migration and a higher version,');
-  console.log('the migration demonstrates all five op types, and the');
-  console.log('README, the cycle driver and the CI workflow are compared against each other in both directions.');
-  console.log('Every one of those assertions has its own negative control on a sabotaged payload copy.');
-  console.log('The cycle driver is also EXECUTED there: it is spawned with a --work-dir inside the repository,');
-  console.log('one above it, one reached through a junction into it, one that is not empty and one whose parent');
-  console.log('does not exist, and each must exit 2 having created nothing - that directory is deleted when the');
-  console.log('run ends, so a guard asserted by reading its source would only prove the source says so.');
-  console.log('PROVENANCE: every text file of the payload - defined by extension/known name; .git and');
-  console.log('node_modules excluded at any depth; the self-hosting zones dev/, .claude/, .aiwf/ and the');
-  console.log('root CLAUDE.md excluded at the ROOT ONLY (a same-named directory or file below the root is');
-  console.log('scanned, and controls plant forbidden content in both places to prove the boundary sits');
-  console.log('where it is claimed), and the harness\'s plugin-cache markers .in_use/ and .orphaned_at');
-  console.log('excluded the same way, by exact name at the root of a marketplace installation only;');
-  console.log('with an unclassified file, an unreadable file and a directory that');
-  console.log('could not be enumerated each counted as a FAILURE rather than skipped (a dropped subtree');
-  console.log('leaves every other number in the section plausible) - is');
-  console.log('scanned for the origin project\'s names (held as digests, never as text), for email');
-  console.log('addresses, for Cyrillic code points and for drive-letter absolute paths outside a per-file');
-  console.log('allowlist. Each of those has its own negative control on a sabotaged payload copy; the');
-  console.log('needles themselves are exercised on constructed input, since a pattern that matches nothing');
-  console.log('reports the same "0 hits" as a clean payload. What is NOT proven: that the three name');
-  console.log('digests have the preimages they claim - a payload that must not contain those names cannot');
-  console.log('carry the proof, so the controls prove the mechanism and the digests are stated data.');
-  console.log('PROSE IS NOT PINNED: no doctrine sentence, verbatim phrase or cross-file literal count is asserted -');
-  console.log('prose in docs/ and skills/ is read in place, and a reworded sentence is a prose change. The skills');
-  console.log('are checked for PRESENCE (frontmatter, the Step 0 contract, the --check interlock), the payload');
-  console.log('cross-references for EXISTENCE, and every /pnp:<cmd> for a shipped skill.');
-  console.log('MARKETPLACE: the repository is its own marketplace (local checkout or GitHub) - the');
-  console.log('manifest exists, parses, names itself and its owner, carries exactly one plugin entry');
-  console.log('whose name matches plugin.json, whose source is "./" and which carries NO version');
-  console.log('(plugin.json is the only version source); each of those has its own negative control on');
-  console.log('a sabotaged copy of the two manifests.');
-  console.log('STATIC: the wrapper flag locks, asserted as exact ARGV PAIRS rather than bare words (so a');
-  console.log('flag switched in the argv while the old word survives in a comment still fails), the hook');
-  console.log('wiring, the wrapper sources of BOTH channels (ASCII-only everywhere, LF-only for the bash');
-  console.log('one, counted at byte level), and the payload cross-references.');
-  console.log('PROJECT LAYER: owned/suppressed ask-rule bookkeeping - including that every OWNED rule is a');
-  console.log('member of the payload ruleset rendered for THIS project root, so a rule left behind by a moved');
-  console.log('or renamed project fails as loudly as an invented one - rendered artifacts agreeing with the');
-  console.log('config, the conditional-render contract (a Claude agent file exists iff its role is');
-  console.log('claude-hosted), every recorded managed artifact PRESENT on disk at a recorded plugin version (a');
-  console.log('managed artifact\'s content is not compared - an update overwrites it), and version bookkeeping -');
-  console.log('proven able to fail by the negative controls,');
-  console.log('which run against a fixture this script synthesises for that purpose alone. Checks with no');
-  console.log('control are named individually above, each with its reason. The four (observed) rows - plans');
-  console.log('drafts/, plans readiness/, whether git ignores the scratch directory and whether plansDir lies');
-  console.log('under it - are observations:');
-  console.log('reported, never counted, outside the negative controls, and listed again under OBSERVED ON THE');
-  console.log('INSPECTED PROJECT like every observation() row.');
-  console.log('COMMIT AUTOMATION: the inspected project is read for an active pre-commit/post-commit hook and');
-  console.log('for a core.hooksPath that moves them, and one is reported as a [NOTE] - never a failure, because');
-  console.log('such a hook is a legitimate choice - carrying the limit it creates: the click covers one commit');
-  console.log('invocation, not the final tree content. Both directions are asserted on repositories the section');
-  console.log('builds itself - only git\'s own .sample hooks produce nothing, an injected executable post-commit');
-  console.log('produces exactly the note, a core.hooksPath redirect is followed away from the hooks directory, a');
-  console.log('submodule-shaped .git FILE is followed to the real git directory, and a LINKED WORKTREE is');
-  console.log('followed through its commondir to the COMMON directory where git keeps hooks and config (with the');
-  console.log('inverse asserted too: a hook planted in the per-worktree directory, where git never looks, is not');
-  console.log('reported). The effective core.hooksPath is resolved the way git layers it: a [core "sub"]');
-  console.log('subsection is not [core], the LAST assignment wins, plain [include] files are followed to a');
-  console.log('3-hop cap (so a self-including config terminates), and a per-worktree config.worktree overrides');
-  console.log('the shared config. The VALUE is parsed as git parses one, each rule asserted on the reader\'s own');
-  console.log('return: an unquoted # or ; starts a comment wherever it stands, the escapes are \\" \\\\ \\n \\t \\b');
-  console.log('(a quoted \\t is a TAB), a trailing backslash continues the value on the next line, ~/ expands');
-  console.log('against the home directory, and a value git itself refuses - an unknown escape, an unterminated');
-  console.log('quote - is read as no value rather than as a guess. What is NOT proven or claimed: what such a');
-  console.log('hook DOES to a commit (only that one is armed); that a hooksPath armed only through a conditional');
-  console.log('[includeIf] is seen - it is NOT, because evaluating git\'s conditions wrongly would be worse than');
-  console.log('not evaluating them; that a ~user/ path is resolved - it is refused, since another user\'s home is');
-  console.log('not knowable from here; and that extensions.worktreeConfig is set - config.worktree is honoured');
-  console.log('whenever the file exists, which errs toward seeing a hook rather than missing one.');
-  console.log('NOT PROVEN, and not claimed: that the harness ENFORCES the declarative permission rules, that it');
-  console.log('RENDERS the Yes/No dialog for an "ask" decision, or that it matches those rules the way the gates');
-  console.log('assume (per subcommand, past the stripped wrappers). None of that is reachable from Node: it rests');
-  console.log('on Claude Code\'s own permission documentation plus the operator\'s live observations, which is why');
-  console.log('Gate 4\'s passthrough branch is written down as a host dependency. Nor is the OS sandbox posture of');
-  console.log('the wrappers - that is enforced by the operating system and the external engine, and only its');
-  console.log('flags are checked here.');
+  if (SCOPE === 'project') {
+    console.log('PROJECT SCOPE (--scope project): this run read only the project passed as --project-fixture, in');
+    console.log('three sections - PROJECT PLAN NAMING (its active plans carry only their own ticket prefix), PROJECT');
+    console.log('LAYER (ownership, rendered artifacts, bookkeeping) and COMMIT AUTOMATION (its commit hooks, reported');
+    console.log('as a [NOTE]).');
+    console.log('NOT RUN in this scope: every payload section (the hooks, the resolvers, the wrappers, the schema,');
+    console.log('the migrations, the marketplace, payload integrity, provenance, the example fixture); no PowerShell');
+    console.log('or bash host was probed or spawned; and no negative control ran - the controls that prove these');
+    console.log('checks can fail, and that this scope can, run in the full scope.');
+    console.log('The full check is `/pnp:selfcheck` (this file without --scope, or with --scope full).');
+  } else {
+    console.log('BASH HOST: the binary this run chose is selected by ORDER (the Git-for-Windows locations before');
+    console.log('the bare name) and by a FUNCTIONAL probe - the candidate must resolve a real absolute path handed');
+    console.log('to it as an argv atom - never by `bash -c \'exit 0\'`, which every candidate on such a machine');
+    console.log('passes. The choice is printed as a [NOTE] row. The expected probe argv is written out by hand in');
+    console.log('that section and the production one is PINNED to it, so a probe made permissive cannot move the');
+    console.log('expectation with it; blindness of a real binary is decided by that hand-written argv, never by the');
+    console.log('code under test. ONE face drives selection through findBash\'s OWN candidate construction, with two');
+    console.log('equally working hosts, so only the ORDER can decide its answer; the other three hand it a chosen');
+    console.log('candidate list, two of them over the production probe and one - the pre-fix control - replacing');
+    console.log('that probe too. The control must then select the path-blind host, while the production probe, over');
+    console.log('a list holding only that host, must yield no host at all rather than a broken one.');
+    console.log('EXECUTED: all three enforcement hooks, run as the harness runs them (identity matrix, the two');
+    console.log('captured live payloads, the dispatch gate\'s ask/passthrough matrix in its factory mode AND its');
+    console.log('enforcement.dispatchGate off-plan mode - where the only silent path is a Ticket: <REF> line whose');
+    console.log('ref is really in an active PLAN, the configured paths.plansDir is proven to be read, and every');
+    console.log('non-"off-plan" state of the key asks anyway; the gate\'s own ticket lookup is ALSO run in-process');
+    console.log('against fixtures, where the targeted read of PLAN_<ABBR>.md is proven to content-read no other plan');
+    console.log('(a decoy plan sorting before it carries the same ref) and a legacy plan name is proven still findable');
+    console.log('by the fallback scan,');
+    console.log('and the PLAN_<ABBR>.md / <ABBR>-<NNN> naming rule is asserted on this project\'s own active plans with');
+    console.log('a two-leg control (a clean fixture with headings really counted, a sabotaged copy that must fail)');
+    console.log('- and the route-state');
+    console.log('guard across R2/R3/unusable/cleared/absent state, and its enforcement.routeWriteGuard toggle,');
+    console.log('whose every failure mode leaves the guard ARMED - and the git-verb gate on BOTH shell tools');
+    console.log('(matcher Bash|PowerShell, each command judged in its own tool\'s dialect), whose');
+    console.log('three branches are asserted as PAIRS: the same command from a subagent and from the main session');
+    console.log('(deny vs silent), each form the shipped rules do NOT spell out - git.exe outside push/merge/rebase,');
+    console.log('every -C form, an unstripped wrapper such as sudo or npx or a flagged xargs, irregular whitespace,');
+    console.log('a newline-split command - against the nearest form that IS rule-matched (ask vs silent), the forms');
+    console.log('the harness itself already gates (a chained subcommand, a stripped wrapper, an env prefix) proven');
+    console.log('SILENT so no dialog is added where one exists, and the same identity on');
+    console.log('an ask-class and a read-only verb (deny vs silent), with every shipped git rule parsed into its');
+    console.log('literal invocation FORM and held against the hook\'s own accept-space in BOTH directions - each');
+    console.log('modelled form must be accepted, each accepted form must be carried by a rule, and the -C forms');
+    console.log('must be refused - with a control per direction on a sabotaged copy of the ruleset, run once per');
+    console.log('shell tool, plus the BIDIRECTIONAL mirror between the two tools\' rule lists: every Bash rule has a');
+    console.log('PowerShell twin and every PowerShell rule a Bash base, each direction with its own control) - the role');
+    console.log('resolver at its real entrypoint,');
+    console.log('including the claude factory fallback and the qal enabled gate - and the config validator at');
+    console.log('its own CLI entrypoint, in both directions (a healthy config is accepted, the mistakes the');
+    console.log('interview can produce are rejected), with its own controls for a broken schema and a');
+    console.log('validator stripped of its assertions.');
+    console.log('The MIGRATION PAYLOAD is validated at the runner\'s own validator entrypoint, in both directions:');
+    console.log('the shipped manifest and every ops.json are accepted, and a gap, a duplicate id, a non-monotonic');
+    console.log('version, a last entry that is not the payload version, an orphan directory, an unknown op type or');
+    console.log('field, and a traversal path are each REJECTED.');
+    console.log('The EXAMPLE FIXTURE - the committed answers file, seed project and simulated version bump under');
+    console.log('examples/example-project/ - is asserted as data that cannot rot: the answers really satisfy the');
+    console.log('shipped schema (at the validator\'s own entrypoint), the bump template carries no number and');
+    console.log('its builder is EXECUTED to prove it lands as the payload\'s next migration and a higher version,');
+    console.log('the migration demonstrates all five op types, and the');
+    console.log('README, the cycle driver and the CI workflow are compared against each other in both directions.');
+    console.log('Every one of those assertions has its own negative control on a sabotaged payload copy.');
+    console.log('The cycle driver is also EXECUTED there: it is spawned with a --work-dir inside the repository,');
+    console.log('one above it, one reached through a junction into it, one that is not empty and one whose parent');
+    console.log('does not exist, and each must exit 2 having created nothing - that directory is deleted when the');
+    console.log('run ends, so a guard asserted by reading its source would only prove the source says so.');
+    console.log('PROVENANCE: every text file of the payload - defined by extension/known name; .git and');
+    console.log('node_modules excluded at any depth; the self-hosting zones dev/, .claude/, .aiwf/ and the');
+    console.log('root CLAUDE.md excluded at the ROOT ONLY (a same-named directory or file below the root is');
+    console.log('scanned, and controls plant forbidden content in both places to prove the boundary sits');
+    console.log('where it is claimed), and the harness\'s plugin-cache markers .in_use/ and .orphaned_at');
+    console.log('excluded the same way, by exact name at the root of a marketplace installation only;');
+    console.log('with an unclassified file, an unreadable file and a directory that');
+    console.log('could not be enumerated each counted as a FAILURE rather than skipped (a dropped subtree');
+    console.log('leaves every other number in the section plausible) - is');
+    console.log('scanned for the origin project\'s names (held as digests, never as text), for email');
+    console.log('addresses, for Cyrillic code points and for drive-letter absolute paths outside a per-file');
+    console.log('allowlist. Each of those has its own negative control on a sabotaged payload copy; the');
+    console.log('needles themselves are exercised on constructed input, since a pattern that matches nothing');
+    console.log('reports the same "0 hits" as a clean payload. What is NOT proven: that the three name');
+    console.log('digests have the preimages they claim - a payload that must not contain those names cannot');
+    console.log('carry the proof, so the controls prove the mechanism and the digests are stated data.');
+    console.log('PROSE IS NOT PINNED: no doctrine sentence, verbatim phrase or cross-file literal count is asserted -');
+    console.log('prose in docs/ and skills/ is read in place, and a reworded sentence is a prose change. The skills');
+    console.log('are checked for PRESENCE (frontmatter, the Step 0 contract, the --check interlock), the payload');
+    console.log('cross-references for EXISTENCE, and every /pnp:<cmd> for a shipped skill.');
+    console.log('MARKETPLACE: the repository is its own marketplace (local checkout or GitHub) - the');
+    console.log('manifest exists, parses, names itself and its owner, carries exactly one plugin entry');
+    console.log('whose name matches plugin.json, whose source is "./" and which carries NO version');
+    console.log('(plugin.json is the only version source); each of those has its own negative control on');
+    console.log('a sabotaged copy of the two manifests.');
+    console.log('STATIC: the wrapper flag locks, asserted as exact ARGV PAIRS rather than bare words (so a');
+    console.log('flag switched in the argv while the old word survives in a comment still fails), the hook');
+    console.log('wiring, the wrapper sources of BOTH channels (ASCII-only everywhere, LF-only for the bash');
+    console.log('one, counted at byte level), and the payload cross-references.');
+    console.log('PROJECT LAYER: owned/suppressed ask-rule bookkeeping - including that every OWNED rule is a');
+    console.log('member of the payload ruleset rendered for THIS project root, so a rule left behind by a moved');
+    console.log('or renamed project fails as loudly as an invented one - rendered artifacts agreeing with the');
+    console.log('config, the conditional-render contract (a Claude agent file exists iff its role is');
+    console.log('claude-hosted), every recorded managed artifact PRESENT on disk at a recorded plugin version (a');
+    console.log('managed artifact\'s content is not compared - an update overwrites it), and version bookkeeping -');
+    console.log('proven able to fail by the negative controls,');
+    console.log('which run against a fixture this script synthesises for that purpose alone. Checks with no');
+    console.log('control are named individually above, each with its reason. The four (observed) rows - plans');
+    console.log('drafts/, plans readiness/, whether git ignores the scratch directory and whether plansDir lies');
+    console.log('under it - are observations:');
+    console.log('reported, never counted, outside the negative controls, and listed again under OBSERVED ON THE');
+    console.log('INSPECTED PROJECT like every observation() row.');
+    console.log('COMMIT AUTOMATION: the inspected project is read for an active pre-commit/post-commit hook and');
+    console.log('for a core.hooksPath that moves them, and one is reported as a [NOTE] - never a failure, because');
+    console.log('such a hook is a legitimate choice - carrying the limit it creates: the click covers one commit');
+    console.log('invocation, not the final tree content. Both directions are asserted on repositories the section');
+    console.log('builds itself - only git\'s own .sample hooks produce nothing, an injected executable post-commit');
+    console.log('produces exactly the note, a core.hooksPath redirect is followed away from the hooks directory, a');
+    console.log('submodule-shaped .git FILE is followed to the real git directory, and a LINKED WORKTREE is');
+    console.log('followed through its commondir to the COMMON directory where git keeps hooks and config (with the');
+    console.log('inverse asserted too: a hook planted in the per-worktree directory, where git never looks, is not');
+    console.log('reported). The effective core.hooksPath is resolved the way git layers it: a [core "sub"]');
+    console.log('subsection is not [core], the LAST assignment wins, plain [include] files are followed to a');
+    console.log('3-hop cap (so a self-including config terminates), and a per-worktree config.worktree overrides');
+    console.log('the shared config. The VALUE is parsed as git parses one, each rule asserted on the reader\'s own');
+    console.log('return: an unquoted # or ; starts a comment wherever it stands, the escapes are \\" \\\\ \\n \\t \\b');
+    console.log('(a quoted \\t is a TAB), a trailing backslash continues the value on the next line, ~/ expands');
+    console.log('against the home directory, and a value git itself refuses - an unknown escape, an unterminated');
+    console.log('quote - is read as no value rather than as a guess. What is NOT proven or claimed: what such a');
+    console.log('hook DOES to a commit (only that one is armed); that a hooksPath armed only through a conditional');
+    console.log('[includeIf] is seen - it is NOT, because evaluating git\'s conditions wrongly would be worse than');
+    console.log('not evaluating them; that a ~user/ path is resolved - it is refused, since another user\'s home is');
+    console.log('not knowable from here; and that extensions.worktreeConfig is set - config.worktree is honoured');
+    console.log('whenever the file exists, which errs toward seeing a hook rather than missing one.');
+    console.log('SCOPE CONTROLS: the project scope (--scope project, the run setup, update and /pnp:roles embed) is');
+    console.log('run as a child of this run: on a healthy project it exits 0 and prints only its three sections');
+    console.log('(PROJECT PLAN NAMING, PROJECT LAYER, COMMIT AUTOMATION) and the unprobed host line; with no host');
+    console.log('reachable at all it reaches the same tally; on a project with a recorded managed artifact deleted');
+    console.log('it exits 1 naming exactly the checks PROJECT LAYER\'s own reading finds not ok; and a third scope');
+    console.log('value or a bare --scope exits 2.');
+    console.log('NOT PROVEN, and not claimed: that the harness ENFORCES the declarative permission rules, that it');
+    console.log('RENDERS the Yes/No dialog for an "ask" decision, or that it matches those rules the way the gates');
+    console.log('assume (per subcommand, past the stripped wrappers). None of that is reachable from Node: it rests');
+    console.log('on Claude Code\'s own permission documentation plus the operator\'s live observations, which is why');
+    console.log('Gate 4\'s passthrough branch is written down as a host dependency. Nor is the OS sandbox posture of');
+    console.log('the wrappers - that is enforced by the operating system and the external engine, and only its');
+    console.log('flags are checked here.');
+  }
   if (notes.length) {
     console.log('\nNOT EXERCISED IN THIS RUN (deliberately not counted as passes):');
     for (const n of notes) console.log(`  - ${n.name}: ${n.why}`);
