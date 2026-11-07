@@ -1,8 +1,8 @@
 {
   "$schema": "D:/pnp-live/schema/aiwf.config.schema.json",
   "_aiwf": {
-    "installedPluginVersion": "0.3.12",
-    "lastMigrationApplied": "0037_habit-gates-and-codex-output",
+    "installedPluginVersion": "0.3.13",
+    "lastMigrationApplied": "0038_selfcheck-scope",
     "managedRegions": {
       ".claude/aiwf-native/roles.json": "0.2.19",
       ".claude/agents/writer.md": "0.3.11",

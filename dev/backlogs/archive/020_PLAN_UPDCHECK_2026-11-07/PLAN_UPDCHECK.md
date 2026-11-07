@@ -39,7 +39,7 @@ argv (`.github/workflows/ci.yml:61`, `:103`, `:151`) or to this repository's `se
 | ref | title | implements | status | record |
 |---|---|---|---|---|
 | UPDCHECK-001 | the self-check engine gains a `--scope` flag; the embedded run takes the project scope | D-01 D-02 D-03 D-04 D-05 D-06 D-07 D-08 | closed 9347fd9 | `records/UPDCHECK-001.md` |
-| UPDCHECK-002 | release 0.3.13: the skills' prose, migration 0038, the bump, the changelog, the timed self-install | D-06 D-09 D-10 D-11 | open | - |
+| UPDCHECK-002 | release 0.3.13: the skills' prose, migration 0038, the bump, the changelog, the timed self-install | D-06 D-09 D-10 D-11 | closed e6240f6 | `records/UPDCHECK-002.md` |
 
 ## Order and gates
 
