@@ -7,17 +7,18 @@
 > Sources: `dev/backlogs/archive/005_PLAN_CONS_2026-09-21.md` (line pointers per item),
 > `dev/backlogs/CANDIDATES.md`, PROJECT_OVERRIDES § Test policy.
 
-## Portion 1 - the eight Windows commands (a ticket runs only the rows its diff can break - dev/PROJECT_OVERRIDES.md § Test policy; CI runs the full set)
+## Portion 1 - the seven Windows commands (a ticket runs only the rows its diff can break - dev/PROJECT_OVERRIDES.md § Test policy; CI runs the full set)
 
-- The eight = `verify.commands` in `aiwf.config.json`, listed verbatim in § Test policy.
+- The seven = `verify.commands` in `aiwf.config.json`, listed verbatim in § Test policy.
 - ONE parallel batch: `Start-Process` per command, logs redirected OUTSIDE the repo, exit codes
   read from the Process objects (archive :6-15). A sequential run inside the portion is a brief
   defect.
 - Measured wall clock: ~10.4 min clean, up to ~17.6 min live (archive :10, :1288) - run it in the
   background, never in a foreground call with a timeout.
 - ZERO edits in the working tree while the example cycles run (archive :1373).
-- All eight are Windows processes - `example-cycle-linux` is Linux-flavored ANSWERS on a Windows
-  run, not POSIX proof (CANDIDATES :834-843). POSIX proof = Portion 2 or CI.
+- All seven are Windows processes. The POSIX proof of a release is CI's ubuntu leg (HARD-021,
+  § Portion 2); Portion 2 reproduces a red POSIX leg locally. The former Linux-answers row was a
+  Windows run, not POSIX proof (CANDIDATES :987-990, :1342-1344), and left the list with SUITES-001.
 - **A version bump reds ONE row of the fixture-form selfcheck** (`--project-fixture .`): PROJECT LAYER
   `installedPluginVersion equals the payload version` (installed = the old version until
   `/pnp:update --apply` runs on this repository, which happens AFTER the code commit). Not a code
@@ -29,7 +30,7 @@
 
 ## Portion 2 - WSL POSIX legs (release tickets; NEVER concurrent with Portion 1)
 
-**NOT A GATE since 2026-09-28 (HARD-021; operator word the same day): CI is the POSIX proof before a tag. This section is the LOCAL REPRODUCTION path - run it when a POSIX CI leg goes red, never as a release condition.**
+**NOT A GATE since 2026-09-28 (HARD-021; operator word the same day): CI's ubuntu leg is the POSIX proof of a release; it runs on the pushed commit after the fact and the tag is not held for it (dev/PROJECT_OVERRIDES.md § Hard rules, Release discipline). This section is the LOCAL REPRODUCTION path - run it when a POSIX CI leg goes red, never as a release condition.**
 
 - Starts only after Portion 1 has finished: both at once = memory kill by the harness (2026-09-19,
   event ledger; the incident behind the PORTIONS rule).
@@ -75,8 +76,9 @@
   replaced `process.exit(...)` with `process.exitCode` in the four `finishWithSelfCheck` callers
   (POSIX stdout truncation; macOS had shown the class since 0.2.0). Archive :679-710, :983-992,
   :1298-1300.
-- Since HARD-021 the tag is placed AFTER the CI run on the pushed `main` commit is green on
-  `windows` and `ubuntu`; there is no local full run before it.
+- The release rule is `dev/PROJECT_OVERRIDES.md` § Hard rules, Release discipline: the tag is
+  created locally on the record commit and pushed with `main` in one push; CI is not waited for, and
+  a red POSIX leg is a defect ticket, not a release block. There is no local full run before it.
 
 ## Environment failure = stop and ask
 

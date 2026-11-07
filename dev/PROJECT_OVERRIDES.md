@@ -148,8 +148,8 @@ The single home of the test policy is this section plus the acceptance suites
 - a missing obvious proof test is a scope miss.
 
 The literal VERIFY commands live in `aiwf.config.json` `verify.commands`: `validate-payload`,
-`setup-suite`, `update-suite`, `example-cycle-windows`, `example-cycle-linux`, `selfcheck`, `spikes`,
-`plugin-validate`.
+`setup-suite`, `update-suite`, `example-cycle-windows`, `selfcheck`, `spikes`, `plugin-validate` -
+all Windows processes; the POSIX proof of a release is CI's ubuntu leg (HARD-021).
 
 **VERIFY is proportional to the change** (operator rules 2026-09-24, 2026-10-17). A change owes
 only what its diff can break, run ONCE:
@@ -168,7 +168,7 @@ A diff spanning several rows runs their union; nothing beyond the ticket's own r
 commit, after the fact, on `windows` and `ubuntu`. (product)
 
 **VERIFY runs in PORTIONS** (operator rules 2026-09-17, 2026-09-19, 2026-09-22). Portion 1: the
-eight Windows commands as ONE parallel batch. Portion 2: the POSIX suites under WSL (user `pnp`) as
+seven Windows commands as ONE parallel batch. Portion 2: the POSIX suites under WSL (user `pnp`) as
 ONE invocation with its legs SEQUENTIAL inside it, started only AFTER Portion 1 has finished - never
 concurrent with it (the two together exhaust the machine's memory). Every Writer brief states the
 portions in those words. Portion 2 is NOT a release gate (operator rule 2026-09-28, HARD-021): it is the local reproduction

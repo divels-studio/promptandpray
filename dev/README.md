@@ -41,7 +41,6 @@ node scripts/update/validate-payload.mjs --plugin-root .
 node scripts/setup/test-setup.mjs
 node scripts/update/test-update.mjs
 node scripts/ci/run-example-cycle.mjs
-node scripts/ci/run-example-cycle.mjs --answers examples/example-project/answers-linux.json
 node scripts/selfcheck/aiwf-selfcheck.js --plugin-root . --project-fixture .   # the real self-install, not a synthetic fixture
 node scripts/spike/run-spikes.mjs
 claude plugin validate .

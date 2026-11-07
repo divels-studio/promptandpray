@@ -146,8 +146,7 @@ line, ending `(project layer only - run `/pnp:selfcheck` for the full check)`.
   it wrote is not consistent - a managed artifact missing from disk, a rendered value (a role, a
   model, an effort) disagreeing with the config, a version stamp behind - and the failing check is
   printed above the verdict by name; no host was probed, so a missing bash or PowerShell is never the
-  cause here (the verdict line's "could not prove part of the contract in this environment" clause
-  is the full run's);
+  cause here;
 - a self-check that could not be started at all is **also** exit 1: "could not check" is never
   reported as "checked";
 - `--no-selfcheck` skips it, and says so on one line.
