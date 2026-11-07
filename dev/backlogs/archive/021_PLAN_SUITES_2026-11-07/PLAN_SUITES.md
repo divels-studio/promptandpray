@@ -51,7 +51,7 @@ any time bound as an acceptance criterion (D-07); the consumers - a consumer tak
 | ref | title | implements | status | record |
 |---|---|---|---|---|
 | SUITES-001 | the cuts: one VERIFY row out, the suites' self-checks on the project scope, a per-section time print, an honest FAIL verdict | D-01 D-02 D-03 D-04 D-07 D-09 | closed (d50b4e7, 9f33a9d) | `records/SUITES-001.md` |
-| SUITES-002 | the self-check's full run in parallel groups, one PowerShell exec pass less, release 0.3.14 | D-05 D-06 D-07 D-08 D-09 | open | - |
+| SUITES-002 | the self-check's full run in parallel groups, one PowerShell exec pass less, release 0.3.14 | D-05 D-06 D-07 D-08 D-09 | closed (eb5da90) | `records/SUITES-002.md` |
 
 ## Order and gates
 

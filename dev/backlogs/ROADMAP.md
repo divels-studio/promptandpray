@@ -213,7 +213,7 @@ Entries below were ported on 2026-10-18 from `dev/backlogs/CANDIDATES.md` (now h
   - 2026-10-17 RBB deferral - delete `--hash` from `scripts/engine/plan-gate.js` and the monolith readers (a code ticket promised after 0.3.0) [dev/backlogs/archive/013_PLAN_RBB_2026-10-17/DECISIONS.md:134]
   - 2026-10-18 GENERIC deferral - rename the legacy fallback `PNP_CANDIDATES.md` -> `LEDGER.md` in the engine (guard, generate, selfcheck, the two suites) once every installation carries the key [dev/backlogs/archive/016_PLAN_GENERIC_2026-10-18/DECISIONS.md:170]
   - 2026-10-31 operator (RULEHOME-003 diet dialog) - the setup interview asks which language each record class is kept in (the changelog, the operator's quotes, everything else), and renders it into the project's CLAUDE.md zone and the doctrine's language rule (with § DOCTR) [dev/backlogs/active/RULEHOME/records/silerax-harvest/diet.md § Conflicts #5]
-  - 2026-11-07 SUITES-001 close (out of scope; operator dialog answer „Ред в пътната карта") - the advisory macOS CI leg went red in the setup suite on run 42263924346 (0.3.12, commit a949449; the later steps skipped); windows and ubuntu green [gh run view 42263924346; dev/backlogs/active/SUITES/DECISIONS.md § Deferred]
+  - 2026-11-07 SUITES-001 close (out of scope; operator dialog answer „Ред в пътната карта") - the advisory macOS CI leg went red in the setup suite on run 42263924346 (0.3.12, commit a949449; the later steps skipped); windows and ubuntu green [gh run view 42263924346; dev/backlogs/archive/021_PLAN_SUITES_2026-11-07/DECISIONS.md § Deferred]
 - Size: S
 - Plans: none yet
 - Status: idea
@@ -227,17 +227,4 @@ Entries below were ported on 2026-10-18 from `dev/backlogs/CANDIDATES.md` (now h
 - Plans: none yet
 - Status: idea
 - Born: 2026-10-31, RULEHOME-002 spike (a)
-
-## SUITES - the suites fast and honest
-- Goal: the eight VERIFY rows run in minutes, not an hour, and a POSIX proof exists where the canon claims one
-- Why: „the suites cost an hour" (CANDIDATES § The suites cost an hour); `example-cycle-linux` is a Windows run with Linux answers, not POSIX proof
-- Scope: in - the items below; out - the test policy rows (overrides § Test policy)
-  - done d50b4e7, 9f33a9d (SUITES-001) - 2026-09 - VERIFY has no POSIX leg; `example-cycle-linux` is a Windows run [dev/backlogs/CANDIDATES.md:985]
-  - 2026-10 - make the suites fast (setup ~16, update ~19, cycle ~16, selfcheck ~6 min; target under 3 min) [dev/backlogs/CANDIDATES.md:1284]
-  - 2026-10 AFTER step 4 - suites fast or fewer; drop `example-cycle-linux` from `verify.commands` (the drop done d50b4e7, SUITES-001; the speed half SUITES-002) [dev/backlogs/CANDIDATES.md:1342]
-  - done d50b4e7 (SUITES-001) - 2026-11-07 UPDCHECK-002 auditor (out of scope) - the embedded runner's FAIL verdict line still offers "could not prove part of the contract in this environment (a host the checks need was missing or unusable)" as a cause; under the project scope (0.3.13) no host is probed, so the clause misleads there - reword per scope [scripts/selfcheck/run-selfcheck.mjs:108-113; archive/020_PLAN_UPDCHECK_2026-11-07/records/UPDCHECK-002.md § Remaining debt]
-- Size: S
-- Plans: PLAN_SUITES (`active/SUITES/`, landed 2026-11-07 - two tickets: SUITES-001 the cuts, SUITES-002 the parallel full self-check and release 0.3.14)
-- Status: in progress
-- Born: 2026-10-18, operator word „продължи три"
 
