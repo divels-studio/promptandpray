@@ -246,6 +246,6 @@ Entries below were ported on 2026-10-18 from `dev/backlogs/CANDIDATES.md` (now h
   - 2026-11-06 measured (one sequential run each, `node <tree>/scripts/selfcheck/aiwf-selfcheck.js --plugin-root <tree> --project-fixture <tree>`, wall time from the run's first to last timestamped line, on this machine): v0.2.0 91 s (848 assertions), v0.2.10 186 s (1,326), v0.3.1 229 s (1,303), 0.3.12 HEAD 701 s (1,755). At HEAD the 5 slowest of 40 sections take 506 s (72%): WRAPPERS bash channel CONTROLS 184.5 s, REVIEW AND QA WRAPPERS output contract 118.7 s, WRAPPERS PowerShell RESUME CONTROLS 107.9 s, WRAPPERS bash channel 56.9 s, EXAMPLE FIXTURE CONTROLS 38.4 s; the sections that execute wrappers or a shell host take 585 s of the 701 s. The three old releases each failed 2-3 project-layer checks against their extracted tree as fixture (not a timing factor) [session measurement 2026-11-06; logs were outside the repository]
 - Size: S
 - Plans: PLAN_UPDCHECK (`active/UPDCHECK/`, landed 2026-11-06)
-- Status: planned
+- Status: in progress
 - Born: 2026-11-06, operator word „Измерване + ROADMAP" (dialog)
 

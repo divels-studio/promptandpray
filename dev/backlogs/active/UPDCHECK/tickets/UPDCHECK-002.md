@@ -1,7 +1,7 @@
 # UPDCHECK-002 [R2 prose + release] - release 0.3.13: the skills' prose, migration 0038, the bump, the changelog, the timed self-install
 
 Implements: D-06, D-09, D-10, D-11.
-COO: Opus - because check 1.
+COO: Fable - because check 1.
 Branch: `main`. Scope guard: `HEAD <hash>` at the dispatch. Depends on: UPDCHECK-001 committed (the
 prose describes its flag, its section titles and its PASS line).
 
