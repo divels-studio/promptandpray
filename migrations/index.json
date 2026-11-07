@@ -35,5 +35,6 @@
   { "id": "0034_ticket-close-homes", "targetPluginVersion": "0.3.9" },
   { "id": "0035_declared-ticket-count", "targetPluginVersion": "0.3.10" },
   { "id": "0036_planning-briefs-and-verify-owner", "targetPluginVersion": "0.3.11" },
-  { "id": "0037_habit-gates-and-codex-output", "targetPluginVersion": "0.3.12" }
+  { "id": "0037_habit-gates-and-codex-output", "targetPluginVersion": "0.3.12" },
+  { "id": "0038_selfcheck-scope", "targetPluginVersion": "0.3.13" }
 ]

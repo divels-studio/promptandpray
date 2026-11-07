@@ -1,0 +1,12 @@
+{
+  "migration": "0038_selfcheck-scope",
+  "targetPluginVersion": "0.3.13",
+  "operations": [
+    {
+      "op": "note",
+      "id": "selfcheck-scope-0-3-13",
+      "text": "0.3.13 narrows the self-check that setup, `/pnp:update --apply` and `/pnp:roles` run by themselves after a write. The engine `scripts/selfcheck/aiwf-selfcheck.js` takes `--scope project|full`: absent means `full`, and any other value or a bare `--scope` exits 2 with a message naming the flag. The shared embedded run (`scripts/selfcheck/run-selfcheck.mjs`) now passes `--scope project`, so it runs only the checks that read the real project - PROJECT PLAN NAMING, PROJECT LAYER (the rendered artifacts, the config, the version stamps, the ownership bookkeeping) and the COMMIT AUTOMATION reading. It spawns no PowerShell or bash host and runs no payload negative control, so a missing bash or PowerShell now shows first at the first audit, not at the apply. Its PASS line ends (project layer only - run `/pnp:selfcheck` for the full check). The full run is unchanged and stays the default everywhere else - CI, a manual `/pnp:selfcheck`, every negative control - and gains a SCOPE CONTROLS section proving that the project scope can fail on a broken project layer and prints no payload section title. The wall time of the embedded run is measured, not promised: no time bound is part of the contract. This update re-renders nothing; no config key, ask rule or operator file changes.",
+      "docRefs": ["CHANGELOG.md", "scripts/selfcheck/README.md", "skills/selfcheck/SKILL.md", "skills/update/SKILL.md", "skills/setup/SKILL.md", "scripts/selfcheck/aiwf-selfcheck.js", "scripts/selfcheck/run-selfcheck.mjs"]
+    }
+  ]
+}

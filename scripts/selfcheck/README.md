@@ -24,17 +24,26 @@ It checks **presence and working hooks**, not words: no doctrine sentence, verba
 cross-file literal count or managed file's content is pinned - an update overwrites managed files,
 and prose in `docs/` and `skills/` is read in place.
 
-The sections, in run order: BASH HOST; GATE 1; GATE 2; GATE 2 MODE; ONE PREFIX PER PLAN; GATE 4;
-GATE 3, GATE 3 TOGGLE, GATE 3 SURFACE, GATE 3 PLANNING; CONFIG SCHEMA; MIGRATION PAYLOAD; HOOK WIRING; MARKETPLACE;
-WRAPPERS (both channels); PLAN GATE; ROLE RESOLVER; /pnp:roles; PAYLOAD INTEGRITY; PROVENANCE; EXAMPLE
-FIXTURE; PROJECT LAYER and its observations; COMMIT AUTOMATION; NEGATIVE CONTROLS.
+The main sections of the full scope, in run order (a section's own CONTROLS section, where it has
+one, follows it): BASH HOST; GATE 1; GATE 2; GATE 2 MODE; ONE PREFIX PER PLAN; GATE 4; GATE 3, GATE 3
+TOGGLE, GATE 3 SURFACE, GATE 3 PLANNING; CONFIG SCHEMA; MIGRATION PAYLOAD; HOOK WIRING; MARKETPLACE;
+WRAPPERS (both channels); PLAN GATE; REVIEW AND QA WRAPPERS; CAPTURE HELPER; ROLE RESOLVER;
+/pnp:roles; PAYLOAD INTEGRITY; PROVENANCE; EXAMPLE FIXTURE; PROJECT LAYER and its observations;
+COMMIT AUTOMATION; COMMIT AUTOMATION CONTROLS; NEGATIVE CONTROLS; SCOPE CONTROLS. The project scope
+(`--scope project`) runs exactly the sections that read the project passed as `--project-fixture`:
+PROJECT PLAN NAMING; PROJECT LAYER; COMMIT AUTOMATION - and probes no PowerShell or bash host. Any
+`--scope` value but `project` or `full`, or a bare flag, exits 2. SCOPE CONTROLS, in the full scope,
+spawns the project scope on a broken copy of a project layer and requires it to fail naming the
+broken check, and requires it to print no payload section title.
 
-`run-selfcheck.mjs` - the shared step that makes `/pnp:setup` and `/pnp:update` run the engine
-above themselves, instead of telling an agent to. One module, so the spawn, the exit-code contract
-and the wording cannot drift between the three CLIs that finish a write.
+`run-selfcheck.mjs` - the shared step that makes `/pnp:setup`, `/pnp:update` and `/pnp:roles` run
+the engine above themselves, instead of telling an agent to. One module, so the spawn, the exit-code
+contract and the wording cannot drift between the CLIs that finish a write. It passes `--scope
+project`, so the run after a write proves the project layer it wrote and nothing of the payload; its
+PASS line says so (`project layer only - run `/pnp:selfcheck` for the full check`).
 
 ```
-node scripts/selfcheck/aiwf-selfcheck.js [--plugin-root <dir>] [--project-fixture <dir>]
+node scripts/selfcheck/aiwf-selfcheck.js [--plugin-root <dir>] [--project-fixture <dir>] [--scope project|full]
 ```
 
 `--project-fixture` may point at a real installation or at an empty/absent directory, in which
@@ -57,6 +66,7 @@ payload one way per assertion and require each to fail. Every one of those check
 still holds when `--plugin-root` points at a payload copy that already carries a fixture migration
 - which is exactly what the acceptance suites and the example cycle do.
 
-Where it runs: `/pnp:setup` and `/pnp:update` run it themselves as their last step (see
-`run-selfcheck.mjs`), `scripts/ci/run-example-cycle.mjs` runs it against the project it built, and
-`.github/workflows/ci.yml` runs it against the payload on every push.
+Where it runs: `/pnp:setup`, `/pnp:update` and `/pnp:roles` run it themselves as their last step, in
+the project scope (see `run-selfcheck.mjs`); `scripts/ci/run-example-cycle.mjs` runs the full scope
+against the project it built, and `.github/workflows/ci.yml` runs the full scope against the payload
+on every push.

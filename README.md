@@ -19,7 +19,7 @@ Born in a real production project, then extracted and genericized.
 
 ## Status
 
-**v0.3.12. Public since 0.2.0.**
+**v0.3.13. Public since 0.2.0.**
 
 What is here:
 
@@ -89,6 +89,10 @@ What is here:
   than reading their source, and then insists its own checks can fail: the project-layer, example
   fixture and provenance sections each sabotage a copy one way per assertion and require the target
   check to flip. A check with no control is printed by name with the reason, never quietly as a pass.
+  It has two scopes: the full one, which `/pnp:selfcheck` and CI run, and a project scope that
+  setup, update and `/pnp:roles` run by themselves after a write - the project layer they wrote, no
+  hook, host or payload control - with a PASS line that says so, so the run after an apply does not
+  grow with the payload.
 - **CI** (`.github/workflows/ci.yml`): on every push and pull request, three OS legs (windows,
   ubuntu, macos), one step per gate. Windows and ubuntu are **blocking** - a red step is a red
   build. The macos leg runs the same gates and asserts the same things, but is **advisory**
@@ -114,7 +118,7 @@ What is **not** here yet:
   and there is none.
 - **An installation on a second machine.** Besides this repository's own self-install, at least two
   consumer projects take the releases through `/plugin update` + `/pnp:update` (both on 0.3.11 when
-  0.3.12 was cut) - all of them on the author's one machine; no installation elsewhere is known.
+  0.3.13 was cut) - all of them on the author's one machine; no installation elsewhere is known.
 
 ## Three names
 
@@ -183,8 +187,9 @@ files for the roles hosted on Claude, the rendered Orchestrator role, a project 
 a managed region inside your `CLAUDE.md` (your own text outside its markers is never touched), and
 the permission ask-rules merged into
 `settings.json` without taking over rules it did not insert. It finishes by running the self-check
-itself, and prints its memory seeds for you to paste into your own memory tool - the store's format
-is machine-local and not the plugin's to assume.
+itself over the project layer it just wrote (the full check is `/pnp:selfcheck`), and prints its
+memory seeds for you to paste into your own memory tool - the store's format is machine-local and
+not the plugin's to assume.
 
 `/pnp:update` brings an installed project up to a newer payload later, and `/pnp:selfcheck` proves
 the installation is still consistent.

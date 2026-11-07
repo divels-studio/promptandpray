@@ -4,6 +4,34 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.3.13] - 2026-11-07
+
+The self-check that setup, `/pnp:update --apply` and `/pnp:roles` run by themselves after a write
+proves only the project layer they wrote, so the run after an apply no longer grows with every
+release; the full self-check is unchanged and stays the default everywhere else.
+
+### Changed
+
+- **The embedded self-check takes the project scope (UPDCHECK-001)** - the engine
+  `scripts/selfcheck/aiwf-selfcheck.js` takes `--scope project|full` (absent = `full`; any other
+  value or a bare `--scope` exits 2 naming the flag), and the shared embedded run
+  `scripts/selfcheck/run-selfcheck.mjs` passes `--scope project`: only the sections that read the
+  real project run - PROJECT PLAN NAMING, PROJECT LAYER (rendered artifacts, config, version stamps,
+  ownership bookkeeping) and the COMMIT AUTOMATION reading - with no PowerShell or bash host probed
+  and no payload negative control.
+  - The PASS line after a write ends `(project layer only - run `/pnp:selfcheck` for the full
+    check)`; a missing or unusable bash or PowerShell now shows first at the first audit, not at
+    the apply. `/pnp:update`, `/pnp:setup`, `/pnp:selfcheck` and `scripts/selfcheck/README.md` say
+    what the embedded run proves and what it no longer proves.
+  - The full scope is byte-for-byte the old argv - CI, a manual `/pnp:selfcheck`, every negative
+    control - and gains a SCOPE CONTROLS section after NEGATIVE CONTROLS: the project scope on a
+    broken copy of a project layer fails naming the broken check, and prints no payload section
+    title. The header carries a `scope` line.
+  - Migration `0038_selfcheck-scope` is one `note`; nothing is re-rendered and no config key or ask
+    rule changes.
+
+Retires local rules: none
+
 ## [0.3.12] - 2026-11-06
 
 Four rules sessions kept breaking move from prose into mechanism: the habit guard denies a

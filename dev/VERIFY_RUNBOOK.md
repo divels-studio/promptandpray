@@ -22,7 +22,10 @@
   `installedPluginVersion equals the payload version` (installed = the old version until
   `/pnp:update --apply` runs on this repository, which happens AFTER the code commit). Not a code
   defect. The pre-commit run of a release diff uses the CI form (`--plugin-root .` alone) - the
-  self-install apply's embedded self-check then proves the fixture form (PARPLAN-001, 2026-10-23).
+  self-install apply's embedded self-check then proves the PROJECT scope of the fixture form, PROJECT
+  LAYER with its version-stamp row included (`--scope project`, since 0.3.13 / UPDCHECK-001; before it
+  the whole fixture form, PARPLAN-001, 2026-10-23); the whole fixture form is this repository's
+  `selfcheck` VERIFY row, run when a ticket's diff owes it.
 
 ## Portion 2 - WSL POSIX legs (release tickets; NEVER concurrent with Portion 1)
 

@@ -8,6 +8,9 @@ allowed-tools: Read, Grep, Glob, Bash
 
 Runs the self-check engine over two different subjects and never confuses them: the **payload**
 (properties of the plugin itself) and the **project layer** (properties of this one installation).
+The engine has two scopes: **full** - both subjects, with every negative control - which this skill
+runs, and **project** - the project layer alone - which setup, `/pnp:update` and `/pnp:roles` run by
+themselves after a write.
 
 ## Step 0 - Project context (mandatory for every `/pnp:*` skill)
 
@@ -35,6 +38,15 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/selfcheck/aiwf-selfcheck.js" `
   runs, not that a real install is healthy - the output says so, and the version-stamp check is
   skipped as self-confirming.
 
+The engine also takes `--scope project|full`. Absent, the scope is `full` - the command above, every
+section and every negative control. `--scope project` runs the project layer only: PROJECT PLAN
+NAMING, PROJECT LAYER and the COMMIT AUTOMATION reading, against the `--project-fixture` given; it
+probes no PowerShell or bash host and prints no payload section. Any other value, or a bare
+`--scope`, exits 2 naming the flag. The project scope is what `/pnp:setup`, `/pnp:update` and
+`/pnp:roles` run by themselves after a write, so their PASS line ends `(project layer only - run
+`/pnp:selfcheck` for the full check)`; this skill runs the full scope, and is where the payload gets
+proven on this machine.
+
 Exit 0 = every assertion held. Exit 1 = at least one failed. Exit 2 = the run could not start.
 
 ## Step 2 - Read the output honestly
@@ -48,11 +60,16 @@ Exit 0 = every assertion held. Exit 1 = at least one failed. Exit 2 = the run co
 - The **NEGATIVE CONTROLS** section breaks a throwaway copy of a synthetic fixture and requires each
   project-layer check to actually fail. A check that cannot fail is not a check.
 
-What the run proves is **presence and working hooks**: the hooks and resolvers executed as the
+What the full run proves is **presence and working hooks**: the hooks and resolvers executed as the
 harness runs them, the wrappers' locked flags, the skills and payload references present, and - for
 the project - every managed artifact recorded in the bookkeeping present on disk, with the rendered
 values (roles, models, efforts) agreeing with the config. It pins no prose: no doctrine sentence and
-no managed file's content is compared, because an update overwrites managed files.
+no managed file's content is compared, because an update overwrites managed files. The embedded
+project-scope run after a write proves only the project part of that list; the hooks, the wrappers,
+the resolvers, the payload's integrity and provenance and every negative control are proven by the
+full run alone - this skill, or CI. The full run also carries a **SCOPE CONTROLS**
+section: it spawns the project scope on a broken copy of a project layer and requires it to fail
+naming the broken check, and requires it to print no payload section title.
 
 What the run does **not** prove, and does not claim: that the harness ENFORCES the declarative
 permission rules, or that it RENDERS the Yes/No dialog for an `ask` decision. Neither is reachable

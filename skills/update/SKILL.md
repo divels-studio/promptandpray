@@ -87,21 +87,31 @@ malformed project additions block, or an unanswered question), 2 could not start
 ## Step 4 - Self-check (the CLI already ran it), then report
 
 You do not have to remember this step: an `--apply` that really applied migrations **runs the
-self-check itself** as its last action, against the project it just wrote, and reports
-`self-check: PASS` with the child's own summary line. `--check`, `--dry-run` and an "already
-current" run write nothing, so it does not run - except a stale `$schema`, which it refreshes, says
-so, and self-checks.
+self-check itself** as its last action, against the project it just wrote, in the engine's
+**project scope** (`--scope project`), and reports `self-check: PASS` with the child's own summary
+line, ending `(project layer only - run `/pnp:selfcheck` for the full check)`. `--check`,
+`--dry-run` and an "already current" run write nothing, so it does not run - except a stale
+`$schema`, which it refreshes, says so, and self-checks.
 
+- what that run **proves** is the project layer it just wrote - the rendered artifacts, the config,
+  the version stamps and the ownership bookkeeping (its sections: PROJECT PLAN NAMING, PROJECT LAYER
+  and the COMMIT AUTOMATION reading); what it does **not** prove is the payload: it executes no hook,
+  wrapper or resolver, probes no PowerShell or bash host and runs no payload negative control, so a
+  missing or unusable bash or PowerShell shows first at the first audit, not here. The full check,
+  payload and negative controls included, is `/pnp:selfcheck`;
 - a **red** self-check makes the update exit **1** and says plainly that the migrations WERE applied
-  and nothing was rolled back - the writes stand, and the verdict is EITHER that the result is not
-  consistent OR that this run **could not prove part of the contract in this environment** (a host
-  the checks need was missing or unusable); the detail above the verdict says which;
+  and nothing was rolled back - the writes stand. In the project scope a red means the project
+  layer it wrote is not consistent - a managed artifact missing from disk, a rendered value (a role,
+  a model, an effort) disagreeing with the config, a version stamp behind - and the failing check is
+  printed above the verdict by name; no host was probed, so a missing bash or PowerShell is never the
+  cause here (the verdict line's "could not prove part of the contract in this environment" clause
+  is the full run's);
 - a self-check that could not be started at all is **also** exit 1: "could not check" is never
   reported as "checked";
 - `--no-selfcheck` skips it, and says so on one line.
 
-`/pnp:selfcheck` is how you **re-run** it or inspect a failure in full - not a step the agent has to
-remember after a write.
+`/pnp:selfcheck` is how you run the **full** check, re-run the project layer's or inspect a failure
+in full - not a step the agent has to remember after a write.
 
 Report in `{{config.operator.language}}`, short, read off the CLI output rather than restated: the
 version diff, the CHANGELOG blocks shown, what was applied, and every question that was asked and how
