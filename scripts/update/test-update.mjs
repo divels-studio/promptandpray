@@ -38,16 +38,19 @@
  *      surface kept rather than refused;
  *  16. the example bump is numbered against the payload it is built into;
  *  17. a stale $schema is refreshed;
- *  18. LAST: the self-check is the update's own last step (PASS, skipped, unrunnable, RED, crashed).
+ *  18. the self-check is the update's own last step (PASS, skipped, unrunnable, RED, crashed);
+ *  19. the full self-check's group children (--jobs refused when malformed, a dead child counted, a
+ *      child runs only its own sections and leaves the project untouched) - seconds, no full run.
  *
  * WHY MOST CASES PASS --no-selfcheck
  *   Every install and every apply below would otherwise pay for a full self-check run. The cases that
- *   are ABOUT the integration run it (section 18, last); the rest skip it through the same flag an
+ *   are ABOUT the integration run it (section 18); the rest skip it through the same flag an
  *   operator has, never through a test-only bypass.
  *
  * Exit 0 = every assertion passed. Exit 1 = at least one failed. Exit 2 = the suite could not run.
  */
 import { spawnSync } from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -1967,7 +1970,7 @@ const BASE_B = makePayload('schema-b', { version: BASELINE.targetPluginVersion, 
 }
 
 // ---------------------------------------------------------------------------
-// LAST: every case below RUNS the self-check, whose own assertions change on their own schedule.
+// Every case below RUNS the self-check, whose own assertions change on their own schedule.
 section('18 - the self-check is the update\'s own last step, and a red one is never exit 0');
 {
   const sc = spawnSync(process.execPath, [
@@ -2107,6 +2110,105 @@ const PROJECT_SCOPE_CRASH_SITE = '  sectionCommitAutomation(projectRoot);';
   check('the two lines print in order', at1 !== -1 && at2 > at1, why(r));
   check('the plain "Nothing was written" line was NOT printed for a run that wrote', !r.out.includes('Nothing was written'), why(r));
   check('the integrated self-check ran and passed', r.out.includes('self-check: PASS'), why(r));
+}
+
+// ---------------------------------------------------------------------------
+// The full self-check's parallel run is its own crash contract, so it is proven here beside the one
+// above - but no case below runs a full self-check: each spawns the engine directly and either stops
+// at the argument check, dies at a group child's start, or runs at most three cheap sections.
+section('19 - the self-check\'s group children: a bad --jobs exits 2, a dead child is a counted crash, a child runs only its own sections and leaves the project untouched');
+// Literal lines written once in the engine's group-child branch: the first statement inside the
+// child's `try`, and the branch's first statement, before any result document is touched.
+const GROUP_CHILD_TRY_SITE = '    markChildStarted();';
+const GROUP_CHILD_ENTRY_SITE = '  const childPlan = readChildMarker();';
+const GROUP_CHILD_ENV = 'AIWF_SELFCHECK_GROUP_CHILD';
+const engineOf = (payload) => at(payload, 'scripts/selfcheck/aiwf-selfcheck.js');
+const runEngine = (payload, args, env) => {
+  const r = spawnSync(process.execPath, [engineOf(payload), '--plugin-root', payload, ...args], { encoding: 'utf8', env: env || process.env });
+  const stdout = String(r.stdout || '');
+  const stderr = String(r.stderr || '');
+  return { status: r.status, stdout, stderr, out: `${stdout}${stderr}` };
+};
+{
+  for (const [label, args] of [['--jobs 0', ['--jobs', '0']], ['--jobs x', ['--jobs', 'x']], ['a bare --jobs as the last argument', ['--jobs']]]) {
+    const r = runEngine(P020, args);
+    check(`${label} is refused before anything runs: exit 2, and the message names --jobs`,
+      r.status === 2 && r.stderr.includes('--jobs'), why(r));
+  }
+}
+{
+  // Both children throw at their first statement, so no section runs anywhere: seconds, not minutes.
+  const throwPayload = makePayload('group-child-throw-020', {
+    version: '0.2.0',
+    migrations: [{ id: '0002_noteonly', version: '0.2.0', ops: [FIXTURE_NOTE] }],
+    tweak: (dir) => patch(engineOf(dir), GROUP_CHILD_TRY_SITE, '    (() => { throw new Error(\'group-child crash injected\'); })();'),
+  });
+  const r = runEngine(throwPayload, ['--jobs', '2', '--project-fixture', project('group-child-throw')]);
+  const from = r.stdout.indexOf('\nFAILURES:');
+  const uncaught = from === -1 ? 0 : (r.stdout.slice(from).match(/^ {2}- \[\(uncaught\)\] /gm) || []).length;
+  check('a group child that throws makes the run exit 1', r.status === 1, why(r));
+  check('each of the two children is its own [(uncaught)] row in the FAILURES block', uncaught === 2, why(r));
+  check('the thrown message reached the report', r.stdout.includes('group-child crash injected'), why(r));
+  check('and the run says out loud that it is incomplete', r.stdout.includes('INCOMPLETE RUN'), why(r));
+  check('the report still ran: the tally line was printed', /^==== \d+\/\d+ assertions passed ====\r?$/m.test(r.stdout), why(r));
+}
+{
+  // Both children exit 3 before any result document exists.
+  const exitPayload = makePayload('group-child-exit-020', {
+    version: '0.2.0',
+    migrations: [{ id: '0002_noteonly', version: '0.2.0', ops: [FIXTURE_NOTE] }],
+    tweak: (dir) => patch(engineOf(dir), GROUP_CHILD_ENTRY_SITE, `  process.exit(3);\n${GROUP_CHILD_ENTRY_SITE}`),
+  });
+  const r = runEngine(exitPayload, ['--jobs', '2', '--project-fixture', project('group-child-exit')]);
+  check('a group child that exits 3 without a result document makes the run exit 1', r.status === 1, why(r));
+  check('its (uncaught) row names the exit and the missing document, for each child, with exit code 3 in the detail',
+    [1, 2].every((k) => r.stdout.includes(`[FAIL] the self-check crashed before it finished: child ${k} exited 3 without a result document - child ${k}, exit code 3;`)),
+    why(r));
+  check('and the run says out loud that it is incomplete', r.stdout.includes('INCOMPLETE RUN'), why(r));
+}
+{
+  // Marked children spawned by hand against a COPY of section 2's project: each one's document holds
+  // exactly its marker's sections, none deals a group, and no byte of the project changes.
+  const fixture = path.join(tmpRoot, 'group-child-project');
+  copyTree(upgraded, fixture, new Set());
+  const hashTree = (root) => {
+    const out = [];
+    const walk = (dir) => {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const f = path.join(dir, e.name);
+        if (e.isDirectory()) walk(f);
+        else out.push(`${path.relative(root, f).split(path.sep).join('/')} ${crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex')}`);
+      }
+    };
+    walk(root);
+    return out.sort();
+  };
+  const treeDiff = (a, b) => [...a.filter((x) => !b.includes(x)).map((x) => `- ${x}`), ...b.filter((x) => !a.includes(x)).map((x) => `+ ${x}`)];
+  const childRun = (label, sections) => {
+    const scratch = fs.mkdtempSync(path.join(tmpRoot, `group-child-scratch-${label}-`));
+    const out = path.join(tmpRoot, `group-child-${label}.json`);
+    const env = { ...process.env, [GROUP_CHILD_ENV]: JSON.stringify({ sections, selfAuthored: false, scratch, out }) };
+    const r = runEngine(P020, ['--project-fixture', fixture, '--jobs', '4'], env);
+    const doc = readJson(out);
+    const names = doc && Array.isArray(doc.sections) ? doc.sections.map((e) => e && e.name) : null;
+    return { r, names, detail: () => `document sections: ${JSON.stringify(names)}\n${why(r)()}` };
+  };
+  const before = hashTree(fixture);
+  const one = childRun('hook-wiring', ['sectionHookWiring']);
+  const afterOne = hashTree(fixture);
+  check('a marked child with one section and --jobs 4 writes a document holding exactly that section',
+    JSON.stringify(one.names) === JSON.stringify(['sectionHookWiring']), one.detail);
+  check('and it dealt no group of its own: no child line on its stderr, nothing on its stdout',
+    !one.r.stderr.includes('aiwf-selfcheck: child') && one.r.stdout.trim() === '', one.detail);
+  check('the project copy is byte for byte the same after it (no file added, removed or changed)',
+    treeDiff(before, afterOne).length === 0, () => treeDiff(before, afterOne).join('\n'));
+  const readers = ['sectionPlanRefNaming', 'sectionProjectLayer', 'sectionCommitAutomation'];
+  const three = childRun('project-readers', readers);
+  const afterThree = hashTree(fixture);
+  check('a marked child running the three readers of the project writes a document holding exactly those three',
+    JSON.stringify(three.names) === JSON.stringify(readers), three.detail);
+  check('and the project copy is byte for byte the same after it too',
+    treeDiff(afterOne, afterThree).length === 0, () => treeDiff(afterOne, afterThree).join('\n'));
 }
 
 // ---------------------------------------------------------------------------

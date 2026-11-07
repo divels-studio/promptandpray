@@ -43,8 +43,15 @@ project`, so the run after a write proves the project layer it wrote and nothing
 PASS line says so (`project layer only - run `/pnp:selfcheck` for the full check`).
 
 ```
-node scripts/selfcheck/aiwf-selfcheck.js [--plugin-root <dir>] [--project-fixture <dir>] [--scope project|full]
+node scripts/selfcheck/aiwf-selfcheck.js [--plugin-root <dir>] [--project-fixture <dir>] [--scope project|full] [--jobs <n>]
 ```
+
+`--jobs <n>` is the number of child processes the full scope's four section groups are dealt to
+(whole groups, round-robin); absent, it is `max(1, min(4, os.availableParallelism() - 1))`, and
+`--jobs 1` runs every section in-process in the canonical order with no child. The report is the
+same either way; the dealing shows on stderr as one line per child naming its sections. `0`, a
+negative or non-integer value or a bare `--jobs` exits 2. Under `--scope project` the flag is
+accepted and has no effect.
 
 `--project-fixture` may point at a real installation or at an empty/absent directory, in which
 case a synthetic TEST fixture is written there. When the fixture is authored by the run, its

@@ -19,7 +19,7 @@ Born in a real production project, then extracted and genericized.
 
 ## Status
 
-**v0.3.13. Public since 0.2.0.**
+**v0.3.14. Public since 0.2.0.**
 
 What is here:
 
@@ -92,7 +92,8 @@ What is here:
   It has two scopes: the full one, which `/pnp:selfcheck` and CI run, and a project scope that
   setup, update and `/pnp:roles` run by themselves after a write - the project layer they wrote, no
   hook, host or payload control - with a PASS line that says so, so the run after an apply does not
-  grow with the payload.
+  grow with the payload. The full scope runs its sections in four parallel groups dealt to `--jobs
+  <n>` child processes, and prints the same report as the in-process `--jobs 1` run.
 - **CI** (`.github/workflows/ci.yml`): on every push and pull request, three OS legs (windows,
   ubuntu, macos), one step per gate. Windows and ubuntu are **blocking** - a red step is a red
   build. The macos leg runs the same gates and asserts the same things, but is **advisory**

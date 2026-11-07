@@ -41,7 +41,7 @@
  *   that cannot fail is not a check, and this section is what stops this file from becoming one.
  *
  * USAGE
- *   node scripts/selfcheck/aiwf-selfcheck.js [--plugin-root <dir>] [--project-fixture <dir>] [--scope project|full]
+ *   node scripts/selfcheck/aiwf-selfcheck.js [--plugin-root <dir>] [--project-fixture <dir>] [--scope project|full] [--jobs <n>]
  *
  *   --plugin-root <dir>       The plugin payload to check. Default: the repo this file lives in.
  *   --project-fixture <dir>   A project with PromptAndPray installed. If the directory is missing
@@ -54,11 +54,19 @@
  *                             (PROJECT PLAN NAMING, PROJECT LAYER, COMMIT AUTOMATION); no payload
  *                             section, no PowerShell or bash host, no negative control. The run
  *                             setup, update and /pnp:roles embed takes it. Any other value exits 2.
+ *   --jobs <n>                The full scope only: the number of child processes of this file the
+ *                             four fixed section groups are dealt to (whole groups, round-robin; n
+ *                             at or above four = one child per group). Default:
+ *                             max(1, min(4, available parallelism - 1)). --jobs 1 runs every
+ *                             section in this process, with no child. The report is the same text
+ *                             either way; each child's sections are named on one stderr line.
+ *                             Accepted and without effect under --scope project. A value that is
+ *                             not a whole number of 1 or more, or a bare --jobs, exits 2.
  *
  *   Exit 0 = every assertion held. Exit 1 = at least one failed. Exit 2 = the run could not start.
  */
 
-const { spawnSync } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
@@ -97,6 +105,31 @@ const SCOPE = (() => {
   return value;
 })();
 
+// --jobs <n>: how many children of this file the full scope's section groups are dealt to (see
+// SECTION_TABLE below main's helpers). Absent = the default; anything but a whole number of 1 or
+// more - or the flag with no value - is refused, for the same reason as --scope. Parsed under every
+// scope so a bad value is refused everywhere; the project scope never spawns a group child.
+const DEFAULT_JOBS = Math.max(1, Math.min(4,
+  (typeof os.availableParallelism === 'function' ? os.availableParallelism() : os.cpus().length) - 1));
+const JOBS = (() => {
+  if (!HAS('--jobs')) return DEFAULT_JOBS;
+  const value = argValue('--jobs');
+  if (value === null || !/^[1-9][0-9]*$/.test(value)) {
+    bail(`--jobs takes a whole number of 1 or more, got ${value === null ? 'no value' : JSON.stringify(value)}.`);
+  }
+  return Number(value);
+})();
+
+// A GROUP CHILD is a full-scope run of this file spawned by a parent run to execute only the
+// sections the marker names (the marker's shape: readChildMarker below). It is read once and
+// removed from this process's environment at once, so nothing a section spawns inherits it - a
+// grandchild can never mistake itself for a group child. A group child never deals groups itself,
+// whatever --jobs says; under --scope project the marker is ignored.
+const GROUP_CHILD_ENV = 'AIWF_SELFCHECK_GROUP_CHILD';
+const GROUP_CHILD_MARKER = process.env[GROUP_CHILD_ENV];
+delete process.env[GROUP_CHILD_ENV];
+const IS_GROUP_CHILD = SCOPE === 'full' && GROUP_CHILD_MARKER !== undefined;
+
 if (!fs.existsSync(path.join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json'))) {
   bail(`--plugin-root "${PLUGIN_ROOT}" does not look like a plugin (no .claude-plugin/plugin.json).`);
 }
@@ -119,9 +152,11 @@ function section(title) {
 }
 // Printed right before the tally line, which stays the report's last line on a pass. The rows are
 // indented and never start with `=== `, so SCOPE CONTROLS' title filter cannot take one for a title.
-function printSlowestSections() {
+// `childRows` ({ title, ms } each) are the rows a parallel run's children measured, in canonical
+// order; this process's own sections (a parallel parent's `(uncaught)` blocks) follow them.
+function printSlowestSections(childRows) {
   const end = Date.now();
-  const rows = sectionStarts.map((s, i) => ({ title: s.title, ms: (i + 1 < sectionStarts.length ? sectionStarts[i + 1].at : end) - s.at }));
+  const rows = (childRows || []).concat(sectionStarts.map((s, i) => ({ title: s.title, ms: (i + 1 < sectionStarts.length ? sectionStarts[i + 1].at : end) - s.at })));
   rows.sort((a, b) => b.ms - a.ms);
   console.log('\nslowest sections:');
   for (const r of rows.slice(0, 5)) console.log(`  ${(r.ms / 1000).toFixed(1)} ${r.title}`);
@@ -3479,7 +3514,10 @@ function sectionWrappers(tmpRoot) {
   // findings do NOT inherit that: they carry stable ids and a sabotage each, because the pins that
   // hold a read-only posture together are exactly the ones that rot into a regex matching nothing.
   section('WRAPPERS (PowerShell channel) - the frozen resume posture and the per-role session state');
-  for (const f of psResumeFindings(PLUGIN_ROOT, { execProbes: true, tmpDir: tmpRoot })) check(f.name, f.ok, f.detail);
+  // Kept: the uncovered-id enumeration at the end of the controls reads these same findings (same
+  // root, same options), so the payload's resume posture is executed once here, not twice.
+  const psFindings = psResumeFindings(PLUGIN_ROOT, { execProbes: true, tmpDir: tmpRoot });
+  for (const f of psFindings) check(f.name, f.ok, f.detail);
 
   section('WRAPPERS (PowerShell channel) RESUME CONTROLS - each of those assertions is proven able to FAIL');
   const psBase = path.join(tmpRoot, 'ps-base');
@@ -3503,8 +3541,7 @@ function sectionWrappers(tmpRoot) {
       target.ok ? 'still PASS - the check is vacuous' : 'FAIL as required');
     try { fs.rmSync(broken, { recursive: true, force: true }); } catch (e) { /* best-effort */ }
   }
-  for (const id of psResumeFindings(PLUGIN_ROOT, { execProbes: true, tmpDir: tmpRoot })
-    .filter((f) => !psCovered.has(f.id)).map((f) => f.id)) {
+  for (const id of psFindings.filter((f) => !psCovered.has(f.id)).map((f) => f.id)) {
     note(`no negative control for PowerShell resume check "${id}"`, 'no control defined - add one or state why it cannot fail');
   }
 
@@ -10097,11 +10134,285 @@ function runProjectScope(projectRoot, selfAuthored) {
 }
 
 // ---------------------------------------------------------------------------
+// The full scope: ONE canonical table, and the groups it is dealt in
+// ---------------------------------------------------------------------------
+// The table's order is the report's order, in-process and parallel alike. `group` says which
+// sections share one process when the run is parallel (--jobs above 1); a group is simply every
+// entry carrying that number, so no second list exists that could drift from this one. The groups
+// keep together what shares state or a path: the example fixture and the negative controls (the
+// exampleProbe counter, the probe paths inside the repository); the four readers of the project
+// (plan naming, project layer, commit automation and its controls); the bash host report first in
+// the group that holds the bash wrappers (the host is selected at module load in every process; the
+// section only reports it). The two wrapper sections - each a long run of host
+// starts - stand in different groups. `c` is the run's context: { tmpRoot, PROJECT, selfAuthored,
+// pluginVersion }.
+const SECTION_TABLE = [
+  // First, because every bash-channel finding after it is only as trustworthy as this selection.
+  { name: 'sectionBashHost', group: 1, run: (c) => sectionBashHost() },
+  { name: 'sectionGate1Identity', group: 2, run: (c) => sectionGate1Identity(c.tmpRoot) },
+  { name: 'sectionGate2', group: 2, run: (c) => sectionGate2(c.tmpRoot) },
+  { name: 'sectionGate2Mode', group: 2, run: (c) => sectionGate2Mode(c.tmpRoot) },
+  { name: 'sectionPlanRefNaming', group: 4, run: (c) => sectionPlanRefNaming(c.tmpRoot, c.PROJECT) },
+  { name: 'sectionGate4', group: 3, run: (c) => sectionGate4() },
+  { name: 'sectionGate3', group: 2, run: (c) => sectionGate3(c.tmpRoot) },
+  { name: 'sectionGate3Toggle', group: 2, run: (c) => sectionGate3Toggle(c.tmpRoot) },
+  { name: 'sectionGate3Surface', group: 2, run: (c) => sectionGate3Surface(c.tmpRoot) },
+  { name: 'sectionGate3Planning', group: 2, run: (c) => sectionGate3Planning(c.tmpRoot) },
+  { name: 'sectionConfigSchema', group: 3, run: (c) => sectionConfigSchema(c.tmpRoot) },
+  { name: 'sectionMigrationPayload', group: 3, run: (c) => sectionMigrationPayload(c.tmpRoot) },
+  { name: 'sectionHookWiring', group: 3, run: (c) => sectionHookWiring() },
+  { name: 'sectionMarketplace', group: 3, run: (c) => sectionMarketplace(c.tmpRoot) },
+  { name: 'sectionWrappers', group: 2, run: (c) => sectionWrappers(c.tmpRoot) },
+  { name: 'sectionShWrappers', group: 1, run: (c) => sectionShWrappers(c.tmpRoot) },
+  { name: 'sectionPlanGate', group: 3, run: (c) => sectionPlanGate(c.tmpRoot) },
+  { name: 'sectionRunHeader', group: 3, run: (c) => sectionRunHeader(c.tmpRoot) },
+  { name: 'sectionResolver', group: 4, run: (c) => sectionResolver(c.tmpRoot) },
+  { name: 'sectionRolesCommand', group: 4, run: (c) => sectionRolesCommand(c.tmpRoot, c.pluginVersion) },
+  { name: 'sectionPayloadIntegrity', group: 4, run: (c) => sectionPayloadIntegrity(c.tmpRoot) },
+  { name: 'sectionProvenance', group: 4, run: (c) => sectionProvenance(c.tmpRoot) },
+  { name: 'sectionExampleFixture', group: 4, run: (c) => sectionExampleFixture(c.tmpRoot) },
+  { name: 'sectionProjectLayer', group: 4, run: (c) => sectionProjectLayer(c.PROJECT, c.selfAuthored) },
+  { name: 'sectionDraftsObservations', group: 4, run: (c) => sectionDraftsObservations(c.tmpRoot) },
+  { name: 'sectionE2eTraceObservation', group: 4, run: (c) => sectionE2eTraceObservation(c.tmpRoot) },
+  { name: 'sectionCommitAutomation', group: 4, run: (c) => sectionCommitAutomation(c.PROJECT) },
+  { name: 'sectionCommitAutomationControls', group: 4, run: (c) => sectionCommitAutomationControls(c.tmpRoot) },
+  { name: 'sectionNegativeControls', group: 4, run: (c) => sectionNegativeControls(c.tmpRoot, c.pluginVersion) },
+  { name: 'sectionScopeControls', group: 4, run: (c) => sectionScopeControls(c.tmpRoot, c.pluginVersion) },
+];
+const TABLE_BY_NAME = new Map(SECTION_TABLE.map((e) => [e.name, e]));
+const GROUP_COUNT = Math.max(...SECTION_TABLE.map((e) => e.group));
+
+// Whole groups, round-robin: group g goes to child ((g - 1) mod n) + 1. Each slot lists its section
+// names in canonical order, because the table is walked in that order.
+function dealGroups(n) {
+  const slots = Array.from({ length: n }, () => []);
+  for (const e of SECTION_TABLE) slots[(e.group - 1) % n].push(e.name);
+  return slots;
+}
+
+// ---------------------------------------------------------------------------
+// The group child: runs the sections its marker names and returns them as one JSON document
+// ---------------------------------------------------------------------------
+// The marker (GROUP_CHILD_ENV) is a JSON object: { sections: [names, canonical order], selfAuthored:
+// bool - the parent's judgement of the fixture, scratch: a directory the parent created and removes,
+// out: the path of this child's result document }. The project is the --project-fixture argument;
+// a group child never writes, judges or removes it. Every refusal is a reason string, never a skip.
+function readChildMarker() {
+  const plan = { sections: [], selfAuthored: false, scratch: null, out: null, project: null, error: null };
+  let m = null;
+  try { m = JSON.parse(GROUP_CHILD_MARKER); } catch (e) { m = null; }
+  if (!isPlainObject(m)) { plan.error = `${GROUP_CHILD_ENV} does not hold a JSON object`; return plan; }
+  if (typeof m.out === 'string' && m.out !== '') plan.out = m.out;
+  const fixture = argValue('--project-fixture');
+  const seen = new Set();
+  const unknown = [];
+  const repeated = [];
+  for (const name of Array.isArray(m.sections) ? m.sections : []) {
+    if (typeof name !== 'string' || !TABLE_BY_NAME.has(name)) unknown.push(String(name));
+    else if (seen.has(name)) repeated.push(name);
+    seen.add(name);
+  }
+  if (plan.out === null) plan.error = 'the marker names no result document (out)';
+  else if (!Array.isArray(m.sections) || m.sections.length === 0) plan.error = 'the marker names no section';
+  else if (unknown.length) plan.error = `the marker names an unknown section: ${unknown.join(', ')}`;
+  else if (repeated.length) plan.error = `the marker names a section twice: ${repeated.join(', ')}`;
+  else if (typeof m.selfAuthored !== 'boolean') plan.error = 'the marker carries no boolean selfAuthored';
+  else if (typeof m.scratch !== 'string' || m.scratch === '' || !fs.existsSync(m.scratch)) plan.error = 'the marker names no existing scratch directory';
+  else if (!fixture) plan.error = 'the group child was started without --project-fixture';
+  if (plan.error) return plan;
+  plan.sections = m.sections.slice();
+  plan.selfAuthored = m.selfAuthored;
+  plan.scratch = m.scratch;
+  plan.project = path.resolve(fixture);
+  return plan;
+}
+
+// A no-op: the first statement inside the group child's `try`, a fixed line the update suite's
+// crash cases plant their throw against.
+function markChildStarted() {}
+
+function runGroupChild(pluginVersion) {
+  const childPlan = readChildMarker();
+  if (childPlan.out === null) {
+    console.error(`aiwf-selfcheck: group child: ${childPlan.error}, so no result document can be written.`);
+    process.exitCode = 1;
+    return;
+  }
+  const doc = { crashed: false, headline: null, detail: null, sections: [] };
+  // Nothing reaches this process's stdout: every line a section prints lands in the buffer of the
+  // entry that is running. A section that swaps console.log itself (DRAFTS OBSERVATIONS does)
+  // restores this function, so its own capture keeps working.
+  const realLog = console.log;
+  let buffer = null;
+  console.log = (...args) => { if (buffer) buffer.push(`${util.format(...args)}\n`); };
+  const ctx = { tmpRoot: childPlan.scratch, PROJECT: childPlan.project, selfAuthored: childPlan.selfAuthored, pluginVersion };
+  // One document entry per table ENTRY, by index range into the accounts: an entry that sets several
+  // section titles (WRAPPERS does) owns every title it set, each with its own seconds.
+  const record = (name, run) => {
+    const entry = { name, title: null, text: '', ms: 0, titles: [], results: [], notes: [], observations: [] };
+    doc.sections.push(entry);
+    const from = { r: results.length, n: notes.length, o: observations.length, s: sectionStarts.length };
+    const startedAt = Date.now();
+    buffer = [];
+    try {
+      run();
+    } finally {
+      const end = Date.now();
+      const starts = sectionStarts.slice(from.s);
+      entry.text = buffer.join('');
+      entry.ms = end - startedAt;
+      entry.title = starts.length ? starts[0].title : null;
+      entry.titles = starts.map((s, i) => ({ title: s.title, ms: (i + 1 < starts.length ? starts[i + 1].at : end) - s.at }));
+      entry.results = results.slice(from.r);
+      entry.notes = notes.slice(from.n);
+      entry.observations = observations.slice(from.o);
+      buffer = null;
+    }
+  };
+  try {
+    markChildStarted();
+    if (childPlan.error) {
+      record('(dealing)', () => {
+        section('(dealing)');
+        check(`the group child refused its marker: ${childPlan.error}`, false, 'no section ran in this child');
+      });
+    } else {
+      for (const name of childPlan.sections) record(name, () => TABLE_BY_NAME.get(name).run(ctx));
+    }
+  } catch (e) {
+    // The same contract as main's catch: the throw is recorded, never lost, and what ran before it
+    // stays in the document (the entry that threw keeps what it printed up to the throw).
+    doc.crashed = true;
+    const { headline, detail } = describeThrowable(e);
+    doc.headline = headline;
+    doc.detail = detail;
+  } finally {
+    console.log = realLog;
+    process.exitCode = doc.crashed || results.some((r) => !r.ok) ? 1 : 0;
+    fs.writeFileSync(childPlan.out, JSON.stringify(doc));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The parallel parent: deals the groups, waits for every child, prints their text in canonical order
+// ---------------------------------------------------------------------------
+// Resolves - never rejects - with the child's exit, signal, spawn error and both streams.
+function spawnGroupChild(args, env) {
+  return new Promise((resolve) => {
+    const out = [];
+    const err = [];
+    let settled = false;
+    const done = (code, signal, error) => {
+      if (settled) return;
+      settled = true;
+      resolve({ code, signal, error, stdout: Buffer.concat(out).toString('utf8'), stderr: Buffer.concat(err).toString('utf8') });
+    };
+    let child;
+    try {
+      child = spawn(process.execPath, args, { env, stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch (e) {
+      done(null, null, e);
+      return;
+    }
+    child.stdout.on('data', (d) => out.push(d));
+    child.stderr.on('data', (d) => err.push(d));
+    child.on('error', (e) => done(null, null, e));
+    child.on('close', (code, signal) => done(code, signal, null));
+  });
+}
+
+async function runGroupChildren(ctx, n, childScratch) {
+  const children = dealGroups(n).map((names, i) => {
+    // Each child's scratch root sits where an in-process run's does, so the paths the sections
+    // print have the same shape either way.
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'pnp-selfcheck-'));
+    childScratch.push(scratch);
+    return { k: i + 1, names, scratch, out: path.join(ctx.tmpRoot, `group-child-${i + 1}.json`) };
+  });
+  // The dealing is observable in a run's log, on stderr: the report on stdout carries nothing new.
+  for (const ch of children) console.error(`aiwf-selfcheck: child ${ch.k}: ${ch.names.join(', ')}`);
+  const runs = await Promise.all(children.map((ch) => spawnGroupChild(
+    [__filename, '--plugin-root', PLUGIN_ROOT, '--project-fixture', ctx.PROJECT, '--scope', 'full'],
+    Object.assign({}, process.env, {
+      [GROUP_CHILD_ENV]: JSON.stringify({ sections: ch.names, selfAuthored: ctx.selfAuthored, scratch: ch.scratch, out: ch.out }),
+    }))));
+
+  const outcome = children.map((ch, i) => {
+    const doc = readJson(ch.out);
+    const valid = isPlainObject(doc) && Array.isArray(doc.sections) && doc.sections.every(isPlainObject);
+    return { ch, run: runs[i], doc: valid ? doc : null };
+  });
+  const rows = [];
+  const list = (v) => (Array.isArray(v) ? v : []);
+  const emit = (e) => {
+    process.stdout.write(typeof e.text === 'string' ? e.text : '');
+    for (const r of list(e.results)) results.push(r);
+    for (const r of list(e.notes)) notes.push(r);
+    for (const r of list(e.observations)) observations.push(r);
+    const titles = list(e.titles);
+    if (titles.length) for (const t of titles) rows.push({ title: String(t.title), ms: Number(t.ms) || 0 });
+    else rows.push({ title: String(e.name), ms: Number(e.ms) || 0 });
+  };
+  const byName = new Map();
+  for (const o of outcome) {
+    for (const e of o.doc ? o.doc.sections : []) {
+      if (o.ch.names.includes(e.name) && !byName.has(e.name)) byName.set(e.name, e);
+    }
+  }
+  // Canonical order first; then whatever a child returned outside its slot (its marker refusal).
+  for (const entry of SECTION_TABLE) if (byName.has(entry.name)) emit(byName.get(entry.name));
+  for (const o of outcome) {
+    for (const e of o.doc ? o.doc.sections : []) if (!o.ch.names.includes(e.name)) emit(e);
+  }
+
+  // One `(uncaught)` block per child that crashed, died, or came back without all of its sections.
+  let crashed = false;
+  const tail = (text) => {
+    const lines = String(text || '').split('\n').map((l) => l.replace(/\r$/, '')).filter((l) => l.trim() !== '');
+    return lines.length ? lines.slice(-20) : ['(the child wrote nothing to stderr)'];
+  };
+  for (const { ch, run, doc } of outcome) {
+    const reported = new Set(doc ? doc.sections.map((e) => e.name) : []);
+    const missing = ch.names.filter((name) => !reported.has(name));
+    const cleanExit = run.error === null && (run.code === 0 || run.code === 1);
+    if (doc && !doc.crashed && cleanExit && missing.length === 0) continue;
+    crashed = true;
+    const exitText = run.error ? `spawn error: ${run.error.message}`
+      : (run.code !== null ? `exit code ${run.code}` : `signal ${run.signal}`);
+    let headline;
+    let detailLines;
+    if (doc && doc.crashed) {
+      headline = String(doc.headline);
+      detailLines = String(doc.detail || '').split('\n');
+    } else if (run.error) {
+      headline = `child ${ch.k} could not be started`;
+      detailLines = tail(run.stderr);
+    } else if (!doc) {
+      headline = `child ${ch.k} exited ${run.code !== null ? run.code : run.signal} without a result document`;
+      detailLines = tail(run.stderr);
+    } else {
+      headline = `child ${ch.k} exited ${run.code !== null ? run.code : run.signal} without a result for ${missing.length} of its sections`;
+      detailLines = tail(run.stderr);
+    }
+    section('(uncaught)');
+    check(`the self-check crashed before it finished: ${headline}`, false,
+      `child ${ch.k}, ${exitText}; its sections that never ran: ${missing.join(', ') || 'none'}`);
+    for (const line of detailLines) console.log(`    ${line}`);
+  }
+  return { crashed, rows };
+}
+
+// ---------------------------------------------------------------------------
 // main
 // ---------------------------------------------------------------------------
-function main() {
+async function main() {
   const pluginJson = readJson(path.join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json'));
   const pluginVersion = (pluginJson && pluginJson.version) || '0.0.0';
+
+  if (IS_GROUP_CHILD) {
+    runGroupChild(pluginVersion);
+    return;
+  }
 
   let fixtureArg = argValue('--project-fixture');
   let temporary = false;
@@ -10135,42 +10446,22 @@ function main() {
     }
   }
 
+  const ctx = { tmpRoot, PROJECT, selfAuthored, pluginVersion };
+  const children = Math.min(JOBS, GROUP_COUNT);
+  const childScratch = [];
+  let childRows = null;
   let crashed = false;
   try {
     if (SCOPE === 'project') {
       runProjectScope(PROJECT, selfAuthored);
+    } else if (children === 1) {
+      for (const entry of SECTION_TABLE) entry.run(ctx);
     } else {
-      // First, because every bash-channel finding after it is only as trustworthy as this selection.
-      sectionBashHost();
-      sectionGate1Identity(tmpRoot);
-      sectionGate2(tmpRoot);
-      sectionGate2Mode(tmpRoot);
-      sectionPlanRefNaming(tmpRoot, PROJECT);
-      sectionGate4();
-      sectionGate3(tmpRoot);
-      sectionGate3Toggle(tmpRoot);
-      sectionGate3Surface(tmpRoot);
-      sectionGate3Planning(tmpRoot);
-      sectionConfigSchema(tmpRoot);
-      sectionMigrationPayload(tmpRoot);
-      sectionHookWiring();
-      sectionMarketplace(tmpRoot);
-      sectionWrappers(tmpRoot);
-      sectionShWrappers(tmpRoot);
-      sectionPlanGate(tmpRoot);
-      sectionRunHeader(tmpRoot);
-      sectionResolver(tmpRoot);
-      sectionRolesCommand(tmpRoot, pluginVersion);
-      sectionPayloadIntegrity(tmpRoot);
-      sectionProvenance(tmpRoot);
-      sectionExampleFixture(tmpRoot);
-      sectionProjectLayer(PROJECT, selfAuthored);
-      sectionDraftsObservations(tmpRoot);
-      sectionE2eTraceObservation(tmpRoot);
-      sectionCommitAutomation(PROJECT);
-      sectionCommitAutomationControls(tmpRoot);
-      sectionNegativeControls(tmpRoot, pluginVersion);
-      sectionScopeControls(tmpRoot, pluginVersion);
+      // The fixture above is written only by this process, before any child starts, and removed
+      // only by the `finally` below, after every child has exited.
+      const merged = await runGroupChildren(ctx, children, childScratch);
+      childRows = merged.rows;
+      if (merged.crashed) crashed = true;
     }
   } catch (e) {
     // A section that THROWS must not take the report with it. Before this catch existed the
@@ -10199,6 +10490,7 @@ function main() {
     for (const line of detail.split('\n')) console.log(`    ${line}`);
   } finally {
     try { fs.rmSync(tmpRoot, { recursive: true, force: true }); } catch (e) { /* best-effort */ }
+    for (const dir of childScratch) { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { /* best-effort */ } }
     if (temporary && !KEEP_FIXTURE) { try { fs.rmSync(PROJECT, { recursive: true, force: true }); } catch (e) { /* best-effort */ } }
   }
 
@@ -10364,7 +10656,7 @@ function main() {
     console.log('\nOBSERVED ON THE INSPECTED PROJECT (notes, not assertions - nothing here is a failure):');
     for (const n of observations) console.log(`  - ${n.name}: ${n.why}`);
   }
-  printSlowestSections();
+  printSlowestSections(childRows);
   console.log(`\n==== ${results.length - failed.length}/${results.length} assertions passed ====`);
   if (failed.length) {
     console.log('FAILURES:');

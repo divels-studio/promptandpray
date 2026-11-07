@@ -4,6 +4,50 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.3.14] - 2026-11-07
+
+The full self-check runs its sections in parallel groups and no longer repeats a PowerShell probe
+pass it already ran; the acceptance suites spawn the embedded self-check in the project scope and
+print their slowest sections; the embedded run's FAIL verdict names only a cause its scope can
+produce.
+
+### Added
+
+- **The self-check's full run takes `--jobs <n>` and runs in four parallel groups (SUITES-002)** -
+  the engine `scripts/selfcheck/aiwf-selfcheck.js` deals its 30 full-scope sections, fixed in four
+  groups by name, whole and round-robin to `--jobs <n>` child processes of itself (default
+  `max(1, min(4, os.availableParallelism() - 1))`); `--jobs 1` is the previous in-process run, and
+  `0`, a negative or non-integer value or a bare `--jobs` exits 2 naming the flag.
+  - The report is unchanged: the sections' text in the canonical order, COVERAGE, the notes, the
+    tally line, FAILURES and the exit code; the dealing shows on stderr as one line per child naming
+    its sections, and stdout carries nothing new.
+  - A child that crashes or exits without its result is one `(uncaught)` failure naming the sections
+    that never ran; the run prints `---- INCOMPLETE RUN ----` and exits 1.
+  - Under `--scope project` the flag is accepted and has no effect; a child never writes, judges or
+    removes the `--project-fixture` tree.
+- **The four suites print their slowest sections (SUITES-001)** - the setup suite, the update
+  suite, the example cycle and the self-check each print, right before their unchanged tally line, a
+  `slowest sections:` block: the five slowest sections in seconds and the total (the spikes, a few
+  seconds whole, print none).
+
+### Changed
+
+- **The suites spawn the embedded self-check in the project scope (SUITES-001)** - the three
+  self-check runs inside `scripts/setup/test-setup.mjs` and `scripts/update/test-update.mjs` that
+  assert only an exit code pass `--scope project`; the example cycle's step 8 keeps the full scope
+  against the bumped payload copy.
+- **The embedded run's FAIL verdict names its scope (SUITES-001)** -
+  `scripts/selfcheck/run-selfcheck.mjs` no longer offers a missing or unusable host as a cause its
+  project-scope run cannot produce; the verdict says the run checked the project layer only and that
+  `/pnp:selfcheck` runs the full check.
+- **One PowerShell exec pass less in the self-check (SUITES-002)** - the uncovered-id enumeration of
+  the PowerShell resume controls reuses the findings of the first pass instead of running the probes
+  a third time; the pristine control pass stays.
+- Migration `0039_selfcheck-jobs` is one `note`; nothing is re-rendered and no config key or ask
+  rule changes.
+
+Retires local rules: none
+
 ## [0.3.13] - 2026-11-07
 
 The self-check that setup, `/pnp:update --apply` and `/pnp:roles` run by themselves after a write

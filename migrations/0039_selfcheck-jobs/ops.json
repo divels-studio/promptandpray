@@ -1,0 +1,12 @@
+{
+  "migration": "0039_selfcheck-jobs",
+  "targetPluginVersion": "0.3.14",
+  "operations": [
+    {
+      "op": "note",
+      "id": "selfcheck-jobs-0-3-14",
+      "text": "0.3.14 makes the full self-check faster without changing what it reports. The engine `scripts/selfcheck/aiwf-selfcheck.js` takes `--jobs <n>`: its 30 full-scope sections stand in four groups fixed by name, dealt whole and round-robin to n child processes of the same script (default max(1, min(4, available parallelism - 1))); `--jobs 1` is the previous in-process run, and `0`, a negative or non-integer value or a bare `--jobs` exits 2 with a message naming the flag. The report is unchanged - the header, the sections' text in canonical order, COVERAGE, the notes, the slowest sections, the tally line, FAILURES and the exit code; the dealing shows on stderr as one line per child naming its sections, and stdout carries nothing new. A child that crashes or exits without its result document is one counted `(uncaught)` failure naming the sections that never ran; the run prints `---- INCOMPLETE RUN ----` and exits 1. A child never writes, judges or removes the `--project-fixture` tree. Under `--scope project` the flag is accepted and has no effect. The PowerShell wrappers section lists its uncovered resume checks from the findings it already produced instead of running the resume probes a third time. The acceptance suites (`scripts/setup/test-setup.mjs`, `scripts/update/test-update.mjs`) spawn the embedded self-check with `--scope project` where they assert only its exit code, while the example cycle's step 8 keeps the full scope; the setup suite, the update suite, the example cycle and the self-check each print a `slowest sections:` block right before their unchanged tally line. The embedded run's FAIL verdict (`scripts/selfcheck/run-selfcheck.mjs`) no longer offers a missing or unusable host as a cause, because its project-scope run probes none; it says the run checked the project scope only and that `/pnp:selfcheck` runs the full check. The wall time is measured, not promised: no time bound is part of the contract. This update re-renders nothing; no config key, ask rule or operator file changes.",
+      "docRefs": ["CHANGELOG.md", "scripts/selfcheck/README.md", "scripts/selfcheck/aiwf-selfcheck.js", "scripts/selfcheck/run-selfcheck.mjs", "scripts/setup/test-setup.mjs", "scripts/update/test-update.mjs", "scripts/ci/run-example-cycle.mjs"]
+    }
+  ]
+}
