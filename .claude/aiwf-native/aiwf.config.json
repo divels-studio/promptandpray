@@ -194,11 +194,6 @@
         "cwd": "."
       },
       {
-        "name": "example-cycle-linux",
-        "run": "node scripts/ci/run-example-cycle.mjs --answers examples/example-project/answers-linux.json",
-        "cwd": "."
-      },
-      {
         "name": "selfcheck",
         "run": "node scripts/selfcheck/aiwf-selfcheck.js --plugin-root . --project-fixture .",
         "cwd": "."

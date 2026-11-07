@@ -108,10 +108,24 @@ const results = [];
 const notes = [];
 const observations = [];
 let currentSection = '(none)';
+// Each section's start is recorded so the closing block can print the slowest ones: a section's
+// seconds run from its own start to the next section's start (the last one's, to the print).
+const sectionStarts = [];
 
 function section(title) {
   currentSection = title;
+  sectionStarts.push({ title, at: Date.now() });
   console.log(`\n=== ${title} ===`);
+}
+// Printed right before the tally line, which stays the report's last line on a pass. The rows are
+// indented and never start with `=== `, so SCOPE CONTROLS' title filter cannot take one for a title.
+function printSlowestSections() {
+  const end = Date.now();
+  const rows = sectionStarts.map((s, i) => ({ title: s.title, ms: (i + 1 < sectionStarts.length ? sectionStarts[i + 1].at : end) - s.at }));
+  rows.sort((a, b) => b.ms - a.ms);
+  console.log('\nslowest sections:');
+  for (const r of rows.slice(0, 5)) console.log(`  ${(r.ms / 1000).toFixed(1)} ${r.title}`);
+  console.log(`  ${process.uptime().toFixed(1)} total`);
 }
 function check(name, ok, detail) {
   results.push({ section: currentSection, name, ok: !!ok });
@@ -10350,6 +10364,7 @@ function main() {
     console.log('\nOBSERVED ON THE INSPECTED PROJECT (notes, not assertions - nothing here is a failure):');
     for (const n of observations) console.log(`  - ${n.name}: ${n.why}`);
   }
+  printSlowestSections();
   console.log(`\n==== ${results.length - failed.length}/${results.length} assertions passed ====`);
   if (failed.length) {
     console.log('FAILURES:');

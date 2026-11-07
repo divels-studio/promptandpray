@@ -20,11 +20,10 @@
  *   4. Child exit non-zero -> the child's stdout and stderr are printed verbatim and the CLI exits 1
  *      with a one-line verdict that says plainly that the files WERE written and nothing was rolled
  *      back. A red self-check behind exit 0 would be the worst false green this payload can produce.
- *      That verdict also names the two DIFFERENT things a red child can mean, because they call for
- *      opposite responses: either the subject really is inconsistent, or this run could not prove
- *      part of the contract in this environment - a host the checks need (a bash, a PowerShell) was
- *      missing or unusable, and dozens of assertions then go red about the machine rather than about
- *      the project. The exit code is 1 in both cases; only the detail above the verdict says which.
+ *      That verdict also says what a red child means here: the subject is inconsistent. The run
+ *      checked the project scope only (point 2) - no PowerShell or bash host is probed in it - so the
+ *      detail printed above the verdict says what is inconsistent, and `/pnp:selfcheck` runs the full
+ *      check.
  *      HOW that code leaves the CLI is part of this point: the caller assigns it to `process.exitCode`
  *      and never passes it to `process.exit()`. The verdict and the child's report are written to this
  *      process's own stdout, which is a synchronous file/pipe on Windows but an ASYNCHRONOUS pipe on
@@ -107,9 +106,9 @@ export function finishWithSelfCheck({
   if (result.stderr) process.stderr.write(result.stderr.endsWith('\n') ? result.stderr : `${result.stderr}\n`);
   err(
     `self-check: FAIL (exit ${result.status}). The files WERE written and nothing was rolled back - a red self-check ` +
-    `never reports that the write failed: it reports EITHER that ${subject} is inconsistent, OR that this run ` +
-    'could not prove part of the contract in this environment (a host the checks need was missing or unusable). ' +
-    'The detail printed above says which, and `/pnp:selfcheck` re-runs it.',
+    `never reports that the write failed: it reports that ${subject} is inconsistent. This run checked the project ` +
+    'scope only (no PowerShell or bash host was probed); the detail printed above says what is inconsistent, and ' +
+    '`/pnp:selfcheck` runs the full check.',
   );
   return 1;
 }

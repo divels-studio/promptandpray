@@ -86,7 +86,21 @@ function check(name, ok, detail) {
   }
   return !!ok;
 }
-function section(title) { console.log(`\n=== ${title} ===`); }
+// Each section's start is recorded so the closing block can print the slowest ones: a section's
+// seconds run from its own start to the next section's start (the last one's, to the print).
+const sectionStarts = [];
+function section(title) { sectionStarts.push({ title, at: Date.now() }); console.log(`\n=== ${title} ===`); }
+// Printed right before the tally line (`checks: N, failures: M`), whose text and order relative to the
+// lines after it do not change. The rows are indented and never start with `=== `, so nothing that
+// reads section titles can take one for a title.
+function printSlowestSections() {
+  const end = Date.now();
+  const rows = sectionStarts.map((s, i) => ({ title: s.title, ms: (i + 1 < sectionStarts.length ? sectionStarts[i + 1].at : end) - s.at }));
+  rows.sort((a, b) => b.ms - a.ms);
+  console.log('\nslowest sections:');
+  for (const r of rows.slice(0, 5)) console.log(`  ${(r.ms / 1000).toFixed(1)} ${r.title}`);
+  console.log(`  ${process.uptime().toFixed(1)} total`);
+}
 // The whole output of the failing run, verbatim - exit code first, then every line of it.
 const why = (r) => () => `exit ${r.status}\n${(r.out || '').replace(/\s+$/, '') || '(the run printed nothing)'}`;
 
@@ -1957,7 +1971,7 @@ const BASE_B = makePayload('schema-b', { version: BASELINE.targetPluginVersion, 
 section('18 - the self-check is the update\'s own last step, and a red one is never exit 0');
 {
   const sc = spawnSync(process.execPath, [
-    path.join(P020, 'scripts', 'selfcheck', 'aiwf-selfcheck.js'), '--plugin-root', P020, '--project-fixture', upgraded,
+    path.join(P020, 'scripts', 'selfcheck', 'aiwf-selfcheck.js'), '--plugin-root', P020, '--project-fixture', upgraded, '--scope', 'project',
   ], { encoding: 'utf8' });
   check('the self-check passes against the project section 2 updated (exit 0)', sc.status === 0,
     sc.status === 0 ? '' : '\n' + (sc.stdout || '').trim().split('\n').slice(-14).join('\n'));
@@ -2097,6 +2111,7 @@ const PROJECT_SCOPE_CRASH_SITE = '  sectionCommitAutomation(projectRoot);';
 
 // ---------------------------------------------------------------------------
 try { fs.rmSync(tmpRoot, { recursive: true, force: true, maxRetries: 3 }); } catch { /* best-effort */ }
+printSlowestSections();
 console.log(`\nchecks: ${checks}, failures: ${failures}`);
 console.log(`fixtures left behind: ${fs.existsSync(tmpRoot) ? tmpRoot : 'none'}`);
 console.log(failures === 0 ? 'UPDATE SUITE: PASS' : 'UPDATE SUITE: FAIL');

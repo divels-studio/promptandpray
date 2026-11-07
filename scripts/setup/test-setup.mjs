@@ -33,10 +33,11 @@
  *      project as the flipping control.
  *
  * WHY MOST CASES PASS --no-selfcheck
- *   Every install below would otherwise pay for a full self-check run (300+ assertions, a fresh
- *   PowerShell host and two dozen child processes). The cases that are ABOUT the integration run it;
- *   the ones that are about the generator skip it deliberately, through the same flag an operator
- *   has - not through a test-only bypass.
+ *   An install's embedded self-check is the project scope (since 0.3.13): it reads the project layer
+ *   only and probes no PowerShell or bash host. The cases that are ABOUT the integration run it; the
+ *   ones that are about the generator skip it deliberately, through the same flag an operator has -
+ *   not through a test-only bypass. The explicit self-check runs below take the same project scope;
+ *   the full run has its own homes (the `selfcheck` VERIFY row, the example cycle's last step, CI).
  *
  * Exit 0 = every assertion passed. Exit 1 = at least one failed. Exit 2 = the suite could not run.
  */
@@ -67,7 +68,21 @@ function check(name, ok, detail) {
   console.log(`  [${ok ? 'PASS' : 'FAIL'}] ${name}${detail ? ' - ' + detail : ''}`);
   return !!ok;
 }
-function section(title) { console.log(`\n=== ${title} ===`); }
+// Each section's start is recorded so the closing block can print the slowest ones: a section's
+// seconds run from its own start to the next section's start (the last one's, to the print).
+const sectionStarts = [];
+function section(title) { sectionStarts.push({ title, at: Date.now() }); console.log(`\n=== ${title} ===`); }
+// Printed right before the tally line (`checks: N, failures: M`), whose text and order relative to the
+// lines after it do not change. The rows are indented and never start with `=== `, so nothing that
+// reads section titles can take one for a title.
+function printSlowestSections() {
+  const end = Date.now();
+  const rows = sectionStarts.map((s, i) => ({ title: s.title, ms: (i + 1 < sectionStarts.length ? sectionStarts[i + 1].at : end) - s.at }));
+  rows.sort((a, b) => b.ms - a.ms);
+  console.log('\nslowest sections:');
+  for (const r of rows.slice(0, 5)) console.log(`  ${(r.ms / 1000).toFixed(1)} ${r.title}`);
+  console.log(`  ${process.uptime().toFixed(1)} total`);
+}
 // Detail for a run: the exit code plus the last lines of its output, and ONLY when something is
 // worth explaining - a passing row that dumps a whole install report drowns the failures.
 const why = (r, always = false) => (r.status === 0 && !always ? '' : `exit ${r.status}: ${r.out.trim().split('\n').filter(Boolean).slice(-3).join(' | ').slice(0, 240)}`);
@@ -323,7 +338,7 @@ check('memory seeds are PRINTED for the operator', r1.out.includes('MEMORY SEEDS
     JSON.stringify((settings.permissions || {}).allow) === JSON.stringify(['Bash(*)', 'PowerShell(*)']) && JSON.stringify((settings.permissions || {}).deny) === JSON.stringify([]));
 }
 {
-  const r = spawnSync(process.execPath, [SELFCHECK, '--plugin-root', PLUGIN_ROOT, '--project-fixture', p1], { encoding: 'utf8' });
+  const r = spawnSync(process.execPath, [SELFCHECK, '--plugin-root', PLUGIN_ROOT, '--project-fixture', p1, '--scope', 'project'], { encoding: 'utf8' });
   const tail = (r.stdout || '').trim().split('\n').slice(-12).join('\n');
   check('the self-check passes against the generated project (exit 0)', r.status === 0, r.status === 0 ? '' : `\n${tail}`);
 }
@@ -992,11 +1007,9 @@ section('17 - the self-check is the install\'s own last step, and "could not che
 }
 {
   // The other branch: a self-check that RAN and came back RED. What is under test here is the
-  // caller's VERDICT, not the engine's report - and specifically the distinction the operator acts
-  // on, because the two meanings call for opposite responses: either the project really is
-  // inconsistent, or this run could not PROVE part of the contract in this environment. The second
-  // is not hypothetical - a bash host that could not resolve the paths handed to it turned 52
-  // assertions red at once, about the machine rather than about the project.
+  // caller's VERDICT, not the engine's report - and specifically what the operator acts on: the
+  // embedded run is the project scope, which probes no host, so the verdict says the project is
+  // inconsistent, that only the project scope ran, and that `/pnp:selfcheck` runs the full check.
   //
   // The child is a payload copy whose self-check exits non-zero with a report on stdout. Doubling
   // the CHILD is the same move the fail-closed case above makes by removing it: the production path
@@ -1023,9 +1036,9 @@ section('17 - the self-check is the install\'s own last step, and "could not che
     r.out.includes('FAILURES:') && r.out.includes('991/992 assertions passed'), why(r, true).slice(0, 200));
   check('the verdict still says the files WERE written and nothing was rolled back',
     r.out.includes('WERE written') && r.out.includes('nothing was rolled back'), why(r, true).slice(0, 200));
-  check('and it distinguishes an inconsistent project from a contract this run could not prove here',
-    r.out.includes('could not prove part of the contract in this environment')
-    && r.out.includes('a host the checks need was missing or unusable'), why(r, true).slice(0, 200));
+  check('and it says the run was the project scope only and names `/pnp:selfcheck` for the full check',
+    r.out.includes('This run checked the project scope only')
+    && r.out.includes('`/pnp:selfcheck` runs the full check'), why(r, true).slice(0, 200));
   check('which is true: the project layer really is on disk',
     exists(at(p24, CONFIG_REL)) && exists(at(p24, ROLES_REL)) && exists(at(p24, 'CLAUDE.md')));
 }
@@ -1535,7 +1548,7 @@ section('22 - the audit table: a fresh install gets it without being asked, and 
       `exit ${f.status}: ${f.out.trim().split('\n').slice(-3).join(' | ')}`);
     fs.rmSync(qa);
   }
-  const selfcheck = spawnSync(process.execPath, [SELFCHECK, '--plugin-root', PLUGIN_ROOT, '--project-fixture', p22], { encoding: 'utf8' });
+  const selfcheck = spawnSync(process.execPath, [SELFCHECK, '--plugin-root', PLUGIN_ROOT, '--project-fixture', p22, '--scope', 'project'], { encoding: 'utf8' });
   check('the self-check is green on the project after the whole round trip',
     selfcheck.status === 0, (selfcheck.stdout || '').split('\n').filter((l) => l.includes('[FAIL]')).slice(0, 3).join(' | ').slice(0, 240));
 }
@@ -2118,6 +2131,7 @@ section('25 - paths.changesDir: unused and ignored; the containment helper keeps
 
 // ---------------------------------------------------------------------------
 try { fs.rmSync(tmpRoot, { recursive: true, force: true, maxRetries: 3 }); } catch { /* best-effort */ }
+printSlowestSections();
 console.log(`\nchecks: ${checks}, failures: ${failures}`);
 console.log(`fixtures left behind: ${fs.existsSync(tmpRoot) ? tmpRoot : 'none'}`);
 console.log(failures === 0 ? 'SETUP SUITE: PASS' : 'SETUP SUITE: FAIL');

@@ -80,7 +80,21 @@ function check(name, ok, detail) {
   if (!ok || !QUIET) console.log(`  [${ok ? 'PASS' : 'FAIL'}] ${name}${detail ? ' - ' + detail : ''}`);
   return !!ok;
 }
-function step(title) { if (!QUIET) console.log(`\n=== ${title} ===`); }
+// Each step's start is recorded - under --quiet too, because the slowest-sections block is part of the
+// summary - so the closing block can print the slowest ones: a step's seconds run from its own start
+// to the next step's start (the last one's, to the print).
+const stepStarts = [];
+function step(title) { stepStarts.push({ title, at: Date.now() }); if (!QUIET) console.log(`\n=== ${title} ===`); }
+// Printed right before the tally line, which stays the run's last count. The rows are indented and
+// never start with `=== `, so nothing that reads step titles can take one for a title.
+function printSlowestSections() {
+  const end = Date.now();
+  const rows = stepStarts.map((s, i) => ({ title: s.title, ms: (i + 1 < stepStarts.length ? stepStarts[i + 1].at : end) - s.at }));
+  rows.sort((a, b) => b.ms - a.ms);
+  console.log('\nslowest sections:');
+  for (const r of rows.slice(0, 5)) console.log(`  ${(r.ms / 1000).toFixed(1)} ${r.title}`);
+  console.log(`  ${process.uptime().toFixed(1)} total`);
+}
 function bail(message) {
   console.error(`example-cycle: ${message}`);
   process.exit(2);
@@ -700,6 +714,7 @@ if (HAS('--keep')) {
   }
   check('the cleanup removed everything this run created', leftBehind.length === 0, leftBehind.slice(0, 4).join('; '));
 }
+printSlowestSections();
 console.log(`\nchecks: ${checks}, failures: ${failures}`);
 console.log(failures === 0 ? 'EXAMPLE CYCLE: PASS' : 'EXAMPLE CYCLE: FAIL');
 process.exit(failures === 0 ? 0 : 1);

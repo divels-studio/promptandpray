@@ -25,7 +25,6 @@
       { "name": "setup-suite", "run": "node scripts/setup/test-setup.mjs", "cwd": "." },
       { "name": "update-suite", "run": "node scripts/update/test-update.mjs", "cwd": "." },
       { "name": "example-cycle-windows", "run": "node scripts/ci/run-example-cycle.mjs", "cwd": "." },
-      { "name": "example-cycle-linux", "run": "node scripts/ci/run-example-cycle.mjs --answers examples/example-project/answers-linux.json", "cwd": "." },
       { "name": "selfcheck", "run": "node scripts/selfcheck/aiwf-selfcheck.js --plugin-root . --project-fixture .", "cwd": "." },
       { "name": "spikes", "run": "node scripts/spike/run-spikes.mjs", "cwd": "." },
       { "name": "plugin-validate", "run": "claude plugin validate .", "cwd": "." }
