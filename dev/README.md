@@ -28,9 +28,11 @@ carry things the payload never may (the operator's language, machine-local paths
 
 ## The payload is code
 
-Every change under `skills/`, `docs/`, `templates/`, `scripts/`, `schema/`, `hooks/`, `migrations/`,
-`examples/` or `.claude-plugin/` is **R2** - it goes through the Writer and a Reviewer pass, never
-directly from the main session. Nothing is deleted from `docs/` without a migration. The payload
+Code in the payload - `scripts/`, `hooks/`, `schema/`, `.claude-plugin/` - goes through the Writer; a
+Codex pass over it runs only on the operator's word. Prose in the payload - `docs/`, `skills/`, the text
+of `templates/`, `README.md`, `CHANGELOG.md` - is R1, edited in the main session (operator decision
+2026-10-16; the rule's home is `dev/PROJECT_OVERRIDES.md` § Hard rules). Nothing is deleted from
+`docs/` without a migration. The payload
 stays generic: no origin-project names, no Cyrillic, no absolute paths - the provenance section of
 the self-check enforces that, with negative controls.
 
