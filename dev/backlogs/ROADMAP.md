@@ -236,7 +236,7 @@ Entries below were ported on 2026-10-18 from `dev/backlogs/CANDIDATES.md` (now h
   - 2026-10 AFTER step 4 - suites fast or fewer; drop `example-cycle-linux` from `verify.commands` [dev/backlogs/CANDIDATES.md:1342]
   - 2026-11-07 UPDCHECK-002 auditor (out of scope) - the embedded runner's FAIL verdict line still offers "could not prove part of the contract in this environment (a host the checks need was missing or unusable)" as a cause; under the project scope (0.3.13) no host is probed, so the clause misleads there - reword per scope [scripts/selfcheck/run-selfcheck.mjs:108-113; archive/020_PLAN_UPDCHECK_2026-11-07/records/UPDCHECK-002.md § Remaining debt]
 - Size: S
-- Plans: none yet
-- Status: idea
+- Plans: PLAN_SUITES (`active/SUITES/`, landed 2026-11-07 - two tickets: SUITES-001 the cuts, SUITES-002 the parallel full self-check and release 0.3.14)
+- Status: planned
 - Born: 2026-10-18, operator word „продължи три"
 

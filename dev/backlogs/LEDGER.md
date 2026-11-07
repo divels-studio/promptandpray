@@ -24,6 +24,7 @@ directory.
 - RULEHOME - readiness/RULEHOME/ (its ledger.md: rulings, passes, events), archive/017_PLAN_RULEHOME_2026-10-31/ (executed in full 2026-10-31: 001 payload prose f61817f, 002 code 6bb25dc + release 0.3.7, 003 the Silerax harvest / removal / diet; records in the archive folder)
 - DOCSTAGE - readiness/DOCSTAGE/ (stamp, round-1.md, round-2.md, ledger.md), archive/018_PLAN_DOCSTAGE_2026-11-02/records/ (landed 2026-11-01, archived 2026-11-02 - release 0.3.8; the first plan of ROADMAP § DOCSTAGE, the entry stays for its second plan)
 - UPDCHECK - readiness/UPDCHECK/ (stamp, round-1.md), archive/020_PLAN_UPDCHECK_2026-11-07/records/ (landed 2026-11-06, executed 2026-11-07 - release 0.3.13: the embedded self-check takes the project scope; the full engine run measured 701 s on 2026-11-06, the whole apply with its project-scope self-check 0.4 s on 2026-11-07, commands in `records/UPDCHECK-002.md`; ROADMAP § UPDCHECK closed with it)
+- SUITES - readiness/SUITES/ (stamp, round-1.md, round-2.md; its ledger.md takes the CI step seconds of the release's pushed commit, D-07), active/SUITES/records/ (landed 2026-11-07: two tickets - the cuts, then the parallel full self-check and release 0.3.14)
 
 ## Rows that belong to no plan
 
