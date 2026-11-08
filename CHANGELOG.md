@@ -4,6 +4,38 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.3.15] - 2026-11-08
+
+The `seed-file` migration op judges its target through the real filesystem, as setup already judges
+the transfer surface: a target that leaves the project through a junction or a symlink, an alias of
+the transfer surface and a link standing at an absent target are refused before anything is written.
+
+### Fixed
+
+- **The `seed-file` op is contained through the real filesystem (SEEDFS-001)** - the update engine
+  `scripts/update/migrate.mjs` judges a seed target in the order resolve, exists, canonical
+  containment, surface, with setup's own helpers imported from `scripts/setup/generate.mjs` instead
+  of a lexical comparison; the project-relative target stays in the summary lines and the dry-run
+  overlay.
+  - A target that resolves outside the project through a junction or a symlink on a parent directory
+    is refused, naming where it really lands in the phrase of setup's own containment check; a
+    present regular file is kept, whatever link leads to it.
+  - A target that is this installation's transfer surface under another spelling - an alias through
+    a junction - is refused as the surface; a link standing at an absent target is refused instead of
+    written through.
+  - The canonical parent is checked again right before the exclusive write, and a parent that moved
+    since the plan-time check is refused; the window between that re-check and the write stays, on
+    the one-executing-session-per-tree invariant.
+  - `samePath` folds case on darwin as well as win32, for setup and update alike; the update suite
+    proves the cases on the shipped `0026_ledger` seed path.
+
+### Changed
+
+- Migration `0040_seed-containment` is one `note`; nothing is re-rendered and no config key or ask
+  rule changes.
+
+Retires local rules: none
+
 ## [0.3.14] - 2026-11-07
 
 The full self-check runs its sections in parallel groups and no longer repeats a PowerShell probe

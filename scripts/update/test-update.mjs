@@ -35,7 +35,10 @@
  *  15. createIfAbsent is accepted and changes nothing (a render always creates), and the validator
  *      rules on the field still hold; 15b seed-file; 15c the shipped ledger migration (0026) - the
  *      ledger created or kept, an older key kept, the re-rendered region, a seed onto an EXISTING
- *      surface kept rather than refused;
+ *      surface kept rather than refused; and the seed judged through the REAL filesystem - a link
+ *      out of the project refused, a junction alias of the surface refused, a link at an absent
+ *      target refused, a present file through a link kept, a parent that moved before the write
+ *      refused;
  *  16. the example bump is numbered against the payload it is built into;
  *  17. a stale $schema is refreshed;
  *  18. the self-check is the update's own last step (PASS, skipped, unrunnable, RED, crashed);
@@ -54,7 +57,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { changelogLines, extractRegion } from './migrate.mjs';
 // The same module through its NAMESPACE, for helpers read in section 17: a helper this payload does
 // not export yet must fail the checks that need it, not abort the whole suite at load time.
@@ -1748,6 +1751,185 @@ section('15c - the ledger migration: the shipped 0026 seeds <plansDir>/LEDGER.md
     const r = update(q, ['--apply'], { payload });
     check('[ledger-15] control: key on LEDGER.md, file ABSENT: refused (exit 1), nothing created',
       r.status === 1 && r.out.includes('the transfer surface of this installation') && !exists(at(q, LEDGER_REL)), why(r));
+  }
+  // --- t6: the seed judged through the REAL filesystem, not the string --------------------------------
+  // Junctions rather than symlinks: they need no administrator rights, so every case really runs, and a
+  // junction that cannot be made is a FAILING check, never a skip. `snapshot()` is not used on a
+  // project holding a junction (it reads a junction dirent as a file); the named paths are checked.
+  {
+    const LINKED_REL = 'linked/LEDGER.md';
+    const notStamped = (p) => bookkeeping(p).lastMigrationApplied !== '0002_ledger';
+    const real = (p) => { try { return fs.realpathSync.native(p); } catch { return null; } };
+    const junction = (target, link) => { try { fs.symlinkSync(target, link, 'junction'); return true; } catch { return false; } };
+    const unlink = (link) => { try { fs.rmdirSync(link); } catch { try { fs.unlinkSync(link); } catch { /* tmpRoot's cleanup takes it */ } } };
+    const isLink = (p) => { try { return fs.lstatSync(p).isSymbolicLink(); } catch { return false; } };
+    const listing = (dir) => { try { return fs.readdirSync(dir); } catch (e) { return [`(unreadable: ${e && e.code})`]; } };
+    const setPlansDir = (p, value) => {
+      const cfg = readJson(at(p, CONFIG_REL));
+      cfg.paths.plansDir = value;
+      writeJson(at(p, CONFIG_REL), cfg);
+    };
+    // The resolution of ledger-7: with no key the run asks it, so the run reaches op 0 whatever the
+    // question order.
+    const keyAnswer = (name) => resolutionFile(name, { '0002_ledger/1/paths.transferSurface': { kind: 'answer', value: LEDGER_REL } });
+    const linkDetail = (made, link, want) => (made ? `${real(link)} vs ${real(want)}` : 'junction creation failed on this host');
+
+    // (a) the escape: <plansDir> is a junction to a sibling OUTSIDE the project.
+    {
+      const target = project('ledger-escape-target');
+      const p = project('ledger-escape');
+      check('install exits 0', install(p).status === 0);
+      setPlansDir(p, 'linked');
+      setSurfaceKey(p, null);
+      const made = junction(target, at(p, 'linked'));
+      check('[ledger-16] fixture: paths.plansDir "linked" is a junction to a sibling folder OUTSIDE the project',
+        made && real(at(p, 'linked')) !== null && real(at(p, 'linked')) === real(target), linkDetail(made, at(p, 'linked'), target));
+      const a = update(p, ['--apply', '--resolution-file', keyAnswer('ledger-escape')], { payload });
+      check('[ledger-17] a seed that leaves the project through a junction is refused (exit 1), naming where it really lands',
+        made && a.status === 1 && a.out.includes('really resolves to') && a.out.includes('not inside the project'), why(a));
+      check('[ledger-18] and the far side is still empty, no key was written, nothing was stamped',
+        made && listing(target).length === 0 && surfaceKey(p) === undefined && notStamped(p),
+        `far side: ${listing(target).join(', ') || '(empty)'}; key ${String(surfaceKey(p))}; stamp ${String(bookkeeping(p).lastMigrationApplied)}`);
+      unlink(at(p, 'linked'));
+    }
+    // (b) the alias: <plansDir> is a junction to the project's own docs/backlogs, the surface's folder.
+    {
+      const p = project('ledger-alias');
+      check('install exits 0', install(p).status === 0);
+      setPlansDir(p, 'linked');
+      setSurfaceKey(p, LEDGER_REL);
+      fs.rmSync(at(p, LEDGER_REL), { force: true });
+      const made = junction(at(p, 'docs/backlogs'), at(p, 'linked'));
+      check('[ledger-19] fixture: paths.plansDir "linked" is a junction to the project\'s own docs/backlogs (INSIDE)',
+        made && real(at(p, 'linked')) !== null && real(at(p, 'linked')) === real(at(p, 'docs/backlogs')),
+        linkDetail(made, at(p, 'linked'), at(p, 'docs/backlogs')));
+      const a = update(p, ['--apply'], { payload });
+      check('[ledger-20] the surface spelled through a junction alias is refused (exit 1) as the transfer surface',
+        made && a.status === 1 && a.out.includes('the transfer surface of this installation'), why(a));
+      check('[ledger-21] and nothing was created at either spelling; nothing was stamped',
+        made && !exists(at(p, LEDGER_REL)) && !exists(at(p, LINKED_REL)) && notStamped(p),
+        `${LEDGER_REL} ${exists(at(p, LEDGER_REL))}; ${LINKED_REL} ${exists(at(p, LINKED_REL))}; stamp ${String(bookkeeping(p).lastMigrationApplied)}`);
+      unlink(at(p, 'linked'));
+    }
+    // (c) the dangling link: a junction stands AT the target and points at nothing.
+    {
+      const p = project('ledger-dangling');
+      check('install exits 0', install(p).status === 0);
+      setSurfaceKey(p, OLD_REL); // the t2 shape, so the surface refusal cannot mask the case
+      fs.rmSync(at(p, LEDGER_REL), { force: true });
+      const nowhere = path.join(tmpRoot, 'ledger-dangling-no-such-target');
+      const link = at(p, LEDGER_REL);
+      const made = junction(nowhere, link);
+      check('[ledger-22] fixture: a junction stands at <plansDir>/LEDGER.md and its target does not exist',
+        made && isLink(link) && !exists(nowhere), made ? `link ${isLink(link)}; target present ${exists(nowhere)}` : 'junction creation failed on this host');
+      const a = update(p, ['--apply'], { payload });
+      check('[ledger-23] a link at an absent target is refused (exit 1) as not a regular file, never written through',
+        made && a.status === 1 && a.out.includes('is not a regular file'), why(a));
+      check('[ledger-24] and the link\'s target is still absent; nothing was stamped',
+        made && !exists(nowhere) && notStamped(p), `target present ${exists(nowhere)}; stamp ${String(bookkeeping(p).lastMigrationApplied)}`);
+      unlink(link);
+    }
+    // (d) the controls: the same shapes with a real folder, and a present file reached through a link.
+    {
+      const p = project('ledger-escape-control');
+      check('install exits 0', install(p).status === 0);
+      setPlansDir(p, 'linked');
+      setSurfaceKey(p, null);
+      fs.mkdirSync(at(p, 'linked'), { recursive: true });
+      const a = update(p, ['--apply', '--resolution-file', keyAnswer('ledger-escape-control')], { payload });
+      check('[ledger-25] control: (a) with a REAL folder "linked": exit 0, "seed-file: linked/LEDGER.md (created)"',
+        a.status === 0 && a.out.includes(`0002_ledger[0] seed-file: ${LINKED_REL} (created)`) && exists(at(p, LINKED_REL)), why(a));
+    }
+    {
+      const p = project('ledger-alias-control');
+      check('install exits 0', install(p).status === 0);
+      setPlansDir(p, 'linked');
+      setSurfaceKey(p, LEDGER_REL);
+      fs.rmSync(at(p, LEDGER_REL), { force: true });
+      fs.mkdirSync(at(p, 'linked'), { recursive: true });
+      const a = update(p, ['--apply'], { payload });
+      check('[ledger-26] control: (b) with a REAL folder "linked": exit 0, "(created)", and nothing at the surface',
+        a.status === 0 && a.out.includes(`0002_ledger[0] seed-file: ${LINKED_REL} (created)`) && !exists(at(p, LEDGER_REL)), why(a));
+    }
+    {
+      const p = project('ledger-alias-kept');
+      check('install exits 0', install(p).status === 0);
+      setPlansDir(p, 'linked');
+      setSurfaceKey(p, LEDGER_REL);
+      fs.writeFileSync(at(p, LEDGER_REL), MINE_LEDGER, 'utf8');
+      const made = junction(at(p, 'docs/backlogs'), at(p, 'linked'));
+      const a = update(p, ['--apply'], { payload });
+      check('[ledger-27] control: the (b) junction with the surface PRESENT: exit 0, "(kept)", byte-identical, no surface refusal',
+        made && a.status === 0 && a.out.includes(`0002_ledger[0] seed-file: ${LINKED_REL} (kept)`)
+        && read(at(p, LEDGER_REL)) === MINE_LEDGER && !a.out.includes('the transfer surface of this installation'),
+        made ? why(a) : 'junction creation failed on this host');
+      unlink(at(p, 'linked'));
+    }
+    {
+      const target = project('ledger-far-kept-target');
+      const p = project('ledger-far-kept');
+      check('install exits 0', install(p).status === 0);
+      setPlansDir(p, 'linked');
+      setSurfaceKey(p, null);
+      fs.writeFileSync(path.join(target, 'LEDGER.md'), MINE_LEDGER, 'utf8');
+      const made = junction(target, at(p, 'linked'));
+      const a = update(p, ['--apply', '--resolution-file', keyAnswer('ledger-far-kept')], { payload });
+      // The order resolve -> exists -> containment: a present file is kept wherever the link leads,
+      // because containment is judged only where the engine would WRITE.
+      check('[ledger-28] control: the (a) junction with a file PRESENT on the far side: exit 0, "(kept)", byte-identical, no containment refusal',
+        made && a.status === 0 && a.out.includes(`0002_ledger[0] seed-file: ${LINKED_REL} (kept)`)
+        && read(path.join(target, 'LEDGER.md')) === MINE_LEDGER && !a.out.includes('really resolves to'),
+        made ? why(a) : 'junction creation failed on this host');
+      unlink(at(p, 'linked'));
+    }
+    // (e) the re-check before the write, through a REAL plan/apply split: one CLI run cannot open the
+    // window between the plan and the exclusive create, so the two exported seams are driven directly
+    // on the minimal context they read. A missing export fails both checks; it never stops the suite.
+    {
+      let seams = {};
+      try { seams = await import(pathToFileURL(at(PLUGIN_ROOT, 'scripts/update/migrate.mjs')).href); } catch { seams = {}; }
+      const hasSeams = typeof seams.planSeedFile === 'function' && typeof seams.applyPlan === 'function';
+      const NO_SEAMS = 'planSeedFile / applyPlan are not exported by this engine';
+      const FIXED = '# Ledger\n\nThe fixed text of the plan/apply case.\n';
+      const planThenApply = (p, between) => {
+        const ctx = { projectRoot: p, config: { paths: { plansDir: 'docs/backlogs', transferSurface: OLD_REL } }, overlay: null, render: () => FIXED };
+        const plan = seams.planSeedFile(ctx, ops[0]);
+        if (!plan || plan.mode !== 'seed') return { error: new Error(`planned as "${plan && plan.mode}", not "seed"`) };
+        between();
+        try { seams.applyPlan(ctx, plan); return { error: null }; } catch (e) { return { error: e }; }
+      };
+      {
+        const target = project('ledger-moved-target');
+        const p = project('ledger-moved');
+        fs.mkdirSync(at(p, 'docs/backlogs'), { recursive: true });
+        let made = false;
+        let outcome = { error: new Error(NO_SEAMS) };
+        if (hasSeams) {
+          try {
+            outcome = planThenApply(p, () => {
+              fs.renameSync(at(p, 'docs/backlogs'), at(p, 'docs/backlogs-moved'));
+              made = junction(target, at(p, 'docs/backlogs'));
+            });
+          } catch (e) { outcome = { error: e }; }
+        }
+        const msg = outcome.error && outcome.error.message ? outcome.error.message : String(outcome.error);
+        check('[ledger-29] the parent swapped for a junction OUT of the project between plan and apply: UpdateError, nothing written',
+          hasSeams && made && real(at(p, 'docs/backlogs')) === real(target)
+          && outcome.error instanceof seams.UpdateError && msg.includes('moved between the check and the write')
+          && listing(target).length === 0,
+          () => (hasSeams ? `junction made ${made}; error: ${msg}; far side: ${listing(target).join(', ') || '(empty)'}` : NO_SEAMS));
+        if (made) unlink(at(p, 'docs/backlogs'));
+      }
+      {
+        const p = project('ledger-unmoved');
+        fs.mkdirSync(at(p, 'docs/backlogs'), { recursive: true });
+        let outcome = { error: new Error(NO_SEAMS) };
+        if (hasSeams) { try { outcome = planThenApply(p, () => {}); } catch (e) { outcome = { error: e }; } }
+        check('[ledger-30] control: the same plan/apply with the folder left in place writes docs/backlogs/LEDGER.md with the fixed text',
+          hasSeams && outcome.error === null && read(at(p, LEDGER_REL)) === FIXED,
+          () => (hasSeams ? `error: ${outcome.error && outcome.error.message}; file: ${JSON.stringify(read(at(p, LEDGER_REL)))}` : NO_SEAMS));
+      }
+    }
   }
 }
 

@@ -1,0 +1,12 @@
+{
+  "migration": "0040_seed-containment",
+  "targetPluginVersion": "0.3.15",
+  "operations": [
+    {
+      "op": "note",
+      "id": "seed-containment-0-3-15",
+      "text": "0.3.15 makes the update engine judge a `seed-file` target through the real filesystem, the way setup already judges the transfer surface, with setup's own helpers (`canonicalPath`, `isInsideDir`, `samePath`, now exported from `scripts/setup/generate.mjs` and imported by `scripts/update/migrate.mjs`, not copied). The order is: resolve (the `<plansDir>` token and the lexical test, which stays the first refusal) -> exists (a present regular file is kept, whatever link leads to it) -> canonical containment (a target that leaves the project through a junction or symlink on a parent directory is refused: `seed-file \"<target>\" really resolves to \"<path>\", which is not inside the project - nothing was written.`) -> the transfer surface, now compared canonically, so an alias of the surface through a junction is refused as the surface. A link standing at an absent target - dangling, or leading to something that is not a regular file - is refused as `exists and is not a regular file (found a link)` instead of being written through. Right before its exclusive create the seed write re-checks the canonical parent the plan-time check saw and refuses a parent that moved in between; no lock is added, and the window between that re-check and the create itself is answered by one executing session per working tree. `samePath` folds case on win32 and on darwin, for setup and update alike. The summary lines (`seed-file: <target> (created|kept)`) keep the project-relative target. This update re-renders nothing; no config key, ask rule or operator file changes.",
+      "docRefs": ["CHANGELOG.md", "scripts/update/migrate.mjs", "scripts/setup/generate.mjs", "scripts/update/test-update.mjs"]
+    }
+  ]
+}

@@ -52,8 +52,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   CONFIG_REL, ROLES_REL, SETTINGS_REL, ProjectAdditionsError,
-  carryProjectAdditions, dominantEol, encodeEol, jsonText, lf, normalizeBookkeeping, orderConfig, planAskRules,
-  renderTemplate, resolveTransferSurface, templateContext,
+  canonicalPath, carryProjectAdditions, dominantEol, encodeEol, isInsideDir, jsonText, lf, normalizeBookkeeping, orderConfig,
+  planAskRules, renderTemplate, resolveTransferSurface, samePath, templateContext,
 } from '../setup/generate.mjs';
 import { formatErrors, loadSchema, validate } from '../setup/validate-config.mjs';
 import { claudePinErrors } from '../setup/role-rules.mjs';
@@ -488,21 +488,43 @@ function planRerender(ctx, op) {
  * promise), and a target that exists as something other than a regular file. Existence is tested
  * BEFORE the surface refusal: a target that is already there is `kept` - nothing written, nothing
  * addressed - even when it is the surface (an installation whose key already names the seeded file).
+ *
+ * THE ORDER: resolve (the `<plansDir>` token and the LEXICAL test, which keeps the summary line and
+ * the overlay key free of `..`) -> exists (a present regular file is `kept`, whatever link leads to
+ * it) -> canonical containment (refuseEscapingSeed: the target judged through the REAL filesystem,
+ * so a junction or symlink on a parent directory cannot carry the write out of the project) -> the
+ * surface, compared canonically (refuseSurfaceSeed: an alias through a junction is the same file).
+ * Containment is judged only where the engine would WRITE, so a present file reached through a link
+ * outside the project stays `kept`. A link standing AT an absent target - dangling, or leading to
+ * something that is not a regular file - is refused as not a regular file (seedTargetExists): an
+ * exclusive create through it would land wherever the link points, outside every check.
+ *
+ * THE CHECK-TO-WRITE BOUNDARY. No lock exists and none is added. The containment is judged twice on
+ * the same path: here at plan time, and again inside applySeed right before its exclusive create -
+ * the canonical parent seen here travels on the plan (`expectParent`), and a parent that moved in
+ * between is refused. The residual is the window between that re-check and the `wx` system call
+ * itself, which no lock-free process closes; it is the same window setup carries between its
+ * judgement and its write, and it is answered by the invariant of ONE executing session per working
+ * tree - the operator's recorded decision, not a mechanism of this engine.
+ *
+ * Exported as a test seam, beside applyPlan: one CLI run cannot open the plan/apply window.
  */
-function planSeedFile(ctx, op) {
+export function planSeedFile(ctx, op) {
   const target = resolveSeedTarget(ctx, op.target);
   if (seedTargetExists(ctx, op.target, target)) {
     return { op, mode: 'none', key: op.target, summary: `seed-file: ${target} (kept)` };
   }
+  refuseEscapingSeed(ctx, op.target, target);
   refuseSurfaceSeed(ctx, op.target, target);
   return {
     op, mode: 'seed', key: op.target, target, content: ctx.render(op.template), write: true,
+    expectParent: canonicalPath(path.dirname(seedPath(ctx, target))),
     summary: `seed-file: ${target} (created)`,
   };
 }
 
-const FOLD_CASE = process.platform === 'win32' || process.platform === 'darwin';
-const sameRel = (a, b) => (FOLD_CASE ? a.toLowerCase() === b.toLowerCase() : a === b);
+/** The absolute path of a seed target (the project-relative POSIX path resolveSeedTarget returns). */
+const seedPath = (ctx, target) => path.join(ctx.projectRoot, ...target.split('/'));
 
 /** The project-relative POSIX path a seed target names on THIS installation, or an UpdateError. */
 function resolveSeedTarget(ctx, raw) {
@@ -523,11 +545,29 @@ function resolveSeedTarget(ctx, raw) {
   return toPosix(inside);
 }
 
-/** A seed that would CREATE this installation's transfer surface is refused (migration 0011). */
+/**
+ * A seed whose target leaves the project through the REAL filesystem - a junction or symlink on a
+ * parent directory - is refused, naming where it really lands in the phrase of setup's containment
+ * check. The lexical test of resolveSeedTarget cannot see it: `linked/LEDGER.md` stays under the root
+ * as a string while the write lands somewhere else.
+ */
+function refuseEscapingSeed(ctx, raw, target) {
+  const base = canonicalPath(ctx.projectRoot);
+  const child = canonicalPath(seedPath(ctx, target));
+  if (!isInsideDir(base, child)) {
+    throw new UpdateError(`seed-file "${raw}" really resolves to "${toPosix(child)}", which is not inside the project - nothing was written.`);
+  }
+}
+
+/**
+ * A seed that would CREATE this installation's transfer surface is refused (migration 0011) - under
+ * any spelling the filesystem reads as the same file, so both sides are compared canonically and an
+ * alias through a junction is the surface too.
+ */
 function refuseSurfaceSeed(ctx, raw, target) {
   const paths = isPlainObject(ctx.config.paths) ? ctx.config.paths : {};
-  const surface = toPosix(path.relative(ctx.projectRoot, path.resolve(ctx.projectRoot, resolveTransferSurface(paths))));
-  if (sameRel(target, surface)) {
+  const surface = canonicalPath(path.resolve(ctx.projectRoot, resolveTransferSurface(paths)));
+  if (samePath(canonicalPath(seedPath(ctx, target)), surface)) {
     throw new UpdateError(
       `seed-file "${raw}" resolves to "${target}", the transfer surface of this installation - no migration `
       + 'operation may ever address it (migration 0011), so nothing was written.',
@@ -535,26 +575,47 @@ function refuseSurfaceSeed(ctx, raw, target) {
   }
 }
 
-/** Does the seed target exist? A regular file (or a previewed write) is "kept"; anything else stops. */
+/**
+ * Does the seed target exist? A regular file (or a previewed write) is "kept"; anything else stops.
+ * The entry itself is read with lstat: a link whose target is a regular file is kept, wherever it
+ * points (nothing is written through it); a link that leads nowhere (dangling) or to something that
+ * is not a regular file is refused - an exclusive create through it would land where it points.
+ */
 function seedTargetExists(ctx, raw, target) {
   if (ctx.overlay && ctx.overlay.has(target)) return true;
+  const file = seedPath(ctx, target);
   let stat = null;
-  try { stat = fs.statSync(path.join(ctx.projectRoot, ...target.split('/'))); } catch (e) {
+  try { stat = fs.lstatSync(file); } catch (e) {
     if (e && e.code === 'ENOENT') return false;
     throw new UpdateError(`seed-file "${raw}": "${target}" cannot be inspected (${e && e.message ? e.message : String(e)}) - nothing was written.`);
   }
-  if (!stat.isFile()) {
-    throw new UpdateError(
-      `seed-file "${raw}": "${target}" exists and is not a regular file (found a ${stat.isDirectory() ? 'directory' : 'special file'}) - `
-      + 'a seed never replaces what is there, so nothing was written.',
-    );
+  const notAFile = (found) => new UpdateError(
+    `seed-file "${raw}": "${target}" exists and is not a regular file (${found}) - `
+    + 'a seed never replaces what is there, so nothing was written.',
+  );
+  if (stat.isSymbolicLink()) {
+    let linked = null;
+    try { linked = fs.statSync(file); } catch { linked = null; }
+    if (linked && linked.isFile()) return true;
+    throw notAFile('found a link');
   }
+  if (!stat.isFile()) throw notAFile(stat.isDirectory() ? 'found a directory' : 'found a special file');
   return true;
 }
 
-/** The seed write: an EXCLUSIVE create, so an existing file is never replaced, whatever the timing. */
-function applySeed(file, text) {
+/**
+ * The seed write: an EXCLUSIVE create, so an existing file is never replaced, whatever the timing.
+ * Right before the create, the canonical parent is compared with the one the plan-time check saw
+ * (`expectParent`): a parent swapped for a link after the check is refused, not written through. The
+ * residual is the window between this re-check and the `wx` system call, which no lock-free process
+ * closes; it is answered by the invariant of one executing session per working tree (the operator's
+ * recorded decision), the same window setup carries between its judgement and its write.
+ */
+function applySeed(file, text, expectParent) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
+  if (typeof expectParent !== 'string' || !samePath(canonicalPath(path.dirname(file)), expectParent)) {
+    throw new UpdateError(`seed-file: the parent of "${file}" moved between the check and the write - nothing was written.`);
+  }
   try {
     fs.writeFileSync(file, lf(text), { encoding: 'utf8', flag: 'wx' });
   } catch (e) {
@@ -648,9 +709,9 @@ function writeConfig(ctx) {
 /**
  * Applies one plan. In a dry run (`ctx.overlay` set) nothing touches the disk: file contents go to
  * the overlay and config changes stay in memory, so the next operation is planned against the state
- * this one would leave.
+ * this one would leave. Exported as a test seam (with planSeedFile) for the plan/apply window.
  */
-function applyPlan(ctx, plan) {
+export function applyPlan(ctx, plan) {
   if (plan.mode === 'config') setConfigPath(ctx.config, plan.op.path, plan.value);
   if ((plan.mode === 'file' || plan.mode === 'settings') && plan.write) {
     if (ctx.overlay) ctx.overlay.set(plan.target, plan.content);
@@ -658,7 +719,7 @@ function applyPlan(ctx, plan) {
   }
   if (plan.mode === 'seed') {
     if (ctx.overlay) ctx.overlay.set(plan.target, plan.content);
-    else applySeed(path.join(ctx.projectRoot, ...plan.target.split('/')), plan.content);
+    else applySeed(path.join(ctx.projectRoot, ...plan.target.split('/')), plan.content, plan.expectParent);
   }
   mergeBookkeeping(ctx.config, plan.bookkeeping);
   // The reconcile's ownership is persisted the moment settings.json carries it (see THE MODEL).

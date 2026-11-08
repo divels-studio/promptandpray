@@ -28,8 +28,9 @@ in whatever document was open at the time, which is the same as not keeping them
   `rerender-managed-region` op names the artifact it addresses, the one in this migration names
   `CLAUDE.md#aiwf-core`, and no operation here or later may name the transfer surface.
 - **Who reads the key.** Setup (for the seed location and the containment check) and the doctrine.
-  The update engine and the hooks never read it, so an installation that adds the key changes no
-  behaviour it already has.
+  The update engine reads it only to REFUSE a `seed-file` that would create the surface (since
+  `169d9e1`) and never writes it; the Gate 3 hook reads it lexically for its write allowance; so an
+  installation that adds the key changes no behaviour it already has.
 
 **If you are updating rather than installing fresh, nothing is created for you.** That is the
 consequence of the paragraph above, not an omission: the only way this file could appear on an

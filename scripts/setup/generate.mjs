@@ -636,7 +636,7 @@ function regionOf(rendered) {
  *
  * Same technique and same reason as the work-directory guard in scripts/ci/run-example-cycle.mjs.
  */
-function canonicalPath(p) {
+export function canonicalPath(p) {
   let cursor = path.resolve(p);
   const tail = [];
   for (;;) {
@@ -660,7 +660,7 @@ function canonicalPath(p) {
  * to `..notes\file.md` - and refusing those would be a false positive in a guard whose whole value is
  * that a refusal means something.
  */
-function isInsideDir(parent, child) {
+export function isInsideDir(parent, child) {
   const rel = path.relative(parent, child);
   if (rel === '' || path.isAbsolute(rel)) return false;
   return rel !== '..' && !rel.startsWith('..' + path.sep);
@@ -670,9 +670,12 @@ function isInsideDir(parent, child) {
  * Path equality as THIS filesystem means it. `realpathSync.native` already returns the on-disk
  * casing for the parts that exist, so the only way two spellings of one destination can differ is in
  * a tail that does not exist yet - which is exactly the fresh-install case the collision guard below
- * is for. On win32 that tail is still the same file, so it is compared case-insensitively there.
+ * is for. That tail is spelled by the config, and on win32 and on macOS's default case-insensitive
+ * filesystem two spellings of it are still the same file, so it is compared case-insensitively on
+ * win32 AND darwin (the update engine's seed judgement shares this helper and the same fold).
  */
-const samePath = (a, b) => (process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b);
+export const samePath = (a, b) => (process.platform === 'win32' || process.platform === 'darwin'
+  ? a.toLowerCase() === b.toLowerCase() : a === b);
 
 /**
  * THE TRANSFER SURFACE'S PATH, in one place because the resolution is a RULE rather than a value.
