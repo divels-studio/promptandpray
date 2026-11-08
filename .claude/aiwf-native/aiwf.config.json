@@ -1,8 +1,8 @@
 {
   "$schema": "D:/pnp-live/schema/aiwf.config.schema.json",
   "_aiwf": {
-    "installedPluginVersion": "0.3.16",
-    "lastMigrationApplied": "0041_doctrine-wording",
+    "installedPluginVersion": "0.3.17",
+    "lastMigrationApplied": "0042_skills-wording",
     "managedRegions": {
       ".claude/aiwf-native/roles.json": "0.2.19",
       ".claude/agents/writer.md": "0.3.16",

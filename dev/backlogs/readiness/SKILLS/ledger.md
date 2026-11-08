@@ -7,6 +7,7 @@ The plan's own rulings, passes and events. One row each, with a pointer.
 | date | pass | engine / model / effort | cold or resumed | tokens | verdict | pointer |
 |---|---|---|---|---|---|---|
 | 2026-11-08 | readiness 1 | codex / gpt-6-sol / xhigh | cold | 100,514 | BLOCKERS: 3 INFO: 1 - all three fixed in revision 1, the INFO rejected | `readiness/SKILLS/round-1.md` |
+| 2026-11-08 | SKILLS-001, SKILLS-002 code passes | none | - | - | no auditor: 001 `review.docs` row 0; 002 the operator's dialog answer "Без Одитор (Recommended)" (D-01) | `archive/024_PLAN_SKILLS_2026-11-08/records/` |
 
 ## Rulings
 

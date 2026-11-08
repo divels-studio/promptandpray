@@ -60,7 +60,7 @@ Out:
 | ref | title | implements | status | record |
 |---|---|---|---|---|
 | SKILLS-001 | every sentence of D-02..D-05, D-09..D-11 in the skills, the Writer brief template and the two recipes | D-01 D-02 D-03 D-04 D-05 D-09 D-10 D-11 D-13 D-15 | closed (eaffdf5) | `records/SKILLS-001.md` |
-| SKILLS-002 | release 0.3.17 - migration 0042 with one note, the manifest entry, the bump, the changelog with its Retires line, the README line | D-01 D-06 D-07 D-08 D-12 D-13 | open | - |
+| SKILLS-002 | release 0.3.17 - migration 0042 with one note, the manifest entry, the bump, the changelog with its Retires line, the README line | D-01 D-06 D-07 D-08 D-12 D-13 | closed (073e75a) | `records/SKILLS-002.md` |
 
 ## Order and gates
 

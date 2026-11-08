@@ -562,7 +562,7 @@ Source of the record: Silerax PLAN_UIR § UIR-003 completion record and Silerax 
   round's blast radius (the ticket's visual/QA spec + the specs that touch the changed files), with a
   fallback to the full list when the round touches a widely imported file or the Writer's report from the
   first run was not kept (the next candidate).
-- **The Writer's report from the E2E run is kept at once** - it lives only in the runner's outputDir [taken up -> ROADMAP § SKILLS]
+- **The Writer's report from the E2E run is kept at once** - it lives only in the runner's outputDir [taken up -> ROADMAP § SKILLS] [done eaffdf5 - both halves: the copy and the outputDir kept until it stands, SKILLS/D-02]
   (cleaned at every run; at Silerax deleted to free disk), so the evidence of the first run was lost and the
   COO repeated the whole run. The Writer copies the JSON report to
   `<scratchDir>/<ticket>-e2e-writer-<stamp>.json` right after the run; the baseline comparison can run over
@@ -1132,16 +1132,16 @@ Each is a local rule whose own text names the payload as its successor; none is 
   pointer-refresh agent (Furnissimo overrides:337; Step 2c says nothing about running beside Step 2b);
 - `--trace retain-on-failure` instead of `--trace on` in the QA run (Furnissimo UIR-003 (1); [taken up -> ROADMAP § SKILLS]
   `skills/qa/SKILL.md` canonical command);
-- the Writer copies the runner's JSON report into `.aiwf/` right after the run, before anything can [taken up -> ROADMAP § SKILLS]
+- the Writer copies the runner's JSON report into `.aiwf/` right after the run, before anything can [taken up -> ROADMAP § SKILLS] [done eaffdf5, SKILLS/D-02]
   clean the output dir (Furnissimo UIR-003 (3));
 - "no `cd` prefix on ANY command", not only before git (Furnissimo overrides:289-296; the managed [done]
   CLAUDE.md covers `cd X && git`);
 - surgical edits over whole-file rewrites (Furnissimo memory; this repo's memory too - 0022 carries [done]
   only "Edit/Write, not the shell");
-- the host's auto mode refuses writes to `.claude/settings.json` and refused Furnissimo's [taken up -> ROADMAP § SKILLS]
+- the host's auto mode refuses writes to `.claude/settings.json` and refused Furnissimo's [taken up -> ROADMAP § SKILLS] [done eaffdf5, SKILLS/D-03]
   `/pnp:update --apply` as self-modification (memory `automode-blocks-settings-json.md`; the 0.2.19
   run) - a sentence in the setup/update skills;
-- "do not offer `/pnp:brief` when the state is durable - `/pnp:mission` reconstructs it" [taken up -> ROADMAP § SKILLS]
+- "do not offer `/pnp:brief` when the state is durable - `/pnp:mission` reconstructs it" [taken up -> ROADMAP § SKILLS] [done eaffdf5, SKILLS/D-04]
   (Furnissimo memory `no-brief-offer-when-durable.md`);
 - Silerax: a per-ticket `last-review-session.<REF>.txt` (item 9 of § „Прием от Silerax") stays OUT by [dropped]
   PLAN_PLB § Scope - the consumer's "ПРЕНЕСЕН" marker should read "rejected, reason in PLAN_PLB".
