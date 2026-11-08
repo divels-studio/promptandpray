@@ -131,9 +131,10 @@ Entries below were ported on 2026-10-18 from `dev/backlogs/CANDIDATES.md` (now h
   - 2026-10-27 Silerax (harvested 2026-10-31, the diet's verification) - `/pnp:plan` Step 1's remaining questions come AFTER Step 2's research, answered from the code, the module docs, the mockups and the scans first, and reach the operator only for what stays unclear; 0.3.7's Step 1 still asks them before the research (operator „3 въпроса на които можеше да си намериш сам отговорите") [dev/backlogs/active/RULEHOME/records/silerax-harvest/diet.md § Rules, lines 138-141]
   - 2026-10-25 Silerax PLINK-003 (harvested 2026-10-31) - the QA brief names "the spec's RED run on the pre-change server" as a standard artifact: with traces off, the red logs are QA's evidence that the spec can fail [dev/backlogs/active/RULEHOME/records/silerax-harvest/ledger-rows.md L81]
   - done c8ddf63 (0.3.11) - 2026-11-03 harvest F8 (Furnissimo TESTENV-002) - the fact-check agent's reply contract compressed by default: FALSE and UNVERIFIABLE rows in full, VERIFIED grouped with a count (463 rows -> ~4k), stated in `/pnp:review` Step 2b [dev/backlogs/inputs/harvest-2026-11-03.md F8]
+  - 2026-11-08 operator, at PLAN_SKILLS's approval report - the approval report of `/pnp:plan` names the COO model of every ticket („искам правило след одобрениен на план да ми се рапотуват modelite ЦOO po tiketi"); home by dialog: the payload, through SKILLS-001 [dev/backlogs/active/SKILLS/DECISIONS.md D-15]
 - Size: S
-- Plans: none yet
-- Status: researching
+- Plans: PLAN_SKILLS (active/SKILLS, landed 2026-11-08)
+- Status: planned
 - Born: 2026-10-18, operator word „продължи три"
 
 ## CODEX - the Codex wrapper: open items
