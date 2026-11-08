@@ -178,7 +178,8 @@ declares why the previous pass could not see it (`ticket.md` § Fail aggregation
 EVIDENCE PACK (a first `code`-class pass carries one; see below for what it is and is not):
 <the file:line evidence the COO already holds - the worklist pointers and the anchors the ticket
 was authored against. The pack is a selection made by the audited side: read the tree past it, run
-your own probes, and report an incomplete pack as a finding.>
+your own probes, and report an incomplete pack as a finding. For a ticket whose brief says
+`E2E: yes`, the pack names the log path of the green E2E run made at the handoff.>
 
 PRODUCT BOUNDARY CHECKS:
 <one line per entry of `config.review.productBoundaryChecks`, verbatim - or `none`. A Codex host
@@ -321,7 +322,7 @@ the approval and the landing - is `/pnp:plan`. This mode is the pass itself, and
 - **One invocation = ONE pass**, and the pass economy reads the row unchanged: `$row.passes` is the
   ceiling (factory 2); `0` means no auditor, a configuration `/pnp:roles` prints as `no auditor`.
   Pass 1 rides the plan's standing word. Pass 2 runs only on the operator's own word, and only when
-  pass 1 returned a BLOCKER that reverses a recorded decision, or the COO names a risk (security,
+  pass 1 returned a BLOCKER that reverses a decision the operator made, or the COO names a risk (security,
   tenancy, concurrency, transactions) after a substantive revision. Its brief carries
   `readiness/<ABBR>/round-1.md` verbatim - findings and dispositions - and every NEW finding declares
   why pass 1 could not see it (`ticket.md` § Fail aggregation). This skill does not loop the

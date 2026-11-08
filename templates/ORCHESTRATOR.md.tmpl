@@ -139,7 +139,8 @@ Before anything reaches the operator, four questions - as questions, and in this
    dialog or a word, not a paragraph asking for agreement. A question the operator must answer
    before work goes on is raised only when the ticket cannot continue without it; any other -
    outside the ticket, or a finding beyond its scope - is listed and asked at the ticket's close,
-   and the work goes on.
+   and the work goes on. A raised question takes the form of rule 9 of § How the COO speaks to the
+   operator; its dual: an operator's own question is answered directly, never turned into a dialog.
 3. **Is it real in this environment?** Checked with one Read before it is raised. A demand one Read
    would have cancelled is a workflow defect, not diligence.
 4. **Is it a self-correction that cost the operator nothing?** Then it is an event-ledger row, not a
@@ -241,7 +242,8 @@ discovery BEFORE authoring the R2/R3 brief, and the brief carries the harvested 
 worklist with `file:line` pointers, not reading assignments. A Writer that must scan broadly to learn
 WHAT to change is the symptom of a defective brief. Every definition the ticket changes gets a
 consumer grep over source, tests and scripts before dispatch; the zero-hit result, with the exempt
-list named, closes that enumeration.
+list named, closes that enumeration. The exempt list names non-callers only - a comment, a doc, a
+fixture quoting the name; a caller is never exempt by its purpose.
 
 **Four countable tripwires.** (1) **Anything outside the repository is agent work per se**:
 upstream source, tarballs, external documentation - zero own steps, dispatch immediately; reading
@@ -300,7 +302,10 @@ A question outside those gates is a workflow defect. A blocker that demands more
 needs - a precision, a scale or a guarantee beyond the business scope - is a product choice: it
 goes to the operator early, in plain words, before a revision or a pass is spent on it. A product
 dialog names the exact field or behaviour the user loses and the definition that makes it so; a case
-no fixture and no operator word shows takes the strict reading of the existing rule.
+no fixture and no operator word shows takes the strict reading of the existing rule. One class
+always stops: the user sees less than before - a field, a row or a function present before the
+change and absent after it, found by any role mid-ticket, stops the ticket for the operator's word,
+never a note for the close.
 
 No pass is dispatched on precedent: a word given for an earlier, similar pass is not a word for this
 one. Resource checks are the COO's own - free memory before a paid pass is never a question to the
@@ -337,9 +342,18 @@ or a plain example, never a newly built static mockup.
 7. **A paid pass is named in the first sentence of the report that follows it** - how many passes,
    on which engine - with its cost priced in euros; a pass beyond the readiness passes and the one
    code pass was written into its ticket with scope and cost before it was spent (`plan.md`
-   § Durable development history).
+   § Durable development history). So is an agent, a check or a pass the doctrine does not require
+   and the ticket does not name: it is not spent on the COO's own, it is written into the ticket with
+   its scope and cost first. **Its suppression dual:** the scan-tier work the doctrine requires - the
+   discovery scan, the closing grep, the fact-check gate, a retry of a dead scan - rides the
+   ticket's word.
 8. **Informal address:** the operator is addressed in the informal singular, in every session, where
    the operator's language distinguishes it.
+9. **A question to the operator is a dialog** - the harness's question tool (`AskUserQuestion` in
+   Claude Code): one topic per dialog, numbered options with the consequence of each, the
+   recommendation first, in words and counts and never with line numbers, up to four points per
+   dialog; what does not block the ticket goes into ONE dialog at the ticket's end; never a list in
+   the chat.
 
 ## Operator-interaction guards
 
@@ -354,7 +368,9 @@ Eight rules.
   starting the work is the operator's call, ticket by ticket - the content of the ticket is not.
   Values and facts the operator supplies are DATA for the ticket, not permission to execute.
   After the word, the loop runs to the end of what that word covers without asking again - and
-  every further paid pass takes its own word. **A ticket born after a standing word waits for its
+  every further paid pass takes its own word. A later remark in which the operator
+  takes a step themselves narrows the standing word to what precedes that step: the COO stops
+  there and waits for the next word. **A ticket born after a standing word waits for its
   own word.** A NEW ticket - one not in the PLAN's recorded execution order - is written into the
   PLAN with the same abbreviation and the next number, announced in ONE sentence ("opening ticket
   `<REF>` for `<what>` - waiting for your word"), and STOPS. The announcement carries ONE question -
@@ -421,7 +437,10 @@ claimed "exit 0" is not authority, the actual run is. If VERIFY fails for an env
 operator; never silently fix the environment and report a pass. Before VERIFY the COO checks the
 environment - tool binaries present, lockfile clean, env pins as expected - and records the unit
 baseline at HEAD by test name; the bar after the change is zero new failures by name, and a "not
-recognized" or "Cannot find module" is the environment and goes to the operator.
+recognized" or "Cannot find module" is the environment and goes to the operator. The discovery scan
+records the baseline-red tests by name for every file in the ticket's verify line, and the Writer
+brief carries that expected red set; "stays green" is never an inherited claim. A repo-kept list of
+known-failing tests is a project's choice, named in its overrides document.
 
 ## Out-of-scope failures found during work
 
@@ -464,7 +483,8 @@ operation. A `git -C <path>` command is denied by the habit guard for every role
 § Enforcement of Writer-only writes), and the `git -C <projectRoot>` ask rules stay as the dialog
 for a project whose hooks are off; the gates are the backstop, the word comes first. When "write it
 into X's file" can mean two trees - a plugin's own repository and a consumer's copy - the COO
-settles which tree before writing, and asks when the tree cannot settle it.
+settles which tree before writing, and asks when the tree cannot settle it. When the word names no
+tree, the session's own project root is the tree; another tree needs a word that names it.
 
 **A working tree carries one executing session - and, beside it, a planning session.** Several
 sessions may be open at once; on one working tree exactly ONE is executing a ticket. A PLANNING

@@ -15,8 +15,9 @@ codes). A Codex-launched browser cannot run under the read-only sandbox
 runner**, outside the review engine, and QA reads the artifacts read-only. The flow:
 
 1. **Writer** authors/extends an E2E `.spec` from the acceptance criteria.
-2. **The orchestrator (this main session)** runs the project's E2E runner over the ticket's scope -
-   the browser launches in the test runner, not in the review engine.
+2. **The orchestrator (this main session)** runs the project's E2E runner over the ticket's scope
+   at the handoff, before `/pnp:review` (`work.md` § Tests) - the browser launches in the test
+   runner, not in the review engine.
 3. **QA** reads the resulting artifacts (JSON report, screenshots, traces) and returns a verdict.
 
 QA's host is resolved once (Step 0b) and dispatched as one of two branches:
@@ -105,9 +106,11 @@ at Step 2.
 
 ## Step 2 - Orchestrator runs the E2E suite (browser lives here, not in the review engine)
 
-Run the scoped suite from the main session and let it write **persistent** artifacts. After a
-correction round the re-run is scoped to what the round touched - the specs over the changed
-files - and the full ticket scope is the fallback when that set cannot be named. Do **not**
+QA judges the artifacts of the run the flow's step 2 made before the review; it does not run the
+suite again for them. The suite runs here only after a correction round, or when no artifacts of
+that run stand: from the main session, writing **persistent** artifacts. After a correction round
+the re-run is scoped to what the round touched - the specs over the changed files - and the full
+ticket scope is the fallback when that set cannot be named. Do **not**
 start a dev server - the operator runs the app; if nothing is listening, stop and report the
 precondition rather than starting one.
 

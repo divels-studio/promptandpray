@@ -53,7 +53,8 @@ directory outside the repository is not covered.>
 <Each line answered before the record's commit, or `n/a` with its why:>
 
 - the operator's own run on a real input, their words quoted - when the outcome is visible in the
-  running product; offline proof never replaces it;
+  running product; or the operator's waiver of that run in words, quoted, the outcome marked as
+  not seen by the operator;
 - the diff review folded in above;
 - the ticket's finding lines on their roadmap area entry marked `done <commit>` or removed (the
   fifth roadmap write, `ticket.md` § Durable development history);

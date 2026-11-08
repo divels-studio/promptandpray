@@ -5,7 +5,10 @@ classes were each a paid pass-1 blocker at least once, most of them in more than
 fourteenth was measured between passes, on the blockers a revision itself created; the fifteenth on
 a second pass, where two of the four blockers born of the revision were a race or a lock decision the
 plan had left as an accepted residual. The sixteenth is not a measurement: it is the cut a plan's
-declared ticket count (`Tickets: <n> - <reason>` in its index) leaves to the auditor.
+declared ticket count (`Tickets: <n> - <reason>` in its index) leaves to the auditor. The
+seventeenth and the eighteenth were measured on consumer plans after a pass, as blockers no pass had
+named: a predicate whose NULL case nobody stated, and a replaced reader whose old contract nobody
+wrote down. Eighteen classes in all.
 
 The readiness brief `/pnp:plan` sends (`templates/briefs/readiness-codex.md`) cites this file: the
 auditor names the class of every finding by number. Classes 1, 10 and 14 are also what the research
@@ -30,5 +33,7 @@ grows with a release, never with a session.
 | 14 | fix after a pass adds new surface | Does the revision after a pass only close the blockers it was handed, or does it open surface the previous pass never saw? |
 | 15 | concurrency decision left as an accepted residual | For every write the ticket adds or changes: which lock holds it and what runs beside it - does the plan NAME them? A race or a lock-order question on a path the ticket writes that the plan closes with "accepted residual", "rare" or "the Writer will see" is an open decision, and no pass accepts it. |
 | 16 | ticket cut | Is every ticket one shippable piece with one code commit, and is the plan one mission? Two tickets that are really one, or a plan that is really two missions, is a BLOCKER. |
+| 17 | NULL case of a boolean predicate | For every boolean predicate the plan adds or changes over a nullable column: does the plan name what the predicate yields when the column is NULL? |
+| 18 | replaced reader | When the plan replaces a reader - a query, an endpoint, a list - does it name the old reader's row contract, sort keys, search semantics and permission gate, and where the new one differs from each? |
 
 This is a corpus, not a theory - a class not listed is not proven absent.

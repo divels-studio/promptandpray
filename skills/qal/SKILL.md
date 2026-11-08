@@ -180,4 +180,4 @@ prompt text can be parsed as a CLI option.
 
 Return QAL's verdict and evidence verbatim. Because QAL is unsandboxed and operator-gated, results
 go back to the **operator** who requested it; any code change that follows routes through the normal
-Writer -> `/pnp:review` -> (spec-based `/pnp:qa` if needed) loop and the commit gate.
+Writer -> E2E run (`E2E: yes`) -> `/pnp:review` -> (spec-based `/pnp:qa` if needed) loop and the commit gate.

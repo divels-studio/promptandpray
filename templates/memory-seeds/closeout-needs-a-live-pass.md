@@ -5,4 +5,6 @@ say the operator has seen the thing work. For any ticket with observable runtime
 the closeout is gated on the operator's own live pass.
 
 Practical form: report "ready for your live pass" and stop. Do not write the completion record, do
-not bump anything, do not propose the next ticket until the word comes back.
+not bump anything, do not propose the next ticket until the word comes back. The operator may
+decline the pass in words: the waiver is quoted in the record, the ticket closes on the offline
+proof, and its outcome is marked as not seen by the operator.

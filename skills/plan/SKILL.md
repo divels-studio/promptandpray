@@ -82,7 +82,9 @@ all of them are recorded, ask nothing and cite where each answer stands. The ans
 the research briefs and the decisions, never a word to start.
 
 Open `<plansDir>/ROADMAP.md`. If the goal has an entry, use it; otherwise write one, in exactly this
-format, the operator's words verbatim where they are the source:
+format, the operator's words verbatim where they are the source. An entry and a finding line carry
+the problem, its evidence, the operator's words and the scope, never how it is fixed: that is the
+planner's work (`ticket.md` § Durable development history).
 
 ```markdown
 ## <ABBR> - <title>
@@ -129,8 +131,8 @@ Write `<plansDir>/drafts/<ABBR>/DECISIONS.md` with the operator:
   are the source; a decision of another plan is cited as `<X>/D-NN`, never restated. A decision this
   plan only records for a later one carries that plan's name, or `plan: deferred`.
 - `## Deferred` - what is consciously left out, each with the condition that brings it back.
-- `## Open Questions` - numbered. **An open question STOPS the skill here**: ask the operator (one
-  dialog, up to four points, each with its consequence) and continue only after every question is
+- `## Open Questions` - numbered. **An open question STOPS the skill here**: ask the operator (the
+  dialog of `ORCHESTRATOR.md` § How the COO speaks to the operator, rule 9) and continue only after every question is
   answered and its answer is written as a decision. An unknown is never written down as an
   assumption. Engineering choices are the COO's: they are decisions with a one-line why, never
   questions.
@@ -239,8 +241,9 @@ into a revision.
 the cycle and goes to the operator with the numbers; a blocker born of added scope is named
 separately, never counted as carried.
 
-**Pass 2 - only on the operator's own word, and only when** pass 1 returned a BLOCKER that reverses a
-`D-NN`, or the COO names a risk (security, tenancy, concurrency, transactions) after a substantive
+**Pass 2 - only on the operator's own word, and only when** pass 1 returned a BLOCKER that
+reverses a decision the operator made (a `D-NN` carrying the operator's words or a dialog answer;
+`plan.md` § Plan readiness review), or the COO names a risk (security, tenancy, concurrency, transactions) after a substantive
 revision, and `$row.passes` is at least 2. Ask for it in one sentence naming the trigger. Its brief
 carries `round-1.md` verbatim - findings and dispositions - and requires every NEW finding to declare
 why pass 1 could not see it (`ticket.md` § Fail aggregation). A resumed pass 2 needs that word

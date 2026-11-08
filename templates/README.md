@@ -30,7 +30,9 @@ nowhere else: `ORCHESTRATOR.md.tmpl` (the core, read by every entry door) and
 keep no second one (`docs/WORKFLOW.md` is the map of the stage files) - and a reference to a rule of
 another stage is one line `<stage>.md § <heading>`, never a restatement. The other rendered Markdown
 artifacts stay **thin**: the project data, the role's own behaviour contract, and one pointer per
-rule cluster to the stage file that holds the rule - a rule is never copied into them.
+rule cluster to the stage file that holds the rule - a rule is never copied into them. A rule that
+enumerates kinds of work is refuted by the kind it missed: a rule names the property it checks, not
+the list.
 
 Every whole-file Markdown template (`ORCHESTRATOR.md.tmpl`, `doctrine/*.tmpl`, `agents/*.tmpl`,
 `AGENTS.md.tmpl`) ends with an empty project additions block; the engine carries whatever the

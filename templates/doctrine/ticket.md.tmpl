@@ -34,15 +34,22 @@ Scope              - in and out of scope
 Acceptance         - testable criteria
 Risk threshold     - which defect severity blocks (given to Reviewer/QA)
 Stop condition     - when Reviewer/QA have enough evidence and must stop
-Verify             - checks/proof required, by risk; the project's VERIFY runbook, when it has one
+Verify             - checks/proof required, by risk; the project's VERIFY runbook, when it has one; the expected red set by test name
 Assignee
 Working branch     - only when different from the default integration branch
+E2E                - whether the ticket proves observable runtime/UI behavior end to end, and why
+Escalation         - whether a concrete decision of the ticket fires an escalation trigger
 ```
 
 The first six names are the six headings a plan ticket carries, the ones the mechanical plan gate
 checks (`plan.md` § Plan readiness review).
 
-`Risk threshold` and `Stop condition` are mandatory for every R2/R3 brief.
+`Risk threshold` and `Stop condition` are mandatory for every R2/R3 brief. So are the two last
+lines, each in its fixed form. The E2E line reads `E2E: yes | no - because <reason>` -
+the countable form of "a brief declares observable runtime/UI behavior". The escalation line reads
+`Escalation: none | trigger <N> - <why>` - one line per ticket, not per decision,
+read over the ticket's concrete decisions at the brief against the four triggers of
+`ORCHESTRATOR.md` § Escalation.
 
 Every Writer brief additionally carries the ticket ref on a **line of its own**, `Ticket: <REF>` -
 the contract Gate 2 reads (`docs/LOOP.md` § Enforcement of Writer-only writes).
@@ -91,6 +98,10 @@ Briefs, micro-rounds, and verdict contracts between the COO and the subagents ar
 conversation. Everything written into the tree is English - plans, tickets, records, ledger rows,
 memory, briefs, verdicts, commit messages, code comments, docs - and the operator's own words are
 quoted verbatim in their language wherever recorded, with an English reading beside them when needed.
+The one exception to English is the CHANGELOG: it is kept in the language the
+`## Changelog format` section of the project's `CLAUDE.md` names - chosen at setup, English when the
+changelog ships with a payload. The operator's quotes are never translated, in the record and the
+decision alike.
 
 ### Proof-surface feasibility (checked at brief-authoring / readiness time)
 
@@ -113,8 +124,10 @@ proof is a **readiness blocker**, not an execution-time note:
 
 Docs class (`docs/**`, PLAN sections, README, comments without code) - the COO edits directly.
 Code class (anything that compiles, is imported, or is tested) - goes to the Writer, even a single
-line. A code-class note goes as a micro-round to the **live** Writer, not a fresh spawn; if the
-Writer session has died, spawn and pay. Every direct COO edit is announced in the commit summary.
+line. A code-class note goes as a micro-round to the **live** Writer, not a fresh spawn: the live
+Writer is resumed with a message to the dispatched agent - the harness's agent-message tool,
+`SendMessage` in Claude Code - for every micro-round, every correction round and the commit; a
+fresh spawn only when that agent has ended, and then spawn and pay. Every direct COO edit is announced in the commit summary.
 The COO reads the whole diff of every ticket and writes that reading into
 `<scratchDir>/<REF>-diff-review.md`, which is folded into the ticket's completion record at the close.
 Before the first paid pass that file carries one line per acceptance criterion naming the defect the
@@ -182,7 +195,8 @@ the gate.
   judge**, not a live browser: a Codex-launched browser cannot run under the read-only sandbox
   (`docs/QA_BROWSER_INVESTIGATION.md`), so the browser lives in the **test runner**. The spec-flow:
   the **Writer** authors/extends an E2E `.spec` from the acceptance criteria -> **the orchestrator**
-  runs the configured runner over the ticket's scope -> **QA** reads the artifacts (JSON report,
+  runs the configured runner over the ticket's scope
+  at the handoff, before `/pnp:review` (`work.md` § Tests) -> **QA** reads the artifacts (JSON report,
   screenshots, traces) and reports `pass` / `pass-with-notes` / `fail` (or a precondition `BLOCKED`
   when the artifacts are missing/unreadable). Same boundary per host as the Reviewer. QA never starts
   a dev server and never drives a browser.
@@ -320,8 +334,10 @@ of a finished plan and the roadmap writes close this section, below item 5.
    ticket stays in this session or wants a fresh one - a recommendation, not a stop: compaction is
    tolerable inside a ticket, while a plan's planning and readiness are not a boundary. The record
    lands in its own docs commit, separate from the code commit. A ticket whose outcome is visible in the running product
-   closes only after the operator's own run on a real input, their words recorded in the record;
-   offline proof never replaces it. **A number describing the state of the system is
+   closes only after the operator's own run on a real input, their words recorded in the record.
+   The operator may decline that run in words: the waiver is quoted in the record, the ticket closes
+   on the offline proof, and its outcome is marked as not seen by the operator; without such a
+   waiver no offline proof stands in for the run. **A number describing the state of the system is
    measured or it is not stated:** anything a reader may rely on as a current fact and regress
    against - tests passed or skipped, timings, sizes, coverage, benchmark results - carries the
    command that produced it or does not go in at all, and arithmetic over two real measurements is
@@ -355,8 +371,13 @@ progress`; (3) the last plan under the entry is archived -> the entry leaves the
 may be an area** - a module or theme whose goal is "no known open defect" - whose `Scope: in -` list
 collects the findings born during work, one indented line each (`<date> <origin> - <what>
 [<pointer>]`), until the list is worth a plan; the plan is born over the list and its tickets come
-from the lines. That list is the fourth write: it grows at a finding's birth. The fifth write closes
+from the lines. An entry and a finding line carry the problem, its evidence, the operator's words
+and the scope, never how it is fixed: that is the planner's work. That list is the fourth write: it
+grows at a finding's birth. The fifth write closes
 a line: when the commit that closes a finding lands, its line is marked `done <pointer>` or removed.
+A nested list's parent line closes with its last child, and the archiving checks every child line
+of the plan's entry; a line leaves the roadmap one by one, each against the record or commit that
+closes it, never as a sweep.
 `Status` and `Plans` change at the three events only. An installation older than the roadmap ports
 its live candidates once - each row to an area or goal entry, the old row marked `taken up -> ROADMAP §
 <ABBR>`, `done` or `dropped: <why>` - and from then on reads the roadmap alone for open work. Archiving also greps the plan's process sections for rule-class points without a pointer row -

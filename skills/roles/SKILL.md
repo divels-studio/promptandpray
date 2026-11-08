@@ -130,8 +130,8 @@ R1            -       -                  -       0       no auditor
   the whole host - engine, model and effort together - comes from `roles.reviewer`.
 - `passes`: the class's configured pass CEILING. Pass 1 runs on the ticket's standing word; every
   further pass is dispatched only on the operator's own explicit word - one word per pass. For
-  `plan`, a second pass is asked for only when pass 1 returned a BLOCKER that reverses a recorded
-  decision, or the COO names a risk after a substantive revision (`/pnp:plan`). For
+  `plan`, a second pass is asked for only when pass 1 returned a BLOCKER that
+  reverses a decision the operator made, or the COO names a risk after a substantive revision (`/pnp:plan`). For
   `code` and `docs`: `1` = one Reviewer pass, `2` = a second full pass available after the first
   returns `pass`, `0` = no auditor. Correction rounds stay capped by `loop.correctionRoundsCap`.
 - `(the Reviewer's)` after an effort means the row is Claude-hosted and shares the reviewer agent

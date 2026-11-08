@@ -36,7 +36,7 @@ Writer and Reviewer included.
 ### R2 - product
 
 - **Non-runtime:** `COO -> Writer subagent -> /pnp:review -> COO`.
-- **Runtime/UI (observable behavior):** `COO -> Writer subagent -> /pnp:review -> /pnp:qa -> COO`.
+- **Runtime/UI (observable behavior):** `COO -> Writer subagent -> E2E run (E2E: yes) -> /pnp:review -> /pnp:qa -> COO`.
 
 Correction rounds are capped (`ticket.md` § Loop shape and its overrides). Local commit after the
 loop passes and a human approves (`ORCHESTRATOR.md` § Commit & Push Authority).
@@ -56,12 +56,15 @@ dispatches the project's rendered `reviewer` agent, rendered whenever the Review
 is Claude-hosted. The class is the COO's call and follows the R1 rule above: a docs-class ticket
 that gains an executable artifact is code class, in the review row as in the route.
 
-### R3 - critical (migrations / access policy / auth / destructive / push)
+### R3 - critical (schema or data migrations of the product's persistent store / access policy / auth / destructive / push)
 
 `COO-approved mini-plan + plan-readiness review (before Writer starts) -> Writer subagent on
-r3/<topic> -> /pnp:review -> /pnp:qa (when there is observable/runtime behavior) -> COO synthesis
--> operator commit/merge gate`. Push always requires the operator's explicit word and is executed
-via the `ask` dialog.
+r3/<topic> -> E2E run (E2E: yes) -> /pnp:review -> /pnp:qa (when there is observable/runtime
+behavior) -> COO synthesis -> operator commit/merge gate`. Push always requires the operator's
+explicit word and is executed via the `ask` dialog.
+
+A payload migration of a plugin is not this class: it is data applied by a tested engine, and it
+routes by its diff.
 
 R3 always uses the full ticket-brief contract, and the durable Mission PLAN when the work crosses
 the durable-history threshold. Durable decisions go to a short ADR when warranted.
@@ -73,7 +76,8 @@ reserved for the model vocabulary.
 
 Four checks, yes/no, read off the ticket before it starts:
 
-1. the ticket writes migration / access-policy / grants / auth / permission-model code;
+1. the ticket writes a schema or data migration of the product's persistent store, or
+   access-policy / grants / auth / permission-model code;
 2. the contract leaves an architecture or a concurrency decision open - countable form: any worklist
    item without a `file:line` anchor, or any unresolved decision marker in the plan section (or, for
    a non-durable R2 that has no plan section, in the brief);
@@ -84,7 +88,9 @@ Four checks, yes/no, read off the ticket before it starts:
 ANY "yes" puts the ticket on a COO at the top tier; ALL "no" on the cheap COO. The plan records
 the answer in each ticket's entry as one line that names the model filling the tier - `COO: <model> -
 because <check N | all four no>`;
-a non-durable R2 with no plan section records it in its brief.
+beside it stands the escalation line of the ticket's brief contract,
+`Escalation: none | trigger <N> - <why>` (`ticket.md` § Ticket brief contract (R2/R3));
+a non-durable R2 with no plan section records both in its brief.
 
 **The routing moves the COO and nothing else.** The Writer's model stays pinned in its agent
 frontmatter and the audit table stays as `/pnp:roles` shows it: a cheap COO does not buy a cheaper
@@ -92,7 +98,8 @@ Writer or a cheaper auditor.
 
 **The dynamic clause.** A trigger that surfaces MID-ticket suspends the ticket exactly as a canon
 conflict does - escalation, not continuation; the four checks are read again against what is now
-true.
+true. The four checks are read after the discovery scan, over the anchored worklist: a scan that
+anchors every item answers check 2 with "no", and the cheap COO suffices for that check.
 
 The saving of a cheap COO is real downstream of an expensive readiness cycle; work routed cheap
 without one keeps the same routing and pays later, in correction rounds. **The dual:** routing
@@ -105,8 +112,8 @@ everything cheap.
 |---|---|---|
 | **R1 - routine** | Small, low-risk change | Done **directly in the main session**. No subagents, no Reviewer, no QA, no loop - but a ticket that gains an executable artifact (script, hook) is re-classified out of R1 and takes the code loop (§ Routes). |
 | **R2 - product (non-runtime)** | Product change with no observable runtime/UI surface | `COO -> Writer subagent -> /pnp:review -> COO`. Correction rounds capped at `loop.correctionRoundsCap`. |
-| **R2 - product (runtime/UI)** | Observable runtime/UI behavior | `COO -> Writer subagent -> /pnp:review -> /pnp:qa -> COO`. Same cap. |
-| **R3 - critical** | Migrations / access policy / auth / destructive / push | Plan-first: COO-approved mini-plan + plan-readiness review (Reviewer, read-only) **before** Writer starts, on `r3/<topic>`, then Writer -> `/pnp:review` -> `/pnp:qa` (if runtime) -> COO synthesis -> **operator** commit/merge gate. |
+| **R2 - product (runtime/UI)** | Observable runtime/UI behavior | `COO -> Writer subagent -> E2E run (E2E: yes) -> /pnp:review -> /pnp:qa -> COO`. Same cap. |
+| **R3 - critical** | Schema or data migrations of the product's persistent store / access policy / auth / destructive / push | Plan-first: COO-approved mini-plan + plan-readiness review (Reviewer, read-only) **before** Writer starts, on `r3/<topic>`, then Writer -> E2E run (E2E: yes) -> `/pnp:review` -> `/pnp:qa` (if runtime) -> COO synthesis -> **operator** commit/merge gate. |
 
 The review engine and the pass count come from the ticket's class, in both R2 rows and in R3: the
 brief's `Class: plan | code | docs` names a row of the audit table (§ Routes),
@@ -126,6 +133,13 @@ Test policy has a single home in your project - the standard named in your overr
 (`paths.overridesDoc`), and the concrete commands live in `verify.commands` and `verify.e2e` in
 `aiwf.config.json`. Tests are part of implementation, not polish. A check agent runs checks and
 fixes nothing; the Writer runs only the tests it adds - red, then green.
+
+**The E2E spec runs before the audit.** For a ticket whose brief says `E2E: yes` (`ticket.md`
+§ Ticket brief contract (R2/R3)), the COO runs `verify.e2e.runner` over the Writer's spec
+at the handoff, before `/pnp:review`. A red spec goes back to the live Writer as a micro-round
+(`ticket.md` § The COO write boundary runs along artifact class, not size), and the review brief
+carries the log path of the green E2E run as evidence. **Its suppression dual:** a ticket with
+`E2E: no` keeps the order as it is.
 
 Out-of-scope failures found during work and the status / release docs policy bind every session
 that works, so they stand in the core: `ORCHESTRATOR.md` § Out-of-scope failures found during work

@@ -111,7 +111,7 @@ so you see who will audit the work before you decide what to ask for.
 The same command changes it, with no re-interview: `/pnp:roles --set docs.engine=claude` gives
 documentation diffs their own Claude host, `/pnp:roles --set plan.passes=3` raises the CEILING of
 readiness passes a plan may get (the first runs on your word for the plan; a second only on a word
-of its own, for a reversed decision or a named risk), `/pnp:roles --reset docs` puts a class back on
+of its own, for a reversed operator decision or a named risk), `/pnp:roles --reset docs` puts a class back on
 the Reviewer.
 It refuses rather than guesses - a result your schema rejects, a malformed project additions block, a
 stale agent file without `--confirm-remove-stale` - and a refusal leaves the project exactly as it
