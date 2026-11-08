@@ -61,7 +61,7 @@ Out:
 | ref | title | implements | status | record |
 |---|---|---|---|---|
 | DOCTR-001 | every sentence of the decisions in the templates, the docs and the skills, its consumers moved by the closing greps | D-01 D-02 D-03 D-04 D-05 D-06 D-07 D-08 D-09 D-10 D-11 D-12 D-13 D-14 D-15 D-16 D-17 D-18 D-19 D-20 D-21 D-22 D-23 D-25 D-26 D-27 | closed (1e7f785) | `records/DOCTR-001.md` |
-| DOCTR-002 | release 0.3.16 - migration 0041 re-rendering the changed managed files, the note, the bump, the changelog with its Retires line; the roles note of D-04 | D-01 D-04 D-20 D-21 D-25 | open | - |
+| DOCTR-002 | release 0.3.16 - migration 0041 re-rendering the changed managed files, the note, the bump, the changelog with its Retires line; the roles note of D-04 | D-01 D-04 D-20 D-21 D-25 | closed (72ccbe8) | `records/DOCTR-002.md` |
 
 ## Order and gates
 

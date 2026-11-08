@@ -52,8 +52,8 @@ engineering decisions):
 
 - **R1 (routine, low-risk):** implement it **directly in this session** - no subagents, no
   Reviewer/QA, no loop.
-- **R2 (product):** the Writer implements; `/pnp:review`, then `/pnp:qa` for observable runtime/UI
-  behavior; then the operator's commit click.
+- **R2 (product):** the Writer implements; the E2E run (`E2E: yes`), `/pnp:review`, then `/pnp:qa`
+  for observable runtime/UI behavior; then the operator's commit click.
 - **R3 (critical):** a mini-plan and its readiness review first, then the R2 loop.
 
 Full mapping: `work.md` § Routing mapped to native.

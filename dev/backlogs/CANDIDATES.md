@@ -57,7 +57,7 @@ self-assessment of the COO there. Plan B is no longer only code - it carries the
   the plan, with a source on every line - never copied from an old brief; the scan agent checks the brief
   against overrides + the plan BEFORE the Writer's dispatch, not only before a paid pass (WORKFLOW § Ticket
   brief contract, „Verify an inherited fact“ - the rules block is inherited claims, not a template).
-- A later operator remark narrows the standing „да“ ("yes"): once the operator says they take a step [taken up -> ROADMAP § DOCTR]
+- A later operator remark narrows the standing „да“ ("yes"): once the operator says they take a step [taken up -> ROADMAP § DOCTR; closed with PLAN_DOCTR, archive/023_PLAN_DOCTR_2026-11-08, release 0.3.16]
   themselves („сам ще си пусна ъпдейта“ - "I will run the update myself"), the COO stops and waits for that
   step; after that - one action per turn, each one shown; removing a rule is shown before it lands (guard (g)).
   Related: the memory that „да“ covers only what was asked.
@@ -66,13 +66,13 @@ self-assessment of the COO there. Plan B is no longer only code - it carries the
   Claude quota for a day; whether readiness helps the Writers cannot be told) - the COO's proposal: a line in
   the Writer's handback „какво в плана се оказа грешно или липсващо и коя проверка ми спести работа“
   ("what in the plan turned out wrong or missing, and which check saved me work").
-- Work the doctrine does NOT require - an agent, a check, a paid pass - goes first through a question to the [taken up -> ROADMAP § DOCTR]
+- Work the doctrine does NOT require - an agent, a check, a paid pass - goes first through a question to the [taken up -> ROADMAP § DOCTR; closed with PLAN_DOCTR, archive/023_PLAN_DOCTR_2026-11-08, release 0.3.16]
   operator, especially after a caught error; a „поправка“ ("fix") with a new unrequested cost is the same error
   in a new form (event 5: 224 160 tokens for an unrequested sonnet cross-check right after the catch; the
   operator:
   „еднолични решения са приемливи в рамките на обхвата, но след като те хванах в издънка, ти продължи да своеволничиш“
   - "unilateral decisions are acceptable within the scope, but after I caught you in a blunder, you kept acting on your own").
-- Escalation is checked AT THE MOMENT of the decision, not at the start: every decision in the brief and the [taken up -> ROADMAP § DOCTR]
+- Escalation is checked AT THE MOMENT of the decision, not at the start: every decision in the brief and the [taken up -> ROADMAP § DOCTR; closed with PLAN_DOCTR, archive/023_PLAN_DOCTR_2026-11-08, release 0.3.16]
   plan carries a line „ескалация: няма / тригер N“ ("escalation: none / trigger N"), so the four triggers
   (ORCHESTRATOR § Escalation) are read over the concrete decision (events 6 and 7: a shared component over
   three modules against a recorded plan decision - triggers 1 and 3; a text key outside the plan's list -
@@ -90,7 +90,7 @@ self-assessment of the COO there. Plan B is no longer only code - it carries the
   (operator 2026-10-14). Candidate item 20 (a new session at a ticket boundary) is read through this: the
   recommendation is about a ticket boundary, not a size. § „Таван на контекста“ must stop accepting a value
   for `/autocompact`.
-- R2 vs R3 for payload migrations - the textual discrepancy from PLAN_STAB readiness pass 2 (ruling row below). [taken up -> ROADMAP § DOCTR]
+- R2 vs R3 for payload migrations - the textual discrepancy from PLAN_STAB readiness pass 2 (ruling row below). [taken up -> ROADMAP § DOCTR; closed with PLAN_DOCTR, archive/023_PLAN_DOCTR_2026-11-08, release 0.3.16]
 - The checks are run by a fresh `general-purpose`/`sonnet` agent, not the Writer - VERIFY, acceptance, [done]
   reruns; the Writer - only for a fix (operator rule 2026-10-15, from Silerax UIR-050; here in overrides
   § Test policy). A candidate for the payload: WORKFLOW § COO owns broad scans (tripwire 3) and the writer
@@ -346,7 +346,7 @@ rules around the doctrine. Every point went through the operator separately. Abb
    „Codex одитира целия модул“ ("Codex audits the whole module") (~14 000 lines, 250-400k quota in Silerax):
    the plan writes the scope and the approximate cost, so it is seen at approval. NO new stop - operator: a
    stop in the middle breaks the autonomous loop. `SM feedback_codex_after_code_only.md`.
-8. The auditor still raises blockers that were visible on the first pass too (it admits the violation [taken up -> ROADMAP § DOCTR]
+8. The auditor still raises blockers that were visible on the first pass too (it admits the violation [taken up -> ROADMAP § DOCTR; moved -> ROADMAP § CODEX (DOCTR/D-05)]
    itself); HARD-005 made the contract instrumented, the behavior did not get fixed - how to enforce it
    structurally. `SP:52`, event ledger `SP` ~302, ~320.
 9. `last-review-session.txt` is per project (`<scratchDir>`), not per machine (the agent was wrong, [dropped; taken up 2026-10-23 -> ROADMAP § PARPLAN]
@@ -433,7 +433,7 @@ rules around the doctrine. Every point went through the operator separately. Abb
     otherwise it is called „непроверено“ ("unverified"); asking - only if the work blocks (item 26). Example
     2026-10-14: the COO relayed „общ за машината“ ("machine-wide") for `last-review-session.txt` without a
     check. `SM feedback_no_assumptions.md`.
-31. LOW priority: the project may keep in the repo a list of known-failing tests; VERIFY still reports the [taken up -> ROADMAP § DOCTR]
+31. LOW priority: the project may keep in the repo a list of known-failing tests; VERIFY still reports the [taken up -> ROADMAP § DOCTR; closed with PLAN_DOCTR, archive/023_PLAN_DOCTR_2026-11-08, release 0.3.16]
     exit code honestly, but success is
     „нула нови падания спрямо списъка“ ("zero new failures against the list"); the list changes only by an operator word (risk: the list becomes a dumping bin). Silerax carries
     it as a local override of „VERIFY honesty“. `SO:226-248`.
@@ -609,7 +609,7 @@ resume политиката (напр. readiness след първия вина�
 топъл без компенсации (кодова верификация) срещу топъл с компенсации (readiness) срещу студен.
 Източник: `D:\Stratex\dev\backlogs\active\PLAN_CAP.md` §Процес т.6, таблицата с пасовете.
 
-## The E2E test runs BEFORE the code audit when the ticket has E2E (born 2026-09-24, from Silerax CAP-003) [taken up -> ROADMAP § DOCTR]
+## The E2E test runs BEFORE the code audit when the ticket has E2E (born 2026-09-24, from Silerax CAP-003) [taken up -> ROADMAP § DOCTR; closed with PLAN_DOCTR, archive/023_PLAN_DOCTR_2026-11-08, release 0.3.16]
 (was: „E2E тестът се пуска ПРЕДИ кодовия одит, когато тикетът има E2E (роден 2026-09-24, от Silerax CAP-003)“)
 
 A candidate without a ref. In Silerax CAP-003 three paid verification passes (P6–P8, `gpt-6-sol`/xhigh,
@@ -815,7 +815,7 @@ the tests.** Verification rests on the Writer's run plus an independent COO-disp
 done explicitly and is recorded in the completion record of GATE-001. Recorded here so it is not
 rediscovered a third time; it needs no ticket, unless the operator decides they want the doctrine to say it.
 
-## A product name is not a path - „запиши го в <плъгин> CANDIDATES" has two valid addresses (born 2026-09-15 from an incident, operator word for the record) [taken up -> ROADMAP § DOCTR]
+## A product name is not a path - „запиши го в <плъгин> CANDIDATES" has two valid addresses (born 2026-09-15 from an incident, operator word for the record) [taken up -> ROADMAP § DOCTR; closed with PLAN_DOCTR, archive/023_PLAN_DOCTR_2026-11-08, release 0.3.16]
 (was: „Име на продукт не е път — „запиши го в <плъгин> CANDIDATES" има два валидни адреса (родена 2026-09-15 от инцидент, операторска дума за записа)“)
 
 A candidate without a ticket ref, by the convention.
@@ -953,7 +953,7 @@ operational work. (b) „Ревизия на payload-съседната докт
 ("a revision of the payload-adjacent doctrine outside the plugin") - their finished local work; its
 generalizable value lives in the doctrine-record gate and in the word-gate warning above.
 
-## Two names for one set: „unplanned R2" vs „small R1 and non-durable R2" (born 2026-09-21 from CONS-009, raised by the Writer) [taken up -> ROADMAP § DOCTR]
+## Two names for one set: „unplanned R2" vs „small R1 and non-durable R2" (born 2026-09-21 from CONS-009, raised by the Writer) [taken up -> ROADMAP § DOCTR; closed with PLAN_DOCTR, archive/023_PLAN_DOCTR_2026-11-08, release 0.3.16]
 (was: „Две имена за едно множество: „unplanned R2" срещу „small R1 and non-durable R2" (роден 2026-09-21 от CONS-009, вдигнат от Колегата)“)
 
 `docs/WORKFLOW.md:338-340` gives readiness to „durable R2 work and all R3" and excludes
@@ -963,7 +963,7 @@ described. The discrepancy is older than CONS-009 and was NOT resolved there - t
 phrasings next to each other, so the section is true under either reading. A proposal for a next plan, not
 a rule.
 
-## A doctrine sentence that enumerates the world is a defect waiting for the case it missed (born 2026-09-21 from CONS-009) [taken up -> ROADMAP § DOCTR]
+## A doctrine sentence that enumerates the world is a defect waiting for the case it missed (born 2026-09-21 from CONS-009) [taken up -> ROADMAP § DOCTR; closed with PLAN_DOCTR, archive/023_PLAN_DOCTR_2026-11-08, release 0.3.16]
 (was: „Доктринно изречение, което изброява света, е дефект, чакащ случая, който е пропуснал (роден 2026-09-21 от CONS-009)“)
 
 Three fixes of one paragraph fell to the same device - each claimed coverage („X е второ условие до Y",
