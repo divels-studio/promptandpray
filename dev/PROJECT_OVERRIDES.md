@@ -207,6 +207,12 @@ edits while a suite is running (RBA-001). (operator rule 2026-10-17)
   why they matter. Numbers and names stay (`ORCHESTRATOR.md` § How the COO speaks to the operator,
   "plainly"), but the sentence around them must read for someone who did not watch the work. The
   test: the operator understands the message on the first read without opening a file. (product)
+- **Numbers stay out of the channel** (operator rule 2026-11-08, at PLAN_SKILLS's landing: „измерванията
+  хич не ме интересуват в репорта, аз ги виждам"). The cycle's measurements - context numbers, agent
+  and pass tokens - stand in the plan index's `## Measurements` and in the records; a report to the
+  operator carries none of them unless the operator asks. A paid pass is still named by role, number
+  and engine (`ORCHESTRATOR.md` § How the COO speaks, rule 7); its token figure goes into the round
+  file, not the message. (product)
 
 ## Environment
 
