@@ -1,0 +1,13 @@
+{
+  "plan": "SEEDFS",
+  "contract": "bc4f545e91181d31f6341a4f1d41669d3bc056333204154018bcd3110a87d62a",
+  "files": {
+    "DECISIONS.md": "a57730bb593f7d68a7d5ec23d81b9fd54b14b0f78983f9725660feb70b3b993a",
+    "PLAN_SEEDFS.md": "21dcdd1cefb8baf9279fbe339b8c19c97e2225a82ae20b194308c1f280ab8133",
+    "tickets/SEEDFS-001.md": "6ae0faccfbea69a24c5dc64452e0d1d110fb5a67b2eb5b69a9d48095b848da84"
+  },
+  "xrefs": {
+    "GENERIC/D-09": "48579ae52c419b68cb46ed045664408daa2ccf8fa665b236f6d8d081c8398b3a"
+  },
+  "stampedAt": "2026-11-08T07:47:10.438Z"
+}

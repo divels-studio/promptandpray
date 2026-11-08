@@ -33,8 +33,8 @@ leaves with one ledger row `<ABBR> dropped: <why>`.
 - Why: Codex code pass 1 on GENERIC-003 (2026-10-18) returned two blockers on it - `resolveSeedTarget` / `refuseSurfaceSeed` in `scripts/update/migrate.mjs` resolve `<plansDir>` and compare the surface lexically; pre-existing since `926a3c6` (0.3.0's seed-file op; 0025's ROADMAP seed has the same exposure), outside GENERIC-003's scope; operator word „1" (recorded as a risk, not a correction round)
 - Scope: in - `resolveSeedTarget` / `refuseSurfaceSeed` through canonical paths, a junction test and an alias test on the shipped 0026 seed path in `test-update.mjs`; out - the setup side (already real-filesystem), the fallback name, the 0011 promise's text
 - Size: S
-- Plans: none yet
-- Status: idea
+- Plans: PLAN_SEEDFS (`active/SEEDFS/`, landed 2026-11-08: one ticket SEEDFS-001 - the containment through the real filesystem, the 15c proof, release 0.3.15; three readiness passes in `readiness/SEEDFS/`)
+- Status: planned
 - Born: 2026-10-18, operator word „1"
 
 ## DOCSTAGE - the doctrine by stage, rendered into the project
