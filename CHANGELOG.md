@@ -4,6 +4,63 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.3.16] - 2026-11-08
+
+The doctrine's recorded open wording and gaps are closed: each rule stands once, at its home heading
+in the core or a stage file, and the docs and skills that restate it moved with it. The changed core,
+stage files, Writer agent and managed `CLAUDE.md` region are re-rendered by migration
+`0041_doctrine-wording`.
+
+### Changed
+
+- **The operator channel and the standing word (DOCTR-001)** - `ORCHESTRATOR.md` § How the COO
+  speaks to the operator and § Operator-interaction guards.
+  - Rule 9: a question to the operator is a dialog - the harness's question tool, one topic,
+    numbered options with their consequences, the recommendation first, up to four points; its dual
+    in the channel filter answers the operator's own question directly.
+  - Guard (b): a later remark in which the operator takes a step themselves narrows the standing
+    word to what precedes that step.
+  - Rule 7: an agent, a check or a pass the doctrine does not require is written into the ticket
+    with its scope and cost before it is spent; the required scan-tier work rides the ticket's word.
+  - A new stop class, "the user sees less than before", found by any role mid-ticket; when the word
+    names no tree, the session's own project root is the tree.
+- **Briefs, routing and the loop (DOCTR-001)** - `ticket.md` § Ticket brief contract, `work.md`.
+  - Two fixed brief lines, `E2E: yes | no - because <reason>` and
+    `Escalation: none | trigger <N> - <why>`, the second also beside the COO routing line of a plan
+    ticket.
+  - The expected red set: the discovery scan records the baseline-red tests by name and the Writer
+    brief carries them; "stays green" is never inherited.
+  - For `E2E: yes` the COO runs the spec at the handoff, before the review, and the review brief
+    carries the green run's log; the live Writer is resumed by a message for every round and the
+    commit.
+  - R3 says "schema or data migrations of the product's persistent store"; a plugin's payload
+    migration routes by its diff; the four routing checks are read after the discovery scan.
+- **Readiness and enumeration (DOCTR-001)** - `plan.md` § Plan readiness review,
+  `docs/READINESS_CLASSES.md`, `ORCHESTRATOR.md` § COO owns broad scans.
+  - A second readiness pass only for a BLOCKER that reverses a decision the operator made; one that
+    reverses a COO decision is a revision.
+  - Readiness classes 17 (the NULL case of a boolean predicate) and 18 (a replaced reader's old
+    contract).
+  - A consumer grep's exempt list names non-callers only; a rule names the property it checks, not
+    a list of kinds of work.
+- **Records, the changelog and the roadmap (DOCTR-001)** - `ticket.md` § Ticket brief contract and
+  § Durable development history, the Writer agent.
+  - The CHANGELOG is kept in the language the project's `## Changelog format` names; the operator's
+    quotes are never translated.
+  - A visible-outcome ticket may close on the operator's waiver in words, quoted, the outcome marked
+    as not seen by the operator.
+  - A roadmap line carries the problem, never the fix; a nested list's parent closes with its last
+    child, and lines leave one by one, never as a sweep.
+- **Migration `0041_doctrine-wording` (DOCTR-002)** - re-renders `ORCHESTRATOR.md`, the `work`,
+  `ticket` and `plan` stage files, `.claude/agents/writer.md` and the `aiwf-core` region of
+  `CLAUDE.md`, every project additions block carried; one `note`.
+  - The seeds `PROJECT_OVERRIDES.md` (the pass-2 line) and `ROADMAP.md` (the quote form) changed;
+    an installed copy keeps its own.
+  - `/pnp:roles --show` prints the plan row's note as "a reversed operator decision or a named
+    risk".
+
+Retires local rules: overrides § Communication: A question to the operator is a dialog
+
 ## [0.3.15] - 2026-11-08
 
 The `seed-file` migration op judges its target through the real filesystem, as setup already judges

@@ -574,7 +574,7 @@ export function showLines(config) {
   const classRows = [];
   const CLASS_LABEL = { plan: 'plan', code: 'code (R2/R3)', docs: 'docs (R2)' };
   const CLASS_NOTE = {
-    plan: 'second pass only on your word: a reversed decision or a named risk',
+    plan: 'second pass only on your word: a reversed operator decision or a named risk',
     code: `correction rounds cap ${cap}; fact-check before each pass`,
     docs: 'fact-check before each pass',
   };

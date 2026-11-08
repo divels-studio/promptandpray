@@ -38,5 +38,6 @@
   { "id": "0037_habit-gates-and-codex-output", "targetPluginVersion": "0.3.12" },
   { "id": "0038_selfcheck-scope", "targetPluginVersion": "0.3.13" },
   { "id": "0039_selfcheck-jobs", "targetPluginVersion": "0.3.14" },
-  { "id": "0040_seed-containment", "targetPluginVersion": "0.3.15" }
+  { "id": "0040_seed-containment", "targetPluginVersion": "0.3.15" },
+  { "id": "0041_doctrine-wording", "targetPluginVersion": "0.3.16" }
 ]

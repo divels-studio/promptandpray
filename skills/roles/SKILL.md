@@ -115,7 +115,7 @@ qa            codex   gpt-5.6-sol        high    -       runtime/UI tickets only
 qal           off     -                  -       -       operator-gated
 
 -- review classes (what gets audited, how many passes) --
-plan          codex   gpt-5.6-sol        high    2       second pass only on your word: a reversed decision or a named risk
+plan          codex   gpt-5.6-sol        high    2       second pass only on your word: a reversed operator decision or a named risk
 code (R2/R3)  codex   gpt-5.6-sol        high    1       correction rounds cap 2; fact-check before each pass
 docs (R2)     codex   gpt-5.6-sol        high    1       fact-check before each pass
 

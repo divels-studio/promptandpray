@@ -1494,7 +1494,7 @@ section('22 - the audit table: a fresh install gets it without being asked, and 
     const s = roleCmd(['--show']);
     const planRow = (s.out.split('\n').find((l) => l.startsWith('plan ')) || '').trimEnd();
     check('/pnp:roles --show: the plan row says a second pass only on the word, with no "+1" and no fact-check',
-      s.status === 0 && planRow.endsWith('second pass only on your word: a reversed decision or a named risk')
+      s.status === 0 && planRow.endsWith('second pass only on your word: a reversed operator decision or a named risk')
       && !planRow.includes('+1') && !planRow.includes('fact-check'), `exit ${s.status}: ${planRow}`);
   }
   // Moving the Reviewer to codex makes its Claude agent file stale, and deleting a file is a
