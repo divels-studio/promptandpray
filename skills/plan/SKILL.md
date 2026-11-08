@@ -75,11 +75,8 @@ then they are removed from this skill.
 
 **The recorded state comes first.** Before the entry is written, read what is already recorded on
 the goal: its roadmap entry, the DECISIONS of the earlier plans on its area, and the project's status
-documents (named in its overrides document). Then ask the operator, in one message, only the
-questions among these that have no recorded answer: which real inputs they can supply (samples,
-fixtures, documents), what must stay as it is, and what retires soon. **Its suppression dual:** when
-all of them are recorded, ask nothing and cite where each answer stands. The answers are data for
-the research briefs and the decisions, never a word to start.
+documents (named in its overrides document). This step asks the operator nothing: the questions
+on the goal are answered after the research (Step 2).
 
 Open `<plansDir>/ROADMAP.md`. If the goal has an entry, use it; otherwise write one, in exactly this
 format, the operator's words verbatim where they are the source. An entry and a finding line carry
@@ -121,6 +118,14 @@ today), the numbered facts of what the code does today with their pointers, the 
 adjacent contracts of every touched surface, what already exists for the goal, the paths the goal
 touches without naming them, and the unknowns. Short; pointers, not prose. A claim
 two agents contradict is verified by the COO with one Read before it is written down.
+
+**The three questions, after the research.** The COO answers
+which real inputs exist, what must stay, what retires
+from the research (its "what already exists" and "unknowns" sections) and the recorded state of
+Step 1, and writes each answer with its pointer into `DECISIONS.md`. Only what stays unanswered goes
+to the operator, in ONE dialog (`ORCHESTRATOR.md` § How the COO speaks to the operator, rule 9),
+before Step 3. **Its suppression dual:** when every answer stands, ask nothing and cite where each
+one stands. The answers are data for the decisions, never a word to start.
 
 ## Step 3 - Decisions
 
@@ -172,8 +177,10 @@ the configured ticket byte cap per ticket - `plan.ticketByteCap`, factory 6,144,
 line not counted - the six headings, every `D-NN` of this plan cited, cross-references, no bare open
 item, Code Map paths that exist), and writes
 `<plansDir>/readiness/<ABBR>/stamp.json` otherwise.
-A refusal goes back to the planner (Step 4, the same dispatch, the problem lines quoted). When the
-stamp is written, confirm it:
+A refusal goes back to the live planner, the problem lines quoted. A gate refusal, a command that
+cannot run and every revision go to the dispatched planner by a message (the harness's agent-message
+tool, `SendMessage` in Claude Code), never a fresh dispatch while that agent lives; a fresh dispatch,
+with its dialog (Step 4), only when it has ended. When the stamp is written, confirm it:
 
 ```text
 node "${CLAUDE_PLUGIN_ROOT}/scripts/engine/plan-gate.js" --check <plansDir>/drafts/<ABBR>
@@ -185,8 +192,14 @@ dispatch; a stale stamp makes the wrapper refuse the pass.
 **Runnability pre-pass.** Between the stamp and the paid pass, dispatch one scan-tier agent (Agent
 tool, `model: "sonnet"`, read-only) over every `## Acceptance` command of the tickets and every
 procedure of the index: it runs each read-only command as written (a mutating one is checked for
-existence only) and replies with the ones that cannot run and why. A command that cannot run goes
-back to the planner (Step 4) and the folder is stamped again; the auditor never pays for it.
+existence only) and replies with the ones that cannot run and why. A command that carries a test
+filter (`-t`, `-k`, `-g`, `--grep`, a spec path) is also checked to select at least one test: a filter that
+selects no test is reported as "cannot fail" (class 8, `docs/READINESS_CLASSES.md`) and is treated
+like a command that cannot run. The check runs over the tree as it stands at the stamp; a filter
+that names a test the ticket itself creates is exempt here - the ticket's worklist names that test
+as new, and the Writer's own first run of the tests it adds, seen failing, is its proof (`work.md`
+§ Tests). A command that cannot run goes back to the live planner and the folder is stamped again;
+the auditor never pays for it.
 
 ## Step 6 - One readiness pass, triage, approval, landing
 
@@ -236,7 +249,7 @@ VERBATIM, plus a `disposition` column the COO fills per row - `fixed` / `rejecte
 or a design choice the operator approved is `asked` - it goes to the operator in plain words, not
 into a revision.
 
-**Revision.** The planner revises (Step 4, the same dispatch over the round file); the COO re-stamps
+**Revision.** The live planner revises over the round file (Step 5); the COO re-stamps
 (Step 5). At most 2 revisions. A revision that does not reduce the count of carried OPEN rows stops
 the cycle and goes to the operator with the numbers; a blocker born of added scope is named
 separately, never counted as carried.
@@ -250,8 +263,9 @@ why pass 1 could not see it (`ticket.md` § Fail aggregation). A resumed pass 2 
 too and its compensations (`/pnp:review` Step 3).
 
 **Approval.** Report to the operator in a few lines: the declared ticket count and its reason, the
-tickets and their order, the passes run with their BLOCKER counts and dispositions, what is
-deferred, and the folder path - never the plan itself.
+tickets and their order, the COO tier of each ticket (its `COO: <model> - because <check>` line),
+the passes run with their BLOCKER counts and dispositions, what is deferred, and the folder path -
+never the plan itself.
 Take the approval number the same way, from the machine source; with none, ask the operator once,
 in this report, for the COO context size on their statusline - the only question this measurement
 asks per plan. Wait for the approval word.

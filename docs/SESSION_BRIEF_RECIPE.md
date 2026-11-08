@@ -13,6 +13,8 @@
 The session brief is the prompt with which the operator opens a **fresh session** on the active
 mission. The **COO of the current session** writes it (via `/pnp:brief`); the operator only reviews
 and pastes it. That way every session starts from ONE recipe instead of being improvised again.
+When the state is durable, no brief is written at all: the next session opens with `/pnp:mission`
+(`/pnp:brief` Step 0.5).
 
 - **Language:** the operator channel language from `operator.language`; technical terms in English.
 - **A separate rule, do not confuse the two:** the briefs to the AGENTS inside a session

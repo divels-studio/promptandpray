@@ -126,6 +126,11 @@ runner command. The persistent JSON report is produced by a **config reporter** 
 runner config (a `json` reporter writing next to `{{config.verify.e2e.outputDir}}`; the runner
 creates the parent dir).
 
+**The report is copied by whoever ran the suite** - the COO at the handoff (the flow's step 2), this
+step after a scoped re-run - right after the run and before anything else, to
+`<scratchDir>/<REF>-e2e-report-<N>.json`, `<N>` the run's number in the ticket (1 for the handoff
+run); `{{config.verify.e2e.outputDir}}` is neither deleted nor run over again before that copy stands.
+
 Why the two flags (do not drop them):
 - **`--trace retain-on-failure`** - a typical repo config traces only on retry, and with zero local
   retries a *failing* run would leave no trace to judge it by. `retain-on-failure` records every
@@ -138,7 +143,9 @@ Why the two flags (do not drop them):
 - the JSON report, **always** (config reporter) - the evidence of a passing test;
 - `{{config.verify.e2e.outputDir}}/**/trace.zip` - a trace per FAILED test (`--trace
   retain-on-failure`); none for a passing one;
-- screenshots - **only on failure** (also embedded in the trace).
+- screenshots - **only on failure** (also embedded in the trace);
+- the declared RED run - the JSON report of the Writer's own first run of the spec it adds, written
+  by the same config reporter and copied by the Writer to `<scratchDir>/<REF>-e2e-red.json`.
 
 ## Step 2b - Extract traces for the QA host (the orchestrator does the unzip)
 
@@ -170,7 +177,8 @@ under `{{config.verify.e2e.outputDir}}/**/trace-extracted/` for QA to Read/Grep 
 - the JSON report - **always**; it is the evidence of a passing test;
 - `{{config.verify.e2e.outputDir}}/**/trace-extracted/` - the **unzipped** trace internals per
   FAILED test (Step 2b), passed when it exists. Pass this dir, **not** the `.zip`;
-- screenshots - **only on failure** (also embedded in the trace).
+- screenshots - **only on failure** (also embedded in the trace);
+- the declared RED run's report, `<scratchDir>/<REF>-e2e-red.json` - the evidence the spec can fail.
 
 ## Step 3 - Build the QA brief (which artifacts, criteria, thresholds, verdict contract)
 
@@ -189,11 +197,12 @@ Ticket: <TICKET_REF>
 EVIDENCE (read-only - do NOT run a browser, do NOT start a server):
   E2E artifacts from the orchestrator's test run (ABSOLUTE paths - resolve them before sending;
   QA cannot expand config values or plugin variables itself):
-    - JSON report (always present - the evidence of a passing test): <abs path to the runner's JSON report>
+    - JSON report (always present - the evidence of a passing test): <abs path of the copy <scratchDir>/<REF>-e2e-report-<N>.json, Step 2>
     - Trace internals (present per FAILED test only, UNZIPPED - Step 2b; omit the line when no test failed):
       <abs path>/**/trace-extracted/
       (Read/Grep the .trace/.network files directly - the Claude QA host cannot open a .zip)
     - Screenshots: only if a test FAILED (also embedded in the trace) - read only if present.
+    - RED run (the spec's first run, before the change): <abs path of <scratchDir>/<REF>-e2e-red.json> - or `RED run: none - because <reason>` when the pre-change tree could not be run.
   Judge a passing test from the JSON report, a failed one from the JSON + its trace internals,
   against the criteria below. A passing test without a trace is complete evidence, never a gap.
 

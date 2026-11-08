@@ -179,7 +179,8 @@ EVIDENCE PACK (a first `code`-class pass carries one; see below for what it is a
 <the file:line evidence the COO already holds - the worklist pointers and the anchors the ticket
 was authored against. The pack is a selection made by the audited side: read the tree past it, run
 your own probes, and report an incomplete pack as a finding. For a ticket whose brief says
-`E2E: yes`, the pack names the log path of the green E2E run made at the handoff.>
+`E2E: yes`, the pack names the log path of the green E2E run made at the handoff and, beside it,
+the copy of its JSON report, `<scratchDir>/<REF>-e2e-report-<N>.json` (`/pnp:qa` Step 2).>
 
 PRODUCT BOUNDARY CHECKS:
 <one line per entry of `config.review.productBoundaryChecks`, verbatim - or `none`. A Codex host

@@ -128,6 +128,9 @@ never rewritten), the transfer surface (seeded once) and foreign permission rule
 **byte for byte**, line endings included: a `CLAUDE.md` write splices the existing bytes and renders
 only the region, in whichever convention (CRLF or LF) that file already uses.
 
+In an auto-approving permission mode the host may refuse the generator's write to
+`.claude/settings.json` or `aiwf.config.json` as self-modification; run it again in a mode that asks.
+
 ## Step 4 - Self-check (the CLI already ran it)
 
 You do not have to remember this step: a successful install that really wrote something **runs the

@@ -29,6 +29,13 @@ Argument: the next ticket or focus; empty = the next open ticket in the active p
 
 Notation: `{{config.some.key}}` in this document means *substitute the value you read in step 2*.
 
+## Step 0.5 - When no brief is composed
+
+When the state is durable - the ticket's record, the memory and the transfer surface are complete -
+compose no brief: say "new session, `/pnp:mission`" and stop. A brief is composed only mid-flight: an
+unfinished ticket, an uncommitted diff, decisions spoken but not recorded (`ticket.md` § The ticket
+boundary).
+
 ## Step 1 - Collect the current state (read-only)
 
 - `git status --short` + `git log --oneline -5` -> branch, **HEAD SHA**, clean/dirty tree.

@@ -286,11 +286,12 @@ Engages **only** when the ticket declares observable runtime/UI behavior. QA doe
 browser. The runtime evidence is produced outside Codex: **Writer** authors an E2E `.spec` from the
 acceptance criteria -> **the orchestrator (main session)** runs the configured runner over the
 ticket's scope (browser lives in the test runner, outside the sandbox) -> QA reads the artifacts
-(JSON report, screenshots, traces) under `--sandbox read-only` and judges them against the criteria.
+(JSON report, screenshots, traces, and the report of the spec's declared RED run) under
+`--sandbox read-only` and judges them against the criteria.
 The full step-flow is `/pnp:qa`.
 
 ```powershell
-scripts\native\ps\codex-qa.ps1 -ProjectRoot <root> -Prompt "QA (artifact judge) ticket <ref> against acceptance criteria: <criteria>. Read the E2E artifacts (JSON report: <path>; traces/screenshots: <path>) under read-only - do NOT run a browser or start a server. Login context (as exercised by the spec): this project's E2E fixture account per its own test setup, referenced by env var NAME only, unless the brief overrides it. Risk threshold: <sev>. Stop condition: <cond>. Return pass/pass-with-notes/fail with evidence (test name, artifact path)."
+scripts\native\ps\codex-qa.ps1 -ProjectRoot <root> -Prompt "QA (artifact judge) ticket <ref> against acceptance criteria: <criteria>. Read the E2E artifacts (JSON report: <path of the copy <scratchDir>/<REF>-e2e-report-<N>.json>; RED run: <path of <scratchDir>/<REF>-e2e-red.json, or RED run: none - because <reason>>; traces/screenshots: <path>) under read-only - do NOT run a browser or start a server. Login context (as exercised by the spec): this project's E2E fixture account per its own test setup, referenced by env var NAME only, unless the brief overrides it. Risk threshold: <sev>. Stop condition: <cond>. Return pass/pass-with-notes/fail with evidence (test name, artifact path)."
 ```
 
 ```bash
