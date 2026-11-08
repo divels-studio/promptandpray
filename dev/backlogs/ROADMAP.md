@@ -28,15 +28,6 @@ leaves with one ledger row `<ABBR> dropped: <why>`.
 - Status: idea
 - Born: 2026-10-17, operator word „тоя 11 отива ... в новия роадмап"
 
-## SEEDFS - the seed-file op contained through the real filesystem
-- Goal: the `seed-file` migration op refuses a target that resolves outside the project or onto this installation's transfer surface through the REAL filesystem (a junction, a symlinked alias), as setup's surface judgement already does
-- Why: Codex code pass 1 on GENERIC-003 (2026-10-18) returned two blockers on it - `resolveSeedTarget` / `refuseSurfaceSeed` in `scripts/update/migrate.mjs` resolve `<plansDir>` and compare the surface lexically; pre-existing since `926a3c6` (0.3.0's seed-file op; 0025's ROADMAP seed has the same exposure), outside GENERIC-003's scope; operator word „1" (recorded as a risk, not a correction round)
-- Scope: in - `resolveSeedTarget` / `refuseSurfaceSeed` through canonical paths, a junction test and an alias test on the shipped 0026 seed path in `test-update.mjs`; out - the setup side (already real-filesystem), the fallback name, the 0011 promise's text
-- Size: S
-- Plans: PLAN_SEEDFS (`active/SEEDFS/`, landed 2026-11-08: one ticket SEEDFS-001 - the containment through the real filesystem, the 15c proof, release 0.3.15; three readiness passes in `readiness/SEEDFS/`)
-- Status: planned
-- Born: 2026-10-18, operator word „1"
-
 ## DOCSTAGE - the doctrine by stage, rendered into the project
 - Goal: a session loads only the doctrine of the stage it is in, whole, by construction of the entry command, and a project's local rules live next to the rule they modify
 - Why: „ние отваряйки сесия независимо от командата започваме работа и това изисква четене на доктрина ... доктрината да бъде разделена на секции" and „във всеки файл носещ някакви правила да има Local rules секция, така overrides остава само продуктови" (operator 2026-10-18, relayed by the arbitration session)
@@ -211,6 +202,7 @@ Entries below were ported on 2026-10-18 from `dev/backlogs/CANDIDATES.md` (now h
   - 2026-10 RENAME-001 - the full rename AIWF -> pnp across the payload (R3) [dev/backlogs/CANDIDATES.md:748]
   - 2026-10 - `ORCHESTRATOR.md` is not in `ownedDestinations` of `generate.mjs` [dev/backlogs/CANDIDATES.md:1062]
   - 2026-10-17 RBB deferral - delete `--hash` from `scripts/engine/plan-gate.js` and the monolith readers (a code ticket promised after 0.3.0) [dev/backlogs/archive/013_PLAN_RBB_2026-10-17/DECISIONS.md:134]
+  - 2026-11-08 SEEDFS-001 Writer hand-back - a DANGLING junction on a PARENT directory (e.g. `paths.plansDir` pointing at a missing target) is read by `canonicalPath` in `scripts/setup/generate.mjs` as inside the project (the walk climbs past the segment it cannot resolve) and Windows can create through it; setup and the update engine share the helper (D-09 kept it out of SEEDFS-001) [dev/backlogs/archive/022_PLAN_SEEDFS_2026-11-08/records/SEEDFS-001.md § Remaining debt]
   - 2026-10-18 GENERIC deferral - rename the legacy fallback `PNP_CANDIDATES.md` -> `LEDGER.md` in the engine (guard, generate, selfcheck, the two suites) once every installation carries the key [dev/backlogs/archive/016_PLAN_GENERIC_2026-10-18/DECISIONS.md:170]
   - 2026-10-31 operator (RULEHOME-003 diet dialog) - the setup interview asks which language each record class is kept in (the changelog, the operator's quotes, everything else), and renders it into the project's CLAUDE.md zone and the doctrine's language rule (with § DOCTR) [dev/backlogs/active/RULEHOME/records/silerax-harvest/diet.md § Conflicts #5]
   - 2026-11-07 SUITES-001 close (out of scope; operator dialog answer „Ред в пътната карта") - the advisory macOS CI leg went red in the setup suite on run 42263924346 (0.3.12, commit a949449; the later steps skipped); windows and ubuntu green [gh run view 42263924346; dev/backlogs/archive/021_PLAN_SUITES_2026-11-07/DECISIONS.md § Deferred]

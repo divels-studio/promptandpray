@@ -51,7 +51,7 @@ through the shared `samePath` (D-11); the fallback name
 
 | ref | title | implements | status | record |
 |---|---|---|---|---|
-| SEEDFS-001 | the seed-file op judged through the real filesystem - containment, the surface alias, a link at an absent target, the darwin fold; the 15c proof; release 0.3.15 | D-01 D-02 D-03 D-04 D-05 D-06 D-07 D-08 D-09 D-10 D-11 D-12 D-13 D-14 | open | - |
+| SEEDFS-001 | the seed-file op judged through the real filesystem - containment, the surface alias, a link at an absent target, the darwin fold; the 15c proof; release 0.3.15 | D-01 D-02 D-03 D-04 D-05 D-06 D-07 D-08 D-09 D-10 D-11 D-12 D-13 D-14 | closed 2026-11-08 (`eceb9be`, auditor pass 1 Codex `pass-with-notes`, 0 correction rounds) | `records/SEEDFS-001.md` |
 
 ## Order and gates
 
