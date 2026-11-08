@@ -4,6 +4,37 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.3.17] - 2026-11-08
+
+Every skill now says what the doctrine already decided: the sentences stand in the skills, the
+Writer brief template and two recipes. No managed file changes; migration `0042_skills-wording`
+carries one `note`.
+
+### Changed
+
+- **The E2E evidence QA and the Reviewer read (SKILLS-001)** - `/pnp:qa`, `/pnp:review`,
+  `docs/CODEX_REVIEW_QA_RECIPE.md`, `templates/briefs/writer-dispatch.md`.
+  - Whoever ran the suite - the COO at the handoff, `/pnp:qa` after a scoped re-run - copies the
+    JSON report to `<scratchDir>/<REF>-e2e-report-<N>.json` right after the run; the output dir is
+    neither deleted nor run over again before that copy stands; the QA and review briefs name the copy.
+  - The spec's RED run is a declared QA artifact: the Writer copies the JSON report of its spec's
+    first run to `<scratchDir>/<REF>-e2e-red.json`, or says `RED run: none - because <reason>`; the
+    Writer brief carries the line for `E2E: yes` tickets only.
+- **Planning, the session brief and setup (SKILLS-001)** - `/pnp:plan`, `/pnp:brief`, `/pnp:setup`,
+  `docs/SESSION_BRIEF_RECIPE.md`.
+  - `/pnp:plan` Step 1 asks the operator nothing; the three questions (real inputs, what must stay,
+    what retires) are answered after the research, and only what stays open goes to one dialog.
+  - Gate refusals, unrunnable commands and revisions go to the live planner by a message, never a
+    fresh dispatch while it lives; the runnability pre-pass flags a test filter that selects no test.
+  - The approval report names the COO tier of each ticket.
+  - `/pnp:brief` composes no brief when the state is durable - "new session, `/pnp:mission`";
+    `/pnp:setup` says an auto-approving permission mode may refuse its settings write.
+- **Migration `0042_skills-wording` (SKILLS-002)** - one `note` naming the sentences above; no
+  managed file re-rendered (the skills and brief templates are read from the plugin root); its
+  `supersedes` names the two local rules below.
+
+Retires local rules: work.md § project additions: the E2E report is copied out; plan.md § project additions: Questions come after the research
+
 ## [0.3.16] - 2026-11-08
 
 The doctrine's recorded open wording and gaps are closed: each rule stands once, at its home heading
