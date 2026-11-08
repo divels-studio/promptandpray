@@ -214,6 +214,7 @@ Entries below were ported on 2026-10-18 from `dev/backlogs/CANDIDATES.md` (now h
   - 2026-10-18 GENERIC deferral - rename the legacy fallback `PNP_CANDIDATES.md` -> `LEDGER.md` in the engine (guard, generate, selfcheck, the two suites) once every installation carries the key [dev/backlogs/archive/016_PLAN_GENERIC_2026-10-18/DECISIONS.md:170]
   - 2026-10-31 operator (RULEHOME-003 diet dialog) - the setup interview asks which language each record class is kept in (the changelog, the operator's quotes, everything else), and renders it into the project's CLAUDE.md zone and the doctrine's language rule (with § DOCTR) [dev/backlogs/active/RULEHOME/records/silerax-harvest/diet.md § Conflicts #5]
   - 2026-11-07 SUITES-001 close (out of scope; operator dialog answer „Ред в пътната карта") - the advisory macOS CI leg went red in the setup suite on run 42263924346 (0.3.12, commit a949449; the later steps skipped); windows and ubuntu green [gh run view 42263924346; dev/backlogs/archive/021_PLAN_SUITES_2026-11-07/DECISIONS.md § Deferred]
+  - 2026-11-07 SUITES-002 release (out of scope; operator dialog answer „Ред в пътната карта") - the advisory macOS leg went red again on run 42406267228 (0.3.14, commit ce9cf46), this time at the example-cycle step after 152 s, its self-check step skipped; windows and ubuntu green [gh run view 42406267228 --json jobs; dev/backlogs/readiness/SUITES/ledger.md]
 - Size: S
 - Plans: none yet
 - Status: idea
