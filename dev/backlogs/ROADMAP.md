@@ -157,8 +157,8 @@ Entries below were ported on 2026-10-18 from `dev/backlogs/CANDIDATES.md` (now h
   - done c8ddf63 (0.3.11, the path removed) - 2026-11-03 harvest F24 (Furnissimo TESTENV-003) - `ticket.md` § Role boundaries still offers "the operator may hand-edit from the COO's exact lines"; the operator: „ти сериозно ли искаш от мен да отварям и редактирам файлове които не разбирам?" - the hand-edit path removed or made the last resort after auto mode is switched off [dev/backlogs/inputs/harvest-2026-11-03.md F24]
   - 2026-10-23 Silerax RDR-002 (harvested 2026-10-31) - the known-failing baseline, an occasion for the intake-31 line: the discovery scan reads the baseline-red tests of every file in the ticket's verify line and the Writer brief carries that expected red set, so "stays green" is never an inherited claim [dev/backlogs/active/RULEHOME/records/silerax-harvest/ledger-rows.md L74]
 - Size: S
-- Plans: none yet
-- Status: idea
+- Plans: PLAN_DOCTR (active/DOCTR, landed 2026-11-08)
+- Status: planned
 - Born: 2026-10-18, operator word „продължи три"
 
 ## SKILLS - the skills: open items

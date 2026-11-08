@@ -1,0 +1,15 @@
+{
+  "plan": "DOCTR",
+  "contract": "b57f98532a5bb95b1ebba598bd1e812356a83fb93834260780e1d817e03168b4",
+  "files": {
+    "DECISIONS.md": "33b4f65f43973d13446c4d27666add351bea63587792b7bf045d61d8748edac5",
+    "PLAN_DOCTR.md": "c3b0c139d6a978682042e899be8bb4213b0370136d9644eacb00a0bce38ecf85",
+    "tickets/DOCTR-001.md": "22aafaa8885dbf590728433606d61809a3670fbe6998e1e239e2dde22631083b",
+    "tickets/DOCTR-002.md": "747b1bb2d907b3c14fe22191eb3b9ac5f852c97342f278401dbfa7d1bda74f10"
+  },
+  "xrefs": {
+    "DOCSTAGE/D-09": "19345352c9170a9de9a91d5492c67afa9cd43bef9eb0496c93bb33a3ef0b688c",
+    "SEEDFS/D-14": "99ba4846409a7298b0a7251993927fda07fcae6b6fff9d92f7dafb6760279319"
+  },
+  "stampedAt": "2026-11-08T10:24:19.548Z"
+}
