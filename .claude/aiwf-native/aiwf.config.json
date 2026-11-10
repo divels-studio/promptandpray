@@ -4,8 +4,8 @@
     "installedPluginVersion": "0.3.18",
     "lastMigrationApplied": "0043_dialog-language",
     "managedRegions": {
-      ".claude/aiwf-native/roles.json": "0.2.19",
-      ".claude/agents/writer.md": "0.3.16",
+      ".claude/aiwf-native/roles.json": "0.3.18",
+      ".claude/agents/writer.md": "0.3.18",
       "CLAUDE.md#aiwf-core": "0.3.16",
       ".claude/aiwf-native/ORCHESTRATOR.md": "0.3.18",
       "AGENTS.md": "0.3.11",
@@ -145,12 +145,12 @@
   "roles": {
     "reviewer": {
       "engine": "codex",
-      "model": "gpt-5.6-sol",
+      "model": "gpt-6.1-sol",
       "effort": "high"
     },
     "qa": {
       "engine": "codex",
-      "model": "gpt-5.6-sol",
+      "model": "gpt-6.1-sol",
       "effort": "high"
     },
     "qal": {
@@ -233,13 +233,13 @@
     "plan": {
       "passes": 2,
       "engine": "codex",
-      "model": "gpt-6-sol",
+      "model": "gpt-6.1-sol",
       "effort": "xhigh"
     },
     "code": {
       "passes": 1,
       "engine": "codex",
-      "model": "gpt-6-sol",
+      "model": "gpt-6.1-sol",
       "effort": "xhigh"
     },
     "docs": {
