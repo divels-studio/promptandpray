@@ -126,8 +126,8 @@ All in `.claude/aiwf-native/ORCHESTRATOR.md` unless a stage file is named:
 
 ## Operator channel
 
-- Talk to the operator in **bg** (technical terms in English). Briefs and
-  verdicts between agents stay in English.
+- Talk to the operator in **bg** (technical terms in English) - in chat
+  and in every question dialog alike. Briefs and verdicts between agents stay in English.
 - Conversational role names: Writer = "Колега", Reviewer =
   "Одитор", QA = "QA". These
   are conversational only; nothing in the filesystem or frontmatter is renamed.
