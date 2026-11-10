@@ -1,0 +1,13 @@
+{
+  "migration": "0043_dialog-language",
+  "targetPluginVersion": "0.3.18",
+  "operations": [
+    { "op": "rerender-managed-region", "file": ".claude/aiwf-native/ORCHESTRATOR.md", "region": null, "template": "templates/ORCHESTRATOR.md.tmpl" },
+    {
+      "op": "note",
+      "id": "dialog-language-0-3-18",
+      "text": "0.3.18 names the language of the question dialog. In ORCHESTRATOR.md, rule 9 of the section on how the COO speaks to the operator now says that the dialog is the operator channel: its question, its option labels and their descriptions are written in operator.language, like every other message to the operator, and the English of briefs and of the tree never reaches it. Before this, the language rule spoke only of the conversation, and a dialog - a tool call written right after an English agent brief - drifted into English partway through a session. This update re-renders ORCHESTRATOR.md, its additions block carried. The seeded operator-channel line of CLAUDE.md (outside the aiwf-core markers) now reads 'in chat and in every question dialog alike' for new installations; a seed is written once, so your own CLAUDE.md keeps its line - reword it on your operator's word if you want the new form.",
+      "docRefs": ["CHANGELOG.md", "templates/CLAUDE.md.tmpl"]
+    }
+  ]
+}

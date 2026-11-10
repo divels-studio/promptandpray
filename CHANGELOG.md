@@ -4,6 +4,23 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.3.18] - 2026-11-10
+
+The question dialog is written in the operator's language. Migration `0043_dialog-language`
+re-renders the core and carries one `note`.
+
+### Changed
+
+- **The question dialog speaks the operator's language** - `ORCHESTRATOR.md` § How the COO speaks
+  to the operator, rule 9: the dialog's question, option labels and descriptions are written in
+  `operator.language`; the English of briefs and of the tree never reaches it.
+  - The seeded operator-channel line of `CLAUDE.md` reads "in chat and in every question dialog
+    alike" (new installations; a seed is written once).
+- **Migration `0043_dialog-language`** - re-renders `.claude/aiwf-native/ORCHESTRATOR.md` and
+  prints one `note`.
+
+Retires local rules: none
+
 ## [0.3.17] - 2026-11-08
 
 Every skill now says what the doctrine already decided: the sentences stand in the skills, the
