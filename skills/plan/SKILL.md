@@ -131,10 +131,12 @@ one stands. The answers are data for the decisions, never a word to start.
 
 Write `<plansDir>/drafts/<ABBR>/DECISIONS.md` with the operator:
 
-- `## Decisions` - one bullet per decision, `- **D-NN** <text> plan: <ABBR>`, numbered from 01 (a
-  later plan of the same entry continues the numbering); the operator's words verbatim where they
-  are the source; a decision of another plan is cited as `<X>/D-NN`, never restated. A decision this
-  plan only records for a later one carries that plan's name, or `plan: deferred`.
+- `## Decisions` - one bullet per decision, `- **D-NN** <text> plan: <ABBR>` (the gate also reads
+  `- **D-NN <title>**`, the form of plans written under an earlier version; a new plan keeps
+  `- **D-NN** <text>`), numbered from 01 (a later plan of the same entry continues the numbering);
+  the operator's words verbatim where they are the source; a decision of another plan is cited as
+  `<X>/D-NN`, never restated. A decision this plan only records for a later one carries that plan's
+  name, or `plan: deferred`.
 - `## Deferred` - what is consciously left out, each with the condition that brings it back.
 - `## Open Questions` - numbered. **An open question STOPS the skill here**: ask the operator (the
   dialog of `ORCHESTRATOR.md` § How the COO speaks to the operator, rule 9) and continue only after every question is

@@ -4,6 +4,26 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.3.19] - 2026-11-10
+
+The plan gate reads a decision bullet whose title stands inside the bold. Migration
+`0044_decision-title-form` carries one `note`.
+
+### Fixed
+
+- **The plan gate reads the title form of a decision bullet (DECFORM-001)** -
+  `scripts/engine/plan-gate.js` recognises `- **D-NN <title>**` (the bold closed on the same line)
+  beside `- **D-NN** <text>`.
+  - A `<X>/D-NN` cross-reference into a plan written in the title form, active or archived, resolves
+    and is hashed into the stamp instead of being refused as unresolved.
+  - Such a plan's own decisions are read, so the "every decision cited" check may newly refuse an
+    active plan whose `plan:`-tagged decision no ticket and no index line cites.
+  - A first-form bullet parses and hashes exactly as before: every existing stamp stays valid;
+    `/pnp:plan` keeps writing the first form and names the second.
+- **Migration `0044_decision-title-form`** - prints one `note`; no managed file is re-rendered.
+
+Retires local rules: none
+
 ## [0.3.18] - 2026-11-10
 
 The question dialog is written in the operator's language. Migration `0043_dialog-language`

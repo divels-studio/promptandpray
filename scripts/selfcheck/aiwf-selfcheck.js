@@ -5264,6 +5264,8 @@ const pgDecisionsText = (bullets = PG_DECISIONS) => [
   '## Deferred', '', '- Nothing.', '',
 ].join('\n');
 const PG_OLD_D01 = '- **D-01** The archived decision the fixture ticket cites. plan: OLD';
+// The title form of a decision bullet (the title inside the bold; plans written under an earlier version), M62-M64.
+const PG_OLD_D02 = '- **D-02 An archived title-form decision.** The text. plan: OLD';
 const pgTicketText = ({ fields = PG_FIELDS, extra = [] } = {}) => [
   '# FIX-001 - the fixture ticket', '',
   'Implements: D-01. Background: OLD/D-01.', '',
@@ -5554,6 +5556,29 @@ function planGateCases() {
     { id: 'M61', label: '"Side by side: FIX-001, FIX-002" over disjoint Code Maps, plus "Side by side: FIX-001, FIX-009" inside a fenced block -> exactly stamp-mismatch (the passing twin of M59; a fenced line declares nothing)',
       after: pgSideBySide(['Side by side: FIX-001, FIX-002', '```text', 'Side by side: FIX-001, FIX-009', '```'], 'src/two.js'),
       expect: exactly('stamp-mismatch') },
+    // The title form of a decision bullet, `- **D-NN <title>**`: parsed as a decision of its own plan,
+    // resolved and hashed as a cross-reference target; a bullet that is neither form is not a decision.
+    { id: 'M62', label: 'a decision D-04 of this plan in the title form ("- **D-04 <title>.**"), cited nowhere -> exactly decision-uncited:D-04 and stamp-mismatch (the title form is parsed as an own decision)',
+      after: (put) => put(`${PG_FOLDER}/DECISIONS.md`, pgDecisionsText([...PG_DECISIONS, '- **D-04 A title-form decision nothing cites.** plan: FIX'])),
+      expect: exactly('decision-uncited:D-04', 'stamp-mismatch') },
+    { id: 'M63', label: 'the archived plan gains OLD/D-02 in the title form, the ticket cites it, restamped -> valid, stamp.xrefs["OLD/D-02"] is the SHA-256 of that bullet and OLD/D-01 keeps its first-form hash',
+      before: (put) => {
+        put(`${PG_ARCHIVE}/DECISIONS.md`, `# DECISIONS - plan OLD\n\n${PG_OLD_D01}\n${PG_OLD_D02}\n`);
+        const ticket = pgTicketText().replace('Background: OLD/D-01.', 'Background: OLD/D-01 and OLD/D-02.');
+        if (ticket === pgTicketText()) throw new Error('the fixture ticket has no OLD/D-01 background line to extend');
+        put(PG_TICKET, ticket);
+      },
+      expect: (r, dir) => {
+        const stamp = readJson(pgAt(dir)(PG_STAMP));
+        return valid(r) && isPlainObject(stamp) && isPlainObject(stamp.xrefs)
+          && stamp.xrefs['OLD/D-02'] === sha256(PG_OLD_D02) && stamp.xrefs['OLD/D-01'] === sha256(PG_OLD_D01);
+      } },
+    { id: 'M64', label: '"- **D-071** ...", "- **D-07x** ..." and "- **D-08 never closed ..." (each "plan: FIX", cited nowhere) -> exactly stamp-mismatch (three digits, a letter glued to the number, a bold never closed: none is a decision)',
+      after: (put) => put(`${PG_FOLDER}/DECISIONS.md`, pgDecisionsText([...PG_DECISIONS,
+        '- **D-071** Three digits are not a decision id. plan: FIX',
+        '- **D-07x** A letter glued to the number. plan: FIX',
+        '- **D-08 never closed plan: FIX'])),
+      expect: exactly('stamp-mismatch') },
   ];
 }
 
@@ -5785,6 +5810,7 @@ function sectionPlanGate(tmpRoot) {
   const FOLDER = 'if (st === null || !st.isDirectory() || !lib.PLAN_ABBR_RE.test(path.basename(abs))) {';
   const CODEMAP = 'if (!fs.existsSync(path.resolve(root, p)))';
   const CAP_READ = 'return Number.isInteger(v) && v >= MIN_TICKET_BYTES ? v : MAX_TICKET_BYTES;';
+  const DECISION_LINE_SRC = String.raw`const DECISION_LINE = /^- \*\*(D-\d{2})(?:\*\*|[ \t.:)\-][^\n]*?\*\*)/;`;
   const controls = [
     { id: 'ctl-4', target: 'M4', label: 'the index check disabled', from: "if (model.index === null) add('index-missing'", to: "if (false) add('index-missing'" },
     { id: 'ctl-5', target: 'M5', label: 'the ticket cap raised from 3 to 4', from: 'const MAX_TICKETS = 3;', to: 'const MAX_TICKETS = 4;' },
@@ -5835,6 +5861,10 @@ function sectionPlanGate(tmpRoot) {
     { id: 'ctl-sbs-shared', target: 'M59', label: 'the shared-path report disabled', from: 'if (shared === null) continue;', to: 'if (true) continue;' },
     { id: 'ctl-sbs-contain', target: 'M60', label: 'containment dropped (only equal paths shared)', from: 'if (a === \'\' || b.startsWith(`${a}/`)) return b;', to: 'if (false) return b;' },
     { id: 'ctl-sbs-mask', target: 'M61', label: 'fenced blocks no longer skipped by the side-by-side reader', from: 'if (mask[i] || !lines[i].startsWith(SIDE_BY_SIDE_KEY)) continue;', to: 'if (!lines[i].startsWith(SIDE_BY_SIDE_KEY)) continue;' },
+    // The decision bullet's two forms (M62-M64): DECISION_LINE back to the first form alone, or loosened.
+    { id: 'ctl-decform-old', target: 'M62', label: 'DECISION_LINE back to the first form alone (an own title-form decision not parsed)', from: DECISION_LINE_SRC, to: String.raw`const DECISION_LINE = /^- \*\*(D-\d{2})\*\*/;` },
+    { id: 'ctl-decform-xref', target: 'M63', label: 'DECISION_LINE back to the first form alone (a title-form cross-reference target not resolved)', from: DECISION_LINE_SRC, to: String.raw`const DECISION_LINE = /^- \*\*(D-\d{2})\*\*/;` },
+    { id: 'ctl-decform-loose', target: 'M64', label: 'DECISION_LINE loosened to any "- **D-NN" prefix (three digits, a glued letter and an unclosed bold parsed)', from: DECISION_LINE_SRC, to: String.raw`const DECISION_LINE = /^- \*\*(D-\d{2})/;` },
   ];
   // The checker controls: plan-gate.js copied beside aiwf-lib.js, sabotaged, and the target case run
   // against the copy. The fixture is still stamped by the PAYLOAD checker, so only the branch moved.

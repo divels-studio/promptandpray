@@ -39,15 +39,15 @@
  *   field-missing:<file>:<field>        a ticket without one of the six column-0 headings `## Outcome`,
  *                                       `## Scope`, `## Acceptance`, `## Risk threshold`,
  *                                       `## Stop condition`, `## Verify` (case-sensitive);
- *   decision-uncited:D-NN               a `- **D-NN**` bullet of DECISIONS.md whose `plan:` names THIS
- *                                       plan and whose D-NN neither a ticket nor the index cites (a
- *                                       bullet naming another plan, or none, is not demanded here; a
- *                                       `<X>/D-NN` reference to ANOTHER plan cites that plan's
- *                                       decision, not this one's);
+ *   decision-uncited:D-NN               a `- **D-NN**` or `- **D-NN <title>**` bullet of DECISIONS.md
+ *                                       whose `plan:` names THIS plan and whose D-NN neither a ticket
+ *                                       nor the index cites (a bullet naming another plan, or none, is
+ *                                       not demanded here; a `<X>/D-NN` reference to ANOTHER plan
+ *                                       cites that plan's decision, not this one's);
  *   decision-xref-unresolved:<X>/D-NN   a reference in the index, DECISIONS.md or a ticket to a plan
  *                                       with no DECISIONS.md under active/<X>/ or archive/<NNN>_PLAN_<X>_*
  *                                       (a reference to this plan resolves against this folder), or to
- *                                       a D-NN that file has no bullet for;
+ *                                       a D-NN that file has no bullet for (either form);
  *   tbd-found:<file>:<line>             a bare TBD, TODO or ??? outside code spans and fenced blocks
  *                                       (a mention of the words goes in a code span);
  *   codemap-path-missing:<file>:<path>  a backticked path in the first column of a ticket's `## Code Map`
@@ -75,9 +75,10 @@
  * THE STAMP. `--stamp` runs every check but the three stamp checks and writes nothing while any
  * problem stands. It records the SHA-256 of each contract file (the index, DECISIONS.md, every
  * tickets/*.md), the contract hash over `<name>\n<text>\n` per file in sorted name order, and the
- * SHA-256 of the bullet text (its `- **D-NN**` line up to the next decision or heading, trimmed) of
- * every decision a cross-reference cites. Texts are UTF-8 with CRLF normalised to LF, so a checkout
- * that converts line endings is not an edit; an mtime could not tell an edit from a touch.
+ * SHA-256 of the bullet text (its `- **D-NN**` or `- **D-NN <title>**` line up to the next decision
+ * or heading, trimmed) of every decision a cross-reference cites. Texts are UTF-8 with CRLF
+ * normalised to LF, so a checkout that converts line endings is not an edit; an mtime could not tell
+ * an edit from a touch.
  * RESEARCH.md and records/ change after the stamp by design and are outside it.
  *
  * THE PROJECT ROOT. Code Map paths are resolved against the process cwd on the CLI (`--check`,
@@ -128,7 +129,7 @@ const MAX_TICKET_BYTES = 6144;
 const MIN_TICKET_BYTES = 1024;
 const TICKET_FIELDS = ['Outcome', 'Scope', 'Acceptance', 'Risk threshold', 'Stop condition', 'Verify'];
 const XREF_RE = /\b([A-Z]{2,8})\/D-(\d{2})\b/g;
-const DECISION_LINE = /^- \*\*(D-\d{2})\*\*/;
+const DECISION_LINE = /^- \*\*(D-\d{2})(?:\*\*|[ \t.:)\-][^\n]*?\*\*)/;
 const DECISION_PLAN = /plan:\s*([A-Z]{2,8})/g;
 const TBD_RE = /\bTBD\b|\bTODO\b|\?\?\?/;
 const USAGE = 'usage: node plan-gate.js --check <folder> | --stamp <folder>   (run from the project root)\n'
@@ -300,8 +301,9 @@ function readFolder(abs) {
 }
 
 /**
- * The decisions of a DECISIONS.md: each unfenced `- **D-NN**` bullet, its text running to the next
- * `- **D-` line or heading, and the plan its LAST `plan: <ABBR>` names (null when it names none).
+ * The decisions of a DECISIONS.md: each unfenced `- **D-NN**` or `- **D-NN <title>**` bullet (the
+ * bold closed on its line), its text running to the next `- **D-` line or heading, and the plan its
+ * LAST `plan: <ABBR>` names (null when it names none).
  */
 function parseDecisions(file) {
   const out = [];
@@ -379,7 +381,7 @@ function resolveXrefs(model, files) {
     const decisions = sources.get(x);
     const hit = decisions === null ? null : decisions.find((d) => d.id === id);
     if (decisions === null) out.set(key, { why: `plan ${x} has no DECISIONS.md under active/${x}/ or archive/<NNN>_PLAN_${x}_*/` });
-    else if (hit === undefined) out.set(key, { why: `the DECISIONS.md of plan ${x} has no "- **${id}**" bullet` });
+    else if (hit === undefined) out.set(key, { why: `the DECISIONS.md of plan ${x} has no "- **${id}**" or "- **${id} <title>**" bullet` });
     else out.set(key, { hash: sha(hit.text) });
   }
   return out;
