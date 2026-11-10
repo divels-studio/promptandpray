@@ -1,8 +1,8 @@
 {
   "$schema": "D:/pnp-live/schema/aiwf.config.schema.json",
   "_aiwf": {
-    "installedPluginVersion": "0.3.18",
-    "lastMigrationApplied": "0043_dialog-language",
+    "installedPluginVersion": "0.3.19",
+    "lastMigrationApplied": "0044_decision-title-form",
     "managedRegions": {
       ".claude/aiwf-native/roles.json": "0.3.18",
       ".claude/agents/writer.md": "0.3.18",
