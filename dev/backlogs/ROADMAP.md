@@ -192,3 +192,16 @@ Entries below were ported on 2026-10-18 from `dev/backlogs/CANDIDATES.md` (now h
 - Status: idea
 - Born: 2026-11-08, at DOCTR-001's close, of the operator's words DOCTR/D-18 quotes
 
+## AUDITRULE - the auditor's rules: open items
+- Goal: every rule an auditor blocks on is seen catching real defects, is measured on a routine, and leaves or narrows when it stops paying
+- Why: the red-proof casus of 2026-11-21 - on Silerax's last 17 plans, 12 of 32 code-pass blockers named no defect, only a missing red record (the arbiter session's count, not re-counted here); the rule was narrowed in 0.3.20; the order below is the arbiter's, on the operator's delegation „ти кои препоръчваш ... ПНП е писан от АИ за АИ"
+- Scope: in - the items below; out - the red-proof rule itself (0.3.20, `review.md` § Test quality)
+  - 2026-11-21 arbiter - (1) a routine count of the auditor's blockers that carry no defect: per plan or per release, how many blockers named a code or test defect and how many only a missing record or form [casus: `dev/changes/0.3.20-red-proof-codex-opinion.txt`; reference: `D:\Stratex\dev\references\CLAUDE_CODE_VERIFICATION.md`]
+  - 2026-11-21 arbiter - (2) a rule's life cycle: a new rule starts in observe mode (its misses are logged, it blocks nothing), a miss becomes a rule after two cases, and rules are pruned on a routine [same casus and reference]
+  - 2026-11-21 arbiter - (3) checks triggered by what the diff touches, first of all a check whether a change can modify the rules and tests that judge it - UNVERIFIED against the plugin's gates (Gate 1-4 may already cover part of it) [same casus and reference]
+  - 2026-11-21 arbiter - (4) guidance on property tests and differential tests: when a ticket's proof should take one of these forms instead of example tests [same casus and reference]
+- Size: M
+- Plans: none yet
+- Status: idea
+- Born: 2026-11-21, the arbiter session's handover on the operator's word „оставаш арбитражна, сесия PNP Work -> предаваш работата и следиш за изпълнението ѝ"
+

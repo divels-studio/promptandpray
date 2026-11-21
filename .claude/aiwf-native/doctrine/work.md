@@ -118,7 +118,8 @@ click-based permission gates only.
 Test policy has a single home in your project - the standard named in your overrides document
 (`paths.overridesDoc`), and the concrete commands live in `verify.commands` and `verify.e2e` in
 `aiwf.config.json`. Tests are part of implementation, not polish. A check agent runs checks and
-fixes nothing; the Writer runs only the tests it adds - red, then green.
+fixes nothing; the Writer runs only the tests it adds - red, then green where `review.md` § Test
+quality owes it.
 
 **The E2E spec runs before the audit.** For a ticket whose brief says `E2E: yes` (`ticket.md`
 § Ticket brief contract (R2/R3)), the COO runs `verify.e2e.runner` over the Writer's spec

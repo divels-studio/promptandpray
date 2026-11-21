@@ -164,9 +164,20 @@ to it - callers, pointers, documents - before the verdict.
 - No stale test names/expectations.
 - A Contract Justification is required whenever a failing assertion is adjusted.
 - Named-fixture mismatch -> STOP and report, never silently redefine the expectation.
-- Every new test is shown red under a named fault and then green, both runs in the hand-back; the
-  COO greps the diff for skip, only, todo and reduced sets and records a decision per hit - green by
-  narrowing is not accepted.
+- Red-then-green proof is owed for a new test, or a test whose assertion the ticket changed, that
+  asserts a behavior the ticket adds or changes. The unit of proof is the fault, not the test: one
+  named fault, one red run, and the hand-back names the tests that went red under it; a failure
+  before a test's own assertion proves nothing for that test. A test written before the production
+  change, whose failing run against the old behavior is in the hand-back, has its proof - no fault
+  is injected. Any other new or changed test - a shape, a type, a message key, a guard that an
+  untouched path stays as it was, an extended input list - is checked by reading: its assertion is
+  unconditional and can fail. A missing red record is a note; it is a blocker only when the
+  Reviewer names the fault under which the test stays green - the finding is then the test, not the
+  record. A brief, a plan's verify line or a ticket's acceptance criterion that asks for more does
+  not widen this bullet. **Its suppression dual:** no red run is asked of a ticket that changes no
+  behavior, and no second one for a failure mode a kept red run already shows.
+- The COO greps the diff for skip, only, todo and reduced sets and records a decision per hit -
+  green by narrowing is not accepted.
 
 ### Verdict discipline
 
