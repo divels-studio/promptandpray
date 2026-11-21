@@ -1,0 +1,16 @@
+{
+  "migration": "0045_red-proof-scope",
+  "targetPluginVersion": "0.3.20",
+  "operations": [
+    { "op": "rerender-managed-region", "file": ".claude/aiwf-native/doctrine/work.md", "region": null, "template": "templates/doctrine/work.md.tmpl" },
+    { "op": "rerender-managed-region", "file": ".claude/aiwf-native/doctrine/ticket.md", "region": null, "template": "templates/doctrine/ticket.md.tmpl" },
+    { "op": "rerender-managed-region", "file": ".claude/aiwf-native/doctrine/review.md", "region": null, "template": "templates/doctrine/review.md.tmpl" },
+    { "op": "rerender-managed-region", "file": ".claude/agents/writer.md", "region": null, "template": "templates/agents/writer.md.tmpl" },
+    {
+      "op": "note",
+      "id": "red-proof-scope-0-3-20",
+      "text": "0.3.20 narrows the red-then-green rule. In review.md, section Test quality, red-then-green proof is now owed only for a new test, or a test whose assertion the ticket changed, that asserts a behavior the ticket adds or changes. The unit of proof is the fault, not the test: one named fault, one red run, and the hand-back names the tests that went red under it; a failure before a test's own assertion proves nothing for that test, and a test written before the production change whose failing run against the old behavior is in the hand-back already has its proof. Any other new or changed test is checked by reading. A missing red record is a note; it is a blocker only when the Reviewer names the fault under which the test stays green. A brief, a plan's verify line or a ticket's acceptance criterion may not widen the rule (ticket.md, section Ticket brief contract; the planner brief). The Writer agent's VERIFY and Done contract, the Writer line of ticket.md section Role boundaries and work.md section Tests say the same. This update re-renders work.md, ticket.md, review.md and the Writer agent, each additions block carried. If your project carries a local rule that keeps every red run as a file, asks for a red run per new or changed test, or blocks on a missing red record alone, that rule now contradicts review.md section Test quality: delete or narrow it on the operator's word.",
+      "docRefs": ["CHANGELOG.md", "templates/briefs/planner.md"]
+    }
+  ]
+}

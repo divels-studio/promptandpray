@@ -4,6 +4,31 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.3.20] - 2026-11-21
+
+The red-then-green rule is narrowed to the behavior a ticket changes. Migration
+`0045_red-proof-scope` re-renders three stage files and the Writer agent and carries one `note`.
+A local rule that keeps every red run as a file - `ticket.md § project additions: The RED runs are
+kept as files` - now contradicts `review.md` § Test quality rather than duplicating it: delete or
+narrow it on your operator's word.
+
+### Changed
+
+- **Red-then-green proof is owed for the behavior a ticket changes** - `review.md` § Test quality:
+  the proof is owed for a new or assertion-changed test of a behavior the ticket adds or changes,
+  per named fault, not per test; a test written first and seen failing against the old behavior has
+  its proof; any other new test is checked by reading.
+  - A missing red record is a note; a blocker only when the Reviewer names the fault under which the
+    test stays green.
+  - A brief, a plan's verify line or a ticket's acceptance criteria quote the rule and do not widen
+    it (`ticket.md` § Ticket brief contract, the planner brief).
+  - The Writer agent's VERIFY and Done contract, the Writer line of `ticket.md` § Role boundaries
+    and `work.md` § Tests say the same.
+- **Migration `0045_red-proof-scope`** - re-renders `.claude/aiwf-native/doctrine/work.md`,
+  `ticket.md`, `review.md` and `.claude/agents/writer.md` and prints one `note`.
+
+Retires local rules: none
+
 ## [0.3.19] - 2026-11-10
 
 The plan gate reads a decision bullet whose title stands inside the bold. Migration

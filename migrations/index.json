@@ -42,5 +42,6 @@
   { "id": "0041_doctrine-wording", "targetPluginVersion": "0.3.16" },
   { "id": "0042_skills-wording", "targetPluginVersion": "0.3.17" },
   { "id": "0043_dialog-language", "targetPluginVersion": "0.3.18" },
-  { "id": "0044_decision-title-form", "targetPluginVersion": "0.3.19" }
+  { "id": "0044_decision-title-form", "targetPluginVersion": "0.3.19" },
+  { "id": "0045_red-proof-scope", "targetPluginVersion": "0.3.20" }
 ]

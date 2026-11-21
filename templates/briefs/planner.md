@@ -59,7 +59,8 @@ THE FOLDER CONTRACT (checked mechanically by `plan-gate.js` - a breach is refuse
 - No bare open-item marker anywhere (put the word in a code span if you must mention it).
 - Scope is a worklist: each item names the file and, where the Writer acts or an acceptance check
   reads, the `file:line`. Acceptance is literal commands, each with the output that would mean
-  "broken". Over the caps = split or defer: say so in the handoff, the COO decides. A ticket is
+  "broken"; a test's red-then-green proof is cited as `review.md` § Test quality and never widened
+  (no red run per test, no per-test log or hash pair, no "every changed test"). Over the caps = split or defer: say so in the handoff, the COO decides. A ticket is
   trimmed by citing, never by cutting: restated decision text becomes its `D-NN` cite, procedures
   and tables move to the index; a `file:line`, an acceptance command, a "broken when" clause or a
   constant is never cut.

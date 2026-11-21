@@ -44,6 +44,10 @@ Escalation         - whether a concrete decision of the ticket fires an escalati
 The first six names are the six headings a plan ticket carries, the ones the mechanical plan gate
 checks (`plan.md` § Plan readiness review).
 
+**A brief quotes the red-proof rule; it does not widen it.** A brief, a plan's verify line and a
+ticket's acceptance criteria point at `review.md` § Test quality for red-then-green proof and ask
+for nothing beyond it - no red run per test, no per-test log or hash pair, no "every changed test".
+
 `Risk threshold` and `Stop condition` are mandatory for every R2/R3 brief. So are the two last
 lines, each in its fixed form. The E2E line reads `E2E: yes | no - because <reason>` -
 the countable form of "a brief declares observable runtime/UI behavior". The escalation line reads
@@ -159,8 +163,8 @@ the gate.
   deliberate exception, not a violation.
 - **Writer** - the **only** repo writer. A native Claude subagent (`.claude/agents/writer.md`),
   invoked via the **Agent tool** with `subagent_type: "writer"`. Never approves its own work;
-  returns the diff, the tests it added - red, then green - and the exact exit codes of the commands
-  it ran; the ticket's VERIFY rows are the COO's run at the handoff (`work.md` § Tests). It does not decide
+  returns the diff, the tests it added - red, then green where `review.md` § Test quality owes it -
+  and the exact exit codes of the commands it ran; the ticket's VERIFY rows are the COO's run at the handoff (`work.md` § Tests). It does not decide
   acceptance or invent ledger content; it performs the Git PLAN write only when the COO explicitly
   delegates that specific mutation. Several Writers may run on ONE ticket when its worklist splits
   into file sets that do not overlap: the brief records the split, and one VERIFY and one commit
