@@ -161,10 +161,10 @@ All in `.claude/aiwf-native/ORCHESTRATOR.md` unless a stage file is named:
   `Start-Process git -ArgumentList 'checkout','--detach','main' -WorkingDirectory 'D:\pnp-live'
   -NoNewWindow -Wait`. Plans live in `dev/backlogs/`, the project's
   identity and hard rules in `dev/PROJECT_OVERRIDES.md` (read it first - `dev/README.md` is the map).
-- The payload is code: any change under `skills/ docs/ templates/ scripts/ schema/ hooks/
-  migrations/ examples/ .claude-plugin/` is R2 through the Writer; the auditor is the audit table's
-  row for the class (docs row 0 = none), and a managed-artifact change ships as a migration +
-  version bump. The payload stays generic - no origin-project names, no
+- Prose in the payload (`docs/`, `skills/`, the text of `templates/`, `README.md`, `CHANGELOG.md`)
+  is R1 in the main session; code (`scripts/ hooks/ schema/ .claude-plugin/`) is R2 through the
+  Writer - the rule is `dev/PROJECT_OVERRIDES.md` § Hard rules; a managed-artifact change ships as a
+  migration + version bump. The payload stays generic - no origin-project names, no
   Cyrillic, no absolute paths. Those may appear only outside the payload: in `dev/` and in the
   self-install layer (`.claude/`, this file's operator zone, `.aiwf/`), which the provenance scan
   skips at the root by design.
