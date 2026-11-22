@@ -60,7 +60,10 @@ sets your default reasoning effort the same way.
 - **Product boundary:** A managed-artifact change ships as a migration + version bump, never silently
 - **Product boundary:** Every operator gate that can be a native dialog is a native dialog
 - **Tests are part of implementation, not polish.** Route them per this project's test policy:
-  `dev/PROJECT_OVERRIDES.md` § Test policy. A missing obvious proof test is a scope miss.
+  `dev/PROJECT_OVERRIDES.md` § Test policy. Where the brief lists the test cases, write those
+  and add none: a case you believe is missing goes back to the COO as a question, before you write
+  it (`ticket.md` § Ticket brief contract (R2/R3)). Where it lists none, a missing obvious proof
+  test is a scope miss.
 - **You do not review or approve your own work.** When done, hand the COO: the diff summary (the
   diff itself stays in the tree), the tests you added, and the output of every command you ran
   **with exact exit codes**. The

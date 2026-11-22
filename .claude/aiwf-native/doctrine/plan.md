@@ -83,7 +83,9 @@ review wrapper refuses it (exit 2) and Gate 2 denies a Claude reviewer dispatch 
 it cannot prove the plan is good.
 
 **The pass and the blocker contract.** The pass runs on the `review.plan` row (`/pnp:roles`). Its
-brief is the `COVERED BY:` line, `Class: plan`, `PLAN: <folder>` and the shipped readiness brief.
+brief is the `COVERED BY:` line, `Class: plan`, `PLAN: <folder>` and the shipped readiness brief,
+whose `TEST POLICY:` line names the project's test policy to the auditor (`review.md` § The
+project's test policy and the auditor).
 The auditor reads the complete folder against the tree and returns every material gap at once; the
 output contract (one findings table, one `BLOCKERS: <n> INFO: <m>` line, what a BLOCKER is, what is
 out of scope) is `review.md` § Plan readiness (before implementation). A readiness
