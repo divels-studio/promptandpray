@@ -28,8 +28,9 @@
 # brief file <scratchDir>/<key>-qa-brief.txt, keyed like the session-state file, so the launch command
 # keeps one constant prefix an allow rule can match. A missing, unreadable, empty or whitespace-only
 # file is exit 2 before any state read and any engine start; --brief-file together with a non-empty
-# brief on stdin is exit 2 (ambiguous). For that check stdin is read ONCE, bounded to 64 KiB and 2
-# seconds, so an open stdin never hangs the run; a stdin that fills the bound is refused unread. Without the flag the brief is read from stdin exactly as before. The
+# brief on stdin is exit 2 (ambiguous). For that check stdin is read ONCE, by node, bounded to 64 KiB
+# and 2 seconds, so an open stdin never hangs the run; a stdin that fills the bound is refused unread,
+# and a check that could not run is a refusal too. Without the flag the brief is read from stdin exactly as before. The
 # session key below is read from the brief whichever way it arrived.
 #
 # --project-root <path> is REQUIRED: the plugin payload has no project of its own, so the caller
@@ -119,24 +120,42 @@ done
 # SUPPLIED, never on its value: an explicitly empty path is a missing file, not "no flag". A brief that
 # also arrived on stdin makes the call ambiguous and is refused rather than one of the two silently
 # winning - and stdin is read with a BOUND, never to its end: `[ -t 0 ]` is a terminal (nothing
-# piped); otherwise ONE read takes at most 64 KiB within at most 2 seconds, so a stdin that is an
-# open pipe - silent, or one that delivered a byte and stays open - cannot hang the run. The read's
-# status is captured, not tested: 0 (the 64 KiB were read), 1 (end of input) and >128 (the time
-# bound hit; the bytes read so far stay in the variable) are all decided by the bytes alone. Two
-# cases are ambiguous: a stdin that fills the bound is refused unread (the cap reached means stdin
-# carries data beside the flag, whatever the 64 KiB were), and a shorter read that carries text. A
+# piped); otherwise ONE node call (STDIN_BOUND_JS) reads at most 64 KiB within at most 2 seconds,
+# whichever comes first, or to the end of input, and then exits by itself - so a stdin that is an
+# open pipe - silent, or one that delivered a byte and stays open - cannot hang the run. node, not a
+# bash builtin: `read -N` does not exist in bash 3.2 (the macOS default), and node behaves the same
+# on every host. It prints one word: `cap` (the 64 KiB bound was filled - refused unread, the cap
+# reached means stdin carries data beside the flag, whatever the 64 KiB were), `text` (a shorter read
+# that carries a non-whitespace character - ambiguous, refused) or `empty` (go on). Anything else -
+# node missing, a non-zero exit, another word - is a refusal too: the check could not run. A
 # leading UTF-8 byte-order mark of the file is dropped, as the PowerShell mirror's UTF-8 read drops it.
+STDIN_BOUND_JS='
+const CAP = 65536;
+const chunks = [];
+let bytes = 0;
+let done = false;
+const finish = () => {
+  if (done) return;
+  done = true;
+  const text = Buffer.concat(chunks).toString("utf8");
+  const word = bytes >= CAP ? "cap" : (/[^ \t\n\v\f\r]/.test(text) ? "text" : "empty");
+  process.stdout.write(word, () => process.exit(0));
+};
+process.stdin.on("data", (c) => { chunks.push(c); bytes += c.length; if (bytes >= CAP) finish(); });
+process.stdin.on("end", finish);
+process.stdin.on("error", () => process.exit(3));
+setTimeout(finish, 2000);
+'
 if [ "$HAS_BRIEF_FILE" -eq 1 ]; then
   if [ ! -t 0 ]; then
-    STDIN_BRIEF=''
-    STDIN_STATUS=0
-    IFS= read -r -d '' -t 2 -N 65536 STDIN_BRIEF || STDIN_STATUS=$?
-    if [ "${#STDIN_BRIEF}" -ge 65536 ]; then
-      fail "--brief-file '$BRIEF_FILE' was given while stdin filled the 64 KiB bound - ambiguous (refused unread); pass the brief one way only."
-    fi
-    if has_text "$STDIN_BRIEF"; then
-      fail "--brief-file '$BRIEF_FILE' was given together with a brief on stdin - ambiguous; pass the brief one way only (stdin read status $STDIN_STATUS)."
-    fi
+    STDIN_WORD="$(node -e "$STDIN_BOUND_JS" 2>/dev/null)" \
+      || fail "--brief-file '$BRIEF_FILE' was given and the check for a brief on stdin could not run (node exit $?) - refused; pass the brief one way only."
+    case "$STDIN_WORD" in
+      empty) ;;
+      cap) fail "--brief-file '$BRIEF_FILE' was given while stdin filled the 64 KiB bound - ambiguous (refused unread); pass the brief one way only." ;;
+      text) fail "--brief-file '$BRIEF_FILE' was given together with a brief on stdin - ambiguous; pass the brief one way only." ;;
+      *) fail "--brief-file '$BRIEF_FILE' was given and the check for a brief on stdin could not run (node printed '$STDIN_WORD') - refused; pass the brief one way only." ;;
+    esac
   fi
   if [ -z "$BRIEF_FILE" ] || [ ! -f "$BRIEF_FILE" ]; then
     fail "the brief file does not exist (or is not a file): '$BRIEF_FILE'. Write the brief there first."

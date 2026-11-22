@@ -114,9 +114,11 @@ function projectDirOf() {
 
 // The allowlist, on the FIRST path segment. Segment names compare case-INSENSITIVELY: on Windows
 // `Docs\x.md` and `docs\x.md` are the same file, so a case-sensitive compare would deny a path the
-// filesystem itself treats as allowed. That leniency matches reality; it is not a hole.
-function isAllowlisted(rel) {
-  const segs = rel.split(/[\\/]/).filter((s) => s !== '');
+// filesystem itself treats as allowed. That leniency matches reality; it is not a hole. The segments
+// come from the path implementation's OWN separator (default: this module's `path`): on POSIX a
+// backslash is a filename character, so `docs\x.js` is one root-level file name, never two segments.
+function isAllowlisted(rel, pathImpl = path) {
+  const segs = rel.split(pathImpl.sep).filter((s) => s !== '');
   if (segs.length === 0) return true; // defensive; the empty relative path is handled before this
   const first = segs[0].toLowerCase();
   if (first === 'docs') return true;                              // docs/** — the COO's own class
@@ -141,12 +143,13 @@ function targetPathOf(toolInput) {
 // win32) or a first segment `..`; the project dir itself (`rel === ''`) is NOT outside - each caller
 // decides the root on its own terms. Shared by the main session's branch and the non-writer branch.
 // `pathImpl` (default: this module's `path`) lets a caller resolve against an explicit host flavour
-// (`path.posix` / `path.win32`); every existing caller omits it and keeps the host's own `path`. The
-// `outside` test is deliberately left as it was; the hand-back helper does not lean on it alone.
+// (`path.posix` / `path.win32`); the hook's own callers omit it and keep the host's own `path`. The
+// `outside` test uses the same `pathImpl` throughout and splits by its OWN separator: on POSIX a
+// backslash is a filename character, so a root file named `..\x.js` is inside, not a step up.
 function projectRelative(projectDir, target, pathImpl = path) {
   const resolved = pathImpl.resolve(projectDir, target);
   const rel = pathImpl.relative(projectDir, resolved);
-  const outside = path.isAbsolute(rel) || rel.split(/[\\/]/)[0] === '..';
+  const outside = pathImpl.isAbsolute(rel) || rel.split(pathImpl.sep)[0] === '..';
   return { resolved, rel, outside };
 }
 
@@ -485,4 +488,4 @@ if (require.main === module) lib.runFailClosed(async () => {
 });
 
 // Required (not run) by the self-check, which calls the resolver directly; as a hook nothing changes.
-module.exports = { resolveTransferSurface, resolveRoadmap, resolvePlanningDirs, isAllowlisted, everyTargetInHandback };
+module.exports = { resolveTransferSurface, resolveRoadmap, resolvePlanningDirs, isAllowlisted, projectRelative, everyTargetInHandback };

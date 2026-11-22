@@ -860,7 +860,7 @@ function sectionGate1Identity(tmpRoot) {
   // against the copy and required to turn red.
   for (const [id, label, target, from, to] of [
     ['g1-ctl-outside', 'the helper forced to "outside"', 'g1-in',
-      "const outside = path.isAbsolute(rel) || rel.split(/[\\\\/]/)[0] === '..';", 'const outside = true;'],
+      "const outside = pathImpl.isAbsolute(rel) || rel.split(pathImpl.sep)[0] === '..';", 'const outside = true;'],
     ['g1-ctl-first', 'only the first path field read', 'g1-mixed',
       "const NON_WRITER_PATH_FIELDS = ['file_path', 'notebook_path'];", "const NON_WRITER_PATH_FIELDS = ['file_path'];"],
   ]) {
@@ -991,14 +991,17 @@ function sectionGate1Identity(tmpRoot) {
   }
   {
     // Named-fault control: the split put back to both slash types. The patched copy is REQUIRED (its
-    // export called directly), not spawned - the direct call is the form these rows take.
+    // export called directly), not spawned - the direct call is the form these rows take. The anchor
+    // carries the next line: isAllowlisted splits the same way and comes first in the file.
     const id = 'g1-ctl-hb-sep';
     const label = 'the separator split put back to both slash types';
     const target = 'g1-hb-posix-bslash';
     let copyModule = null;
     try {
       const hookCopy = path.join(pgEngineCopy(tmpRoot, id, ['pretooluse-mutation-guard.js', 'aiwf-lib.js']), 'pretooluse-mutation-guard.js');
-      pgPatch(hookCopy, 'const segs = rel.split(pathImpl.sep).filter', 'const segs = rel.split(/[\\\\/]/).filter');
+      pgPatch(hookCopy,
+        "const segs = rel.split(pathImpl.sep).filter((s) => s !== '');\n    if (segs.length <= HANDBACK_SEGMENTS.length)",
+        "const segs = rel.split(/[\\\\/]/).filter((s) => s !== '');\n    if (segs.length <= HANDBACK_SEGMENTS.length)");
       copyModule = require(hookCopy);
     } catch (e) { check(`[${id}] control could be applied: ${label}`, false, String(e.message)); }
     if (copyModule) {
@@ -1006,6 +1009,78 @@ function sectionGate1Identity(tmpRoot) {
       const got = sepCall(copyModule, row);
       check(`[${id}] sabotage detected: ${label} -> ${target} turns red`, got !== row[5],
         got === row[5] ? 'still PASS - the check is vacuous' : `FAIL as required (got ${got})`);
+    }
+  }
+
+  // Gate 3's allowlist and the shared containment helper, called directly with an explicit path
+  // flavour in the same form: on POSIX a backslash is a filename character, never a separator.
+  // [id, label, path implementation, rel, expected]
+  const ALLOWLIST_SEP_ROWS = [
+    ['g3-al-posix-bslash-docs', 'posix: docs\\x.js is ONE root-level file name, not .md -> false',
+      path.posix, 'docs\\x.js', false],
+    ['g3-al-posix-bslash-aiwf', 'posix: .aiwf\\x.js is ONE root-level file name, not .md -> false',
+      path.posix, '.aiwf\\x.js', false],
+    ['g3-al-posix-bslash-md', 'posix: notes\\x.md is ONE root-level *.md file name -> true',
+      path.posix, 'notes\\x.md', true],
+    ['g3-al-posix-fslash', 'posix: docs/x.js -> true',
+      path.posix, 'docs/x.js', true],
+    ['g3-al-win32-bslash', 'win32: docs\\x.js -> true',
+      path.win32, 'docs\\x.js', true],
+    ['g3-al-win32-nested-md', 'win32: src\\x.md is not root-level -> false',
+      path.win32, 'src\\x.md', false],
+  ];
+  // [id, label, path implementation, root, target, expected `outside`]
+  const W32_OTHER_DRIVE = 'E:' + '\\x.js'; // composed as W32_ROOT is, for the same provenance reason
+  const RELATIVE_SEP_ROWS = [
+    ['g1-pr-posix-bslash-up', 'posix: ..\\x.js is a root file of that name -> outside false',
+      path.posix, '/proj', '..\\x.js', false],
+    ['g1-pr-posix-fslash-up', 'posix: ../x.js -> outside true',
+      path.posix, '/proj', '../x.js', true],
+    ['g1-pr-win32-bslash-up', 'win32: ..\\x.js -> outside true',
+      path.win32, W32_ROOT, '..\\x.js', true],
+    ['g1-pr-win32-drive', 'win32: an absolute path on another drive letter -> outside true',
+      path.win32, W32_ROOT, W32_OTHER_DRIVE, true],
+  ];
+  const alCall = (mod, row) => {
+    try { return mod.isAllowlisted(row[3], row[2]); }
+    catch (e) { return `threw: ${e.message}`; }
+  };
+  const prCall = (mod, row) => {
+    try { return mod.projectRelative(row[3], row[4], row[2]).outside; }
+    catch (e) { return `threw: ${e.message}`; }
+  };
+  if (gate1Module) {
+    for (const row of ALLOWLIST_SEP_ROWS) {
+      const got = alCall(gate1Module, row);
+      check(`[${row[0]}] ${row[1]}`, got === row[4], `got ${got}`);
+    }
+    for (const row of RELATIVE_SEP_ROWS) {
+      const got = prCall(gate1Module, row);
+      check(`[${row[0]}] ${row[1]}`, got === row[5], `got ${got}`);
+    }
+  }
+  // Named-fault controls of these rows, the g1-ctl-hb-sep pattern: a patched copy REQUIRED, its export
+  // called directly. [id, label, rows, call, expected column, target, from, to]
+  for (const [id, label, rows, call, col, target, from, to] of [
+    ['g3-ctl-al-sep', 'the allowlist split put back to both slash types', ALLOWLIST_SEP_ROWS, alCall, 4,
+      'g3-al-posix-bslash-docs',
+      'function isAllowlisted(rel, pathImpl = path) {\n  const segs = rel.split(pathImpl.sep)',
+      'function isAllowlisted(rel, pathImpl = path) {\n  const segs = rel.split(/[\\\\/]/)'],
+    ['g1-ctl-pr-sep', 'the outside split put back to both slash types', RELATIVE_SEP_ROWS, prCall, 5,
+      'g1-pr-posix-bslash-up',
+      "rel.split(pathImpl.sep)[0] === '..'", "rel.split(/[\\\\/]/)[0] === '..'"],
+  ]) {
+    let copyModule = null;
+    try {
+      const hookCopy = path.join(pgEngineCopy(tmpRoot, id, ['pretooluse-mutation-guard.js', 'aiwf-lib.js']), 'pretooluse-mutation-guard.js');
+      pgPatch(hookCopy, from, to);
+      copyModule = require(hookCopy);
+    } catch (e) { check(`[${id}] control could be applied: ${label}`, false, String(e.message)); }
+    if (copyModule) {
+      const row = rows.find((x) => x[0] === target);
+      const got = call(copyModule, row);
+      check(`[${id}] sabotage detected: ${label} -> ${target} turns red`, got !== row[col],
+        got === row[col] ? 'still PASS - the check is vacuous' : `FAIL as required (got ${got})`);
     }
   }
 }
@@ -2562,6 +2637,15 @@ function sectionGate3(tmpRoot) {
   check('main + R2 open + docs/backlogs/active/PLAN_X.md -> allow (nested; first segment wins)',
     allow(G(R2, fp('docs/backlogs/active/PLAN_X.md'))));
   check('main + R2 open + Docs/foo.md -> allow (case-insensitive segment compare)', allow(G(R2, fp('Docs/foo.md'))));
+  {
+    // A platform row: on win32 the backslash is a separator, so docs\x.js is under docs/; on every
+    // other platform it is one root-level code file whose name holds a backslash.
+    const WIN = process.platform === 'win32';
+    const r = G(R2, fp('docs\\x.js'));
+    check(`main + R2 open + docs\\x.js -> ${WIN ? 'allow' : 'DENY'} on ${process.platform} ` +
+      '(a separator on win32; a filename character elsewhere)',
+    WIN ? allow(r) : deny(r) && r.reason.includes(G3_MARK), `${r.decision}: ${r.reason.slice(0, 70)}`);
+  }
   check('main + R2 open + a path OUTSIDE the project dir -> allow (session scratchpad / agent memory)',
     allow(G(R2, fp(path.resolve(R2, '..', 'outside.txt')))));
 
@@ -2836,8 +2920,8 @@ function sectionGate3Surface(tmpRoot) {
   {
     // A platform resolver row: on win32 the backslash is a separator, so this IS under .claude; on
     // every other platform it is one root file whose name holds backslashes - not under `.claude`, so
-    // the resolver returns it (the fixed allowlist does not: `isAllowlisted` splits on backslashes
-    // everywhere).
+    // the resolver returns it (and the fixed allowlist reads it the same way: `isAllowlisted` splits by
+    // the host's own separator, so elsewhere it is one root-level *.md file name).
     const ts = '.claude\\agents\\writer.md';
     const got = resolve(ts);
     const WIN = process.platform === 'win32';
@@ -4874,8 +4958,8 @@ const BRIEF_FILE_PROBES = [
   { id: 'bf-open', file: BF_BRIEF, stdin: null, idle: 'x\n', shOnly: true, resume: false, seed: () => null,
     label: (f, s, flag) => `${f} ${flag} with an OPEN stdin that delivers one line and then stays open EXECUTED: exit 2 (ambiguous) within the bounded read - codex never invoked, no hang`,
     ok: bfRefused('ambiguous') },
-  // 65,536 spaces fill the read's cap, so the `x` behind them is never read: the bytes that WERE read
-  // carry no text, and only the "the cap was filled" test can refuse it.
+  // 65,536 spaces fill the read's cap, so the `x` behind them never decides: the bytes reach the cap,
+  // the word is `cap`, and only the "the cap was filled" refusal can refuse it.
   { id: 'bf-cap', file: BF_BRIEF, stdin: null, idle: `${' '.repeat(65536)}x`, shOnly: true, resume: false, seed: () => null,
     label: (f, s, flag) => `${f} ${flag} with an OPEN stdin that fills the 64 KiB bound with spaces before any text EXECUTED: exit 2 (ambiguous, refused unread) - codex never invoked`,
     ok: bfRefused('ambiguous') },
@@ -5192,13 +5276,14 @@ function readOnlyWrapperControls(file, short) {
     { id: `sh-exec-${short}-bf-blank`, label: `${file}: "has text" narrowed to "non-empty", so a whitespace-only brief file passes (executed)`,
       apply: (r) => patchText(r, at, '*[![:space:]]*) return 0 ;;', () => '?*) return 0 ;;') },
     { id: `sh-exec-${short}-bf-both`, label: `${file}: --brief-file AND a brief on stdin accepted together (executed)`,
-      apply: (r) => patchText(r, at, 'if has_text "$STDIN_BRIEF"; then', () => 'if false; then') },
+      apply: (r) => patchText(r, at, 'text) fail "--brief-file', () => 'text) true "--brief-file') },
     { id: `sh-exec-${short}-bf-idle`, label: `${file}: the stdin read's time bound dropped, so an idle stdin blocks the run (executed)`,
-      apply: (r) => patchText(r, at, "IFS= read -r -d '' -t 2 -N 65536 STDIN_BRIEF", () => "IFS= read -r -d '' -N 65536 STDIN_BRIEF") },
+      apply: (r) => patchText(r, at, '\nsetTimeout(finish, 2000);\n', () => '\n') },
     { id: `sh-exec-${short}-bf-open`, label: `${file}: the bounded stdin read replaced by cat, so a stdin that stays open blocks the run (executed)`,
-      apply: (r) => patchText(r, at, "IFS= read -r -d '' -t 2 -N 65536 STDIN_BRIEF || STDIN_STATUS=$?", () => 'STDIN_BRIEF="$(cat)"') },
+      apply: (r) => patchText(r, at, 'STDIN_WORD="$(node -e "$STDIN_BOUND_JS" 2>/dev/null)"',
+        () => 'STDIN_WORD="$(if has_text "$(cat)"; then printf text; else printf empty; fi)"') },
     { id: `sh-exec-${short}-bf-cap`, label: `${file}: the "the cap was filled" refusal removed, so text behind 64 KiB of whitespace slips past (executed)`,
-      apply: (r) => patchText(r, at, 'if [ "${#STDIN_BRIEF}" -ge 65536 ]; then', () => 'if false; then') },
+      apply: (r) => patchText(r, at, 'cap) fail "--brief-file', () => 'cap) true "--brief-file') },
   ];
 }
 

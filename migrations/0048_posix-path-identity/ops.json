@@ -1,0 +1,12 @@
+{
+  "migration": "0048_posix-path-identity",
+  "targetPluginVersion": "0.3.23",
+  "operations": [
+    {
+      "op": "note",
+      "id": "posix-path-identity-0-3-23",
+      "text": "0.3.23 fixes two POSIX defects and changes nothing on Windows. One: Gate 1 and Gate 3 now split a write target by the host's own separator. On Linux and macOS a backslash is a filename character, so a root-level file whose name holds one is judged as that one file: it no longer passes Gate 3 as docs or scratch because its name starts with docs or .aiwf and a backslash, and a file whose name starts with two dots and a backslash is no longer read as outside the project by either gate. Two: the two read-only bash wrappers check for a brief on stdin beside --brief-file through node instead of a bash builtin option that bash 3.2 does not have, so the ambiguity refusal no longer depends on the bash version; the bound is unchanged, 64 KiB or 2 seconds. No bash 3.2 host ran it before the release: the macOS proof is the CI leg on the pushed commit. Nothing is re-rendered and no file of yours changes.",
+      "docRefs": ["CHANGELOG.md"]
+    }
+  ]
+}

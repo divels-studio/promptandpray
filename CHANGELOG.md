@@ -4,6 +4,31 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.3.23] - 2026-11-22
+
+Two POSIX defects fixed; nothing changes on Windows. Migration `0048_posix-path-identity` carries
+one `note` and re-renders nothing.
+
+### Fixed
+
+- **Gate 1 and Gate 3 judge a write target by the host's own path separator (HANDBACK-002)** - on
+  Linux and macOS a backslash is a filename character, so a root-level file whose name holds one is
+  judged as that one file.
+  - `docs\x.js` and `.aiwf\x.js` no longer pass Gate 3 as the docs or scratch class.
+  - A root file named `..\x.js` is no longer read as outside the project, by either gate.
+  - A root file whose name holds a backslash and ends in `.md` is a root-level `*.md` file and
+    passes Gate 3 as one; before, it was read as a nested path and denied.
+- **The `--brief-file` ambiguity check of the bash wrappers runs on bash 3.2 (HANDBACK-002)** -
+  `codex-review.sh` and `codex-qa.sh` read stdin for that check through one `node` call instead of
+  `read -N`, an option the macOS default shell does not have: there the read failed, stdin looked
+  empty and a brief on stdin beside the flag was never refused.
+  - The bound is unchanged: 64 KiB or 2 seconds, whichever comes first.
+  - A check that could not run is a refusal, never a pass.
+  - Run before the release on a Windows host's bash only; the linux and macOS proof is the CI leg
+    on the pushed commit.
+
+Retires local rules: none
+
 ## [0.3.22] - 2026-11-22
 
 Who decides what about tests. The project decides what is tested, the auditor whether a test is
