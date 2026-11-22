@@ -82,7 +82,8 @@ roles)). The brief may carry a budget target - honor it without lowering the bar
 First line is exactly one of:
 
 - `pass` - no blocker at/above the risk threshold; nothing left to note.
-- `pass-with-notes` - acceptable now; only narrow, local, non-blocking notes remain.
+- `pass-with-notes` - acceptable now; only required notes (`review.md` § Test findings on confirmed
+  code, listed under their own heading) or narrow, local, non-blocking notes remain.
 - `fail` - at least one blocker at/above threshold. List blockers first (each with `file:line`
   and why it blocks), then non-blocking notes, then the exact next action.
 

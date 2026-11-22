@@ -202,7 +202,10 @@ raise a blocker that was already visible):
   read IN FULL before the pass - plan readiness returns its own findings table instead - see
   "Plan-readiness mode").
     - `pass`            = no blocker at or above the risk threshold; nothing left to note.
-    - `pass-with-notes` = acceptable now; only narrow, local, non-blocking notes remain.
+    - `pass-with-notes` = acceptable now; only required notes (the stage file's "Test findings on
+                          confirmed code": a weak or missing test over code you confirmed correct
+                          is a required note, never a blocker - list them under their own heading)
+                          or narrow, local, non-blocking notes remain.
     - `fail`            = at least one blocker at/above threshold. List blockers first (each with
                           file:line and why it blocks), then non-blocking notes, then the exact
                           next action.
@@ -558,7 +561,10 @@ next readiness pass, and any commit gate are the COO's calls, not this skill's. 
 finding does not take a correction round at all: **a disputed blocker is parked for the operator, not
 implemented in a correction round** - where the Reviewer disputes a DESIGN decision the COO made
 rather than naming a defect, the COO writes the disagreement down and takes it to the operator, and
-the round waits for the word.
+the round waits for the word. **Required notes take no correction round and no second pass either**
+(`review.md` § Test findings on confirmed code): the live Writer closes each one in test files, the
+COO reads the delta against each note and runs the changed tests, and the ticket goes on to its
+commit (`ticket.md` § Loop shape and its overrides).
 
 The COO then owes the OPERATOR its own report of that verdict:
 the verdict plus one or two sentences of its substance, before the next dispatch - what the pass

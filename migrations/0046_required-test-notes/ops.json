@@ -1,0 +1,15 @@
+{
+  "migration": "0046_required-test-notes",
+  "targetPluginVersion": "0.3.21",
+  "operations": [
+    { "op": "rerender-managed-region", "file": ".claude/aiwf-native/doctrine/ticket.md", "region": null, "template": "templates/doctrine/ticket.md.tmpl" },
+    { "op": "rerender-managed-region", "file": ".claude/aiwf-native/doctrine/review.md", "region": null, "template": "templates/doctrine/review.md.tmpl" },
+    { "op": "rerender-managed-region", "file": ".claude/agents/reviewer.md", "region": null, "template": "templates/agents/reviewer.md.tmpl", "ifRecorded": true },
+    {
+      "op": "note",
+      "id": "required-test-notes-0-3-21",
+      "text": "0.3.21 changes what the Reviewer blocks on. In review.md, the new section Test findings on confirmed code: when the Reviewer has traced a behavior the ticket adds or changes through the production code and found it correct, a weakness in that behavior's tests - a missing assertion, an assertion that stays green under a named fault, a surface with no proof of its own, a missing unhappy-path test - is a REQUIRED NOTE, not a blocker. It names the test, the fault the test would miss and the surface, and by itself it never makes the verdict fail: a pass whose only findings are required notes returns pass-with-notes. The Writer closes every required note before the commit, the COO checks each fix by reading the delta and running the changed tests, and no verification pass follows (ticket.md, section Loop shape and its overrides: closing required notes is ticket work, not a correction round, its delta stays in test files, and a note whose fix needs a production line is a correction round). The same finding is a blocker only when the Reviewer could not confirm the code without that proof. A test that fails, a test skipped or narrowed to get green and a required verify command that was not run stay blockers. This update re-renders ticket.md and review.md, each additions block carried, and the Reviewer agent where one was rendered; the brief of /pnp:review carries the same verdict vocabulary. If your project carries a local rule that makes a weak or missing test a blocker whatever the Reviewer found in the code, that rule now contradicts review.md section Test findings on confirmed code: delete or narrow it on the operator's word.",
+      "docRefs": ["CHANGELOG.md", "skills/review/SKILL.md"]
+    }
+  ]
+}

@@ -4,6 +4,32 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.3.21] - 2026-11-22
+
+A weak or missing test over code the Reviewer confirmed is a required note, not a blocker.
+Migration `0046_required-test-notes` re-renders two stage files and, where one exists, the Reviewer
+agent, and carries one `note`. A local rule that makes a weak or missing test a blocker whatever the
+Reviewer found in the code now contradicts `review.md` § Test findings on confirmed code: delete or
+narrow it on your operator's word.
+
+### Changed
+
+- **A test weakness over confirmed code is a required note** - `review.md` § Test findings on
+  confirmed code: when the Reviewer traced the changed behavior and found the code correct, a
+  missing assertion, an assertion green under a named fault, a surface without its own proof or a
+  missing unhappy-path test is a required note and never makes the verdict `fail` by itself.
+  - The Writer closes every required note before the commit; the COO checks each fix by reading the
+    delta and running the changed tests; no verification pass follows (`ticket.md` § Loop shape and
+    its overrides - ticket work, not a correction round).
+  - It is a blocker only when the Reviewer could not confirm the code without that proof; a failing
+    test, a skipped or narrowed test and an unrun verify command stay blockers.
+  - The Reviewer agent's output contract and the brief and Step 4 of `/pnp:review` say the same.
+- **Migration `0046_required-test-notes`** - re-renders `.claude/aiwf-native/doctrine/ticket.md`
+  and `review.md`, re-renders `.claude/agents/reviewer.md` where one was rendered, and prints one
+  `note`.
+
+Retires local rules: none
+
 ## [0.3.20] - 2026-11-21
 
 The red-then-green rule is narrowed to the behavior a ticket changes. Migration
