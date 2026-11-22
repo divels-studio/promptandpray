@@ -4,6 +4,24 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.3.24] - 2026-11-22
+
+The self-check corrected, not the gates. Migration `0049_selfcheck-posix-rows` carries one `note`
+and re-renders nothing.
+
+### Fixed
+
+- **Two self-check rows expected the decision from before 0.3.23 on Linux and macOS (HANDBACK-003)** -
+  the full self-check of 0.3.23 printed two red rows there, both named `(p2) main + R2 open`, under
+  GATE 3 SURFACE and GATE 3 PLANNING: they asserted a deny for a root-level file whose name holds
+  backslashes and ends in `.md`. The gates were right - such a file is a root-level markdown file.
+  - The surface row expects an allow on every platform, and a new row `(p2b)` shows that off Windows
+    the allow comes from the root-level `*.md` rule, not from the transfer surface.
+  - The planning row names a `.ts` file, so the folder test alone decides it.
+  - Nothing changes on Windows. The 0.3.23 fix of the bash wrappers is confirmed on the macOS CI leg.
+
+Retires local rules: none
+
 ## [0.3.23] - 2026-11-22
 
 Two POSIX defects fixed; nothing changes on Windows. Migration `0048_posix-path-identity` carries

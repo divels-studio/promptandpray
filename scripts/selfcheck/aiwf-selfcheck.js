@@ -2825,14 +2825,24 @@ function sectionGate3Surface(tmpRoot) {
 
   // --- platform rows: the identity test is the HOST's path identity -------------------------------
   // No skipWhen exists on check() rows, so the expected decision is computed from process.platform.
+  // (p2) allows on every platform for two different reasons - on win32 the backslash target IS the
+  // configured surface, elsewhere it is one root-level `*.md` file name (the fixed allowlist) - so
+  // (p2b) writes the same target in a project whose surface is another path: DENY on win32, allow
+  // elsewhere, which is what proves the POSIX allow of (p2) does not come from the surface.
   const FOLD = process.platform === 'win32' || process.platform === 'darwin';
   const BACKSLASH_IS_SEPARATOR = process.platform === 'win32';
   check(`(p1) main + R2 open + DEV/backlogs/CANDIDATES.md -> ${FOLD ? 'allow' : 'DENY'} on ${process.platform} ` +
     '(case-insensitive by default on win32/darwin; another file on linux)',
     FOLD ? allow(G(CONF, 'DEV/backlogs/CANDIDATES.md')) : deny(G(CONF, 'DEV/backlogs/CANDIDATES.md')));
-  check(`(p2) main + R2 open + dev\\backlogs\\CANDIDATES.md -> ${BACKSLASH_IS_SEPARATOR ? 'allow' : 'DENY'} on ` +
-    `${process.platform} (a separator on win32; a filename character elsewhere)`,
-    BACKSLASH_IS_SEPARATOR ? allow(G(CONF, 'dev\\backlogs\\CANDIDATES.md')) : deny(G(CONF, 'dev\\backlogs\\CANDIDATES.md')));
+  check(`(p2) main + R2 open + dev\\backlogs\\CANDIDATES.md -> allow on ${process.platform} ` +
+    `(${BACKSLASH_IS_SEPARATOR ? 'a separator on win32: the configured surface' :
+      'a filename character here: one root-level *.md file name, the fixed allowlist, not the surface'})`,
+    allow(G(CONF, 'dev\\backlogs\\CANDIDATES.md')));
+  check(`(p2b) configured surface src/app.ts (refused) + dev\\backlogs\\CANDIDATES.md -> ` +
+    `${BACKSLASH_IS_SEPARATOR ? 'DENY' : 'allow'} on ${process.platform} ` +
+    `(${BACKSLASH_IS_SEPARATOR ? 'a separator on win32: a nested path that is not the surface' :
+      'a filename character here: one root-level *.md file name, allowed without any surface'})`,
+    BACKSLASH_IS_SEPARATOR ? deny(G(REFUSED, 'dev\\backlogs\\CANDIDATES.md')) : allow(G(REFUSED, 'dev\\backlogs\\CANDIDATES.md')));
 
   // --- fallback rows: `<plansDir>/PNP_CANDIDATES.md`, the rule copied by hand from the generator ---
   // Each row asserts the decision on the literal expected path AND that a denied code write names that
@@ -3049,14 +3059,16 @@ function sectionGate3Planning(tmpRoot) {
 
   // --- platform rows: the folder test is the HOST's path identity ---------------------------------
   // No skipWhen exists on check() rows, so the expected decision is computed from process.platform.
+  // (p2) names a .ts file: off win32 the backslash target is one root-level file name, and a .md name
+  // would pass there as a root-level *.md file, whatever the folder test decided.
   const FOLD = process.platform === 'win32' || process.platform === 'darwin';
   const BACKSLASH_IS_SEPARATOR = process.platform === 'win32';
   check(`(p1) main + R2 open + DEV/backlogs/drafts/PX/x.md -> ${FOLD ? 'allow' : 'DENY'} on ${process.platform} ` +
     '(case-insensitive by default on win32/darwin; another folder on linux)',
     FOLD ? allow(G(CONF, 'DEV/backlogs/drafts/PX/x.md')) : deny(G(CONF, 'DEV/backlogs/drafts/PX/x.md')));
-  check(`(p2) main + R2 open + dev\\backlogs\\drafts\\PX\\x.md -> ${BACKSLASH_IS_SEPARATOR ? 'allow' : 'DENY'} on ` +
-    `${process.platform} (a separator on win32; a filename character elsewhere)`,
-    BACKSLASH_IS_SEPARATOR ? allow(G(CONF, 'dev\\backlogs\\drafts\\PX\\x.md')) : deny(G(CONF, 'dev\\backlogs\\drafts\\PX\\x.md')));
+  check(`(p2) main + R2 open + dev\\backlogs\\drafts\\PX\\x.ts -> ${BACKSLASH_IS_SEPARATOR ? 'allow' : 'DENY'} on ` +
+    `${process.platform} (a separator on win32; a filename character elsewhere: one root-level file name, not *.md)`,
+    BACKSLASH_IS_SEPARATOR ? allow(G(CONF, 'dev\\backlogs\\drafts\\PX\\x.ts')) : deny(G(CONF, 'dev\\backlogs\\drafts\\PX\\x.ts')));
 
   // --- resolver rows: the exported resolvePlanningDirs called directly, no hook run ---------------
   // Required only behind the entrypoint guard sectionGate3Surface asserts as a row (a hook without it

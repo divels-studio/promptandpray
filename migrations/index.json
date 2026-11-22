@@ -46,5 +46,6 @@
   { "id": "0045_red-proof-scope", "targetPluginVersion": "0.3.20" },
   { "id": "0046_required-test-notes", "targetPluginVersion": "0.3.21" },
   { "id": "0047_test-authority", "targetPluginVersion": "0.3.22" },
-  { "id": "0048_posix-path-identity", "targetPluginVersion": "0.3.23" }
+  { "id": "0048_posix-path-identity", "targetPluginVersion": "0.3.23" },
+  { "id": "0049_selfcheck-posix-rows", "targetPluginVersion": "0.3.24" }
 ]

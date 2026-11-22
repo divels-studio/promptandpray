@@ -1,0 +1,12 @@
+{
+  "migration": "0049_selfcheck-posix-rows",
+  "targetPluginVersion": "0.3.24",
+  "operations": [
+    {
+      "op": "note",
+      "id": "selfcheck-posix-rows-0-3-24",
+      "text": "0.3.24 corrects the self-check, not the gates. On Linux and macOS the full self-check of 0.3.23 printed two red rows, both named (p2) main + R2 open, under GATE 3 SURFACE and GATE 3 PLANNING: they still expected the decision from before 0.3.23 for a root-level file whose name holds backslashes and ends in .md. The gates were right - such a file is a root-level markdown file and passes Gate 3 as one - and the two rows now assert that. Nothing changes on Windows, nothing is re-rendered and no file of yours changes.",
+      "docRefs": ["CHANGELOG.md"]
+    }
+  ]
+}
