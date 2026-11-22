@@ -113,11 +113,12 @@ jobs:
     #
     # NON-BLOCKING ON PURPOSE - and not the thing the `claude plugin validate` note at the end of the
     # windows job refuses. macOS is officially UNSUPPORTED / best-effort: it installs and runs on the
-    # bash channel it shares with linux, but nobody operates this loop on a Mac, and one measured
-    # defect stands unfixed here - the self-check's captured output truncates partway through and the
-    # run ends without its tally (CHANGELOG 0.2.2, Known limits). So the job below keeps every gate
-    # the other legs have, keeps asserting all of them, and keeps going red and readable when one
-    # breaks; `continue-on-error` only stops a known, written-down defect on an unsupported platform
+    # bash channel it shares with linux, but nobody operates this loop on a Mac, so a defect that
+    # shows only here cannot be reproduced locally. The two measured so far are closed - the
+    # self-check's truncated output (CHANGELOG 0.2.2, Known limits; fixed in 0.2.7) and a wrapper read
+    # that bash 3.2 lacks (fixed in 0.3.23) - and this leg is green as of 0.3.24. So the job below
+    # keeps every gate the other legs have, keeps asserting all of them, and keeps going red and
+    # readable when one breaks; `continue-on-error` only stops a defect on an unsupported platform
     # from blocking a merge. That is the opposite of the case that note refuses, where the wrapper
     # would have hidden a step asserting NOTHING about this repository: here the assertions are real
     # and the tolerance is scoped to a support tier. The key comes off the day macOS is either fixed

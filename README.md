@@ -98,8 +98,9 @@ What is here:
 - **CI** (`.github/workflows/ci.yml`): on every push and pull request, three OS legs (windows,
   ubuntu, macos), one step per gate. Windows and ubuntu are **blocking** - a red step is a red
   build. The macos leg runs the same gates and asserts the same things, but is **advisory**
-  (non-blocking), because macOS is best-effort rather than supported and carries a known unfixed
-  defect (see Status below); it stays in the workflow so its result is still readable. Three things
+  (non-blocking), because macOS is best-effort rather than supported - a defect that shows only
+  there cannot be reproduced locally (see below); it stays in the workflow so its result is still
+  readable. Three things
   are deliberately left out and say so in the file: the manifest validation, which needs a CLI a
   runner does not have; hook parity against the reference implementation, which lives on an operator
   machine and is a local check by nature; and `shellcheck` on the macos leg, where it is not
@@ -114,10 +115,11 @@ What is **not** here yet:
 - **macOS support - best-effort, not supported.** The supported channels are **windows** and
   **linux**. macOS installs and runs: it takes the same bash channel as linux, `/pnp:setup` still
   accepts it, and its CI leg still runs every gate - but there is no support guarantee behind it,
-  that leg is advisory rather than blocking, and one measured defect stands unfixed: on macOS the
-  self-check's captured output truncates partway through and the run ends without its tally
-  (`CHANGELOG.md`, 0.2.2 § Known limits). It is tracked rather than fixed - pinning it needs a Mac,
-  and there is none.
+  and that leg is advisory rather than blocking. No defect is known open on it: the two measured
+  there - the self-check's output truncating before its tally (`CHANGELOG.md`, 0.2.2 § Known limits,
+  fixed in 0.2.7) and a wrapper read that bash 3.2 does not have (fixed in 0.3.23) - are closed, and
+  its CI leg is green as of 0.3.24. It stays best-effort because the next defect that shows only
+  there could not be reproduced: that needs a Mac, and there is none.
 - **An installation on a second machine.** Besides this repository's own self-install, at least two
   consumer projects take the releases through `/plugin update` + `/pnp:update` (both on 0.3.11 when
   0.3.13 was cut) - all of them on the author's one machine; no installation elsewhere is known.
