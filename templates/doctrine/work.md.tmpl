@@ -38,6 +38,10 @@ Writer and Reviewer included.
 - **Non-runtime:** `COO -> Writer subagent -> /pnp:review -> COO`.
 - **Runtime/UI (observable behavior):** `COO -> Writer subagent -> E2E run (E2E: yes) -> /pnp:review -> /pnp:qa -> COO`.
 
+**The brief's E2E line picks the row.** A ticket whose brief says `E2E: no` - a change of look only,
+or one the project's test policy keeps out of E2E - takes the non-runtime row even when it touches
+the UI: no spec, no E2E run, no QA.
+
 Correction rounds are capped (`ticket.md` § Loop shape and its overrides). Local commit after the
 loop passes and a human approves (`ORCHESTRATOR.md` § Commit & Push Authority).
 
@@ -136,8 +140,9 @@ fixes nothing; the Writer runs only the tests it adds - red, then green where `r
 quality owes it.
 
 **The E2E spec runs before the audit.** For a ticket whose brief says `E2E: yes` (`ticket.md`
-§ Ticket brief contract (R2/R3)), the COO runs `verify.e2e.runner` over the Writer's spec
-at the handoff, before `/pnp:review`. A red spec goes back to the live Writer as a micro-round
+§ Ticket brief contract (R2/R3)), the COO - or a check agent it dispatches - runs
+`verify.e2e.runner` over the Writer's spec at the handoff, before `/pnp:review`; a project whose
+overrides document says so accepts the Writer's kept green run over the final build instead. A red spec goes back to the live Writer as a micro-round
 (`ticket.md` § The COO write boundary runs along artifact class, not size), and the review brief
 carries the log path of the green E2E run as evidence. **Its suppression dual:** a ticket with
 `E2E: no` keeps the order as it is.

@@ -874,6 +874,140 @@ function sectionGate1Identity(tmpRoot) {
     check(`[${id}] sabotage detected: ${label} -> ${target} turns red`, !row[4](r),
       row[4](r) ? 'still PASS - the check is vacuous' : `FAIL as required (${r.decision})`);
   }
+
+  // --- the hand-back folder passthrough of the non-writer branch ---------------------------------
+  // A non-writer other than reviewer/qa/qal may write a FILE under .aiwf/agents/ (both segments
+  // compared case-insensitively, at least one segment below the folder) when EVERY present path field
+  // lands there; the folder itself, any other .aiwf/ file, a sibling folder, a traversal out of it, a
+  // mixed payload and an incomplete identity keep the deny. The hook only judges the payload.
+  const HB_REL = path.join('.aiwf', 'agents', 'report.md');
+  // [id, label, tool, tool_input, verdict, identity]; identity, when given, replaces EXPLORE whole.
+  const HANDBACK_ROWS = [
+    ['g1-hb-rel', 'Explore Write .aiwf/agents/report.md (relative) -> passthrough',
+      'Write', { file_path: HB_REL, content: 'x' }, allow],
+    ['g1-hb-abs', 'Explore Write .aiwf/agents/report.md (absolute) -> passthrough',
+      'Write', { file_path: path.join(root, HB_REL), content: 'x' }, allow],
+    ['g1-hb-nested', 'Explore Write .aiwf/agents/scan-1/report.md -> passthrough',
+      'Write', { file_path: path.join('.aiwf', 'agents', 'scan-1', 'report.md'), content: 'x' }, allow],
+    ['g1-hb-case', 'Explore Write .AIWF/Agents/report.md (segments compared case-insensitively) -> passthrough',
+      'Write', { file_path: path.join('.AIWF', 'Agents', 'report.md'), content: 'x' }, allow],
+    ['g1-hb-nb', 'Explore NotebookEdit with notebook_path .aiwf/agents/n.ipynb -> passthrough',
+      'NotebookEdit', { notebook_path: path.join('.aiwf', 'agents', 'n.ipynb'), new_source: 'x' }, allow],
+    ['g1-hb-dir', 'Explore Write to the folder .aiwf/agents itself -> DENY, the text byte-identical',
+      'Write', { file_path: path.join('.aiwf', 'agents'), content: 'x' }, exactDeny('Write')],
+    ['g1-hb-state', 'Explore Write .aiwf/route-state.json -> DENY, the text byte-identical',
+      'Write', { file_path: path.join('.aiwf', 'route-state.json'), content: 'x' }, exactDeny('Write')],
+    ['g1-hb-brief', 'Explore Write .aiwf/X-1-review-brief.txt -> DENY, the text byte-identical',
+      'Write', { file_path: path.join('.aiwf', 'X-1-review-brief.txt'), content: 'x' }, exactDeny('Write')],
+    ['g1-hb-prefix', 'Explore Write .aiwf/agents-x/report.md (a sibling folder) -> DENY',
+      'Write', { file_path: path.join('.aiwf', 'agents-x', 'report.md'), content: 'x' }, exactDeny('Write')],
+    ['g1-hb-traverse', 'Explore Write .aiwf/agents/../route-state.json (resolved before judged) -> DENY',
+      'Write', { file_path: '.aiwf/agents/../route-state.json', content: 'x' }, exactDeny('Write')],
+    ['g1-hb-mixed-in', 'Explore Edit, file_path in the folder + notebook_path src/probe.ipynb -> DENY',
+      'Edit', { file_path: HB_REL, notebook_path: path.join('src', 'probe.ipynb') }, exactDeny('Edit')],
+    ['g1-hb-mixed-out', 'Explore Write, file_path in the folder + notebook_path OUTSIDE the root -> DENY',
+      'Write', { file_path: HB_REL, notebook_path: path.join(tmpRoot, 'g1-outside', 'probe.ipynb'), content: 'x' }, exactDeny('Write')],
+    ['g1-hb-reviewer', 'reviewer Write .aiwf/agents/report.md -> DENY naming "reviewer"',
+      'Write', { file_path: HB_REL, content: 'x' }, (r) => deny(r) && r.reason === G1_DENY('Write', 'reviewer'),
+      { agent_id: 'a9', agent_type: 'reviewer' }],
+    ['g1-hb-qa', 'qa Write .aiwf/agents/report.md -> DENY',
+      'Write', { file_path: HB_REL, content: 'x' }, (r) => deny(r) && r.reason === G1_DENY('Write', 'qa'),
+      { agent_id: 'a10', agent_type: 'qa' }],
+    ['g1-hb-qal', 'qal Write .aiwf/agents/report.md -> DENY',
+      'Write', { file_path: HB_REL, content: 'x' }, (r) => deny(r) && r.reason === G1_DENY('Write', 'qal'),
+      { agent_id: 'a11', agent_type: 'qal' }],
+    ['g1-hb-noid', 'agent_id present + agent_type absent, Write .aiwf/agents/report.md -> DENY',
+      'Write', { file_path: HB_REL, content: 'x' }, (r) => deny(r) && r.reason.includes('agent_id present, agent_type absent'),
+      { agent_id: 'a12' }],
+    ['g1-hb-null', 'agent_type null, Write .aiwf/agents/report.md -> DENY',
+      'Write', { file_path: HB_REL, content: 'x' }, (r) => deny(r) && r.reason === G1_DENY('Write', null),
+      { agent_id: 'a13', agent_type: null }],
+  ];
+  const hbPayload = (row) => {
+    const p = g1Payload(row[2], row[3]);
+    if (row[5]) { delete p.agent_id; delete p.agent_type; Object.assign(p, row[5]); }
+    return p;
+  };
+  const runHbRow = (hookPath, row) => runHook(hookPath, hbPayload(row), root);
+  for (const row of HANDBACK_ROWS) {
+    const r = runHbRow(GATE1, row);
+    check(`[${row[0]}] ${row[1]}`, row[4](r), `${r.decision}: ${r.reason.slice(0, 70)}`);
+  }
+  {
+    // The real harness shape: the captured general-purpose payload, its target rewritten into the
+    // hand-back folder, passes.
+    const r = runHook(GATE1, Object.assign({}, capturedNonWriter,
+      { tool_input: { file_path: HB_REL, content: 'PROBE_NONWRITER' } }), root);
+    check('[g1-hb-captured] captured live general-purpose payload rewritten into .aiwf/agents/ -> passthrough',
+      allow(r), `${r.decision}: ${r.reason.slice(0, 70)}`);
+  }
+  // Named-fault controls of the hand-back rows, the same pattern as above.
+  for (const [id, label, target, from, to] of [
+    ['g1-ctl-hb-folder', 'the second-segment check dropped (any path under .aiwf/ passes)', 'g1-hb-state',
+      "const HANDBACK_SEGMENTS = ['.aiwf', 'agents'];", "const HANDBACK_SEGMENTS = ['.aiwf'];"],
+    ['g1-ctl-hb-roles', 'the refused-types list emptied', 'g1-hb-reviewer',
+      "const HANDBACK_REFUSED_TYPES = ['reviewer', 'qa', 'qal'];", 'const HANDBACK_REFUSED_TYPES = [];'],
+    ['g1-ctl-hb-third', 'the third-segment requirement dropped', 'g1-hb-dir',
+      'if (segs.length <= HANDBACK_SEGMENTS.length) return false;', 'if (segs.length < HANDBACK_SEGMENTS.length) return false;'],
+  ]) {
+    let hookCopy;
+    try {
+      hookCopy = path.join(pgEngineCopy(tmpRoot, id, ['pretooluse-mutation-guard.js', 'aiwf-lib.js']), 'pretooluse-mutation-guard.js');
+      pgPatch(hookCopy, from, to);
+    } catch (e) { check(`[${id}] control could be applied: ${label}`, false, String(e.message)); continue; }
+    const row = HANDBACK_ROWS.find((x) => x[0] === target);
+    const r = runHbRow(hookCopy, row);
+    check(`[${id}] sabotage detected: ${label} -> ${target} turns red`, !row[4](r),
+      row[4](r) ? 'still PASS - the check is vacuous' : `FAIL as required (${r.decision})`);
+  }
+
+  // The hand-back helper called directly with an explicit path flavour, so both hosts' separator
+  // rules are proven on any host: on POSIX a backslash is a filename character, never a separator.
+  // [id, label, path implementation, root, file_path, expected]
+  const W32_ROOT = 'C:' + '\\proj'; // composed so the provenance scan does not read a drive-letter path in this source
+  const HANDBACK_SEP_ROWS = [
+    ['g1-hb-posix-bslash', 'posix: .aiwf\\agents\\report.md is ONE root-level file name -> false',
+      path.posix, '/proj', '.aiwf\\agents\\report.md', false],
+    ['g1-hb-posix-mixed', 'posix: .aiwf/agents\\report.md is a file directly under .aiwf/ -> false',
+      path.posix, '/proj', '.aiwf/agents\\report.md', false],
+    ['g1-hb-posix-fslash', 'posix: .aiwf/agents/report.md -> true',
+      path.posix, '/proj', '.aiwf/agents/report.md', true],
+    ['g1-hb-win32-bslash', 'win32: .aiwf\\agents\\report.md -> true',
+      path.win32, W32_ROOT, '.aiwf\\agents\\report.md', true],
+    ['g1-hb-win32-fslash', 'win32: .aiwf/agents/report.md -> true',
+      path.win32, W32_ROOT, '.aiwf/agents/report.md', true],
+  ];
+  const sepCall = (mod, row) => {
+    try { return mod.everyTargetInHandback('Explore', { file_path: row[4] }, row[3], row[2]); }
+    catch (e) { return `threw: ${e.message}`; }
+  };
+  let gate1Module = null;
+  try { gate1Module = require(GATE1); } catch (e) { check('Gate 1 module loads for the direct helper calls', false, String(e.message)); }
+  if (gate1Module) {
+    for (const row of HANDBACK_SEP_ROWS) {
+      const got = sepCall(gate1Module, row);
+      check(`[${row[0]}] ${row[1]}`, got === row[5], `got ${got}`);
+    }
+  }
+  {
+    // Named-fault control: the split put back to both slash types. The patched copy is REQUIRED (its
+    // export called directly), not spawned - the direct call is the form these rows take.
+    const id = 'g1-ctl-hb-sep';
+    const label = 'the separator split put back to both slash types';
+    const target = 'g1-hb-posix-bslash';
+    let copyModule = null;
+    try {
+      const hookCopy = path.join(pgEngineCopy(tmpRoot, id, ['pretooluse-mutation-guard.js', 'aiwf-lib.js']), 'pretooluse-mutation-guard.js');
+      pgPatch(hookCopy, 'const segs = rel.split(pathImpl.sep).filter', 'const segs = rel.split(/[\\\\/]/).filter');
+      copyModule = require(hookCopy);
+    } catch (e) { check(`[${id}] control could be applied: ${label}`, false, String(e.message)); }
+    if (copyModule) {
+      const row = HANDBACK_SEP_ROWS.find((x) => x[0] === target);
+      const got = sepCall(copyModule, row);
+      check(`[${id}] sabotage detected: ${label} -> ${target} turns red`, got !== row[5],
+        got === row[5] ? 'still PASS - the check is vacuous' : `FAIL as required (got ${got})`);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

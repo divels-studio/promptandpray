@@ -19,7 +19,7 @@ Born in a real production project, then extracted and genericized.
 
 ## Status
 
-**v0.3.21. Public since 0.2.0.**
+**v0.3.22. Public since 0.2.0.**
 
 What is here:
 
@@ -36,7 +36,8 @@ What is here:
   documented exceptions - the command that applies the migrations and the diagnostic you need most
   when something is out of date cannot be the two that refuse to run.
 - **Three enforcement hooks** (`hooks/hooks.json`): the mutation guard - Gate 1, non-writer subagents
-  cannot use the Edit/Write family inside the project root (a write outside it passes), plus Gate 3,
+  cannot use the Edit/Write family inside the project root (a write outside it passes, and so does a
+  helper agent's hand-back file under the scratch directory's `agents/` folder), plus Gate 3,
   the route-state write guard that keeps the main session out of code while an R2/R3 ticket is open - the dispatch gate, Gate 2, which puts the
   operator in the way of a Writer dispatch: a click on every one of them, or (per
   `enforcement.dispatchGate`) only on a dispatch whose `Ticket: <REF>` line names no ticket in an

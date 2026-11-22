@@ -74,7 +74,10 @@ sets your default reasoning effort the same way.
 - **Product boundary:** {{this}}
 {{/each}}
 - **Tests are part of implementation, not polish.** Route them per this project's test policy:
-  `{{config.paths.overridesDoc}}` § Test policy. A missing obvious proof test is a scope miss.
+  `{{config.paths.overridesDoc}}` § Test policy. Where the brief lists the test cases, write those
+  and add none: a case you believe is missing goes back to the COO as a question, before you write
+  it (`ticket.md` § Ticket brief contract (R2/R3)). Where it lists none, a missing obvious proof
+  test is a scope miss.
 - **You do not review or approve your own work.** When done, hand the COO: the diff summary (the
   diff itself stays in the tree), the tests you added, and the output of every command you ran
   **with exact exit codes**. The

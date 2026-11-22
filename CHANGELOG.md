@@ -4,6 +4,62 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.3.22] - 2026-11-22
+
+Who decides what about tests. The project decides what is tested, the auditor whether a test is
+honest, with a floor no project policy lowers; this supersedes 0.3.21's required-note rule.
+Migration `0047_test-authority` re-renders the core, four stage files and the Writer agent and
+carries one `note`. A local rule that points the auditor at the project's test policy now duplicates
+`review.md` § The project's test policy and the auditor, and one that makes a weak test over
+confirmed code a blocker or a required fix outside the floor contradicts it: delete or narrow each
+on your operator's word.
+
+### Added
+
+- **The project's test policy binds both audits** - `review.md` § The project's test policy and the
+  auditor: the overrides document's § Test policy is named to the auditor on a `TEST POLICY:` line
+  of every readiness and review brief; the absence of a test the policy excludes is never a finding.
+  - The auditor decides whether a test that exists is honest and whether the code is correct.
+  - The floor: a behavior that writes stored data, computes money, or sits on a migration,
+    access-policy, grants, auth or permission-model surface always owes its proof.
+- **A helper agent's hand-back file (HANDBACK-001)** - Gate 1 passes a non-writer agent's write under
+  the scratch directory's `agents/` folder and nowhere else inside the project root; the
+  Claude-hosted Reviewer and QA stay refused everywhere inside it.
+  - `ORCHESTRATOR.md` tripwire 3: a hand-back too long for a reply is written whole to the path the
+    brief names there, and the reply is a summary and that path.
+  - The self-check carries the new rows with their named-fault controls, the spike probes three
+    rows.
+- **The record's numbers** - `templates/briefs/record.md` § Measurements: the auditor's blockers by
+  kind, the effort split (test Writers / production Writers / fact-check of test prose), the defects
+  that reached the operator after the close.
+
+### Changed
+
+- **A test weakness over confirmed code is a plain note** - `review.md` § Test findings on confirmed
+  code: listed in the record, settled at the close, nobody fixes it in the ticket; a required note,
+  closed by the Writer before the commit with no second pass, only on the floor.
+- **The brief's test list is the whole list** - `ticket.md` § Ticket brief contract and the Writer
+  agent: a Writer adds no test case its brief does not list and asks instead; a case the COO adds
+  goes into the ticket with its ruling before the dispatch.
+- **Three clarifications where the generic text read against a project's test policy** - the
+  brief's E2E line picks the route row, so a UI ticket with `E2E: no` has no spec, no E2E run and no
+  QA (`work.md` § Routes, `ticket.md` § Role boundaries).
+  - The handoff E2E is run by the COO or a check agent it dispatches; a project whose overrides
+    document says so accepts the Writer's kept green run instead (`work.md` § Tests).
+  - Tripwire 4's instrument "made to fail on purpose" is a script, a grep or a gate; a test follows
+    `review.md` § Test quality (`ORCHESTRATOR.md` § COO owns broad scans).
+- **Migration `0047_test-authority`** - re-renders `.claude/aiwf-native/ORCHESTRATOR.md`,
+  `doctrine/work.md`, `ticket.md`, `plan.md`, `review.md` and `.claude/agents/writer.md` and prints
+  one `note`.
+
+Closes consumer candidates: the auditor's blockers by kind in every record (the record's numbers);
+tripwire 3 against Gate 1 - a procedure agent told to write under the scratch directory and refused
+there (the hand-back folder); the E2E route of a look-only UI ticket, tripwire 4 against the
+red-proof rule, and who runs the handoff E2E (the three clarifications). A project that recorded any
+of them marks it shipped in 0.3.22.
+
+Retires local rules: `review.md § project additions: What is tested is the project's call; whether a test is honest is the auditor's`, `plan.md § project additions: At readiness the same policy decides which tests a ticket must name`
+
 ## [0.3.21] - 2026-11-22
 
 A weak or missing test over code the Reviewer confirmed is a required note, not a blocker.

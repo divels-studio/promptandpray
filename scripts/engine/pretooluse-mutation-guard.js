@@ -13,11 +13,20 @@
  * Everything else denies: a non-object input (array/primitive/null), or ANY own-property
  * presence of `agent_id`/`agent_type` (including explicit `null`) with a type other than
  * "writer" — incomplete/ambiguous identity fails CLOSED (never inferred as main session).
- * The one passthrough of that deny: a write whose EVERY path field present in `tool_input`
- * (`file_path`, `notebook_path`, each an own property) is a non-empty string that resolves OUTSIDE
- * the project root (a scratch directory) - the gate protects the repo, the same boundary the main
- * session's branch holds. One field inside (the root itself included), a present field that is not
- * a non-empty string, a `tool_input` that is not an object, or no path field at all keeps the deny.
+ * Two passthroughs of that deny, and nothing else:
+ *   - OUTSIDE THE ROOT: a write whose EVERY path field present in `tool_input` (`file_path`,
+ *     `notebook_path`, each an own property) is a non-empty string that resolves OUTSIDE the project
+ *     root (a scratch directory) - the gate protects the repo, the same boundary the main session's
+ *     branch holds. Any agent type, as before.
+ *   - THE HAND-BACK FOLDER: a write whose EVERY present path field is a non-empty string resolving to
+ *     a FILE under `<root>/.aiwf/agents/` (first segment `.aiwf`, second `agents`, compared
+ *     case-insensitively, at least one segment below the folder; resolved first, then judged, so a
+ *     `..` out of the folder is judged where it lands), from an `agent_type` that is a non-empty
+ *     string and NOT one of `reviewer`, `qa`, `qal` (exact match). The review roles never get it:
+ *     inside the root they stay read-only, that folder included.
+ * One field elsewhere inside the root (the root itself and the folder itself included), a mixed
+ * payload, a present field that is not a non-empty string, a `tool_input` that is not an object, or
+ * no path field at all keeps the deny. Neither passthrough reads the config or the route state.
  *
  * AIWF-N10 (engine-neutral review roles): this gate catches the Edit/Write family from any non-writer
  * subagent, so it is what holds a CLAUDE-hosted Reviewer/QA read-only (Read/Grep/Glob-only, no OS
@@ -131,9 +140,12 @@ function targetPathOf(toolInput) {
 // more (no realpath, no filesystem access). `outside` is an absolute relative path (another drive on
 // win32) or a first segment `..`; the project dir itself (`rel === ''`) is NOT outside - each caller
 // decides the root on its own terms. Shared by the main session's branch and the non-writer branch.
-function projectRelative(projectDir, target) {
-  const resolved = path.resolve(projectDir, target);
-  const rel = path.relative(projectDir, resolved);
+// `pathImpl` (default: this module's `path`) lets a caller resolve against an explicit host flavour
+// (`path.posix` / `path.win32`); every existing caller omits it and keeps the host's own `path`. The
+// `outside` test is deliberately left as it was; the hand-back helper does not lean on it alone.
+function projectRelative(projectDir, target, pathImpl = path) {
+  const resolved = pathImpl.resolve(projectDir, target);
+  const rel = pathImpl.relative(projectDir, resolved);
   const outside = path.isAbsolute(rel) || rel.split(/[\\/]/)[0] === '..';
   return { resolved, rel, outside };
 }
@@ -154,6 +166,37 @@ function everyTargetOutside(toolInput, projectDir) {
     const v = toolInput[key];
     if (typeof v !== 'string' || v.trim() === '') return false;
     if (!projectRelative(projectDir, v).outside) return false;
+  }
+  return present > 0;
+}
+
+// The non-writer branch's second passthrough: the hand-back folder `.aiwf/agents/`, where a helper
+// subagent leaves its report file. `.aiwf` is the same literal STATE_REL uses (the schema fixes
+// `paths.scratchDir` to that const); nothing is read from the config here. The segments compare
+// case-INSENSITIVELY, as isAllowlisted does, and the target must lie BELOW the folder (more segments
+// than HANDBACK_SEGMENTS): the folder itself, any other `.aiwf/` file, a sibling such as
+// `.aiwf/agents-x/` and a mixed payload are FALSE (deny). The review roles are refused by exact type.
+const HANDBACK_SEGMENTS = ['.aiwf', 'agents'];
+const HANDBACK_REFUSED_TYPES = ['reviewer', 'qa', 'qal'];
+function everyTargetInHandback(agentType, toolInput, projectDir, pathImpl = path) {
+  if (typeof agentType !== 'string' || agentType.trim() === '') return false;
+  if (HANDBACK_REFUSED_TYPES.includes(agentType)) return false;
+  if (!isPlainObject(toolInput)) return false;
+  let present = 0;
+  for (const key of NON_WRITER_PATH_FIELDS) {
+    if (!has(toolInput, key)) continue;
+    present += 1;
+    const v = toolInput[key];
+    if (typeof v !== 'string' || v.trim() === '') return false;
+    const { rel, outside } = projectRelative(projectDir, v, pathImpl);
+    if (outside) return false;
+    // Split by the path implementation's OWN separator: on POSIX a backslash is a filename character,
+    // so `.aiwf\agents\x` is one root-level file name, never three segments.
+    const segs = rel.split(pathImpl.sep).filter((s) => s !== '');
+    if (segs.length <= HANDBACK_SEGMENTS.length) return false;
+    for (let i = 0; i < HANDBACK_SEGMENTS.length; i += 1) {
+      if (segs[i].toLowerCase() !== HANDBACK_SEGMENTS[i]) return false;
+    }
   }
   return present > 0;
 }
@@ -428,6 +471,9 @@ if (require.main === module) lib.runFailClosed(async () => {
   // A write whose every present path field resolves OUTSIDE the project root passes: the repo is not
   // touched. The route state (responsibility (2)) is never read on this branch.
   if (everyTargetOutside(input.tool_input, projectDirOf())) return lib.allowPassthrough();
+  // A file under the hand-back folder `.aiwf/agents/` passes too - never for reviewer/qa/qal, never
+  // for an incomplete identity (agent_type absent, null or not a non-empty string).
+  if (everyTargetInHandback(input.agent_type, input.tool_input, projectDirOf())) return lib.allowPassthrough();
   const detail = typePresent
     ? `agent_type ${input.agent_type === null ? 'null' : JSON.stringify(input.agent_type)}`
     : 'agent_id present, agent_type absent';
@@ -439,4 +485,4 @@ if (require.main === module) lib.runFailClosed(async () => {
 });
 
 // Required (not run) by the self-check, which calls the resolver directly; as a hook nothing changes.
-module.exports = { resolveTransferSurface, resolveRoadmap, resolvePlanningDirs, isAllowlisted };
+module.exports = { resolveTransferSurface, resolveRoadmap, resolvePlanningDirs, isAllowlisted, everyTargetInHandback };

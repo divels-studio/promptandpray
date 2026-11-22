@@ -25,7 +25,11 @@ What each role may and may not do on its host: `ticket.md` § Role boundaries.
 **Gate 1** (the plugin's PreToolUse mutation guard) allows an `Edit`/`Write` inside the project root
 only from the true main session or a subagent whose harness-trusted `agent_type` is exactly
 `writer`; every other subagent is denied there. A write whose every path field resolves outside the
-project root (a scratch directory) passes for any actor - the gate protects the repository.
+project root (a scratch directory) passes for any actor - the gate protects the repository. One
+folder inside the root is open to a non-writer helper agent: `<scratchDir>/agents/`, where an agent
+leaves a hand-back too long for its reply. Nothing else in the scratch directory is - the route
+state, the briefs and the session-id files live beside that folder - and the Claude-hosted
+`reviewer` and `qa` agents are refused there as everywhere inside the root.
 
 **Gate 2** (the plugin's PreToolUse dispatch gate) puts the operator in the way of a Writer dispatch
 through the Agent tool, in one of two modes chosen by `enforcement.dispatchGate`:

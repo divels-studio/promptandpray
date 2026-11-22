@@ -187,6 +187,13 @@ PRODUCT BOUNDARY CHECKS:
 reads no `.claude/agents/` file, and the root `AGENTS.md` it reads is role-free, so this slot is
 how the project's boundaries reach it.>
 
+TEST POLICY: <`{{config.paths.overridesDoc}}` § Test policy, plus any document that section names -
+or `none` when the project carries no such section. The project decides what is tested and at which
+layer; you decide whether a test that exists is honest and whether the code is correct. The absence
+of a test the policy excludes is never a finding. The floor no policy lowers: a behavior that writes
+stored data, computes money, or sits on a migration, access-policy, grants, auth or permission-model
+surface always owes its proof (the stage file's "The project's test policy and the auditor").>
+
 RISK THRESHOLD: <which defect severity blocks - e.g. "block on correctness/security/data-loss;
 note-only for style">
 STOP CONDITION: <when you have enough evidence and must stop - e.g. "stop once every changed
@@ -202,10 +209,11 @@ raise a blocker that was already visible):
   read IN FULL before the pass - plan readiness returns its own findings table instead - see
   "Plan-readiness mode").
     - `pass`            = no blocker at or above the risk threshold; nothing left to note.
-    - `pass-with-notes` = acceptable now; only required notes (the stage file's "Test findings on
+    - `pass-with-notes` = acceptable now; only notes on tests (the stage file's "Test findings on
                           confirmed code": a weak or missing test over code you confirmed correct
-                          is a required note, never a blocker - list them under their own heading)
-                          or narrow, local, non-blocking notes remain.
+                          is a note, never a blocker; on the floor of the TEST POLICY slot it is a
+                          REQUIRED note - list those under their own heading) or narrow, local,
+                          non-blocking notes remain.
     - `fail`            = at least one blocker at/above threshold. List blockers first (each with
                           file:line and why it blocks), then non-blocking notes, then the exact
                           next action.
@@ -561,10 +569,11 @@ next readiness pass, and any commit gate are the COO's calls, not this skill's. 
 finding does not take a correction round at all: **a disputed blocker is parked for the operator, not
 implemented in a correction round** - where the Reviewer disputes a DESIGN decision the COO made
 rather than naming a defect, the COO writes the disagreement down and takes it to the operator, and
-the round waits for the word. **Required notes take no correction round and no second pass either**
-(`review.md` § Test findings on confirmed code): the live Writer closes each one in test files, the
-COO reads the delta against each note and runs the changed tests, and the ticket goes on to its
-commit (`ticket.md` § Loop shape and its overrides).
+the round waits for the word. **A note on a test over confirmed code takes no correction round and
+no second pass** (`review.md` § Test findings on confirmed code): a plain note goes into the
+ticket's record and its destination is settled at the close; a REQUIRED note - one on the floor -
+is closed by the live Writer in test files, the COO reads the delta against it and runs the changed
+tests, and the ticket goes on to its commit (`ticket.md` § Loop shape and its overrides).
 
 The COO then owes the OPERATOR its own report of that verdict:
 the verdict plus one or two sentences of its substance, before the next dispatch - what the pass

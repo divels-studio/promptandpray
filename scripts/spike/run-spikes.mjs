@@ -171,6 +171,11 @@ const gate1Cases = [
   { name: 'subagent Explore -> a path OUTSIDE the project root', projectDir: projectNoTicket, payload: writeEnvelope({ agent_id: 'a8', agent_type: 'Explore' }, outsideFile), expect: 'allow(passthrough)' },
   { name: 'subagent Explore -> src/probe.txt (relative, inside the root)', projectDir: projectNoTicket, payload: writeEnvelope({ agent_id: 'a9', agent_type: 'Explore' }, path.join('src', 'probe.txt')), expect: 'deny' },
   { name: 'subagent Explore -> file_path outside + notebook_path inside', projectDir: projectNoTicket, payload: { ...writeEnvelope({ agent_id: 'a10', agent_type: 'Explore' }, outsideFile), tool_input: { file_path: outsideFile, notebook_path: path.join('src', 'probe.ipynb'), content: 'PROBE' } }, expect: 'deny' },
+  // The hand-back folder passthrough (a file under .aiwf/agents/, never for reviewer/qa/qal). Under
+  // --reference the first row is expected to diverge: a reference hook older than this passthrough denies it.
+  { name: 'subagent Explore -> .aiwf/agents/report.md (the hand-back folder)', projectDir: projectNoTicket, payload: writeEnvelope({ agent_id: 'a11', agent_type: 'Explore' }, path.join('.aiwf', 'agents', 'report.md')), expect: 'allow(passthrough)' },
+  { name: 'subagent Explore -> .aiwf/route-state.json (beside the hand-back folder)', projectDir: projectNoTicket, payload: writeEnvelope({ agent_id: 'a12', agent_type: 'Explore' }, path.join('.aiwf', 'route-state.json')), expect: 'deny' },
+  { name: 'subagent reviewer -> .aiwf/agents/report.md', projectDir: projectNoTicket, payload: writeEnvelope({ agent_id: 'a13', agent_type: 'reviewer' }, path.join('.aiwf', 'agents', 'report.md')), expect: 'deny' },
 ];
 
 // Gate 3's per-project toggle. These cases are deliberately NOT part of gate1Cases: the reference

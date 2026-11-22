@@ -76,3 +76,15 @@ overrides); a ticket with no auditor carries `0 (no auditor)`. The session size 
 machine source the project's overrides document names (a file its statusline writes); with no such
 source it is `-` - never asked at a record's close, never estimated. Temporary: this row stays until
 the first plan measured with it has been judged, then it is removed from this skeleton.>
+
+| auditor's blockers by kind | effort: test Writers / production Writers / fact-check of test prose | defects that reached the operator after the close |
+|---|---|---|
+| <code defect n / test defect n / record or form only n - or `no auditor`> | <three figures from the agents' own usage lines, or `-` where the work was not split that way> | <n, each a row of `## Events` - `0` at the close, raised when one arrives> |
+
+<The kinds are counted from the verdicts as returned: a blocker that names a defect in production
+code or product behavior, one that names how a test fails to prove its claim, one that names only a
+missing record or form. The effort figures are copied from the usage each agent reported, never
+estimated; a ticket with one Writer for code and tests carries `-`. A defect the operator meets
+after the close - a live-look correction, a fix after release - is written as an Events row of this
+record when it arrives, and the count follows it. These two numbers are read together across
+tickets: the volume of tests may go down while the first falls and the last does not rise.>

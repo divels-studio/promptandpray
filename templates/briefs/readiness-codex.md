@@ -26,6 +26,13 @@ the property. Every NEW finding declares in its evidence cell why pass 1 could n
 born of the revision" or "origin: a fact pass 1 did not open"; a new finding without that origin is
 a contract violation, reported separately below the table.>
 
+TEST POLICY: <the path of the project's overrides document and its section "Test policy", plus any
+document that section names - or `none` when the project carries no such section>
+The project decides what is tested and at which layer; read that policy before you judge a ticket's
+tests. A demand for a test the policy excludes is INFO, never a BLOCKER. The floor no policy lowers:
+a behavior that writes stored data, computes money, or sits on a migration, access-policy, grants,
+auth or permission-model surface always owes its proof.
+
 THE BLOCKER CONTRACT. A BLOCKER = a required property the plan lacks + the evidence (`file:line`,
 opened by you). INFO never causes a revision. Out of scope: wording, formatting, `file:line`
 precision in explaining context, the size of the prose, and the design choices the decisions record

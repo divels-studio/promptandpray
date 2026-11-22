@@ -48,6 +48,12 @@ checks (`plan.md` § Plan readiness review).
 ticket's acceptance criteria point at `review.md` § Test quality for red-then-green proof and ask
 for nothing beyond it - no red run per test, no per-test log or hash pair, no "every changed test".
 
+**The brief's test list is the whole list.** A Writer writes the test cases its brief lists and adds
+none: a case it believes is missing goes back to the COO as a question, before it is written. A case
+the COO adds after the ticket was written - its own ruling, the fix of a finding - goes into the
+ticket with the ruling that needs it, before the dispatch. **Its suppression dual:** a brief that
+lists no test cases leaves the Writer to route its tests by the project's test policy.
+
 `Risk threshold` and `Stop condition` are mandatory for every R2/R3 brief. So are the two last
 lines, each in its fixed form. The E2E line reads `E2E: yes | no - because <reason>` -
 the countable form of "a brief declares observable runtime/UI behavior". The escalation line reads
@@ -195,7 +201,8 @@ the gate.
   + convention + git reversibility, with NO OS cell.
 - **QA** - read-only, **engine-neutral** the same way: `/pnp:qa` dispatches either the Codex wrapper
   (`scripts/native/ps/codex-qa.ps1` / `scripts/native/sh/codex-qa.sh`) **or** the `qa` Claude
-  subagent, **only** when the ticket has observable runtime/UI behavior. QA is an **artifact
+  subagent, **only** when the ticket has observable runtime/UI behavior - its brief says
+  `E2E: yes`; a UI ticket with `E2E: no` has no spec and no QA (`work.md` § Routes). QA is an **artifact
   judge**, not a live browser: a Codex-launched browser cannot run under the read-only sandbox
   (`docs/QA_BROWSER_INVESTIGATION.md`), so the browser lives in the **test runner**. The spec-flow:
   the **Writer** authors/extends an E2E `.spec` from the acceptance criteria -> **the orchestrator**
@@ -286,12 +293,14 @@ Not configurable:
   check 1 (migration, access policy, grants, auth, permission model). A QA `fail` is closed only by
   a QA run. The fact-check gate and the COO's first-hand check of the delta are recorded as for a
   prose round.
-- **Closing the required notes of a `pass-with-notes` is ticket work, not a correction round**
-  (`review.md` § Test findings on confirmed code): a micro-round to the live Writer whose delta
-  stays in test files, then the COO's first-hand check - the delta read against each note and the
-  changed tests run - recorded in the ticket's completion record; no verification pass follows,
-  whatever the delta's size. A note whose fix needs a production line is a correction round under
-  the bullet above.
+- **A note on a test over confirmed code opens no correction round** (`review.md` § Test findings
+  on confirmed code). A plain note is listed in the ticket's completion record and its destination
+  is settled at the close; nobody fixes it in the ticket. A REQUIRED note - one on the floor of
+  `review.md` § The project's test policy and the auditor - is ticket work: a micro-round to the
+  live Writer whose delta stays in test files, then the COO's first-hand check - the delta read
+  against each note and the changed tests run - recorded in the completion record; no verification
+  pass follows, whatever the delta's size. A note whose fix needs a production line is a correction
+  round under the bullet above.
 
 ## Fail aggregation
 
