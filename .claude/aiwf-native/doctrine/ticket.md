@@ -274,6 +274,12 @@ Not configurable:
   check 1 (migration, access policy, grants, auth, permission model). A QA `fail` is closed only by
   a QA run. The fact-check gate and the COO's first-hand check of the delta are recorded as for a
   prose round.
+- **Closing the required notes of a `pass-with-notes` is ticket work, not a correction round**
+  (`review.md` § Test findings on confirmed code): a micro-round to the live Writer whose delta
+  stays in test files, then the COO's first-hand check - the delta read against each note and the
+  changed tests run - recorded in the ticket's completion record; no verification pass follows,
+  whatever the delta's size. A note whose fix needs a production line is a correction round under
+  the bullet above.
 
 ## Fail aggregation
 

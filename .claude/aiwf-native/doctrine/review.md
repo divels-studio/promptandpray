@@ -66,7 +66,8 @@ otherwise unchanged.
 - For each behaviour the ticket's Outcome names, trace the ordered chain from its entry point to its
   end point through the files of the Code Map, adversarially - and still read the whole diff.
 - Every acceptance criterion maps to a proof. A missing proof surface is a completion blocker even
-  if existing tests are green.
+  if existing tests are green - a required note where the Reviewer confirmed the code (§ Test
+  findings on confirmed code).
 - Proof for algorithmic/matcher/routing/transform/parser logic MUST exercise the production function
   or an extracted production helper - mirrored test-local logic is not proof.
 - Assertions must be unconditional. `expect()` wrapped in an `if` that passes silently when false is
@@ -153,7 +154,8 @@ to it - callers, pointers, documents - before the verdict.
 - When the brief requires real fixture/input/data proof, the tests must actually use it - synthetic
   builders/mocks that hide the required proof surface, and green synthetic-only scenarios, are not
   proof.
-- An obvious missing unhappy-path test is a named blocker.
+- An obvious missing unhappy-path test is a named blocker - a required note where the Reviewer
+  confirmed the code (§ Test findings on confirmed code).
 - Extraction remedy: if the production surface is not directly testable, extract a contract-safe
   helper/module and test that - never a mirrored algorithm in the test file.
 
@@ -173,11 +175,30 @@ to it - callers, pointers, documents - before the verdict.
   untouched path stays as it was, an extended input list - is checked by reading: its assertion is
   unconditional and can fail. A missing red record is a note; it is a blocker only when the
   Reviewer names the fault under which the test stays green - the finding is then the test, not the
-  record. A brief, a plan's verify line or a ticket's acceptance criterion that asks for more does
+  record, and it is a required note where the Reviewer confirmed the code (§ Test findings on
+  confirmed code). A brief, a plan's verify line or a ticket's acceptance criterion that asks for more does
   not widen this bullet. **Its suppression dual:** no red run is asked of a ticket that changes no
   behavior, and no second one for a failure mode a kept red run already shows.
 - The COO greps the diff for skip, only, todo and reduced sets and records a decision per hit -
   green by narrowing is not accepted.
+
+### Test findings on confirmed code
+
+**A weakness in a test over code the Reviewer confirmed is a required note, not a blocker.** When
+the Reviewer has traced a behavior the ticket adds or changes through the production code and found
+it correct, every weakness in that behavior's tests - a missing assertion, an assertion that stays
+green under a named fault, a surface with no proof of its own, a missing unhappy-path test - is a
+REQUIRED NOTE: it names the test, the fault the test would miss and the surface, and by itself it
+never makes the verdict `fail`. A pass whose only findings are required notes returns
+`pass-with-notes`. The Writer closes every required note before the commit; the COO checks each fix
+by reading the delta and running the changed tests, and no verification pass follows (`ticket.md`
+§ Loop shape and its overrides). The same finding is a blocker only when the Reviewer could not
+confirm the code without that proof - the finding then says what stayed unconfirmed and why reading
+the code could not settle it. This rule narrows every sentence of this file that makes a missing or
+weak proof a blocker - in § Reviewer - code & design correctness, § Review dimensions by defect
+class, § Proof adequacy, § Test quality and § Verdict discipline - and no brief widens it back.
+**Its suppression dual:** a test that fails, a test skipped or narrowed to get green, and a required
+verify command that was not run stay blockers, confirmed code or not.
 
 ### Verdict discipline
 
@@ -227,7 +248,8 @@ On `fail`, list ALL already-visible material blockers in the SAME round. A mater
 real product/runtime/contract/proof/i18n/UX issue that by itself prevents an honest `pass`. Do not
 serialize fail reasons across rounds; a later round may not raise a "new" blocker that was already
 visible. For each blocker: name the exact failing surface and require proof on that exact surface;
-forbid proxy closure (adapter-only, type-only, unit-only, prose-only, generic green test).
+forbid proxy closure (adapter-only, type-only, unit-only, prose-only, generic green test). Required
+notes (§ Test findings on confirmed code) are listed whole in the same round, under the same rule.
 
 **On a pass 2 the Reviewer is handed the previous list and owes a declaration for anything outside
 it** (what the brief carries: `ticket.md` § Fail aggregation); every NEW blocker
@@ -242,10 +264,11 @@ violation, not a reason to withhold blockers.
 Return exactly one:
 
 - `pass` - sufficient at the given risk threshold (Reviewer: code/docs; QA: runtime proof present).
-- `pass-with-notes` - acceptable now; narrow, local, non-blocking notes remain.
+- `pass-with-notes` - acceptable now; required notes (§ Test findings on confirmed code) or narrow,
+  local, non-blocking notes remain.
 - `fail` - a material blocker at or above the risk threshold prevents an honest pass.
 
-List blockers first, then non-blocking notes, then the exact next action (the literal missing
+List blockers first, then required notes under their own heading, then non-blocking notes, then the exact next action (the literal missing
 command when the blocker is a verify mismatch). Return to the COO. Never declare a patch accepted
 while required runtime proof is missing, a blocker remains, docs contradict the implementation, a
 security boundary is only assumed, or a test failure was ignored.
