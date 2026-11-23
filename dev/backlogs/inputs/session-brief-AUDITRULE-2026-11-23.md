@@ -56,7 +56,7 @@ Product stage и местните му текстове, които payload-ът
 - Одитната таблица на този проект е на `gpt-6.2-sol` за всички Codex роли от `b43984f` (plan и code на xhigh).
 - Codex пас: `pwsh -NoProfile -File "D:\pnp-live\scripts\native\ps\codex-review.ps1" -ProjectRoot "D:\promptandpray" -Class
   <plan|code> -BriefFile ".aiwf\<key>-review-brief.txt"`, във фон; stdout е само крайното съобщение, stderr носи реда
-  `tokens used`. ПРЕДИ пускане на платен пас казваш на оператора двигателя, модела и усилието (корекция от 2026-11-23).
+  `tokens used`.
 - Self-install apply след bump: `/pnp:update --apply`; в auto mode записът в `aiwf.config.json` може да бъде отказан от
   хоста - пуска се в режим, който пита.
 - Consumer пътища: Silerax = `D:\Stratex` (НЕ `D:\Silera`); планът на Fable PRCCA е изнесен в `D:\RCCA_TMP`; планът на
