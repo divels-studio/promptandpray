@@ -2,8 +2,8 @@
 
 Written into the tree by the arbiter session itself, on the operator's word of 2026-11-23: "запиши до тук каквото е необходимо,
 репото е свободно". It continues `dev/changes/audit-measures-2026-11-23.md` (the casus, the Fable plan's baseline, the measures
-M1-M4). It is evidence and an opinion, not doctrine. THE MEASURES M1-M4 ARE STILL NOT DECIDED - the conversation about them has
-not been held yet (§ 7).
+M1-M4). It is evidence and an opinion, not doctrine. §§ 1-8 were written before the conversation about the measures; the operator then DECIDED them the same
+evening - § 9 is the decision and supersedes every "not decided" above it.
 
 Marks. OPENED = the arbiter opened the file itself. CODEX = the comparison pass's own reading, not re-checked by the arbiter.
 PEER = reported by the Silerax session "PRCCAA Plan" in a cross-session message, not opened by the arbiter. The consumer is
@@ -147,3 +147,57 @@ type - a direction from one run. He accepted the Opus plan.
 - Whether the Opus plan executes cleanly: neither ticket has run.
 - Whether the comparison would repeat: one plan per model, different research, a withheld finding found once.
 - The share of the planning cost on each side (agents' figures of the Opus session were not read).
+
+## 9. The decision (2026-11-23, the same session, after §§ 1-8 were committed)
+
+The operator accepted the release as five parts, to be planned as ONE release and to ship BEFORE the next Silerax phase is
+planned - he has four phases to plan and execute, and a new evaluation follows them. His words: on part 1's cost - "за част 1,
+ако се хване при изпълнение съм ок, зс това е и одитора след това"; on the measurement - "искам релийза да въведе механизъм за
+измерване и анализ на планирането и неговото изпълнение, без овъринжинеринг и без досадни въпроси към мен от агентите. имам 4
+фази да планирам и изпълнявам и след тях да се направи нова оценка"; the acceptance - "приемам записвай всичко". The rule TEXTS
+are not written yet: each is shown to him and approved in the session that writes it (`ORCHESTRATOR.md` guard (g)).
+
+1. THE BLOCKER NAMES A LOSS (both audits). A blocker names what is lost if the work runs exactly as written: stored data or
+   money wrong, an access or tenancy hole, a migration that fails, something the user sees wrong or cannot do, a decision left to
+   the Writer - and a proof that cannot fail for the ticket's own product property. A finding about how the plan or the diff is
+   worded, ordered, proven, evidenced or recorded names no loss and is a NOTE the COO fixes with no revision round and no pass;
+   a test that merely cannot run is a note. The floor of 0.3.22 stays. Accepted cost: a wrong command in a plan is caught at
+   execution, with the code auditor behind it.
+2. THE PLAN DOES NOT RESTATE THE PROCEDURE. A ticket names what is its own (its test files, its new cases, whether it needs a
+   reset and why, the acceptance commands of its own properties); who runs which check, in what order, against which baseline is
+   the project's test policy, cited by one line. It starts at the planner brief, which orders the restatement today
+   (`templates/briefs/planner.md`:17-20, :60-66); readiness classes 8 and 11 apply to what the plan itself introduces. Settled
+   together with 0.3.11's rule that the auditor verifies the closing greps.
+3. PLAN-FORM DUTIES SCALE WITH THE CHANGE. The read / lock / write rows and the closing-grep sets are owed for what the plan
+   changes - a write whose order, lock or statement set changes; a write that only carries one more column through existing
+   statements owes one sentence.
+4. MEASUREMENT OF PLANNING AND OF EXECUTION - two fixed-form rows the COO fills by itself from figures it already holds; no new
+   tool, no script, no dashboard, no question to the operator.
+   - One row per PLAN, at its landing: the model and effort that planned; the readiness passes and the revisions; pass 1's
+     blockers by kind (a loss named / no loss named / rejected); what the auditor and the planning agents spent, as the tools
+     print it.
+   - One row per TICKET, at its close: the code pass's blockers by kind, the effort split and the defects that reached the
+     operator after the close (all three exist since 0.3.22); the correction rounds; and NEW - what in the plan turned out wrong
+     at execution, a count and one sentence each (the price of part 1).
+   - NOT in it: anything only the operator can read off a screen (a quota share, a context size), hours, a per-agent diary. A
+     defect after the close is recorded when the operator reports it; nobody asks him.
+   - Both rows start with one fixed prefix, so one grep collects them.
+   - THE EVALUATION after the four phases: an arbiter session collects the rows of the four plans and their tickets and answers
+     three questions - did the blockers with no loss named fall; did the real findings hold their level; how many plan mistakes
+     were caught only at execution and what they cost. The Opus-for-planning question is read from the same rows.
+   - The four phases are comparable only if all run on the new version; the phase already landed (PRCCAA, 0.3.24) is the
+     "before".
+5. PRODUCT STAGE - a slot of the payload beside the `TEST POLICY:` line: what the project's stage does not ask for and what
+   stays mandatory, filled once by the project and named to the planner brief and to BOTH audits' briefs (the readiness brief
+   does not carry the project's `review.md` - § 7). When it ships, Silerax's two local pointers retire and its section
+   `dev/PROJECT_OVERRIDES.md` § Product stage stays; the release's `Retires local rules:` line names them.
+
+Not in the release: the readiness effort and the number of passes (the operator's cost gate); any loosening of money, access,
+RLS or tenancy checks; the planner's "enumerated matrix" (ROADMAP § AUDITRULE line (5), step 6 - decided on the rows of part 4).
+
+How it is carried: a plan (`/pnp:plan`) in a working session of this repository, not the arbiter's - it changes the audit's
+central sentence and reaches every consumer. The text of part 1 is checked against the recorded cases BOTH ways before it ships:
+the 12 "record only" code blockers of the research file and the procedure and form blockers of PRCCA and PRCCAA must come out
+as notes; the 15 code defects, PRCCA's B1 / B2 / B5 / B8, PRCCAA's B7 / B12 / B14 and PRCI round 1's B1 / B3 / B4 must stay
+blockers. Whether one Codex opinion pass reads the contract text before the release is the operator's cost call, asked in that
+session. The session brief for it: `dev/backlogs/inputs/session-brief-AUDITRULE-2026-11-23.md`.
