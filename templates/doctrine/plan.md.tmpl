@@ -109,19 +109,23 @@ pass runs only through `/pnp:plan` Step 6, which applies `/pnp:review` Step 3's 
 with the skill loaded before any scan agent; a hand-built readiness pass is a route violation.
 
 **Triage and the round file.** The COO disposes of every finding - fixed / rejected with a
-refutation / deferred / asked - in `<plansDir>/readiness/<ABBR>/round-<N>.md`: the table verbatim
+refutation / deferred / asked / `note: land` / `note: drop` (a BLOCKER row that names no loss,
+landed or dropped like INFO, with no revision counted; a notes-only handoff to the live planner is
+no counted revision) - in `<plansDir>/readiness/<ABBR>/round-<N>.md`: the table verbatim
 plus a disposition column. A finding that disputes a recorded decision goes to the operator, not
 into a revision. The planner writes the fix. A revision closes the blockers it was handed and adds
 nothing new. **A finding that opens new surface** - one that can be answered only by something the
 plan does not have: a lock, a helper, a new write path, a collection written by another path - takes
 one of two dispositions, by name: `deferred to the next plan` (the surface leaves this plan's scope;
 a roadmap line at the landing) or `asked` (the plan's scope is wrong; the cycle stops and the
-operator decides) - never `fixed` by expansion. **Its suppression dual:** a finding closed by
-wording, a command, a pointer or a property the plan already has is `fixed` in the revision. A
-revision that does not reduce the count of carried OPEN rows stops the cycle and goes to the
-operator; a blocker born of added scope is named separately, never counted as carried. The auditor's cut question
+operator decides) - never `fixed` by expansion. **Its suppression dual:** a finding that names a
+loss and is closed by wording, a command, a pointer or a property the plan already has is `fixed` in
+the revision; one that names no loss is `note: land` or `note: drop`. A revision that does not
+reduce the count of carried OPEN rows stops the cycle and goes to the operator; a blocker born of
+added scope is named separately, never counted as carried. The auditor's cut question
 (`docs/READINESS_CLASSES.md` class 16, under check 4 below): every ticket is one shippable piece with
-one code commit - two tickets that are one, or a plan that is two missions, is a BLOCKER.
+one code commit - two tickets that are one, or a plan that is two missions, is a BLOCKER when one of
+them cannot ship alone without a loss (`review.md` § A blocker names a loss); otherwise a note.
 
 **Pass economy.** Pass 1 rides the plan's standing word. A second pass runs only on the operator's
 own explicit word, and only when pass 1 returned a BLOCKER that
@@ -156,7 +160,8 @@ The readiness review checks only:
    class 15: a race left as an accepted residual is an open decision);
 4. tickets/steps are executable in the correct dependency order;
 5. acceptance criteria are sufficient, and every verification command is literal and can fail -
-   runnable as written, with a named output that would mean "broken";
+   runnable as written, with a named output that would mean "broken" - read only over what the
+   plan itself introduces; the project's cited procedure is not re-audited;
 6. branch, worktree, and Git prerequisites are valid.
 
 The approved plan is the durable Git authority after the operator approves execution.

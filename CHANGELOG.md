@@ -4,6 +4,60 @@ All notable changes to PromptAndPray (`pnp`) are recorded here. The format follo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow strict
 `MAJOR.MINOR.PATCH` as enforced by `scripts/update/validate-payload.mjs`.
 
+## [0.3.25] - 2026-11-24
+
+What an auditor may block on, what a plan writes down, and what the loop measures. Migration
+`0050_audit-loss` re-renders three stage files and, where it is recorded, the Reviewer agent, and
+carries one `note`. A local rule that points the auditor or the planner at the project's product
+stage now duplicates the new `PRODUCT STAGE:` line for the readiness and code audits: delete it, or
+keep it for QA only, on your operator's word.
+
+### Added
+
+- **A PRODUCT STAGE slot beside TEST POLICY (AUDR-001)** - the readiness brief, the code-review brief
+  and the planner brief carry a `PRODUCT STAGE:` line naming the overrides document's § Product
+  stage, or `none`.
+  - What the stage does not ask for is a note, never a blocker, and is never planned for; what it
+    lists as mandatory is not loosened; it never lowers the floor (`review.md` § The project's test
+    policy and the auditor).
+  - The overrides seed carries a `## Product stage` section for a new project; an existing project
+    writes its own when it wants one.
+- **Two fixed-form measurement rows (AUDR-001)** - one `pnp-measure` row per plan, written into its
+  index at the landing, and one per ticket, written into its record at the close, so one grep
+  collects them.
+  - The plan row: who planned, the readiness passes and revisions, pass 1's blockers by kind (loss
+    named / no loss named / rejected), the auditor's and the agents' spend as the tools print it.
+  - The ticket row: the code pass's blockers by kind, correction rounds, the effort split, the
+    defects after the close, and what in the plan turned out wrong at execution.
+  - Filled from figures the COO already holds; an unknown figure is `-`, never asked.
+
+### Changed
+
+- **A blocker names a loss, at both audits (AUDR-001)** - `review.md` § A blocker names a loss: a
+  BLOCKER names what is lost if the work runs as written - data or money wrong, an access or tenancy
+  hole, a migration that fails or blocks live traffic, a race that loses a write, something the user
+  sees wrong or cannot do, a decision left to the Writer, a proof that does not test the ticket's own
+  property.
+  - A finding about wording, order, proof form, evidence or record is a note: no revision, no pass.
+  - The readiness brief carries the same text; the triage gains the disposition `note: land` /
+    `note: drop`, and a pass 2 marks such a row NOTED.
+  - The floor stays, and so do the code-pass blockers for a failing, skipped or narrowed test and an
+    unrun verify row; a missing red run is not one.
+  - Three older rules follow it: a readiness proof blocks only when it cannot observe the ticket's own
+    property (`ticket.md` § Proof-surface feasibility), a finding closed by wording is `fixed` in a
+    revision only when it names a loss, and a ticket cut (readiness class 16) blocks only when a
+    ticket cannot ship alone without a loss.
+- **The plan does not restate the verification procedure (AUDR-001)** - a ticket names its own test
+  files, cases, reset and the acceptance commands of its own properties; who runs which check, in
+  what order and against which baseline is the project's test policy, cited by one line.
+- **Plan-form duties scale with the change (AUDR-001)** - read / lock / write rows are owed where a
+  write's order, lock or statements change, one sentence for a write that only carries one more
+  column; a closing-grep set for a symbol whose definition changes, none for one only added.
+- **The context measurement leaves `/pnp:plan` and the record (AUDR-001)** - no start or approval
+  number, no question to the operator about the context size, no "COO session at close" column.
+
+Retires local rules: `plan.md § project additions: The product stage`; narrowed, not retired: `review.md § project additions: The product stage` - its readiness and code-review half is the payload's now, its QA half stays local
+
 ## [0.3.24] - 2026-11-22
 
 The self-check corrected, not the gates. Migration `0049_selfcheck-posix-rows` carries one `note`

@@ -66,13 +66,6 @@ context compaction all three are read again, whatever the diff says.
 
 ## Step 1 - The roadmap entry
 
-**The start number.** Before anything else, take the COO context size now and keep it for Step 6:
-read it from the machine source the project's overrides document names (a file its statusline
-writes), when there is one; with no such source, ask nothing here - the start is written as not
-measured (Step 6). Never estimate. *Temporary:* the measurement steps of this skill (this one, the
-approval number, `## Measurements`) stay until the first plan measured with them has been judged;
-then they are removed from this skill.
-
 **The recorded state comes first.** Before the entry is written, read what is already recorded on
 the goal: its roadmap entry, the DECISIONS of the earlier plans on its area, and the project's status
 documents (named in its overrides document). This step asks the operator nothing: the questions
@@ -159,6 +152,9 @@ the roadmap entry's Size and the research - a decision with one reason, `<n> - <
 1-99), or `default`. The planner copies it verbatim into the index as the line
 `Tickets: <n> - <reason>`, which the gate of Step 5 enforces; on `default` the index carries no
 such line and the cap is 3.
+
+Fill the brief's `CLOSING GREPS`: every symbol whose definition the plan changes - renamed,
+removed, re-shaped, its meaning changed; a symbol the plan only adds owes none.
 
 The planner writes ONLY under `<plansDir>/drafts/<ABBR>/` - the index `PLAN_<ABBR>.md` and
 `tickets/<ABBR>-NNN.md` - and returns the structured handoff the brief defines, never the files'
@@ -247,7 +243,9 @@ capacity refusal, the log path, exit and session id; the `-o` file beside that l
 final message),
 the auditor's findings table
 VERBATIM, plus a `disposition` column the COO fills per row - `fixed` / `rejected: <why>` /
-`deferred` / `asked`. INFO rows never trigger a revision. A row that disputes a recorded decision
+`deferred` / `asked` / `note: land` / `note: drop` (a BLOCKER row that names no loss, landed or
+dropped like INFO, with no revision counted; a notes-only handoff to the live planner is no counted
+revision). INFO rows never trigger a revision. A row that disputes a recorded decision
 or a design choice the operator approved is `asked` - it goes to the operator in plain words, not
 into a revision.
 
@@ -268,18 +266,15 @@ too and its compensations (`/pnp:review` Step 3).
 tickets and their order, the COO tier of each ticket (its `COO: <model> - because <check>` line),
 the passes run with their BLOCKER counts and dispositions, what is deferred, and the folder path -
 never the plan itself.
-Take the approval number the same way, from the machine source; with none, ask the operator once,
-in this report, for the COO context size on their statusline - the only question this measurement
-asks per plan. Wait for the approval word.
+Wait for the approval word.
 
 **Measurements - on the approval.** Write into the index `<plansDir>/drafts/<ABBR>/PLAN_<ABBR>.md` a
-section `## Measurements` with one table `| idea -> approved plan | cycle spend |` and one value row:
-(1) the approval number minus the start number of Step 1, or the approval number alone marked
-`start not measured` when Step 1 had no source; (2) the sum of every subagent's tokens as each
-completion notification reported them, plus every Codex pass's tokens as the `round-<N>.md` headers
-recorded them. Under the table, list the parts of (2) one per line - agent or pass, tokens - and name
-the source of every value: `file`, `notification`, `round header` or `operator`. No part is
-estimated: a part nobody printed is named as missing, never guessed.
+section `## Measurements` with one row:
+
+`| pnp-measure | plan | <ABBR> | planned by: COO <model> <effort or -> / planner <model> <effort> | readiness passes <n> | revisions <n> | pass 1: loss named <n> / no loss named <n> / rejected <n> | auditor tokens <as the round headers print them> | research and planner agents <tokens as their completion reports print them> |`
+
+The COO fills them from figures it already holds; an unknown figure is `-`, never asked. The pass-1
+kinds come from the round file: a BLOCKER row disposed `note` (Triage above) counts as "no loss named".
 
 **Roadmap entry - on the approval.** With `## Measurements`, write into the same index a section
 `## Roadmap entry`: the entry's `Goal:` and `Why:` lines from `<plansDir>/ROADMAP.md`, verbatim. The

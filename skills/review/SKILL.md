@@ -194,6 +194,8 @@ of a test the policy excludes is never a finding. The floor no policy lowers: a 
 stored data, computes money, or sits on a migration, access-policy, grants, auth or permission-model
 surface always owes its proof (the stage file's "The project's test policy and the auditor").>
 
+PRODUCT STAGE: <the overrides document's § Product stage - or none>
+
 RISK THRESHOLD: <which defect severity blocks - e.g. "block on correctness/security/data-loss;
 note-only for style">
 STOP CONDITION: <when you have enough evidence and must stop - e.g. "stop once every changed
@@ -329,8 +331,8 @@ the approval and the landing - is `/pnp:plan`. This mode is the pass itself, and
   it recognises a plan pass only by the class flag or the `Class: plan` line.
 - **Output.** The findings table `| id | class | property the plan must have | evidence | hint |`
   and one line `BLOCKERS: <n> INFO: <m>` (pass 2 adds `CLOSED:` / `OPEN:`) - not
-  `pass`/`pass-with-notes`/`fail`. A BLOCKER names a required property the plan lacks and its
-  evidence; INFO never causes a revision.
+  `pass`/`pass-with-notes`/`fail`. A BLOCKER names a loss - the stage file's
+  "A blocker names a loss", carried whole by the readiness brief; INFO never causes a revision.
 - **One invocation = ONE pass**, and the pass economy reads the row unchanged: `$row.passes` is the
   ceiling (factory 2); `0` means no auditor, a configuration `/pnp:roles` prints as `no auditor`.
   Pass 1 rides the plan's standing word. Pass 2 runs only on the operator's own word, and only when
@@ -340,7 +342,9 @@ the approval and the landing - is `/pnp:plan`. This mode is the pass itself, and
   why pass 1 could not see it (`ticket.md` § Fail aggregation). This skill does not loop the
   passes itself.
 - **The round file.** The COO writes `<plansDir>/readiness/<ABBR>/round-<N>.md`: the findings table
-  verbatim plus a disposition column (`fixed` / `rejected: <why>` / `deferred` / `asked`).
+  verbatim plus a disposition column (`fixed` / `rejected: <why>` / `deferred` / `asked` /
+  `note: land` / `note: drop` (a BLOCKER row that names no loss, landed or dropped like INFO,
+  with no revision counted; a notes-only handoff to the live planner is no counted revision)).
 - Read-only: report to the COO; do not edit the plan.
 
 The implementation-review contract above is unchanged; this branch applies only to plan readiness.

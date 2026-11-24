@@ -67,24 +67,20 @@ directory outside the repository is not covered.>
 
 ## Measurements
 
-| correction rounds | COO session at close | source |
-|---|---|---|
-| <n, counted from an auditor's verdict> | <tokens, or `-` when no source> | <file or `-`> |
+| pnp-measure | ticket | <REF> | code pass: code defect <n> / test defect <n> / record or form only <n> - or no auditor | correction rounds <n> | effort: test Writers / production Writers / fact-check <figures or -> | defects after the close <n> | plan wrong at execution <n> |
 
-<Correction rounds are counted from an auditor's verdict (`ticket.md` § Loop shape and its
-overrides); a ticket with no auditor carries `0 (no auditor)`. The session size is read from the
-machine source the project's overrides document names (a file its statusline writes); with no such
-source it is `-` - never asked at a record's close, never estimated. Temporary: this row stays until
-the first plan measured with it has been judged, then it is removed from this skeleton.>
+<Under it, one sentence per "plan wrong at execution": where the ticket as written could not run or
+was wrong, and what it cost. A defect after the close is an Events row when the operator reports
+it; nobody asks him.>
 
-| auditor's blockers by kind | effort: test Writers / production Writers / fact-check of test prose | defects that reached the operator after the close |
-|---|---|---|
-| <code defect n / test defect n / record or form only n - or `no auditor`> | <three figures from the agents' own usage lines, or `-` where the work was not split that way> | <n, each a row of `## Events` - `0` at the close, raised when one arrives> |
-
-<The kinds are counted from the verdicts as returned: a blocker that names a defect in production
-code or product behavior, one that names how a test fails to prove its claim, one that names only a
-missing record or form. The effort figures are copied from the usage each agent reported, never
-estimated; a ticket with one Writer for code and tests carries `-`. A defect the operator meets
-after the close - a live-look correction, a fix after release - is written as an Events row of this
-record when it arrives, and the count follows it. These two numbers are read together across
-tickets: the volume of tests may go down while the first falls and the last does not rise.>
+<The COO fills them from figures it already holds; an unknown figure is `-`, never asked. The kinds
+are counted from the verdicts as returned: a blocker that names a defect in production code or
+product behavior, one that names how a test fails to prove its claim, one that names only a missing
+record or form. Notes are not counted; a blocker carried to a later pass counts once. The effort
+figures are copied from the usage each agent reported, never estimated; a ticket with one Writer
+for code and tests carries `-`. The defects after the close are `0` at the close,
+raised when one arrives: a defect the operator meets after the close - a live-look correction, a
+fix after release - is written as an Events row of this record when it arrives, and the count
+follows it. The code-pass kinds and the defects after the close are read together across tickets:
+the volume of tests may go down while the code defects fall and the defects after the close do not
+rise.>

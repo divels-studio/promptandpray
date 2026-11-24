@@ -38,13 +38,11 @@ Read the complete folder against the tree and check only the six readiness check
 the classes of `docs/READINESS_CLASSES.md` (class 15: for every write, the lock and what runs beside
 it).
 
-**The blocker contract.** A BLOCKER is a required property the plan lacks plus the evidence
-(`file:line`, opened). INFO never causes a revision. Wording, formatting, `file:line` precision in
-explaining context and the design choices the decisions record as the operator's are out of scope;
-the hint is a hint, never the finding. A finding whose fix changes no property the six checks read
-is INFO - the test is whether the plan, executed exactly as written, would make a ticket fail, land
-wrong or leave a decision open; the shipped readiness brief carries the INFO examples. The output
-is one findings table
+**The blocker contract.** What a BLOCKER is and what is a NOTE - an INFO row here - is
+§ A blocker names a loss; the shipped readiness brief carries that text and its INFO examples.
+INFO never causes a revision. Wording, formatting, `file:line` precision in explaining context and
+the design choices the decisions record as the operator's are out of scope; the hint is a hint,
+never the finding. The output is one findings table
 `| id | class | property the plan must have | evidence | hint |` and one line
 `BLOCKERS: <n> INFO: <m>`, nothing else (pass 2 adds `CLOSED: <k> OPEN: <j>`). Do not require a
 universal DoR/DoD, create an audit document, or review formatting for its own sake. The project's
@@ -65,9 +63,42 @@ Two questions, two authorities, at both audits - plan readiness and code review:
 - **The floor no project policy lowers:** a behavior that writes stored data, computes money, or
   sits on a surface of COO routing check 1 (`work.md` § COO routing: migration, access policy,
   grants, auth, permission model) always owes its proof.
+- **The project's product stage** - its overrides document's § Product stage, named on the brief's
+  `PRODUCT STAGE:` line - says what this stage does not ask for and what stays mandatory. A finding
+  about something it lists as not asked is a note, never a blocker; what it lists as mandatory is
+  not loosened; it never lowers the floor.
 
 **Its suppression dual:** where the brief's `TEST POLICY:` line reads `none`, the project names no
-policy and the pass is judged by this file alone.
+policy and what is tested is judged by this file alone; the product stage still binds where its
+line names one. Of the product stage: where the line reads `none`, the pass is judged without it.
+
+## A blocker names a loss
+
+At both audits - plan readiness and code review - a BLOCKER names what is lost if the work runs
+exactly as written, with its evidence (`file:line`, opened). The losses: stored data or money wrong;
+an access, tenancy or permission hole; a migration that fails, cannot be applied, or blocks live
+traffic while it waits for or holds its lock; a race or a lock order that loses, duplicates or
+deadlocks a write; something the user sees wrong or cannot do; a decision left to the Writer; a
+proof that does not test the ticket's own product property - its assertion stays green when the
+property is broken, or it probes another object than the one the ticket changes. The brief's risk
+threshold picks which of them block.
+
+A finding about how the plan or the diff is worded, ordered, proven, evidenced or recorded names no
+loss: it is a NOTE (an INFO row at readiness). So is a command that cannot run as written, a missing
+grep or count, a procedure restated or missing, the form of a table or a row, and the gate that
+collects a proof's result - which specs run together, the baseline, what a comparator requires,
+which artifacts QA gets. A note opens no revision and no pass: at readiness the live planner lands
+it beside a revision, or alone without it counting as one, or the COO drops it; at the code pass it
+is listed in the record and settled at the close (§ Test findings on confirmed code). The cost is
+accepted: a wrong command is caught when the ticket runs, with the code audit behind it.
+
+**Its suppression dual:** a finding of form whose consequence IS a loss - a step order that fails a
+migration, a pointer that sends the Writer to the wrong file, a production reader the change
+breaks - is a blocker, named by that loss; a test the change breaks is a note at readiness, because
+it fails at the run. Nothing here lowers the floor (§ The project's test policy and the auditor)
+or the dual of § Test findings on confirmed code: at the code pass, a test that failed, a test
+skipped or narrowed to get green, and a VERIFY row or project verify command that was not run stay
+blockers; a missing red run is not one (§ Test quality), whatever the ticket or the brief demands.
 
 ## Given per brief: risk threshold + stop condition
 
@@ -280,10 +311,11 @@ R2).
 
 ## Fail aggregation (both roles)
 
-On `fail`, list ALL already-visible material blockers in the SAME round. A material blocker is any
-real product/runtime/contract/proof/i18n/UX issue that by itself prevents an honest `pass`. Do not
-serialize fail reasons across rounds; a later round may not raise a "new" blocker that was already
-visible. For each blocker: name the exact failing surface and require proof on that exact surface;
+On `fail`, list ALL already-visible material blockers in the SAME round. A material blocker is, for
+the Reviewer, one that names a loss (§ A blocker names a loss) at or above the brief's risk
+threshold; for QA, any real product/runtime/contract/proof/i18n/UX issue that by itself prevents an
+honest `pass`. Do not serialize fail reasons across rounds; a later round may not raise a "new"
+blocker that was already visible. For each blocker: name the exact failing surface and require proof on that exact surface;
 forbid proxy closure (adapter-only, type-only, unit-only, prose-only, generic green test). The
 notes of § Test findings on confirmed code, required or not, are listed whole in the same round,
 under the same rule.
@@ -303,7 +335,8 @@ Return exactly one:
 - `pass` - sufficient at the given risk threshold (Reviewer: code/docs; QA: runtime proof present).
 - `pass-with-notes` - acceptable now; notes on tests over confirmed code (§ Test findings on
   confirmed code) or narrow, local, non-blocking notes remain.
-- `fail` - a material blocker at or above the risk threshold prevents an honest pass.
+- `fail` - a material blocker (for the Reviewer, § A blocker names a loss) at or above the risk
+  threshold prevents an honest pass.
 
 List blockers first, then required notes under their own heading, then non-blocking notes, then the exact next action (the literal missing
 command when the blocker is a verify mismatch). Return to the COO. Never declare a patch accepted

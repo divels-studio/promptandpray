@@ -11,15 +11,21 @@ names, and only where you write a Code Map row or a worklist pointer - never a w
 row needs the file's role, which the research already gives.
 TICKET COUNT: <COO-filled - `<n> - <reason>`, the plan's ticket count the COO decided from the
 roadmap entry's Size and the research; or `default` (= 3)>
-CLOSING GREPS: <COO-filled - the consumer enumeration of every symbol the plan changes: per set, the
-grep that closes it and its hit count, `file:line` each, so you never ask for it; you copy this
-block verbatim into the index under `## Closing greps`>
+CLOSING GREPS: <COO-filled - the consumer enumeration of every symbol whose definition the plan
+changes - renamed, removed, re-shaped, its meaning changed; a symbol the plan only adds owes none:
+per set, the grep that closes it and its hit count, `file:line` each, so you never ask for it; you
+copy this block verbatim into the index under `## Closing greps`>
 VERIFY COMMANDS: <COO-filled - `verify.commands` and `verify.e2e.runner` quoted VERBATIM from
 `.claude/aiwf-native/aiwf.config.json`, one line each; a ticket's Verify names its rows from this
 list and never rewrites a command in another shell's form; a unit file list the config does not
 carry is written on the overrides' form>
-<on a revision: ROUND FILE: <plansDir>/readiness/<ABBR>/round-<N>.md - fix every row whose
-disposition is `fixed`; touch nothing else>
+TEST POLICY: <the path of the project's overrides document and its section "Test policy", plus any
+document that section names - or `none` when the project carries no such section>
+PRODUCT STAGE: <the overrides document's § Product stage - or none>
+The planner plans nothing the stage does not ask for.
+<on a revision or a notes-only handoff: ROUND FILE: <plansDir>/readiness/<ABBR>/round-<N>.md - fix
+every row whose disposition is `fixed`, and land every row whose disposition is `note: land`; touch
+nothing else>
 <on a gate refusal: GATE PROBLEMS: <the plan-gate lines, verbatim> - fix exactly these>
 
 WRITE BOUNDARY. You write ONLY under `<folder>`. You do not edit `RESEARCH.md` or `DECISIONS.md`: a
@@ -58,12 +64,16 @@ THE FOLDER CONTRACT (checked mechanically by `plan-gate.js` - a breach is refuse
   decision of another plan is cited as `<X>/D-NN`.
 - No bare open-item marker anywhere (put the word in a code span if you must mention it).
 - Scope is a worklist: each item names the file and, where the Writer acts or an acceptance check
-  reads, the `file:line`. Acceptance is literal commands, each with the output that would mean
-  "broken"; a test's red-then-green proof is cited as `review.md` § Test quality and never widened
+  reads, the `file:line`. A ticket names what is its own: its test files and the new cases in
+  them, whether it needs a reset (a database, a fixture, an environment) and why, and the acceptance
+  commands of its own properties, each with the output that would mean "broken". Who runs which
+  check, in what order and against which baseline is the project's test policy: cite it by one line
+  (the TEST POLICY slot), never restate it in a ticket or in the index. A test's red-then-green
+  proof is cited as `review.md` § Test quality and never widened
   (no red run per test, no per-test log or hash pair, no "every changed test"). Over the caps = split or defer: say so in the handoff, the COO decides. A ticket is
-  trimmed by citing, never by cutting: restated decision text becomes its `D-NN` cite, procedures
-  and tables move to the index; a `file:line`, an acceptance command, a "broken when" clause or a
-  constant is never cut.
+  trimmed by citing, never by cutting: restated decision text becomes its `D-NN` cite, a procedure
+  becomes the cite of the policy that holds it; a `file:line`, an acceptance command, a "broken
+  when" clause or a constant is never cut.
 
 HANDOFF - your whole reply, at most ~25 lines, never the files' text:
 

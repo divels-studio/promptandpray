@@ -115,8 +115,10 @@ decision alike.
 
 ### Proof-surface feasibility (checked at brief-authoring / readiness time)
 
-Every proof a brief requires must be observable through a real, in-scope surface; an infeasible
-proof is a **readiness blocker**, not an execution-time note:
+Every proof a brief requires must be observable through a real, in-scope surface. A proof that
+cannot observe the ticket's own property is a **readiness blocker**
+(`review.md` § A blocker names a loss), not an execution-time note; a verify command whose path,
+project or flags are only wrong as written is a note there, caught when the ticket runs:
 
 - **End-to-end (browser) proof** requires evidence visible in the DOM, network, a browser-visible
   state, permitted DB evidence, or explicitly authored response metadata. Reject a server-stdout
@@ -293,14 +295,15 @@ Not configurable:
   check 1 (migration, access policy, grants, auth, permission model). A QA `fail` is closed only by
   a QA run. The fact-check gate and the COO's first-hand check of the delta are recorded as for a
   prose round.
-- **A note on a test over confirmed code opens no correction round** (`review.md` § Test findings
-  on confirmed code). A plain note is listed in the ticket's completion record and its destination
-  is settled at the close; nobody fixes it in the ticket. A REQUIRED note - one on the floor of
-  `review.md` § The project's test policy and the auditor - is ticket work: a micro-round to the
+- **A note opens no correction round** - a note of `review.md` § A blocker names a loss and a note
+  on a test over confirmed code (`review.md` § Test findings on confirmed code) alike. A plain note
+  is listed in the ticket's completion record and its destination is settled at the close; nobody
+  fixes it in the ticket. A REQUIRED note - one on the floor of `review.md` § The project's test
+  policy and the auditor - is ticket work: a micro-round to the
   live Writer whose delta stays in test files, then the COO's first-hand check - the delta read
   against each note and the changed tests run - recorded in the completion record; no verification
-  pass follows, whatever the delta's size. A note whose fix needs a production line is a correction
-  round under the bullet above.
+  pass follows, whatever the delta's size. A required note whose fix needs a production line is a
+  correction round under the bullet above.
 
 ## Fail aggregation
 
