@@ -1,0 +1,92 @@
+COVERED BY: operator word "искам да пуснеш един одитор кодекс който да направи сравнение между двата Плана от ресорча до крайния резултат", 2026-11-23
+Ticket: PLANCMP-001
+Kind: comparative opinion over two plan folders - read-only, no verdict vocabulary of a review, nothing to fix
+
+You are an independent senior auditor. Two AI planning sessions planned THE SAME phase of the same product, one after the
+other, from the same operator intent. Compare the two bodies of planning work end to end - research, decisions, plan index,
+tickets, the reaction to the readiness audit, the final state - and answer the operator's question below. You write nothing
+anywhere; your whole output is your final message.
+
+THE OPERATOR'S QUESTION (the only thing that matters)
+His quota on the stronger model is limited and he wants to keep it for coding. Can he, from now on, safely let the cheaper
+model PLAN plans of this type - a database migration, a few moderately complex architecture decisions, a change that runs
+through validation schemas, service writers, a shared form and shared tables - instead of the stronger one?
+He explicitly ACCEPTS more readiness blockers and a more expensive readiness audit as the price. So the number of blockers
+each plan drew is NOT the score and must not be used as one. What he cannot accept is a plan whose mistakes are of a kind an
+audit does not reliably catch and that then reach code, data or the user.
+
+THE TWO RUNS
+- Plan A, abbreviation PRCCA - planned by Claude Fable 5.2 at MEDIUM reasoning effort (the session's COO and its planner).
+- Plan B, abbreviation PRCCAA - planned by Claude Opus 5.5 at HIGH reasoning effort.
+The model names and effort levels are the operator's statement. He adds, from public information he read: these two settings
+are considered very close in capability, Fable slightly above; one effort level higher on Fable does not fit his quota at all.
+Treat that as his premise, not as a fact you verified.
+Both ran under the same workflow plugin version (PromptAndPray 0.3.24) in the project Silerax, repository D:\Stratex. Each
+went through the same cycle: research, decisions, a planner, the plan gate, readiness pass 1 (Codex gpt-6.2-sol, xhigh,
+cold), revision 1, readiness pass 2 (the same session resumed), revision 2. Revision 2 of NEITHER plan was audited - the final
+text of both is unaudited at the places revision 2 touched.
+The operator states that the Plan B session had no access to the Plan A session's notes, ledger or memory. Plan A's files were
+moved out of the repository before Plan B started. The phase list and the operator's answers for the phase are shared input.
+
+WHERE EVERYTHING IS (absolute paths; your working directory is another repository and is irrelevant - do not review it)
+Plan A (Fable), moved out of the repository:
+- D:\RCCA_TMP\drafts\PRCCA\  - RESEARCH.md, DECISIONS.md, PLAN_PRCCA.md, tickets\PRCCA-001.md, tickets\PRCCA-002.md
+- D:\RCCA_TMP\readiness\PRCCA\  - round-1.md, round-2.md, ledger.md, stamp.json; scratch\ holds the briefs sent to the auditor
+  and the head / tail of pass 2's output
+- D:\RCCA_TMP\drafts\PRCC\  - PHASES.md and the phase-wide research (RESEARCH.md, RESEARCH.from-repo.md)
+- D:\RCCA_TMP\SESSION_STATE_2026-11-23.md, D:\RCCA_TMP\DEFECT_shared_form_error_reference.md
+Plan B (Opus), in the repository:
+- D:\Stratex\dev\backlogs\drafts\PRCCAA\  - RESEARCH.md, DECISIONS.md, PLAN_PRCCAA.md, tickets\PRCCAA-001.md, tickets\PRCCAA-002.md
+- D:\Stratex\dev\backlogs\readiness\PRCCAA\  - round-1.md, round-2.md, ledger.md, stamp.json
+- D:\Stratex\.aiwf\PRCCAA-review-brief-pass1.txt, PRCCAA-review-brief-pass2.txt  - the briefs sent to the auditor
+- D:\Stratex\dev\backlogs\drafts\PRCC\PHASES.md  - the shared phase list
+The code both plans describe: D:\Stratex\silerax\ (application), D:\Stratex\silerax\supabase\ (migrations, pgTAP tests). The
+project's rules a plan must fit: D:\Stratex\dev\PROJECT_OVERRIDES.md, D:\Stratex\docs\guides\TESTING.md. Plan B's pointers were
+read at commit 432a965d; check the pointers of both plans against the tree as it stands and say when a line has merely moved.
+
+WHAT TO DO
+1. Read both folders whole, the round files included. Do not sample.
+2. Check the substance of each plan against the real code yourself. Open the code behind the claims that carry weight: the
+   migration and what it locks, the three service writers and their transactions, the validation schemas and their consumers,
+   the shared form, the shared purchases table and every place it is mounted, the edit path and its money / VAT guards, the
+   list filter. A claim you did not open is marked UNVERIFIED.
+3. Compare stage by stage:
+   a. Research - what each found and missed about the code; wrong facts; whether they started from the same phase-wide
+      research or built their own (say which, it limits what the comparison can show).
+   b. Decisions - the quality of the architecture and product decisions: which are equivalent, where the two differ, and which
+      one is right against the code. Wrong claims inside a decision (each plan had at least one found by the audit).
+   c. The plan and the tickets - completeness of the worklist, the ticket cut, whether each ticket ships alone, the migration
+      and its rollout order, the proofs chosen for the risky properties.
+   d. The reaction to the audit - did each revision fix the cause or patch the wording; what each revision broke or added.
+   e. The final state - THE MOST IMPORTANT PART. Take each final plan as it stands and find what is STILL wrong in it: a defect
+      a Writer following it literally would build, a consumer still missed, a decision still wrong, a proof that still cannot
+      fail, a migration or rollout step that can still hurt live data. List them per plan with file:line evidence.
+4. Cross-check: for every real design gap the audit found in ONE plan, say whether the OTHER plan had the same gap unnoticed,
+   avoided it, or decided the matter differently. A gap present in both and caught in only one tells more than any count.
+5. Separate what a readiness audit DID catch from what it would not reliably catch. A weakness the audit catches every time
+   is, for this operator, an acceptable cost. A weakness that slipped past two audit passes is not.
+
+HOW TO JUDGE
+- Severity by what is lost: wrong or lost stored data, money computed wrongly, an access / tenancy hole, a migration that
+  fails or blocks live traffic, something the user sees wrong or cannot do, a decision the Writer would have to make alone.
+- Findings about wording, the form of the plan, the order of verification commands, bookkeeping rows or how something is
+  recorded are NOT part of the answer. Mention them in one closing sentence per plan at most.
+- Do not reward length or thoroughness of text. A shorter plan that is right beats a longer one that restates procedures.
+- Be equally adversarial to both. Do not assume the stronger model's plan is the reference. Where the two plans disagree, the
+  code decides, not either plan.
+- This is one phase planned once by each model. Say plainly what one run can and cannot show, and which differences are more
+  likely chance, inputs or the session's handling than the model.
+
+YOUR FINAL MESSAGE - in English, at most about 1,500 words, in exactly this order
+1. THE ANSWER - one of: SAFE / SAFE WITH CONDITIONS / NOT SAFE for letting Opus 5.5 at high effort plan plans of this type,
+   in two or three sentences, with the reason that decides it.
+2. THE CONDITIONS OR GUARDS - if any: the concrete things the cheaper model's planning needs around it (a check before the
+   audit, a kind of claim to verify by hand, a kind of plan that should stay with the stronger model). Only what your evidence
+   supports; name the evidence for each.
+3. STAGE BY STAGE - a table: stage | Plan A (Fable) | Plan B (Opus) | which is better and why, one line per stage a-e.
+4. STILL WRONG IN THE FINAL PLANS - per plan, each defect with severity (what is lost), file:line in the plan and in the code.
+   Write "none found" if none; say what you opened to be able to say so.
+5. THE CROSS-CHECK - the real gaps found by the audit in one plan and their state in the other.
+6. WHERE EACH MODEL WAS WEAK IN A WAY THAT MATTERS - the kinds of mistake, not the count; which of them an audit catches.
+7. LIMITS - what you did not open, what one run cannot show, anything in the setup that makes the two runs not comparable.
+Every factual claim about a plan or the code carries a file:line you opened, or the word UNVERIFIED.

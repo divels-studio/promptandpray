@@ -293,7 +293,8 @@ The order:
 - The share of a ticket's test list that came from readiness: the first-cut tickets are not kept.
 - Silerax plans before 2026-11-14 were not counted; Furnissimo and PnP itself were only grepped.
 - The Codex opinion of 2026-11-21 (gpt-6.1-sol, xhigh, 113,915 tokens) read TRM-002 only; it is kept in PnP at
-  `dev/changes/0.3.20-red-proof-codex-opinion.txt`.
+  `dev/changes/0.3.20-red-proof-codex-opinion.txt`; its Codex session id (moved from the untracked scratch file
+  `last-review-session.D-492.txt` on 2026-11-24) is `01a1fde2-bcc5-72b0-9107-85765ddce615`.
 - Classification in all three counts is judgement-based at the margins; mixed blockers were counted as the substantive kind.
 - Agents' pointers marked AGENT were not re-opened; a line number may have moved since (Silerax archived plan TRM as
   `archive\093_PLAN_TRM_2026-11-21` during the work).

@@ -79,8 +79,8 @@ The operator's question, in his words: "искам да разбера за в �
 повече блокери от страна на кодекс". The number of blockers was explicitly not the score.
 
 The pass: one cold read-only Codex pass, gpt-6.2-sol, xhigh, over both plan folders and the code; 263,643 tokens (the wrapper's
-`codex-review: tokens used` line); session `01a2095a-ee3b-76a3-8a4a-7c557e7d46c5`; brief `.aiwf/PLANCMP-001-review-brief.txt`
-(untracked scratch); log `<temp>/pnp-codex/PLANCMP-001-code-20261123-190123-22644.log` (outside the repository). A first launch
+`codex-review: tokens used` line); session `01a2095a-ee3b-76a3-8a4a-7c557e7d46c5`; brief kept at
+`dev/changes/plancmp-001-review-brief-2026-11-23.txt` (moved from the untracked scratch on 2026-11-24); log `<temp>/pnp-codex/PLANCMP-001-code-20261123-190123-22644.log` (outside the repository). A first launch
 on gpt-6.1-sol was stopped by the operator after a few minutes; no figure was printed for it.
 
 Its answer (CODEX): SAFE WITH CONDITIONS for letting Opus 5.5 at high effort plan plans of this type. The two plans are close;
