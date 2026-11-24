@@ -1,0 +1,11 @@
+{
+  "plan": "AUDR",
+  "contract": "24bfc01d648bc927b3e03d4f9e78d9d0896c5d80e528d4d278a1172e2aa32046",
+  "files": {
+    "DECISIONS.md": "9245b984a8c7ab42a8fa370a7bda04a46ba358fd24e84202b42a49f46aad6202",
+    "PLAN_AUDR.md": "00b3bd4911a0835f57f2f720b5e813691791468bc2122a33a223e735c7838d0d",
+    "tickets/AUDR-001.md": "b5cb6f4ebb4f8fb9a8767417b4e492b3f02b815b0e68453c5e93c3d2cae54571"
+  },
+  "xrefs": {},
+  "stampedAt": "2026-11-24T09:03:04.862Z"
+}
