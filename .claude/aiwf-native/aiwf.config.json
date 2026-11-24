@@ -1,8 +1,8 @@
 {
   "$schema": "D:/pnp-live/schema/aiwf.config.schema.json",
   "_aiwf": {
-    "installedPluginVersion": "0.3.24",
-    "lastMigrationApplied": "0049_selfcheck-posix-rows",
+    "installedPluginVersion": "0.3.25",
+    "lastMigrationApplied": "0050_audit-loss",
     "managedRegions": {
       ".claude/aiwf-native/roles.json": "0.3.24",
       ".claude/agents/writer.md": "0.3.24",
@@ -10,9 +10,9 @@
       ".claude/aiwf-native/ORCHESTRATOR.md": "0.3.22",
       "AGENTS.md": "0.3.11",
       ".claude/aiwf-native/doctrine/work.md": "0.3.22",
-      ".claude/aiwf-native/doctrine/ticket.md": "0.3.22",
-      ".claude/aiwf-native/doctrine/plan.md": "0.3.22",
-      ".claude/aiwf-native/doctrine/review.md": "0.3.22"
+      ".claude/aiwf-native/doctrine/ticket.md": "0.3.25",
+      ".claude/aiwf-native/doctrine/plan.md": "0.3.25",
+      ".claude/aiwf-native/doctrine/review.md": "0.3.25"
     },
     "ownedAskRules": [
       "Bash(git commit:*)",
