@@ -4,6 +4,7 @@ Implements: D-01, D-02, D-03, D-04, D-05, D-06, D-07, D-08.
 COO: Opus - because all four no.
 Escalation: none - the ticket executes the operator's own decisions of 2026-11-23/24 (no plan-recorded decision is reversed by the ticket), writes no access, tenancy or security-definer surface (a payload migration is not one), stays inside its own diff, and no two roles disagree in writing.
 Branch: `main`. Depends on: the plan landed (`dev/` only). Scope guard: `HEAD <hash>` the dispatch brief names (HEAD at the dispatch, after the landing commit). `E2E: no`.
+Amended at the close (code audit pass 1, correction round 1, on the operator's dialog answers 2026-11-24): five sites outside W01-W29 - C1 the TEST POLICY `none` dual in `templates/doctrine/review.md.tmpl`, C2 the opening of `templates/doctrine/ticket.md.tmpl` § Proof-surface feasibility, C3 the triage dual in `templates/doctrine/plan.md.tmpl`, C4 readiness class 16 in `docs/READINESS_CLASSES.md`, `templates/briefs/readiness-codex.md` and `templates/doctrine/plan.md.tmpl`, C5 the 0050 note's `/pnp:roles` line and its sentence on C2-C4 (`records/AUDR-001.md`).
 
 ## Outcome
 

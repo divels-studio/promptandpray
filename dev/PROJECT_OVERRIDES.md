@@ -222,8 +222,9 @@ cross-platform tool.
 **COO context source** (machine-local, the operator's own statusline `~/.claude/statusline.sh`): it
 writes `~/.claude/ctx/<session id>.pct` (used percent) and `.size` (window tokens) for every session
 on this machine; the COO context is `pct * size / 100` - the number the statusline itself prints,
-to its whole-percent precision. The session id is the one in the session's scratchpad path. This is
-the machine source `/pnp:plan` and the record skeleton read; nothing of it is payload. (machine)
+to its whole-percent precision. The session id is the one in the session's scratchpad path. Since
+0.3.25 neither `/pnp:plan` nor the record skeleton reads it (AUDR/D-06); it stays for the context
+gate hook below. Nothing of it is payload. (machine)
 
 ## Workspace paths
 

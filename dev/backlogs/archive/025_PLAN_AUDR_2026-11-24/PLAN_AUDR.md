@@ -40,7 +40,7 @@ Out (DECISIONS § Deferred and § The three questions "what must stay"):
 
 | ref | title | implements | status | record |
 |---|---|---|---|---|
-| AUDR-001 | The five parts, migration 0050, manifest entry and bump to 0.3.25 | D-01, D-02, D-03, D-04, D-05, D-06, D-07, D-08 | open | - |
+| AUDR-001 | The five parts, migration 0050, manifest entry and bump to 0.3.25 | D-01, D-02, D-03, D-04, D-05, D-06, D-07, D-08 | done `54df72e` | `records/AUDR-001.md` |
 
 Order and gates (one ticket, in order):
 

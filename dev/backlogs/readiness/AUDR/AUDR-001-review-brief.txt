@@ -1,0 +1,87 @@
+COVERED BY: operator word "започни AUDR-001", 2026-11-24
+Review the diff for ticket AUDR-001 on branch main.
+
+Class: code
+Ticket: AUDR-001
+
+SCOPE / DIFF:
+`git diff fe046081f39146046d8b99f75bb2da1d00c4bd80` (the working tree against the dispatch guard) plus the two untracked new
+files `migrations/0050_audit-loss/ops.json` and `migrations/0050_audit-loss/NOTES.md`. Ignore `dev/backlogs/ROADMAP.md` (a
+status line). The ticket is `dev/backlogs/active/AUDR/tickets/AUDR-001.md` (worklist W01-W29, Acceptance, Risk threshold); the
+approved rule texts are `dev/backlogs/active/AUDR/DECISIONS.md` D-03 .. D-07; the release mechanics D-08; the readiness rounds
+`dev/backlogs/readiness/AUDR/round-1.md`, `round-2.md`. `CHANGELOG.md` (the 0.3.25 block) and `README.md:22` are the COO's
+prose in the same diff and are reviewed like the rest.
+
+CARRIED BLOCKERS
+none - this is pass 1
+
+EVIDENCE PACK
+- The approved texts and where each lands: DECISIONS.md D-03 (-> `templates/doctrine/review.md.tmpl` § A blocker names a loss,
+  and `templates/briefs/readiness-codex.md` THE BLOCKER CONTRACT, carried whole because the readiness brief names no
+  review.md - COO grep of readiness-codex.md for `review\.md|doctrine`: 0 hits), D-04 (planner.md acceptance rule, classes 8/11,
+  check 5, closing-grep sentence), D-05 (research.md, readiness-codex.md, class 15, planner CLOSING GREPS, /pnp:plan Step 4),
+  D-06 (skills/plan/SKILL.md Measurements, templates/briefs/record.md), D-07 (review.md.tmpl bullet + dual, the three slots,
+  PROJECT_OVERRIDES.md.tmpl seed), D-08 (migration 0050, manifest, plugin.json).
+- The Writer's four framing deviations, accepted by the COO: "Of the product stage:" before the copied dual in
+  review.md.tmpl; "(Triage above)" for "(D-03)" in skills/plan/SKILL.md; the record row written bare with its kept counting
+  sentence renamed to the new columns; the planner sentence split.
+- VERIFY at the handoff (COO's run): validate-payload exit 0; update-suite exit 0 `checks: 495, failures: 0`; selfcheck CI
+  form `--plugin-root .` exit 0 `==== 1809/1809 assertions passed ====` (the fixture form reds its version row until the
+  self-install - dev/VERIFY_RUNBOOK.md); the same three at fe04608 gave the same lines. Provenance grep: no hits. Render
+  dry-run `node scripts/update/aiwf-update.mjs --dry-run --project-root . --plugin-root .` exit 0: the three stage files
+  "the payload render written (project additions carried)", `.claude/agents/reviewer.md` "not on this installation (no
+  record) - skipped", the note.
+- Fact-check gate (sonnet): `claims: 66 verified: 63 false: 0 unverifiable: 3` - the three closed by the COO (the consumer's
+  two local rules exist outside this repo; the readiness brief names no review.md; bare § cites in the readiness brief).
+- QA's material-blocker clause stays in `review.md.tmpl` § Fail aggregation on purpose (DECISIONS D-07; readiness round 1 B6).
+This pack is the audited side's selection: read the tree past it.
+
+PRODUCT BOUNDARY CHECKS:
+- Payload stays generic: no origin-project names, no Cyrillic, no absolute paths (the provenance section of the self-check is the gate)
+- A managed-artifact change ships as a migration + version bump, never silently
+- Every operator gate that can be a native dialog is a native dialog
+
+TEST POLICY: dev/PROJECT_OVERRIDES.md § Test policy, plus the document that section names (dev/VERIFY_RUNBOOK.md). The project
+decides what is tested and at which layer; you decide whether a test that exists is honest and whether the code is correct.
+The absence of a test the policy excludes is never a finding. The floor no policy lowers: a behavior that writes stored
+data, computes money, or sits on a migration, access-policy, grants, auth or permission-model surface always owes its proof
+(the stage file's "The project's test policy and the auditor").
+
+PRODUCT STAGE: none
+
+ONE MORE QUESTION, the operator's (DECISIONS D-02 - this pass is also the opinion pass over the new contract text): read the
+new blocker text (`templates/doctrine/review.md.tmpl` § A blocker names a loss, and its copy in
+`templates/briefs/readiness-codex.md`) against the recorded case list `dev/backlogs/readiness/AUDR/both-ways-check.md` and say
+where it would still let a finding that names no loss block, or let a real loss through as a note. Report these under a
+separate heading `CONTRACT TEXT` after the verdict's lists - they are opinions on an approved text and do not by themselves
+make the verdict `fail`; the verdict is about whether the diff carries the approved texts and the release correctly.
+
+RISK THRESHOLD: block on: an approved text of D-03 .. D-07 reworded, cut or missing at a named site; an old sentence left beside
+its replacement so two rules contradict; a site changed outside the worklist; a migration op, the manifest entry or the
+version that does not match D-08 (a wrong destination/template pair, a missing re-render); a contradiction the change creates
+with a payload text it did not touch; Cyrillic, an origin-project name or an absolute path in the payload. Note only: line
+wrapping, the wording of pointer sentences, the order of bullets inside a list.
+STOP CONDITION: stop once every changed file is read against the ticket's worklist and the approved texts, the migration is
+read against D-08 and the engine (`scripts/update/migrate.mjs`, `scripts/update/validate-payload.mjs`), every reader of a
+changed sentence outside the diff has been searched for a contradiction, and the CONTRACT TEXT question is answered; do not
+propose redesigns.
+BUDGET TARGET: keep the brief dense and return ALL material blockers in ONE round - aim for a single round. (This is a
+throughput target only; it does NOT change the authority minimums - the correction-round cap and the `review.plan.passes`
+ceiling are unchanged.)
+
+OUTPUT CONTRACT (single round - return ALL material blockers at once; a later round may not
+raise a blocker that was already visible):
+  First line: exactly one of `pass` / `pass-with-notes` / `fail`
+  (per the review stage file at D:/promptandpray/.claude/aiwf-native/doctrine/review.md, read IN FULL before the pass - note
+  that this ticket CHANGES that file's template; judge the diff by the stage file as it stands at HEAD, the contract in force).
+    - `pass`            = no blocker at or above the risk threshold; nothing left to note.
+    - `pass-with-notes` = acceptable now; only notes on tests (the stage file's "Test findings on
+                          confirmed code": a weak or missing test over code you confirmed correct
+                          is a note, never a blocker; on the floor of the TEST POLICY slot it is a
+                          REQUIRED note - list those under their own heading) or narrow, local,
+                          non-blocking notes remain.
+    - `fail`            = at least one blocker at/above threshold. List blockers first (each with
+                          file:line and why it blocks), then non-blocking notes, then the exact
+                          next action.
+  Then the heading CONTRACT TEXT with the answer to the operator's question above.
+  Do not fix anything - you are read-only. Report only.
